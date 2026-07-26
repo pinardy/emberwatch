@@ -1,0 +1,6 @@
+# Store text with LF in the repo so the project is identical on every platform.
+* text=auto eol=lf
+
+# Generated at build time by scripts/generate-icons.mjs, but tracked so the
+# manifest is valid on a fresh clone without running the generator first.
+*.png binary
