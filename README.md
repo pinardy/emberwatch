@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 45 tests: simulation, balance harness, UI
+npm test           # 64 tests: simulation, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 ```
@@ -18,7 +18,10 @@ npm run preview    # serve the built PWA (installable, works offline)
 | --- | --- |
 | **Seasons** | Drizzle → Clearance → Storm, ~7 minutes a year. Farms fail in the Storm, gathering halves, and the hearth burns wood. |
 | **Glades** | The map is a hex field of fogged glades. Assign villagers to clear those bordering your territory for resources; dangerous and forbidden glades force a decision when opened. |
-| **Resolve** | Each species has a resolve score driven by housing, food variety, satisfied service needs, and hostility. Above its threshold, a species earns **reputation**. |
+| **Threats** | The greedy option in a glade event can unleash a timed menace that strikes on a repeating countdown — stealing stock, raising hostility, fraying the Queen's patience — until you pay it off. Other options grant run-long pacts instead. |
+| **Resolve** | Each species has a resolve score driven by housing, food variety, satisfied service needs, and hostility. Above its threshold, a species earns **reputation**. Every species also bends one rule — lizards shrug off a cold hearth, idle beavers build faster, harpies clear glades from the air — and most villagers arrive with a personal quirk. |
+| **Warmth** | Housing within the hearth's warmth radius is safe; homes beyond it chill their residents during the Storm. A few production buildings also work faster placed beside their supplier. |
+| **Caravans** | Once a Trading Post stands, caravans call on a cycle with rotating lots to buy — and pay double for one good they want that visit. Amber also rerolls drafts, rushes construction, and soothes the Queen. |
 | **Reputation** | Fills from high resolve, completed orders, and reclaimed land. Fill it and you win. |
 | **Impatience** | The Queen's patience. Grows over time, when villagers leave, and sharply once hostility is high. Fill it and you lose. |
 | **Hostility** | Rises with time, population and cleared glades. Drags resolve down for everyone. |
@@ -40,13 +43,16 @@ src/
       rng.ts            #   counter-based RNG: a value is f(seed, cursor)
       mapgen.ts         #   hex map + Voronoi glade partitioning
       tick.ts           #   one fixed step of the world
-      production.ts     #   construction, recipes, deposit depletion
+      production.ts     #   construction, recipes, deposits, adjacency
       society.ts        #   food, resolve, reputation, impatience, departures
-      events.ts         #   glade clearing, drafts, orders, newcomers
+      events.ts         #   glade clearing, drafts, threats, orders, newcomers
+      traits.ts         #   species quirks & villager quirks as multipliers
+      trade.ts          #   caravan visits, offers, buying and selling
       actions.ts        #   player commands, each returning a reason on failure
       diagnostics.ts    #   "what is quietly going wrong" for the warning strip
     store.ts            # zustand store + the game loop's entry point
   ui/                   # React components; read the sim, never contain rules
+                        # (audio.ts synthesises all cues & rain — no assets)
 ```
 
 Two rules keep this maintainable:
@@ -80,7 +86,7 @@ Icons are generated at build time by `scripts/generate-icons.mjs`, which writes 
 
 ## Known scope limits
 
-- Art is emoji throughout; there are no sprites or audio.
+- Art is emoji throughout; there are no sprites. Audio is synthesised in WebAudio (season stings, event cues, a rain loop that follows the season) — no recorded assets.
 - Meta progression is intentionally small: five Citadel upgrades, no world map campaign.
-- ~30 buildings and 8 glade events — enough for the loop to have real decisions, a small catalogue for the genre.
-- Buildings occupy a single hex; there are no multi-tile footprints or road networks.
+- ~30 buildings, 25 glade events, and 30+ cornerstones — enough for the loop to have real decisions, a small catalogue for the genre.
+- Buildings occupy a single hex; there are no multi-tile footprints or road networks, though hearth warmth and adjacency bonuses make placement matter.
