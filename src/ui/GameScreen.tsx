@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
+import { RESOURCES } from '../game/content/resources'
 import { collectWarnings } from '../game/engine/diagnostics'
+import { canAfford } from '../game/engine/queries'
 import { useGameStore, useRun, type SidePanel } from '../game/store'
 import { BuildPanel } from './BuildPanel'
 import { ChoiceModal } from './ChoiceModal'
@@ -8,7 +10,9 @@ import { Inspector } from './Inspector'
 import { MapView } from './MapView'
 import { ResourceBar } from './ResourceBar'
 import { LogPanel, OrdersPanel, TradePanel } from './SidePanels'
+import { TipsCoach } from './TipsCoach'
 import { TopBar } from './TopBar'
+import { useAudioCues } from './useAudioCues'
 import { useGameLoop, useHotkeys } from './useGameLoop'
 import { VillagerPanel } from './VillagerPanel'
 
@@ -29,6 +33,7 @@ export function GameScreen() {
 
   useGameLoop(run !== null)
   useHotkeys(run !== null)
+  useAudioCues(run)
 
   // Notices are transient; clear them after a beat.
   useEffect(() => {
@@ -40,7 +45,8 @@ export function GameScreen() {
   if (!run) return null
 
   return (
-    <div className="game">
+    <div className="game" data-season={run.season.season}>
+      <div className="season-tint" aria-hidden />
       <TopBar />
       <ResourceBar />
 
@@ -84,7 +90,48 @@ export function GameScreen() {
 
       <ChoiceModal />
       <EndModal />
+      <ThreatBar />
       <Warnings />
+      <TipsCoach />
+    </div>
+  )
+}
+
+/** Active threats: what they cost, when they strike next, how to buy them off. */
+function ThreatBar() {
+  const run = useRun()
+  const appease = useGameStore((s) => s.appease)
+  if (!run || run.threats.length === 0) return null
+  return (
+    <div className="threat-bar">
+      {run.threats.map((threat) => {
+        const affordable = canAfford(run.stock, threat.appease)
+        return (
+          <div key={threat.id} className="threat-card">
+            <span className="threat-icon">{threat.icon}</span>
+            <div className="threat-text">
+              <strong>{threat.name}</strong>
+              <small>
+                strikes in {Math.max(0, Math.ceil(threat.timer))}s · {threat.description}
+              </small>
+            </div>
+            <button
+              type="button"
+              disabled={!affordable}
+              onClick={() => appease(threat.id)}
+              title={affordable ? 'Pay it off' : 'You cannot afford this yet'}
+            >
+              Appease:{' '}
+              {Object.entries(threat.appease).map(([id, amount]) => (
+                <span key={id}>
+                  {RESOURCES[id as keyof typeof RESOURCES]?.icon}
+                  {amount}{' '}
+                </span>
+              ))}
+            </button>
+          </div>
+        )
+      })}
     </div>
   )
 }

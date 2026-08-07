@@ -195,9 +195,10 @@ describe('app shell', () => {
       fireEvent.click(within(tabs).getByRole('tab', { name: new RegExp(label, 'i') }))
       expect(useGameStore.getState().panel).toBeTruthy()
     }
-    // The people panel is where resolve is diagnosed.
+    // The people panel is where resolve is diagnosed. (The tips coach can also
+    // mention "resolve", so target the panel heading specifically.)
     fireEvent.click(within(tabs).getByRole('tab', { name: /People/i }))
-    expect(screen.getByText(/Resolve/i)).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /Resolve/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Recall all/i })).toBeTruthy()
   })
 
