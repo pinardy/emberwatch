@@ -97,8 +97,46 @@ export interface SpeciesDef {
   needs: ServiceNeed[]
   /** Building tags this species works faster at, e.g. `{ farming: 0.25 }`. */
   workBonus: Partial<Record<BuildingTag, number>>
+  /** The species' rule-bending quirk — what makes drafting them a decision. */
+  trait: SpeciesTrait
   blurb: string
 }
+
+/**
+ * Species traits bend a rule for every villager of that species. Effects are
+ * declarative like cornerstones, read at the point in the sim they apply.
+ */
+export type SpeciesTraitEffect =
+  /** The cold-hearth resolve penalty does not apply to this species. */
+  | { kind: 'ignoreColdHearth' }
+  /** This species clears glades faster (percent, additive). */
+  | { kind: 'clearRate'; percent: number }
+  /** This species eats more/less (percent; negative = less). */
+  | { kind: 'mealSize'; percent: number }
+  /** Idle villagers of this species build faster (percent, additive). */
+  | { kind: 'buildRate'; percent: number }
+  /** Despair accumulates slower for this species (percent reduction). */
+  | { kind: 'slowDespair'; percent: number }
+
+export interface SpeciesTrait {
+  name: string
+  description: string
+  effects: SpeciesTraitEffect[]
+}
+
+/**
+ * Individual quirks rolled when a villager arrives. Small, readable effects —
+ * enough to make a departure sting and a roster worth reading.
+ */
+export type VillagerTraitId =
+  | 'diligent'
+  | 'sluggish'
+  | 'glutton'
+  | 'frugal'
+  | 'strongback'
+  | 'pathfinder'
+  | 'forager'
+  | 'stormborn'
 
 // ---------------------------------------------------------------------------
 // Buildings
@@ -166,6 +204,11 @@ export interface BuildingDef {
   gatherRadius?: number
   /** Only one may exist per settlement. */
   unique?: boolean
+  /**
+   * Work-speed bonus when a built instance of `nearId` sits on an adjacent
+   * tile. Makes placement a puzzle instead of a canvas.
+   */
+  adjacency?: { nearId: string; percent: number }
   description: string
 }
 
@@ -243,6 +286,8 @@ export interface Villager {
   name: string
   /** Building instance id, `clearing:<gladeId>`, or null when idle. */
   assignment: string | null
+  /** Personal quirk, rolled on arrival. Most villagers have one. */
+  trait?: VillagerTraitId
 }
 
 export interface BuildingInstance {
@@ -339,6 +384,23 @@ export type CornerstoneEffect =
   | { kind: 'buildSpeed'; percent: number }
   | { kind: 'clearSpeed'; percent: number }
   | { kind: 'needsFewerServices'; species: SpeciesId | 'all'; amount: number }
+  // --- rule-benders ----------------------------------------------------------
+  /** Farms operate at this percent of normal speed during the Storm. */
+  | { kind: 'farmsInStorm'; percent: number }
+  /** Hostility gained from clearing a glade (percent; -100 = none at all). */
+  | { kind: 'gladeHostility'; percent: number }
+  /** Wood the hearth burns (percent; negative = less). */
+  | { kind: 'hearthFuel'; percent: number }
+  /** Passive growth of the Queen's impatience (percent; negative = slower). */
+  | { kind: 'impatienceRate'; percent: number }
+  /** How soon newcomers arrive (percent; negative = sooner). */
+  | { kind: 'newcomerRate'; percent: number }
+  /** Loot from clearing glades (percent; positive = more). */
+  | { kind: 'gladeLoot'; percent: number }
+  /** Caravan asking prices (percent; negative = cheaper). */
+  | { kind: 'tradePrices'; percent: number }
+  /** Flat resolve for all species, but only while the Storm rages. */
+  | { kind: 'stormResolve'; amount: number }
 
 export interface GladeEventOptionDef {
   label: string
@@ -352,8 +414,59 @@ export interface GladeEventOptionDef {
   reputation?: number
   /** Villagers lost (storm beasts, plague...). */
   villagerLoss?: number
+  /** Villagers who join the settlement (stragglers, freed captives...). */
+  villagerGain?: number
   /** Requires this much of each resource to be selectable. */
   requires?: ResourceBag
+  /** Unleashes a timed threat that strikes until it is appeased. */
+  threat?: ThreatSpec
+  /** Grants a permanent run-long effect (a pact, a curse, a blessing). */
+  ongoing?: OngoingEffectSpec
+}
+
+/**
+ * A timed menace released from a glade. It strikes every `interval` seconds
+ * until the settlement pays the `appease` cost — urgency the instant-resolve
+ * events cannot create.
+ */
+export interface ThreatSpec {
+  name: string
+  icon: string
+  description: string
+  /** Seconds between strikes. */
+  interval: number
+  /** Paid (via the threats panel) to end it for good. */
+  appease: ResourceBag
+  strike: {
+    hostility?: number
+    impatience?: number
+    villagerLoss?: number
+    /** Stolen from the stockpile, capped at what is there. */
+    stockLoss?: ResourceBag
+  }
+  /** Modifiers active while the threat lives (e.g. −resolve for everyone). */
+  whileActive?: CornerstoneEffect[]
+}
+
+export interface ActiveThreat extends ThreatSpec {
+  /** Instance id. */
+  id: string
+  /** Glade that unleashed it, for the log and the map. */
+  gladeId: string
+  /** Seconds until the next strike. */
+  timer: number
+}
+
+/** A permanent run-long modifier granted by an event choice. */
+export interface OngoingEffectSpec {
+  name: string
+  icon: string
+  description: string
+  effects: CornerstoneEffect[]
+}
+
+export interface OngoingEffect extends OngoingEffectSpec {
+  id: string
 }
 
 export interface GladeEventDef {
@@ -363,6 +476,32 @@ export interface GladeEventDef {
   kind: Exclude<GladeKind, 'settlement' | 'small'>
   description: string
   options: GladeEventOptionDef[]
+}
+
+// ---------------------------------------------------------------------------
+// Trade
+// ---------------------------------------------------------------------------
+
+export interface CaravanOffer {
+  resource: ResourceId
+  amount: number
+  /** Total amber asked for the whole lot. */
+  price: number
+  sold: boolean
+}
+
+/**
+ * A caravan visits periodically (once a Trading Post exists), carrying a
+ * rotating stock and paying double for one good it wants this trip.
+ */
+export interface CaravanState {
+  here: boolean
+  /** Seconds until arrival while away; seconds until departure while here. */
+  timer: number
+  offers: CaravanOffer[]
+  /** The caravan pays double for this resource this visit. */
+  wants: ResourceId
+  visits: number
 }
 
 // ---------------------------------------------------------------------------
@@ -434,6 +573,18 @@ export interface RunState {
   cornerstones: string[]
   /** Reputation thresholds already used to offer a cornerstone. */
   cornerstonesTaken: number
+
+  /** Timed menaces released from glades; they strike until appeased. */
+  threats: ActiveThreat[]
+  threatCounter: number
+  /** Permanent run-long effects granted by event choices. */
+  ongoing: OngoingEffect[]
+
+  caravan: CaravanState
+
+  /** Amber sinks scale with use, so these count uses. */
+  rerollsUsed: number
+  soothesUsed: number
 
   /** FIFO queue — a glade event and a reputation milestone can land together. */
   pendingChoices: PendingChoice[]

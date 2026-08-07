@@ -1,5 +1,6 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE, RESOURCES } from '../content/resources'
+import { hexDistance } from './hex'
 import type {
   BuildingInstance,
   ResourceBag,
@@ -42,6 +43,28 @@ export function comfortableHousing(s: RunState): number {
   for (const b of Object.values(s.buildings)) {
     if (!b.built || b.defId !== 'cabin') continue
     sum += BUILDINGS[b.defId]?.housing ?? 0
+  }
+  return sum
+}
+
+/**
+ * Housing capacity within the hearth's warmth radius. Homes beyond it are
+ * cold during the Storm — see `RESOLVE_COLD_HOME`.
+ */
+export function warmHousing(s: RunState, radius: number): number {
+  const hearth = Object.values(s.buildings).find(
+    (b) => BUILDINGS[b.defId]?.category === 'hearth',
+  )
+  if (!hearth) return 0
+  const origin = s.tiles[hearth.tile]
+  let sum = 0
+  for (const b of Object.values(s.buildings)) {
+    if (!b.built) continue
+    const housing = BUILDINGS[b.defId]?.housing ?? 0
+    if (housing <= 0) continue
+    const tile = s.tiles[b.tile]
+    if (!tile) continue
+    if (hexDistance(origin, tile) <= radius) sum += housing
   }
   return sum
 }

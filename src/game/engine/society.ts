@@ -4,12 +4,14 @@ import type { ResourceId, RunState, SpeciesId } from '../types'
 import {
   COMPLEX_FOOD_MULTIPLIER,
   FOOD_VARIETY_CAP,
+  HEARTH_WARMTH_RADIUS,
   IMPATIENCE_BASE,
   IMPATIENCE_HOSTILITY_THRESHOLD,
   IMPATIENCE_PER_HOSTILITY_OVER,
   IMPATIENCE_PER_VILLAGER_LOST,
   REPUTATION_PER_RESOLVE_POINT,
   RESOLVE_COLD_HEARTH,
+  RESOLVE_COLD_HOME,
   RESOLVE_COMFORT,
   RESOLVE_DRIFT,
   RESOLVE_HOUSED,
@@ -32,7 +34,9 @@ import {
   serviceCoverage,
   speciesCounts,
   totalHousing,
+  warmHousing,
 } from './queries'
+import { despairRate, ignoresColdHearth, mealMultiplier } from './traits'
 
 /**
  * Villagers eat once every `SECONDS_PER_MEAL`. Cooked food covers two meals,
@@ -48,7 +52,11 @@ export function stepFood(s: RunState, dt: number, mods: Modifiers): void {
     return
   }
 
-  s.foodDebt += (pop * dt * Math.max(0.1, mods.foodUpkeep)) / SECONDS_PER_MEAL
+  // Foxes and frugal villagers eat less; gluttons eat more.
+  let mouths = 0
+  for (const v of Object.values(s.villagers)) mouths += mealMultiplier(v)
+
+  s.foodDebt += (mouths * dt * Math.max(0.1, mods.foodUpkeep)) / SECONDS_PER_MEAL
 
   let guard = 0
   while (s.foodDebt >= 1 && guard++ < 500) {
@@ -128,6 +136,7 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
   const comfort = comfortableHousing(s)
   const coverage = serviceCoverage(s)
   const variety = Math.min(foodVariety(s), FOOD_VARIETY_CAP)
+  const storm = s.season.season === 'storm'
 
   const housedTerm = pop > 0 && housing >= pop ? RESOLVE_HOUSED : 0
   const comfortTerm = pop > 0 && comfort >= pop * 0.6 ? RESOLVE_COMFORT : 0
@@ -135,6 +144,18 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
     pop > 0 && housing < pop ? RESOLVE_UNHOUSED * Math.min(1, (pop - housing) / pop) : 0
   const starvingTerm = s.starving ? RESOLVE_STARVING : 0
   const coldTerm = s.coldHearth ? RESOLVE_COLD_HEARTH : 0
+
+  /*
+   * Homes beyond the hearth's warmth are cold in the Storm. The penalty scales
+   * with the share of the housed population sleeping out there, so one distant
+   * shelter is a nuisance and a whole cold suburb is a crisis.
+   */
+  let chillTerm = 0
+  if (storm && pop > 0 && housing > 0) {
+    const housed = Math.min(pop, housing)
+    const warm = Math.min(housed, warmHousing(s, HEARTH_WARMTH_RADIUS))
+    chillTerm = RESOLVE_COLD_HOME * ((housed - warm) / pop)
+  }
 
   return s.speciesPool.map((sp) => {
     const def = SPECIES[sp]
@@ -162,8 +183,10 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
     const needsTerm = satisfied * RESOLVE_PER_NEED
     const varietyTerm = variety * RESOLVE_PER_FOOD_VARIETY
     const hostilityTerm = -s.hostility * RESOLVE_PER_HOSTILITY
-    const cornerstoneTerm = resolveBonusFor(mods, sp)
-    const penalties = unhousedTerm + starvingTerm + coldTerm
+    const cornerstoneTerm = resolveBonusFor(mods, sp) + (storm ? mods.stormResolve : 0)
+    // Lizards do not feel a cold hearth; nobody escapes hunger or the rain.
+    const speciesColdTerm = ignoresColdHearth(sp) ? 0 : coldTerm
+    const penalties = unhousedTerm + starvingTerm + speciesColdTerm + chillTerm
 
     const target =
       def.baseResolve +
@@ -239,13 +262,13 @@ export function stepReputation(
   return gain
 }
 
-export function stepImpatience(s: RunState, dt: number): void {
+export function stepImpatience(s: RunState, dt: number, mods: Modifiers): void {
   const yearScale = 1 + (s.season.year - 1) * 0.18
   let rate = IMPATIENCE_BASE * yearScale
   if (s.hostility > IMPATIENCE_HOSTILITY_THRESHOLD) {
     rate += (s.hostility - IMPATIENCE_HOSTILITY_THRESHOLD) * IMPATIENCE_PER_HOSTILITY_OVER
   }
-  addImpatience(s, rate * dt)
+  addImpatience(s, rate * mods.impatienceRate * dt)
 }
 
 export function addImpatience(s: RunState, amount: number): void {
@@ -274,7 +297,7 @@ export function stepDepartures(s: RunState, dt: number): string[] {
       continue
     }
     if (s.resolve[sp] <= RESOLVE_LEAVE_THRESHOLD) {
-      s.despair[sp] += dt
+      s.despair[sp] += dt * despairRate(sp)
       while (s.despair[sp] >= SECONDS_TO_LEAVE) {
         s.despair[sp] -= SECONDS_TO_LEAVE
         const victim = Object.values(s.villagers).find((v) => v.species === sp)

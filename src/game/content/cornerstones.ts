@@ -97,6 +97,47 @@ const defs: CornerstoneDef[] = [
     ],
   },
 
+  {
+    id: 'rainCatchers',
+    name: 'Rain Catchers',
+    icon: '🪣',
+    rarity: 'common',
+    description: 'The hearth burns 30% less wood.',
+    effects: [{ kind: 'hearthFuel', percent: -30 }],
+  },
+  {
+    id: 'wardenOfRoads',
+    name: 'Warden of the Roads',
+    icon: '🛤️',
+    rarity: 'common',
+    description: 'Newcomers arrive 30% sooner.',
+    effects: [{ kind: 'newcomerRate', percent: -30 }],
+  },
+  {
+    id: 'scavengersInstinct',
+    name: "Scavengers' Instinct",
+    icon: '🪶',
+    rarity: 'common',
+    description: 'Cleared glades yield 40% more loot.',
+    effects: [{ kind: 'gladeLoot', percent: 40 }],
+  },
+  {
+    id: 'quietFootfalls',
+    name: 'Quiet Footfalls',
+    icon: '🐾',
+    rarity: 'common',
+    description: 'Clearing a glade angers the forest 40% less.',
+    effects: [{ kind: 'gladeHostility', percent: -40 }],
+  },
+  {
+    id: 'stormLanterns',
+    name: 'Storm Lanterns',
+    icon: '🏮',
+    rarity: 'common',
+    description: '+4 resolve for every species while the Storm rages.',
+    effects: [{ kind: 'stormResolve', amount: 4 }],
+  },
+
   // ---- rare ---------------------------------------------------------------
   {
     id: 'stormShroud',
@@ -142,7 +183,62 @@ const defs: CornerstoneDef[] = [
     effects: [{ kind: 'productionSpeed', tag: 'all', percent: 15 }],
   },
 
+  {
+    id: 'greenhouseFrames',
+    name: 'Greenhouse Frames',
+    icon: '🪟',
+    rarity: 'rare',
+    description: 'Farms keep working at 40% speed during the Storm.',
+    effects: [{ kind: 'farmsInStorm', percent: 40 }],
+  },
+  {
+    id: 'courtEnvoy',
+    name: 'Court Envoy',
+    icon: '📯',
+    rarity: 'rare',
+    description: "The Queen's impatience grows 30% slower.",
+    effects: [{ kind: 'impatienceRate', percent: -30 }],
+  },
+  {
+    id: 'silverTongues',
+    name: 'Silver Tongues',
+    icon: '🗣️',
+    rarity: 'rare',
+    description: 'Caravans charge 25% less.',
+    effects: [{ kind: 'tradePrices', percent: -25 }],
+  },
+
   // ---- epic ---------------------------------------------------------------
+  {
+    id: 'woodlandTruce',
+    name: 'Woodland Truce',
+    icon: '🕊️',
+    rarity: 'epic',
+    description: 'Clearing glades angers the forest not at all.',
+    effects: [{ kind: 'gladeHostility', percent: -100 }],
+  },
+  {
+    id: 'emberSanctum',
+    name: 'Ember Sanctum',
+    icon: '🕳️',
+    rarity: 'epic',
+    description: 'The hearth burns 60% less wood, and every species gains +3 resolve in the Storm.',
+    effects: [
+      { kind: 'hearthFuel', percent: -60 },
+      { kind: 'stormResolve', amount: 3 },
+    ],
+  },
+  {
+    id: 'openGates',
+    name: 'Open Gates',
+    icon: '🚪',
+    rarity: 'epic',
+    description: 'Newcomers arrive 50% sooner and every species gains +2 resolve.',
+    effects: [
+      { kind: 'newcomerRate', percent: -50 },
+      { kind: 'resolveFlat', species: 'all', amount: 2 },
+    ],
+  },
   {
     id: 'heraldOfTheFlame',
     name: 'Herald of the Flame',

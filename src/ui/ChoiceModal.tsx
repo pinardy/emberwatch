@@ -3,6 +3,7 @@ import { CORNERSTONES } from '../game/content/cornerstones'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
 import { NEED_LABELS } from '../game/content/species'
+import { rerollCost } from '../game/engine/events'
 import { canAfford } from '../game/engine/queries'
 import { useGameStore, useRun } from '../game/store'
 import type { ResourceBag } from '../game/types'
@@ -66,6 +67,19 @@ export function ChoiceModal() {
                     {option.villagerLoss ? (
                       <span className="is-bad">🪦 −{option.villagerLoss} villagers</span>
                     ) : null}
+                    {option.villagerGain ? (
+                      <span className="is-good">🧑‍🤝‍🧑 +{option.villagerGain} villagers</span>
+                    ) : null}
+                    {option.threat ? (
+                      <span className="is-bad">
+                        {option.threat.icon} Unleashes: {option.threat.name}
+                      </span>
+                    ) : null}
+                    {option.ongoing ? (
+                      <span className="is-good">
+                        {option.ongoing.icon} Lasting: {option.ongoing.name}
+                      </span>
+                    ) : null}
                   </div>
                   {!affordable && option.requires && (
                     <small className="is-bad">
@@ -111,6 +125,7 @@ export function ChoiceModal() {
               )
             })}
           </div>
+          <RerollButton />
         </div>
       </Overlay>
     )
@@ -153,8 +168,29 @@ export function ChoiceModal() {
             )
           })}
         </div>
+        <RerollButton />
       </div>
     </Overlay>
+  )
+}
+
+/** Amber lever on drafts: redraw the options at a steepening price. */
+function RerollButton() {
+  const run = useRun()
+  const reroll = useGameStore((s) => s.reroll)
+  if (!run) return null
+  const cost = rerollCost(run)
+  return (
+    <footer className="modal-foot">
+      <button
+        type="button"
+        className="reroll-button"
+        disabled={(run.stock.amber ?? 0) < cost}
+        onClick={reroll}
+      >
+        🎲 Reroll the offer — {cost} {RESOURCES.amber.icon}
+      </button>
+    </footer>
   )
 }
 

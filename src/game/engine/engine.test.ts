@@ -1,14 +1,42 @@
 import { describe, expect, it } from 'vitest'
 import { BUILDINGS } from '../content/buildings'
-import { GLADE_EVENTS } from '../content/gladeEvents'
+import { GLADE_EVENTS, GLADE_EVENT_LIST } from '../content/gladeEvents'
 import { ORDER_LIST, evaluateGoal } from '../content/orders'
-import { placeBuilding, assignWorker, canPlaceBuilding, addClearer } from './actions'
-import { OPENING_BLUEPRINT_PICKS, SEASON_LENGTH, STARTING_VILLAGERS } from './balance'
+import { RESOURCES } from '../content/resources'
+import { VILLAGER_TRAITS } from '../content/species'
+import {
+  placeBuilding,
+  assignWorker,
+  canPlaceBuilding,
+  addClearer,
+  rushConstruction,
+  rushCost,
+  sootheCost,
+  sootheQueen,
+} from './actions'
+import {
+  CARAVAN_OFFERS,
+  HEARTH_WARMTH_RADIUS,
+  OPENING_BLUEPRINT_PICKS,
+  SEASON_LENGTH,
+  STARTING_VILLAGERS,
+  TRADE_LOT,
+} from './balance'
 import { createRun } from './createRun'
-import { relevantBlueprints, resolveGladeEvent, takeChoice } from './events'
+import {
+  addVillager,
+  appeaseThreat,
+  relevantBlueprints,
+  rerollChoice,
+  rerollCost,
+  resolveGladeEvent,
+  stepThreats,
+  takeChoice,
+} from './events'
 import { hexDistance, hexKey, hexesInRadius } from './hex'
 import { MAP_RADIUS } from './mapgen'
 import { computeModifiers } from './modifiers'
+import { adjacencyMultiplier, seasonMultiplier } from './production'
 import {
   canAfford,
   foodStock,
@@ -16,9 +44,25 @@ import {
   population,
   storageUsed,
   totalHousing,
+  warmHousing,
 } from './queries'
 import { makeRng } from './rng'
+import { resolveBreakdowns } from './society'
 import { tick } from './tick'
+import {
+  buyOffer,
+  hasTradingPost,
+  sellPrice,
+  sellResource,
+  stepCaravan,
+} from './trade'
+import {
+  buildMultiplier,
+  clearMultiplier,
+  despairRate,
+  ignoresColdHearth,
+  mealMultiplier,
+} from './traits'
 import type { RunState } from '../types'
 
 const SEED = 123456
@@ -435,5 +479,294 @@ describe('determinism', () => {
     expect(restored.hostility).toBeCloseTo(original.hostility, 6)
     expect(restored.stock).toEqual(original.stock)
     expect(restored.rngCursor).toBe(original.rngCursor)
+  })
+})
+
+describe('traits', () => {
+  it('gives each species a rule-bending trait the engine respects', () => {
+    expect(ignoresColdHearth('lizard')).toBe(true)
+    expect(ignoresColdHearth('human')).toBe(false)
+    expect(despairRate('human')).toBeLessThan(1)
+    expect(mealMultiplier({ id: 'x', species: 'fox', name: 'T', assignment: null })).toBeLessThan(1)
+    expect(clearMultiplier({ id: 'x', species: 'harpy', name: 'T', assignment: null })).toBeGreaterThan(1)
+    expect(buildMultiplier({ id: 'x', species: 'beaver', name: 'T', assignment: null })).toBeGreaterThan(1)
+  })
+
+  it('spares lizards the cold-hearth penalty', () => {
+    const state = newRun()
+    state.coldHearth = true
+    const mods = computeModifiers(state)
+    const byId = Object.fromEntries(resolveBreakdowns(state, mods).map((b) => [b.species, b]))
+    expect(byId.lizard.penalties).toBeGreaterThan(byId.human.penalties)
+  })
+
+  it('rolls personal quirks that the trait table knows', () => {
+    const state = newRun()
+    for (const v of Object.values(state.villagers)) {
+      if (v.trait) expect(VILLAGER_TRAITS[v.trait]).toBeDefined()
+    }
+  })
+})
+
+describe('threats', () => {
+  function armThreat(state: RunState): void {
+    state.threats.push({
+      id: 't0',
+      gladeId: 'glade1',
+      name: 'Test Menace',
+      icon: '🐺',
+      description: 'test',
+      interval: 10,
+      timer: 1,
+      appease: { wood: 5 },
+      strike: { hostility: 8, stockLoss: { berry: 4 } },
+      whileActive: [{ kind: 'resolveFlat', species: 'all', amount: -3 }],
+    })
+  }
+
+  it('strikes on a timer and resets', () => {
+    const state = newRun()
+    armThreat(state)
+    const hostilityBefore = state.hostility
+    const berriesBefore = state.stock.berry ?? 0
+    stepThreats(state, 2)
+    expect(state.hostility).toBeCloseTo(hostilityBefore + 8)
+    expect(state.stock.berry ?? 0).toBe(berriesBefore - 4)
+    expect(state.threats[0].timer).toBeCloseTo(9)
+  })
+
+  it('weighs on resolve while it lives', () => {
+    const state = newRun()
+    armThreat(state)
+    expect(computeModifiers(state).resolveFlat.all).toBe(-3)
+  })
+
+  it('can be appeased for its price, and only if affordable', () => {
+    const state = newRun()
+    armThreat(state)
+    state.threats[0].appease = { tool: 99 }
+    expect(appeaseThreat(state, 't0')).not.toBeNull()
+    state.threats[0].appease = { wood: 5 }
+    const wood = state.stock.wood ?? 0
+    expect(appeaseThreat(state, 't0')).toBeNull()
+    expect(state.threats).toHaveLength(0)
+    expect(state.stock.wood ?? 0).toBe(wood - 5)
+  })
+})
+
+describe('ongoing effects & rule-bending cornerstones', () => {
+  it('folds event-granted pacts into the modifiers', () => {
+    const state = newRun()
+    state.ongoing.push({
+      id: 'g0',
+      name: 'Test Pact',
+      icon: '🌩️',
+      description: 'test',
+      effects: [{ kind: 'farmsInStorm', percent: 30 }],
+    })
+    expect(computeModifiers(state).farmsInStorm).toBeCloseTo(0.3)
+  })
+
+  it('lets greenhouse farms work through the Storm', () => {
+    const state = newRun()
+    state.cornerstones = ['greenhouseFrames']
+    const mods = computeModifiers(state)
+    expect(seasonMultiplier('smallFarm', 'storm', mods)).toBeCloseTo(0.4)
+    expect(seasonMultiplier('smallFarm', 'storm')).toBe(0)
+  })
+})
+
+describe('trade & amber sinks', () => {
+  /** Stands up a built Trading Post so caravans start calling. */
+  function withTradingPost(state: RunState): void {
+    state.unlockedBuildings.push('tradingPost')
+    for (const tile of Object.values(state.tiles)) {
+      if (canPlaceBuilding(state, 'tradingPost', tile.key) === null) {
+        placeBuilding(state, 'tradingPost', tile.key)
+        break
+      }
+    }
+    const post = Object.values(state.buildings).find((b) => b.defId === 'tradingPost')!
+    post.built = true
+  }
+
+  it('caravans arrive with rotating offers and a wanted good', () => {
+    const state = newRun()
+    expect(hasTradingPost(state)).toBe(false)
+    stepCaravan(state, 999)
+    expect(state.caravan.here).toBe(false)
+
+    withTradingPost(state)
+    state.caravan.timer = 1
+    stepCaravan(state, 2)
+    expect(state.caravan.here).toBe(true)
+    expect(state.caravan.offers).toHaveLength(CARAVAN_OFFERS)
+    expect(state.caravan.wants).toBeTruthy()
+  })
+
+  it('buys a lot and pays double for the wanted good', () => {
+    const state = newRun()
+    withTradingPost(state)
+    state.caravan.timer = 1
+    stepCaravan(state, 2)
+
+    state.stock.amber = 500
+    const offer = state.caravan.offers[0]
+    const before = state.stock[offer.resource] ?? 0
+    expect(buyOffer(state, 0)).toBeNull()
+    expect(state.stock[offer.resource] ?? 0).toBe(before + offer.amount)
+    expect(buyOffer(state, 0)).not.toBeNull() // already sold
+
+    const wants = state.caravan.wants
+    expect(sellPrice(state, wants, TRADE_LOT)).toBeGreaterThan(
+      RESOURCES[wants].value * TRADE_LOT,
+    )
+    state.stock[wants] = TRADE_LOT
+    const amber = state.stock.amber ?? 0
+    expect(sellResource(state, wants)).toBeNull()
+    expect(state.stock.amber ?? 0).toBeGreaterThan(amber)
+  })
+
+  it('rerolls an open draft for a steepening amber price', () => {
+    const state = freshRun()
+    const before = [...state.pendingChoices[0].options]
+    state.stock.amber = 100
+    const cost = rerollCost(state)
+    expect(rerollChoice(state)).toBeNull()
+    expect(state.pendingChoices[0].options).not.toEqual(before)
+    expect(state.stock.amber).toBe(100 - cost)
+    expect(rerollCost(state)).toBeGreaterThan(cost)
+  })
+
+  it('rushes construction for amber', () => {
+    const state = newRun()
+    for (const tile of Object.values(state.tiles)) {
+      if (canPlaceBuilding(state, 'shelter', tile.key) === null) {
+        placeBuilding(state, 'shelter', tile.key)
+        break
+      }
+    }
+    const site = Object.values(state.buildings).find((b) => !b.built)!
+    state.stock.amber = 100
+    const cost = rushCost(state, site.id)
+    expect(cost).toBeGreaterThan(0)
+    expect(rushConstruction(state, site.id)).toBeNull()
+    expect(site.built).toBe(true)
+    expect(state.stock.amber).toBe(100 - cost)
+  })
+
+  it('soothes the Queen at a steepening price', () => {
+    const state = newRun()
+    state.impatience = 5
+    state.stock.amber = 200
+    const cost = sootheCost(state)
+    expect(sootheQueen(state)).toBeNull()
+    expect(state.impatience).toBe(4)
+    expect(state.stock.amber).toBe(200 - cost)
+    expect(sootheCost(state)).toBeGreaterThan(cost)
+  })
+})
+
+describe('placement: warmth & adjacency', () => {
+  it('counts housing inside the hearth warmth radius', () => {
+    const state = newRun()
+    // Everything starts compact, so all housing is warm.
+    expect(warmHousing(state, HEARTH_WARMTH_RADIUS)).toBe(totalHousing(state))
+
+    // A far shelter houses people but does not count as warm.
+    const far = Object.values(state.tiles).find(
+      (t) =>
+        hexDistance(t, { q: 0, r: 0 }) > HEARTH_WARMTH_RADIUS + 1 &&
+        !t.blocked &&
+        !t.deposit &&
+        !t.buildingId,
+    )!
+    state.glades[far.gladeId].cleared = true
+    expect(placeBuilding(state, 'shelter', far.key)).toBeNull()
+    const shelter = Object.values(state.buildings).find((b) => b.tile === far.key)!
+    shelter.built = true
+    expect(warmHousing(state, HEARTH_WARMTH_RADIUS)).toBe(
+      totalHousing(state) - (BUILDINGS.shelter.housing ?? 0),
+    )
+  })
+
+  it('chills distant homes during the Storm', () => {
+    const state = newRun()
+    const far = Object.values(state.tiles).find(
+      (t) =>
+        hexDistance(t, { q: 0, r: 0 }) > HEARTH_WARMTH_RADIUS + 1 &&
+        !t.blocked &&
+        !t.deposit &&
+        !t.buildingId,
+    )!
+    state.glades[far.gladeId].cleared = true
+    placeBuilding(state, 'shelter', far.key)
+    Object.values(state.buildings).forEach((b) => {
+      b.built = true
+    })
+    // Overflow the warm beds so somebody actually sleeps out there.
+    while (population(state) <= 6) addVillager(state)
+
+    const mods = computeModifiers(state)
+    state.season.season = 'drizzle'
+    const mild = resolveBreakdowns(state, mods)[0].penalties
+    state.season.season = 'storm'
+    const stormy = resolveBreakdowns(state, mods)[0].penalties
+    expect(stormy).toBeLessThan(mild)
+  })
+
+  it('speeds up a mill placed beside its camp', () => {
+    const state = newRun()
+    state.stock.wood = 200
+    state.stock.stone = 200
+
+    // Find a camp spot with a free neighbour for the mill.
+    let campTile: string | null = null
+    let millTile: string | null = null
+    for (const tile of Object.values(state.tiles)) {
+      if (canPlaceBuilding(state, 'woodcuttersCamp', tile.key) !== null) continue
+      const neighbor = hexesInRadius(tile, 1).find(
+        (h) =>
+          hexKey(h.q, h.r) !== tile.key &&
+          canPlaceBuilding(state, 'lumberMill', hexKey(h.q, h.r)) === null,
+      )
+      if (neighbor) {
+        campTile = tile.key
+        millTile = hexKey(neighbor.q, neighbor.r)
+        break
+      }
+    }
+    expect(campTile).toBeTruthy()
+    placeBuilding(state, 'woodcuttersCamp', campTile!)
+    placeBuilding(state, 'lumberMill', millTile!)
+    const camp = Object.values(state.buildings).find((b) => b.defId === 'woodcuttersCamp')!
+    const mill = Object.values(state.buildings).find((b) => b.defId === 'lumberMill')!
+    camp.built = true
+    mill.built = true
+    expect(adjacencyMultiplier(state, mill)).toBeCloseTo(1.2)
+
+    // Alone in a field, no bonus.
+    delete state.buildings[camp.id]
+    delete state.tiles[camp.tile].buildingId
+    expect(adjacencyMultiplier(state, mill)).toBe(1)
+  })
+})
+
+describe('glade event content invariants', () => {
+  it('every event can always be resolved via its last option', () => {
+    for (const def of GLADE_EVENT_LIST) {
+      const last = def.options[def.options.length - 1]
+      expect(last.requires, `${def.id} last option must be requires-free`).toBeUndefined()
+    }
+  })
+
+  it('threats always have a positive interval and a payable price', () => {
+    for (const def of GLADE_EVENT_LIST) {
+      for (const option of def.options) {
+        if (!option.threat) continue
+        expect(option.threat.interval).toBeGreaterThan(0)
+        expect(Object.keys(option.threat.appease).length).toBeGreaterThan(0)
+      }
+    }
   })
 })

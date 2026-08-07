@@ -1,5 +1,4 @@
 import { BUILDINGS } from '../content/buildings'
-import { RESOURCES } from '../content/resources'
 import { SPECIES } from '../content/species'
 import type {
   BuildingInstance,
@@ -8,6 +7,11 @@ import type {
   ResourceId,
   RunState,
 } from '../types'
+import {
+  RUSH_COST_PER_SECOND,
+  SOOTHE_BASE_COST,
+  SOOTHE_COST_GROWTH,
+} from './balance'
 import { pushLog } from './createRun'
 import { depositsInRangeOf } from './production'
 import {
@@ -19,6 +23,7 @@ import {
   storageUsed,
 } from './queries'
 import { unassign } from './society'
+import { clearMultiplier } from './traits'
 
 /** Player commands. Each returns `null` on success or a reason for failure. */
 export type ActionError = string | null
@@ -195,7 +200,10 @@ export function addClearer(s: RunState, gladeId: string): ActionError {
   if (!isReachable(s, gladeId)) return 'Clear an adjacent glade first.'
   const idle = idleVillagers(s)
   if (idle.length === 0) return 'No idle villagers.'
-  const villager = idle[0]
+  // Send the best axe first — harpies and pathfinders clear faster.
+  const villager = idle.reduce((best, v) =>
+    clearMultiplier(v) > clearMultiplier(best) ? v : best,
+  )
   villager.assignment = `clearing:${gladeId}`
   glade.clearers++
   return null
@@ -220,30 +228,51 @@ export function isReachable(s: RunState, gladeId: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Trading
+// Amber sinks
 // ---------------------------------------------------------------------------
 
-export function hasTradingPost(s: RunState): boolean {
-  return Object.values(s.buildings).some((b) => b.defId === 'tradingPost' && b.built)
+/** Amber to finish a construction site on the spot. */
+export function rushCost(s: RunState, buildingId: string): number {
+  const building = s.buildings[buildingId]
+  const def = building ? BUILDINGS[building.defId] : undefined
+  if (!building || !def || building.built) return 0
+  const remaining = Math.max(0, def.buildSeconds - building.buildProgress)
+  return Math.max(5, Math.ceil(remaining * RUSH_COST_PER_SECOND))
 }
 
-/** Caravans sell at a 60% markup over base value. */
-export function buyPrice(resource: ResourceId, amount: number): number {
-  return Math.ceil((RESOURCES[resource]?.value ?? 1) * 1.6 * amount)
+/** Pays amber to finish a site immediately — the classic impatience lever. */
+export function rushConstruction(s: RunState, buildingId: string): ActionError {
+  const building = s.buildings[buildingId]
+  if (!building) return 'No such building.'
+  if (building.built) return 'Already finished.'
+  const cost = rushCost(s, buildingId)
+  if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
+  const def = BUILDINGS[building.defId]
+  spend(s.stock, { amber: cost })
+  building.built = true
+  building.buildProgress = def?.buildSeconds ?? building.buildProgress
+  s.stats.buildingsBuilt++
+  if (def?.gatherRadius) {
+    building.depositsInRange = depositsInRangeOf(s, building.tile, def.gatherRadius)
+  }
+  pushLog(s, `${def?.name ?? 'A building'} rushed for ${cost} amber.`, 'info')
+  return null
 }
 
-export function buyResource(
-  s: RunState,
-  resource: ResourceId,
-  amount: number,
-): ActionError {
-  if (!hasTradingPost(s)) return 'You need a Trading Post.'
-  const price = buyPrice(resource, amount)
-  if ((s.stock.amber ?? 0) < price) return 'Not enough amber.'
-  if (storageUsed(s) + amount > s.storageCap) return 'The stockpile is full.'
-  spend(s.stock, { amber: price })
-  grant(s.stock, { [resource]: amount }, s.storageCap, storageUsed(s))
-  pushLog(s, `Bought ${amount} × ${RESOURCES[resource]?.name} for ${price} amber.`, 'info')
+/** Amber cost of the next petition to the Queen — it steepens with use. */
+export function sootheCost(s: RunState): number {
+  return SOOTHE_BASE_COST + s.soothesUsed * SOOTHE_COST_GROWTH
+}
+
+/** Buys back a point of the Queen's patience. */
+export function sootheQueen(s: RunState): ActionError {
+  if (s.impatience < 1) return 'The Queen is not impatient.'
+  const cost = sootheCost(s)
+  if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
+  spend(s.stock, { amber: cost })
+  s.impatience = Math.max(0, s.impatience - 1)
+  s.soothesUsed++
+  pushLog(s, `A gift of ${cost} amber reaches the Citadel. The Queen is soothed.`, 'good')
   return null
 }
 

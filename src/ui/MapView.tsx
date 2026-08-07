@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { BUILDINGS } from '../game/content/buildings'
 import { canPlaceBuilding, isReachable } from '../game/engine/actions'
+import { HEARTH_WARMTH_RADIUS } from '../game/engine/balance'
 import { hexCorners, hexToPixel } from '../game/engine/hex'
 import { DEPOSIT_INFO, TERRAIN_COLORS } from '../game/engine/mapgen'
 import { useGameStore, useRun } from '../game/store'
@@ -190,6 +191,15 @@ export function MapView() {
             (1 / view.scale - 1) * (layout.minX + layout.width / 2)
           } ${(1 / view.scale - 1) * (layout.minY + layout.height / 2)})`}
         >
+          {/* Hearth warmth: homes beyond this ring are cold during the Storm. */}
+          {buildMode && (BUILDINGS[buildMode]?.housing ?? 0) > 0 && (
+            <circle
+              cx={layout.positions['0,0']?.x ?? 0}
+              cy={layout.positions['0,0']?.y ?? 0}
+              r={(HEARTH_WARMTH_RADIUS + 0.5) * HEX_SIZE * Math.sqrt(3)}
+              className="warmth-ring"
+            />
+          )}
           {Object.values(run.tiles).map((tile) => {
             const pos = layout.positions[tile.key]
             const visibility = visibilityOf(run, tile)
