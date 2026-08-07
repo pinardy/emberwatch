@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { SEASON_INFO } from '../game/engine/balance'
 import { MAX_HOSTILITY } from '../game/engine/tick'
 import { computeModifiers } from '../game/engine/modifiers'
@@ -7,11 +8,54 @@ import { SPECIES } from '../game/content/species'
 import { useGameStore, useRun } from '../game/store'
 import { SPEED_OPTIONS } from '../game/engine/balance'
 
+interface Float {
+  id: number
+  text: string
+  tone: 'good' | 'bad'
+}
+
+/**
+ * Floating "+1"s over a meter when its integer value moves. Purely cosmetic —
+ * the number that matters is already on the meter.
+ */
+function useFloaters(value: number, direction: 'up-good' | 'up-bad'): Float[] {
+  const [floats, setFloats] = useState<Float[]>([])
+  const prev = useRef(value)
+  const counter = useRef(0)
+
+  useEffect(() => {
+    const delta = value - prev.current
+    prev.current = value
+    if (delta === 0) return
+    const tone: Float['tone'] =
+      (delta > 0) === (direction === 'up-good') ? 'good' : 'bad'
+    const float: Float = {
+      id: counter.current++,
+      text: `${delta > 0 ? '+' : ''}${delta}`,
+      tone,
+    }
+    // Cap the stack; each float removes itself when its animation ends. No
+    // cleanup here — cancelling the timer on the next change would strand the
+    // previous float on screen.
+    setFloats((fs) => [...fs.slice(-3), float])
+    window.setTimeout(
+      () => setFloats((fs) => fs.filter((f) => f.id !== float.id)),
+      1400,
+    )
+  }, [value, direction])
+
+  return floats
+}
+
 export function TopBar() {
   const run = useRun()
   const speed = useGameStore((s) => s.speed)
   const setSpeed = useGameStore((s) => s.setSpeed)
   const goToScreen = useGameStore((s) => s.goToScreen)
+  const sound = useGameStore((s) => s.settings.sound)
+  const updateSettings = useGameStore((s) => s.updateSettings)
+  const repFloats = useFloaters(run?.reputation ?? 0, 'up-good')
+  const impFloats = useFloaters(run?.impatience ?? 0, 'up-bad')
   if (!run) return null
 
   const info = SEASON_INFO[run.season.season]
@@ -70,6 +114,7 @@ export function TopBar() {
           fraction={run.reputationProgress}
           tone="good"
           hint="Win at maximum reputation. Earned from high resolve and completed orders."
+          floats={repFloats}
         />
         <Meter
           label="Impatience"
@@ -79,6 +124,8 @@ export function TopBar() {
           fraction={run.impatienceProgress}
           tone="bad"
           hint="You lose if this fills. Grows over time, and faster when villagers leave."
+          floats={impFloats}
+          pulseKey={run.impatience}
         />
         <Meter
           label="Hostility"
@@ -92,6 +139,15 @@ export function TopBar() {
       </div>
 
       <div className="topbar-right">
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => updateSettings({ sound: !sound })}
+          title={sound ? 'Mute sound' : 'Unmute sound'}
+          aria-label={sound ? 'Mute sound' : 'Unmute sound'}
+        >
+          {sound ? '🔊' : '🔇'}
+        </button>
         <div className="stat" title="Population and housing">
           <span>🧑‍🤝‍🧑</span>
           <strong className={pop > housing ? 'is-bad' : ''}>
@@ -135,16 +191,19 @@ interface MeterProps {
   fraction: number
   tone: 'good' | 'bad' | 'warn'
   hint: string
+  floats?: Float[]
+  /** Changing this key replays the pulse animation (impatience ticking up). */
+  pulseKey?: number
 }
 
-function Meter({ label, icon, value, max, fraction, tone, hint }: MeterProps) {
+function Meter({ label, icon, value, max, fraction, tone, hint, floats, pulseKey }: MeterProps) {
   const pct = ((value + Math.min(1, fraction)) / max) * 100
   return (
-    <div className={`meter meter-${tone}`} title={hint}>
+    <div className={`meter meter-${tone}`} title={hint} key={pulseKey !== undefined ? `p${pulseKey}` : undefined}>
       <div className="meter-head">
         <span>{icon}</span>
         <span className="meter-label">{label}</span>
-        <strong>
+        <strong className={pulseKey !== undefined ? 'pulse-once' : undefined}>
           {value}
           <small>/{max}</small>
         </strong>
@@ -152,6 +211,15 @@ function Meter({ label, icon, value, max, fraction, tone, hint }: MeterProps) {
       <div className="meter-track">
         <div className="meter-fill" style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
+      {floats && floats.length > 0 && (
+        <div className="floaters" aria-hidden>
+          {floats.map((f) => (
+            <span key={f.id} className={`floater is-${f.tone}`}>
+              {f.text}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
