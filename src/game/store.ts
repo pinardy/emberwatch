@@ -3,20 +3,27 @@ import { META_UPGRADES, defaultMeta, supplyReward } from './content/meta'
 import {
   addClearer,
   assignWorker,
-  buyResource,
   demolishBuilding,
   placeBuilding,
   recallEveryone,
   removeClearer,
   removeWorker,
+  rushConstruction,
   setRecipe,
+  sootheQueen,
   togglePause,
 } from './engine/actions'
 import { TICK_SECONDS, type GameSpeed } from './engine/balance'
 import { createRun } from './engine/createRun'
-import { resolveGladeEvent, takeChoice } from './engine/events'
+import {
+  appeaseThreat,
+  rerollChoice,
+  resolveGladeEvent,
+  takeChoice,
+} from './engine/events'
 import { randomSeed } from './engine/rng'
 import { tick } from './engine/tick'
+import { buyOffer, sellResource } from './engine/trade'
 import {
   loadMeta,
   loadRun,
@@ -77,7 +84,12 @@ interface GameStore {
   clearGladeRemove: (gladeId: string) => void
   chooseOption: (optionId: string) => void
   chooseEventOption: (index: number) => void
-  buy: (resource: ResourceId, amount: number) => void
+  reroll: () => void
+  buyLot: (index: number) => void
+  sell: (resource: ResourceId) => void
+  appease: (threatId: string) => void
+  rush: (buildingId: string) => void
+  soothe: () => void
   recallAll: () => void
   dismissNotice: () => void
   buyUpgrade: (id: string) => void
@@ -252,8 +264,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       saveRun(run)
       return null
     }),
-  buy: (resource, amount) =>
-    runCommand(set, get, (run) => buyResource(run, resource, amount)),
+  reroll: () => runCommand(set, get, (run) => rerollChoice(run)),
+  buyLot: (index) => runCommand(set, get, (run) => buyOffer(run, index)),
+  sell: (resource) => runCommand(set, get, (run) => sellResource(run, resource)),
+  appease: (threatId) => runCommand(set, get, (run) => appeaseThreat(run, threatId)),
+  rush: (buildingId) => runCommand(set, get, (run) => rushConstruction(run, buildingId)),
+  soothe: () => runCommand(set, get, (run) => sootheQueen(run)),
   recallAll: () =>
     runCommand(set, get, (run) => {
       recallEveryone(run)

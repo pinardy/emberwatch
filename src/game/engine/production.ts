@@ -14,11 +14,12 @@ import {
   GATHER_SEASON_MULTIPLIER,
   WORKER_RATE,
 } from './balance'
-import { hexDistance, hexesInRadius, hexKey } from './hex'
+import { hexDistance, hexesInRadius, hexKey, hexNeighbors } from './hex'
 import type { Modifiers } from './modifiers'
 import { extraOutputChance, productionMultiplier } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
+import { buildMultiplier, workTraitMultiplier } from './traits'
 
 /**
  * Which deposits a building at `tileKey` can reach. Only counts deposits inside
@@ -52,10 +53,31 @@ export function refreshDepositCaches(s: RunState): void {
   }
 }
 
+/**
+ * Work-speed multiplier from a satisfied adjacency (a mill beside its felling
+ * grounds, a cookhouse beside the farm). Neighbours are six tile lookups, so
+ * this is cheap enough to read every tick.
+ */
+export function adjacencyMultiplier(s: RunState, b: BuildingInstance): number {
+  const def = BUILDINGS[b.defId]
+  if (!def?.adjacency) return 1
+  const origin = s.tiles[b.tile]
+  if (!origin) return 1
+  for (const n of hexNeighbors(origin)) {
+    const neighbor = s.tiles[hexKey(n.q, n.r)]
+    const other = neighbor?.buildingId ? s.buildings[neighbor.buildingId] : undefined
+    if (other?.built && other.defId === def.adjacency.nearId) {
+      return 1 + def.adjacency.percent / 100
+    }
+  }
+  return 1
+}
+
 /** Combined worker rate in work-seconds per real second. */
 export function workRate(s: RunState, b: BuildingInstance, mods: Modifiers): number {
   const def = BUILDINGS[b.defId]
   if (!def) return 0
+  const gathering = def.tags.includes('gathering')
   let rate = 0
   for (const workerId of b.workers) {
     const villager = s.villagers[workerId]
@@ -63,16 +85,28 @@ export function workRate(s: RunState, b: BuildingInstance, mods: Modifiers): num
     const bonuses = SPECIES[villager.species].workBonus
     let bonus = 0
     for (const tag of def.tags) bonus += bonuses[tag] ?? 0
-    rate += WORKER_RATE * (1 + bonus)
+    rate +=
+      WORKER_RATE *
+      (1 + bonus) *
+      workTraitMultiplier(villager, gathering, s.season.season)
   }
-  return rate * productionMultiplier(mods, def.tags)
+  return rate * productionMultiplier(mods, def.tags) * adjacencyMultiplier(s, b)
 }
 
 /** Seasonal multiplier for a building's output. */
-export function seasonMultiplier(defId: string, season: Season): number {
+export function seasonMultiplier(
+  defId: string,
+  season: Season,
+  mods?: Modifiers,
+): number {
   const def = BUILDINGS[defId]
   if (!def) return 1
-  if (def.tags.includes('farming')) return FARM_SEASON_MULTIPLIER[season]
+  if (def.tags.includes('farming')) {
+    const base = FARM_SEASON_MULTIPLIER[season]
+    // Greenhouse-style cornerstones keep farms turning through the Storm.
+    if (season === 'storm' && mods) return Math.max(base, mods.farmsInStorm)
+    return base
+  }
   if (def.tags.includes('gathering')) return GATHER_SEASON_MULTIPLIER[season]
   return 1
 }
@@ -97,7 +131,6 @@ export function stepProduction(
   s: RunState,
   dt: number,
   mods: Modifiers,
-  idleBuilders: number,
 ): ProductionResult {
   const result: ProductionResult = {
     completed: [],
@@ -107,10 +140,15 @@ export function stepProduction(
 
   // --- construction ---------------------------------------------------------
   const underConstruction = Object.values(s.buildings).filter((b) => !b.built)
-  if (underConstruction.length > 0 && idleBuilders > 0) {
+  // Idle villagers are the shared builder pool; beavers and strong backs count
+  // for more than one pair of hands.
+  let buildPower = 0
+  for (const v of Object.values(s.villagers)) {
+    if (v.assignment === null) buildPower += BUILD_RATE_PER_VILLAGER * buildMultiplier(v)
+  }
+  if (underConstruction.length > 0 && buildPower > 0) {
     // Builders split evenly across every site.
-    const perSite = (idleBuilders * BUILD_RATE_PER_VILLAGER * mods.buildSpeed) /
-      underConstruction.length
+    const perSite = (buildPower * mods.buildSpeed) / underConstruction.length
     for (const b of underConstruction) {
       const def = BUILDINGS[b.defId]
       if (!def) continue
@@ -142,7 +180,7 @@ export function stepProduction(
     // Deposit-gated recipes need a live deposit in range.
     if (recipe.requiresDeposit && !hasLiveDeposit(s, b, recipe.requiresDeposit)) continue
 
-    const multiplier = seasonMultiplier(b.defId, s.season.season)
+    const multiplier = seasonMultiplier(b.defId, s.season.season, mods)
     if (multiplier <= 0) continue
 
     const rate = workRate(s, b, mods) * multiplier

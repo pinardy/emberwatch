@@ -136,7 +136,7 @@ export const SECONDS_TO_LEAVE = 22
  * against the balance harness: a well-run settlement sitting ~10 above its
  * thresholds earns roughly a reputation point per minute.
  */
-export const REPUTATION_PER_RESOLVE_POINT = 0.0018
+export const REPUTATION_PER_RESOLVE_POINT = 0.002
 /** Impatience gained for each villager that leaves or dies. */
 export const IMPATIENCE_PER_VILLAGER_LOST = 0.6
 /** Baseline impatience per second (grows each year). */
@@ -193,6 +193,50 @@ export const GATHER_SEASON_MULTIPLIER: Record<Season, number> = {
 export const HEARTH_FUEL_PER_SECOND = 0.16
 /** Wood burned per second outside the Storm. */
 export const HEARTH_IDLE_FUEL_PER_SECOND = 0.04
+
+/**
+ * Housing within this many hexes of the hearth counts as warm. During the
+ * Storm, villagers bunked beyond it take a resolve penalty — the map's way of
+ * making sprawl a decision rather than free real estate.
+ */
+export const HEARTH_WARMTH_RADIUS = 5
+/** Resolve penalty (scaled by the exposed share) for cold homes in the Storm. */
+export const RESOLVE_COLD_HOME = -8
+
+// ---------------------------------------------------------------------------
+// Caravans & amber sinks
+// ---------------------------------------------------------------------------
+
+/** Seconds after the Trading Post finishes before the first caravan. */
+export const CARAVAN_FIRST_ARRIVAL = 70
+/** Seconds between caravan visits. */
+export const CARAVAN_INTERVAL = 170
+/** Seconds a caravan stays. */
+export const CARAVAN_STAY = 100
+/** Distinct goods a caravan offers per visit. */
+export const CARAVAN_OFFERS = 4
+/** Markup over base value on caravan lots (before cornerstones). */
+export const CARAVAN_MARKUP = 1.45
+/** Multiplier the caravan pays for the good it wants this visit. */
+export const CARAVAN_WANT_BONUS = 2
+/** Units sold per click at the trading post. */
+export const TRADE_LOT = 5
+
+/** Rerolling a draft: base cost, plus growth per reroll already used. */
+export const REROLL_BASE_COST = 15
+export const REROLL_COST_GROWTH = 10
+/** Soothing the Queen: −1 impatience, at a steepening price. */
+export const SOOTHE_BASE_COST = 40
+export const SOOTHE_COST_GROWTH = 15
+/** Rush construction: amber per work-second remaining (min 5). */
+export const RUSH_COST_PER_SECOND = 0.5
+
+// ---------------------------------------------------------------------------
+// Villager traits
+// ---------------------------------------------------------------------------
+
+/** Chance a newcomer arrives with a personal quirk. */
+export const VILLAGER_TRAIT_CHANCE = 0.6
 
 // ---------------------------------------------------------------------------
 // Work rates

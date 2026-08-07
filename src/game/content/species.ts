@@ -1,4 +1,4 @@
-import type { SpeciesDef, SpeciesId } from '../types'
+import type { SpeciesDef, SpeciesId, VillagerTraitId } from '../types'
 
 const defs: SpeciesDef[] = [
   {
@@ -10,6 +10,11 @@ const defs: SpeciesDef[] = [
     resolveTarget: 18,
     needs: ['religion', 'luxury'],
     workBonus: { farming: 0.3, gathering: 0.15 },
+    trait: {
+      name: 'Steadfast',
+      description: 'Slow to give up: despair builds half as fast.',
+      effects: [{ kind: 'slowDespair', percent: 50 }],
+    },
     blurb: 'Steady farmhands. They want a shrine to pray at and something nice to drink.',
   },
   {
@@ -21,6 +26,11 @@ const defs: SpeciesDef[] = [
     resolveTarget: 18,
     needs: ['luxury', 'education'],
     workBonus: { woodworking: 0.4, masonry: 0.15 },
+    trait: {
+      name: 'Master Builders',
+      description: 'Idle beavers raise buildings 60% faster.',
+      effects: [{ kind: 'buildRate', percent: 60 }],
+    },
     blurb: 'Master carpenters, and insufferably particular about their comforts.',
   },
   {
@@ -32,6 +42,11 @@ const defs: SpeciesDef[] = [
     resolveTarget: 16,
     needs: ['brawling', 'treatment'],
     workBonus: { hunting: 0.4, smithing: 0.2 },
+    trait: {
+      name: 'Blood of Embers',
+      description: 'A cold hearth does not trouble them at all.',
+      effects: [{ kind: 'ignoreColdHearth' }],
+    },
     blurb: 'Hunters and smiths. Give them something to punch and someone to patch them up.',
   },
   {
@@ -43,6 +58,11 @@ const defs: SpeciesDef[] = [
     resolveTarget: 20,
     needs: ['education', 'rest'],
     workBonus: { scholar: 0.4, gathering: 0.2 },
+    trait: {
+      name: 'Winged Scouts',
+      description: 'Survey glades from above: they clear 50% faster.',
+      effects: [{ kind: 'clearRate', percent: 50 }],
+    },
     blurb: 'Scholars of the old world. Prone to complaining, excellent at reading.',
   },
   {
@@ -54,6 +74,11 @@ const defs: SpeciesDef[] = [
     resolveTarget: 18,
     needs: ['rest', 'treatment'],
     workBonus: { cooking: 0.3, gathering: 0.25 },
+    trait: {
+      name: 'Light Eaters',
+      description: 'Forage on the side: they eat 25% less from the stores.',
+      effects: [{ kind: 'mealSize', percent: -25 }],
+    },
     blurb: 'Foragers and cooks who would rather be napping.',
   },
 ]
@@ -74,6 +99,46 @@ export const NEED_LABELS: Record<string, { name: string; icon: string }> = {
   brawling: { name: 'Brawling', icon: '🥊' },
   treatment: { name: 'Treatment', icon: '🍵' },
 }
+
+/**
+ * Personal quirks rolled when a villager arrives. Effects are read in the
+ * engine wherever the number they bend is computed.
+ */
+export interface VillagerTraitDef {
+  id: VillagerTraitId
+  name: string
+  icon: string
+  description: string
+  /** Multiplier on assigned work speed. */
+  work?: number
+  /** Multiplier on assigned work speed during the Storm only. */
+  stormWork?: number
+  /** Multiplier on food eaten. */
+  meals?: number
+  /** Multiplier on build contribution while idle. */
+  build?: number
+  /** Multiplier on glade-clearing contribution. */
+  clear?: number
+  /** Extra work multiplier at gathering camps. */
+  gatherWork?: number
+}
+
+const traitDefs: VillagerTraitDef[] = [
+  { id: 'diligent', name: 'Diligent', icon: '💪', description: 'Works 15% faster.', work: 1.15 },
+  { id: 'sluggish', name: 'Sluggish', icon: '🥱', description: 'Works 12% slower.', work: 0.88 },
+  { id: 'glutton', name: 'Glutton', icon: '🍖', description: 'Eats 30% more.', meals: 1.3 },
+  { id: 'frugal', name: 'Frugal', icon: '🥄', description: 'Eats 20% less.', meals: 0.8 },
+  { id: 'strongback', name: 'Strong Back', icon: '🧱', description: 'Builds 40% faster while idle.', build: 1.4 },
+  { id: 'pathfinder', name: 'Pathfinder', icon: '🧭', description: 'Clears glades 40% faster.', clear: 1.4 },
+  { id: 'forager', name: 'Forager', icon: '🍄', description: '20% faster at gathering camps.', gatherWork: 1.2 },
+  { id: 'stormborn', name: 'Stormborn', icon: '⛈️', description: 'Works 25% faster during the Storm.', stormWork: 1.25 },
+]
+
+export const VILLAGER_TRAITS: Record<VillagerTraitId, VillagerTraitDef> = Object.fromEntries(
+  traitDefs.map((d) => [d.id, d]),
+) as Record<VillagerTraitId, VillagerTraitDef>
+
+export const VILLAGER_TRAIT_LIST = traitDefs
 
 const FIRST_NAMES = [
   'Bram', 'Oda', 'Silt', 'Nessa', 'Kobb', 'Vell', 'Fenn', 'Ruk', 'Isla', 'Tamm',

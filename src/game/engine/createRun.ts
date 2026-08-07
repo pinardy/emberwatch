@@ -1,6 +1,11 @@
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
 import { ORDER_LIST } from '../content/orders'
-import { SPECIES, STARTING_SPECIES, villagerName } from '../content/species'
+import {
+  SPECIES,
+  STARTING_SPECIES,
+  VILLAGER_TRAIT_LIST,
+  villagerName,
+} from '../content/species'
 import type {
   BuildingInstance,
   MetaState,
@@ -18,8 +23,10 @@ import {
   STARTING_VILLAGERS,
   MAX_IMPATIENCE,
   MAX_REPUTATION,
+  VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { offerBlueprint } from './events'
+import { defaultCaravan } from './trade'
 import { hexKey } from './hex'
 import { generateMap } from './mapgen'
 import { depositsInRangeOf } from './production'
@@ -62,11 +69,15 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
   for (let i = 0; i < STARTING_VILLAGERS; i++) {
     const sp = speciesPool[i % speciesPool.length]
     const id = `v${i}`
+    const trait = rng.chance(VILLAGER_TRAIT_CHANCE)
+      ? rng.pick(VILLAGER_TRAIT_LIST).id
+      : undefined
     villagers[id] = {
       id,
       species: sp,
       name: villagerName(i),
       assignment: null,
+      ...(trait ? { trait } : {}),
     }
   }
 
@@ -107,6 +118,12 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
     orders: [],
     cornerstones: meta?.upgrades.includes('citadelBlessing') ? ['campfireTales'] : [],
     cornerstonesTaken: 0,
+    threats: [],
+    threatCounter: 0,
+    ongoing: [],
+    caravan: defaultCaravan(),
+    rerollsUsed: 0,
+    soothesUsed: 0,
     pendingChoices: [],
     log: [],
     logCounter: 0,

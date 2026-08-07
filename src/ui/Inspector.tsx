@@ -2,11 +2,15 @@ import { BUILDINGS } from '../game/content/buildings'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
 import { NEED_LABELS, SPECIES } from '../game/content/species'
-import { isReachable } from '../game/engine/actions'
+import { isReachable, rushCost } from '../game/engine/actions'
 import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { computeModifiers } from '../game/engine/modifiers'
 import { availableRecipes, idleVillagers } from '../game/engine/queries'
-import { seasonMultiplier, workRate } from '../game/engine/production'
+import {
+  adjacencyMultiplier,
+  seasonMultiplier,
+  workRate,
+} from '../game/engine/production'
 import { useGameStore, useRun } from '../game/store'
 import type { BuildingInstance, Recipe, RunState } from '../game/types'
 
@@ -92,8 +96,11 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
   const mods = computeModifiers(run)
   const recipes = availableRecipes(building)
   const active = def.recipes.find((r) => r.id === building.activeRecipeId)
-  const rate = workRate(run, building, mods) * seasonMultiplier(building.defId, run.season.season)
+  const rate =
+    workRate(run, building, mods) *
+    seasonMultiplier(building.defId, run.season.season, mods)
   const idle = idleVillagers(run).length
+  const adjacent = adjacencyMultiplier(run, building) > 1
 
   return (
     <div className="inspector-body">
@@ -121,6 +128,14 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
               style={{ width: `${(building.buildProgress / def.buildSeconds) * 100}%` }}
             />
           </div>
+          <button
+            type="button"
+            className="wide-button"
+            disabled={(run.stock.amber ?? 0) < rushCost(run, building.id)}
+            onClick={() => useGameStore.getState().rush(building.id)}
+          >
+            ⚡ Rush for {rushCost(run, building.id)} {RESOURCES.amber.icon}
+          </button>
         </>
       ) : (
         <>
@@ -200,7 +215,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
                   </div>
                   <small className="muted">
                     {rate <= 0
-                      ? seasonMultiplier(building.defId, run.season.season) === 0
+                      ? seasonMultiplier(building.defId, run.season.season, mods) === 0
                         ? 'Idle — this building produces nothing during the Storm.'
                         : 'Idle — assign a worker.'
                       : `${rate.toFixed(2)} work/s → one batch every ${(
@@ -223,6 +238,17 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
                   .map((id) => RESOURCES[id as keyof typeof RESOURCES]?.name)
                   .join(', ')}
                 .
+              </p>
+            </section>
+          )}
+
+          {def.adjacency && (
+            <section className="inspector-section">
+              <h4>Adjacency</h4>
+              <p className="muted">
+                {adjacent ? '✅' : '▫'} +{def.adjacency.percent}% work speed next to a{' '}
+                {BUILDINGS[def.adjacency.nearId]?.name}
+                {adjacent ? ' — active.' : ' — not adjacent.'}
               </p>
             </section>
           )}

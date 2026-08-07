@@ -1728,3 +1728,286 @@ code {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ==========================================================================
+   Season tint & storm rain — atmosphere layered over the whole game surface.
+   ========================================================================== */
+
+.season-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: background 2.5s ease, opacity 2.5s ease;
+}
+
+.game {
+  position: relative;
+}
+
+.game[data-season='drizzle'] .season-tint {
+  background: linear-gradient(180deg, rgba(96, 128, 160, 0.05), rgba(80, 110, 140, 0.03));
+}
+
+.game[data-season='clearance'] .season-tint {
+  background: linear-gradient(180deg, rgba(233, 210, 140, 0.05), rgba(200, 180, 120, 0.02));
+}
+
+.game[data-season='storm'] .season-tint {
+  background:
+    repeating-linear-gradient(
+      112deg,
+      transparent 0px,
+      transparent 7px,
+      rgba(150, 180, 210, 0.05) 7px,
+      rgba(150, 180, 210, 0.05) 8px
+    ),
+    radial-gradient(ellipse at 50% 120%, transparent 55%, rgba(20, 16, 40, 0.28) 100%),
+    linear-gradient(180deg, rgba(40, 44, 80, 0.12), rgba(24, 28, 52, 0.1));
+  animation: rain-drift 0.5s linear infinite;
+}
+
+@keyframes rain-drift {
+  from {
+    background-position: 0 0, 0 0, 0 0;
+  }
+  to {
+    background-position: -20px 8px, 0 0, 0 0;
+  }
+}
+
+/* ==========================================================================
+   Threats — the red strip of things that will strike again.
+   ========================================================================== */
+
+.threat-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  z-index: 24;
+  max-width: min(560px, calc(100vw - 24px));
+}
+
+.threat-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(52, 22, 22, 0.96);
+  border: 1px solid #8a4a44;
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  box-shadow: var(--shadow);
+  animation: rise 180ms ease;
+}
+
+.threat-icon {
+  font-size: 22px;
+}
+
+.threat-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.threat-text strong {
+  display: block;
+  color: #f4cec9;
+  font-family: var(--font);
+}
+
+.threat-text small {
+  color: #d8a9a2;
+  font-size: 12px;
+}
+
+.threat-card button {
+  background: rgba(90, 38, 34, 0.9);
+  border-color: #a35b52;
+  color: #ffe9e4;
+  white-space: nowrap;
+}
+
+.threat-card button:hover:not(:disabled) {
+  background: #6d2e29;
+}
+
+/* ==========================================================================
+   Tips coach — one gentle card at a time, bottom-left.
+   ========================================================================== */
+
+.tip-coach {
+  position: fixed;
+  bottom: 14px;
+  left: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  max-width: 340px;
+  background: rgba(20, 27, 33, 0.97);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  z-index: 40;
+  box-shadow: var(--shadow);
+  animation: rise 220ms ease;
+}
+
+.tip-coach .tip-body strong {
+  color: var(--gold);
+  font-family: var(--font);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.tip-coach p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.tip-coach button {
+  flex-shrink: 0;
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ==========================================================================
+   Meters: floating deltas & the impatience pulse.
+   ========================================================================== */
+
+.meter {
+  position: relative;
+}
+
+.floaters {
+  position: absolute;
+  right: 6px;
+  top: -4px;
+  pointer-events: none;
+}
+
+.floater {
+  position: absolute;
+  right: 0;
+  font-weight: 700;
+  font-size: 13px;
+  animation: float-up 1.4s ease-out forwards;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.floater.is-good {
+  color: var(--good);
+}
+
+.floater.is-bad {
+  color: var(--bad);
+}
+
+@keyframes float-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  20% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+}
+
+.pulse-once {
+  animation: meter-pulse 700ms ease;
+}
+
+@keyframes meter-pulse {
+  30% {
+    transform: scale(1.35);
+  }
+}
+
+/* ==========================================================================
+   Trade, rerolls, and other amber levers.
+   ========================================================================== */
+
+.trade-heading {
+  margin: 10px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.trade-card.is-wanted {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px rgba(217, 180, 106, 0.35);
+}
+
+.wide-button {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 12px;
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.wide-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 12px;
+}
+
+.reroll-button {
+  border-color: var(--gold);
+  color: var(--gold);
+  border-radius: 20px;
+  padding: 7px 18px;
+}
+
+.reroll-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ==========================================================================
+   Traits & warmth.
+   ========================================================================== */
+
+.species-trait {
+  display: block;
+  color: var(--gold);
+  margin-top: 2px;
+}
+
+.villager-trait {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--gold);
+  font-weight: 400;
+}
+
+.warmth-ring {
+  fill: rgba(217, 180, 106, 0.05);
+  stroke: var(--gold);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+  pointer-events: none;
+  animation: warmth-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes warmth-breathe {
+  50% {
+    stroke-opacity: 0.45;
+  }
+}

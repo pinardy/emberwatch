@@ -60,6 +60,11 @@ export function BuildPanel() {
                         {def.housing ? <em>🛏 {def.housing}</em> : null}
                         {def.storage ? <em>📦 {def.storage}</em> : null}
                         {def.gatherRadius ? <em>◎ {def.gatherRadius}</em> : null}
+                        {def.adjacency ? (
+                          <em title={`+${def.adjacency.percent}% work speed next to a ${BUILDINGS[def.adjacency.nearId]?.name}`}>
+                            🔗 {BUILDINGS[def.adjacency.nearId]?.icon} +{def.adjacency.percent}%
+                          </em>
+                        ) : null}
                         {def.service ? (
                           <em>
                             {NEED_LABELS[def.service.need].icon}{' '}

@@ -1,5 +1,5 @@
 import { BUILDINGS } from '../game/content/buildings'
-import { NEED_LABELS, SPECIES } from '../game/content/species'
+import { NEED_LABELS, SPECIES, VILLAGER_TRAITS } from '../game/content/species'
 import { computeModifiers } from '../game/engine/modifiers'
 import {
   SERVICE_COVERAGE_RATIO,
@@ -41,6 +41,9 @@ export function VillagerPanel() {
                     {def.name} <small>×{count}</small>
                   </strong>
                   <small>{def.blurb}</small>
+                  <small className="species-trait" title={def.trait.description}>
+                    ✨ {def.trait.name} — {def.trait.description}
+                  </small>
                 </div>
                 <div
                   className={`species-resolve ${
@@ -130,15 +133,20 @@ export function VillagerPanel() {
               label = def ? `${def.icon} ${def.name}` : 'Working'
               tileKey = building?.tile ?? null
             }
+            const trait = v.trait ? VILLAGER_TRAITS[v.trait] : undefined
             return (
               <button
                 type="button"
                 className={`villager ${assignment ? '' : 'is-idle'}`}
                 key={v.id}
                 onClick={() => tileKey && selectTile(tileKey)}
+                title={trait ? `${trait.name}: ${trait.description}` : undefined}
               >
                 <span>{SPECIES[v.species].icon}</span>
-                <strong>{v.name}</strong>
+                <strong>
+                  {v.name}
+                  {trait && <em className="villager-trait"> {trait.icon} {trait.name}</em>}
+                </strong>
                 <small>{label}</small>
               </button>
             )

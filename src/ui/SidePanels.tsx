@@ -1,12 +1,15 @@
 import { CORNERSTONES } from '../game/content/cornerstones'
 import { ORDERS, describeGoal } from '../game/content/orders'
 import { RESOURCES, RESOURCE_LIST } from '../game/content/resources'
-import { buyPrice, hasTradingPost } from '../game/engine/actions'
+import { sootheCost } from '../game/engine/actions'
+import { TRADE_LOT } from '../game/engine/balance'
+import { hasTradingPost, offerPrice, sellPrice } from '../game/engine/trade'
 import { useGameStore, useRun } from '../game/store'
 import type { ResourceId } from '../game/types'
 
 export function OrdersPanel() {
   const run = useRun()
+  const soothe = useGameStore((s) => s.soothe)
   if (!run) return null
   return (
     <div className="panel-body">
@@ -36,6 +39,22 @@ export function OrdersPanel() {
       </section>
 
       <section className="build-group">
+        <h3>Petition the Queen</h3>
+        <p className="panel-hint">
+          A gift of amber buys back a point of her patience. The price climbs with
+          each petition.
+        </p>
+        <button
+          type="button"
+          className="wide-button"
+          disabled={(run.stock.amber ?? 0) < sootheCost(run) || run.impatience < 1}
+          onClick={() => soothe()}
+        >
+          🕊️ Soothe the Queen — {sootheCost(run)} {RESOURCES.amber.icon} (⏳ −1)
+        </button>
+      </section>
+
+      <section className="build-group">
         <h3>Cornerstones</h3>
         {run.cornerstones.length === 0 && (
           <p className="muted">None yet. They are offered at reputation milestones.</p>
@@ -56,6 +75,23 @@ export function OrdersPanel() {
           })}
         </div>
       </section>
+
+      {run.ongoing.length > 0 && (
+        <section className="build-group">
+          <h3>Pacts &amp; blessings</h3>
+          <div className="chip-column">
+            {run.ongoing.map((effect) => (
+              <div className="cornerstone-chip rarity-rare" key={effect.id}>
+                <span>{effect.icon}</span>
+                <div>
+                  <strong>{effect.name}</strong>
+                  <small>{effect.description}</small>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -82,18 +118,21 @@ export function LogPanel() {
   )
 }
 
-const TRADE_AMOUNT = 5
-
-/** Simple amber shop. Buying is deliberately expensive — it is a safety valve. */
+/**
+ * Caravan trading. While a caravan is in town you buy its rotating lots and
+ * sell your surplus — it pays double for the one good it wants this visit.
+ */
 export function TradePanel() {
   const run = useRun()
-  const buy = useGameStore((s) => s.buy)
+  const buyLot = useGameStore((s) => s.buyLot)
+  const sell = useGameStore((s) => s.sell)
   if (!run) return null
 
   const available = hasTradingPost(run)
   const amber = run.stock.amber ?? 0
+  const caravan = run.caravan
   const sellable = RESOURCE_LIST.filter(
-    (r) => r.category === 'material' || r.category === 'rawFood' || r.category === 'serviceGood',
+    (r) => r.category !== 'currency' && (run.stock[r.id] ?? 0) >= TRADE_LOT,
   )
 
   return (
@@ -107,30 +146,67 @@ export function TradePanel() {
         </div>
         {!available ? (
           <p className="muted">
-            Build a Trading Post to deal with passing caravans. Its own recipes turn goods
-            into amber; here you can spend that amber on what you are short of.
+            Build a Trading Post and caravans will start calling. They carry rotating
+            stock, and each one pays double for a good it wants.
+          </p>
+        ) : !caravan.here ? (
+          <p className="muted">
+            🐫 The next caravan arrives in about{' '}
+            <strong>{Math.max(1, Math.ceil(caravan.timer / 60))} min</strong>. Stock up
+            on whatever it might want.
           </p>
         ) : (
           <>
             <p className="panel-hint">
-              Caravans charge a 60% markup. Buy {TRADE_AMOUNT} at a time.
+              🐫 In town for {Math.ceil(caravan.timer)}s — paying double for{' '}
+              <strong>
+                {RESOURCES[caravan.wants]?.icon} {RESOURCES[caravan.wants]?.name}
+              </strong>
+              .
             </p>
+            <h4 className="trade-heading">For sale</h4>
+            <div className="trade-grid">
+              {caravan.offers.map((offer, index) => {
+                const price = offerPrice(run, index)
+                return (
+                  <button
+                    key={`${offer.resource}-${index}`}
+                    type="button"
+                    className="trade-card"
+                    disabled={offer.sold || amber < price}
+                    onClick={() => buyLot(index)}
+                  >
+                    <span>{RESOURCES[offer.resource]?.icon}</span>
+                    <strong>
+                      {offer.amount} {RESOURCES[offer.resource]?.name}
+                    </strong>
+                    <small>{offer.sold ? 'Sold' : `${price} amber`}</small>
+                  </button>
+                )
+              })}
+            </div>
+            <h4 className="trade-heading">Sell (lots of {TRADE_LOT})</h4>
+            {sellable.length === 0 && (
+              <p className="muted">Nothing in the stockpile makes a full lot.</p>
+            )}
             <div className="trade-grid">
               {sellable.map((resource) => {
-                const price = buyPrice(resource.id as ResourceId, TRADE_AMOUNT)
+                const paid = sellPrice(run, resource.id as ResourceId, TRADE_LOT)
+                const wanted = caravan.wants === resource.id
                 return (
                   <button
                     key={resource.id}
                     type="button"
-                    className="trade-card"
-                    disabled={amber < price}
-                    onClick={() => buy(resource.id as ResourceId, TRADE_AMOUNT)}
+                    className={`trade-card ${wanted ? 'is-wanted' : ''}`}
+                    onClick={() => sell(resource.id as ResourceId)}
                   >
                     <span>{resource.icon}</span>
                     <strong>
-                      {TRADE_AMOUNT} {resource.name}
+                      {TRADE_LOT} {resource.name}
                     </strong>
-                    <small>{price} amber</small>
+                    <small>
+                      {wanted ? '★ ' : ''}+{paid} amber
+                    </small>
                   </button>
                 )
               })}

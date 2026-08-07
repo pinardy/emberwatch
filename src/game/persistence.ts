@@ -1,4 +1,5 @@
 import { META_VERSION, defaultMeta } from './content/meta'
+import { defaultCaravan } from './engine/trade'
 import type { MetaState, RunState } from './types'
 
 const RUN_KEY = 'emberwatch.run.v1'
@@ -9,10 +10,12 @@ export interface Settings {
   /** Auto-pause when a choice appears or the window loses focus. */
   pauseOnBlur: boolean
   showTileGrid: boolean
+  /** Master switch for the synthesised cues and rain ambience. */
+  sound: boolean
 }
 
 export function defaultSettings(): Settings {
-  return { pauseOnBlur: true, showTileGrid: true }
+  return { pauseOnBlur: true, showTileGrid: true, sound: true }
 }
 
 function read<T>(key: string): T | null {
@@ -36,6 +39,13 @@ function write(key: string, value: unknown): void {
 export function loadRun(): RunState | null {
   const run = read<RunState>(RUN_KEY)
   if (!run || typeof run.seed !== 'number' || !run.tiles) return null
+  // Saves from before threats/caravans/ongoing effects get safe defaults.
+  run.threats ??= []
+  run.threatCounter ??= 0
+  run.ongoing ??= []
+  run.caravan ??= defaultCaravan()
+  run.rerollsUsed ??= 0
+  run.soothesUsed ??= 0
   return run
 }
 

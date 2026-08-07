@@ -2,13 +2,17 @@ import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CORNERSTONE_LIST, CORNERSTONES, RARITY_WEIGHTS } from '../content/cornerstones'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS, describeGoal, evaluateGoal } from '../content/orders'
-import { SPECIES, villagerName } from '../content/species'
-import type { RunState, ServiceNeed } from '../types'
+import { SPECIES, VILLAGER_TRAIT_LIST, villagerName } from '../content/species'
+import type { ResourceBag, ResourceId, RunState, ServiceNeed } from '../types'
 import {
   CLEAR_RATE_PER_VILLAGER,
   GLADES_PER_REPUTATION,
   HOSTILITY_PER_GLADE_CLEARED,
+  IMPATIENCE_PER_VILLAGER_LOST,
+  REROLL_BASE_COST,
+  REROLL_COST_GROWTH,
   REWARD_MILESTONES,
+  VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { drawOrder, pushLog } from './createRun'
 import type { Modifiers } from './modifiers'
@@ -16,12 +20,32 @@ import { refreshDepositCaches } from './production'
 import { canAfford, grant, population, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { addImpatience, addReputation, removeVillager, unassign } from './society'
+import { clearMultiplier } from './traits'
+
+/** Scales a resource bag, rounding to whole units. */
+function scaleBag(bag: ResourceBag, factor: number): ResourceBag {
+  if (factor === 1) return bag
+  const out: ResourceBag = {}
+  for (const [id, amount] of Object.entries(bag)) {
+    const qty = Math.round((amount ?? 0) * factor)
+    if (qty > 0) out[id as ResourceId] = qty
+  }
+  return out
+}
 
 /** Advances any glade with villagers assigned to clearing it. */
 export function stepClearing(s: RunState, dt: number, mods: Modifiers): void {
+  // Per-glade clearing power: harpies and pathfinders count for more.
+  const power: Record<string, number> = {}
+  for (const v of Object.values(s.villagers)) {
+    if (!v.assignment?.startsWith('clearing:')) continue
+    const gladeId = v.assignment.slice('clearing:'.length)
+    power[gladeId] = (power[gladeId] ?? 0) + CLEAR_RATE_PER_VILLAGER * clearMultiplier(v)
+  }
+
   for (const glade of Object.values(s.glades)) {
     if (glade.cleared || glade.clearers <= 0) continue
-    glade.clearProgress += glade.clearers * CLEAR_RATE_PER_VILLAGER * mods.clearSpeed * dt
+    glade.clearProgress += (power[glade.id] ?? 0) * mods.clearSpeed * dt
     if (glade.clearProgress < glade.clearWork) continue
 
     // --- glade taken ------------------------------------------------------
@@ -38,9 +62,10 @@ export function stepClearing(s: RunState, dt: number, mods: Modifiers): void {
     for (const id of glade.neighbors) s.glades[id].discovered = true
     glade.discovered = true
 
-    const added = grant(s.stock, glade.reward, s.storageCap, storageUsed(s))
+    const loot = scaleBag(glade.reward, mods.gladeLoot)
+    const added = grant(s.stock, loot, s.storageCap, storageUsed(s))
     s.stats.resourcesProduced += added
-    s.hostility += HOSTILITY_PER_GLADE_CLEARED
+    s.hostility += HOSTILITY_PER_GLADE_CLEARED * mods.gladeHostility
 
     refreshDepositCaches(s)
 
@@ -92,20 +117,96 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
       s.stats.villagersLost++
     }
   }
+  if (option.villagerGain) {
+    for (let i = 0; i < option.villagerGain; i++) addVillager(s)
+  }
 
-  // "Stragglers' Camp" style options that bring people with them.
-  if (def.id === 'stragglersCamp' && optionIndex === 0) {
-    for (let i = 0; i < 3; i++) addVillager(s)
+  if (option.threat) {
+    const gladeId = choice.gladeId ?? ''
+    s.threats.push({
+      ...option.threat,
+      id: `t${s.threatCounter++}`,
+      gladeId,
+      timer: option.threat.interval,
+    })
+    pushLog(s, `${option.threat.name} is loose. Appease it before it strikes.`, 'bad')
+  }
+
+  if (option.ongoing) {
+    s.ongoing.push({ ...option.ongoing, id: `g${s.ongoing.length}_${def.id}` })
+    pushLog(s, `${option.ongoing.name}: ${option.ongoing.description}`, 'info')
   }
 
   pushLog(s, `${def.name}: ${option.label}.`, option.hostility && option.hostility > 0 ? 'bad' : 'info')
   s.pendingChoices.shift()
 }
 
+// ---------------------------------------------------------------------------
+// Threats
+// ---------------------------------------------------------------------------
+
+/**
+ * Threats strike on a timer until they are appeased. Each strike is logged, so
+ * a player who ignores one can read exactly what it is costing them.
+ */
+export function stepThreats(s: RunState, dt: number): void {
+  for (const threat of s.threats) {
+    threat.timer -= dt
+    if (threat.timer > 0) continue
+    threat.timer += threat.interval
+
+    const strike = threat.strike
+    const parts: string[] = []
+    if (strike.hostility) {
+      s.hostility = Math.max(0, s.hostility + strike.hostility)
+      parts.push(`hostility +${strike.hostility}`)
+    }
+    if (strike.impatience) {
+      addImpatience(s, strike.impatience)
+      parts.push(`the Queen frets`)
+    }
+    if (strike.stockLoss) {
+      for (const [id, amount] of Object.entries(strike.stockLoss)) {
+        const key = id as keyof typeof s.stock
+        const taken = Math.min(s.stock[key] ?? 0, amount ?? 0)
+        if (taken > 0) {
+          spend(s.stock, { [key]: taken })
+          parts.push(`${taken} ${key} stolen`)
+        }
+      }
+    }
+    if (strike.villagerLoss) {
+      for (let i = 0; i < strike.villagerLoss; i++) {
+        const victim = Object.values(s.villagers)[0]
+        if (!victim) break
+        removeVillager(s, victim.id)
+        s.stats.villagersLost++
+        addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
+        parts.push(`${victim.name} is taken`)
+      }
+    }
+    pushLog(s, `${threat.icon} ${threat.name} strikes — ${parts.join(', ') || 'the settlement shudders'}.`, 'bad')
+  }
+}
+
+/** Pays a threat off. Returns an error string, or null on success. */
+export function appeaseThreat(s: RunState, threatId: string): string | null {
+  const threat = s.threats.find((t) => t.id === threatId)
+  if (!threat) return 'No such threat.'
+  if (!canAfford(s.stock, threat.appease)) return 'Not enough to appease it.'
+  spend(s.stock, threat.appease)
+  s.threats = s.threats.filter((t) => t.id !== threatId)
+  pushLog(s, `${threat.icon} ${threat.name} has been dealt with.`, 'good')
+  return null
+}
+
 /** Adds a villager of a random species from the run's pool. */
 export function addVillager(s: RunState): string | null {
   const rng = makeRng(s.seed, s.rngCursor)
   const species = rng.pick(s.speciesPool)
+  const trait = rng.chance(VILLAGER_TRAIT_CHANCE)
+    ? rng.pick(VILLAGER_TRAIT_LIST).id
+    : undefined
   s.rngCursor = rng.cursor()
   const index = Object.keys(s.villagers).length + s.stats.villagersLost
   const id = `v${index}_${s.clock.toFixed(0)}`
@@ -114,6 +215,7 @@ export function addVillager(s: RunState): string | null {
     species,
     name: villagerName(index),
     assignment: null,
+    ...(trait ? { trait } : {}),
   }
   return id
 }
@@ -287,6 +389,54 @@ function refreshQueuedChoices(s: RunState): void {
       }
     }
   }
+}
+
+/** Amber cost of the next draft reroll — it steepens with use. */
+export function rerollCost(s: RunState): number {
+  return REROLL_BASE_COST + s.rerollsUsed * REROLL_COST_GROWTH
+}
+
+/**
+ * Re-draws the options of the open draft for amber. A well-loved roguelite
+ * lever: it converts a lucky economy into slightly better luck.
+ */
+export function rerollChoice(s: RunState): string | null {
+  const choice = s.pendingChoices[0]
+  if (!choice) return 'Nothing to reroll.'
+  if (choice.kind === 'gladeEvent') return 'The forest does not renegotiate.'
+  const cost = rerollCost(s)
+  if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
+
+  if (choice.kind === 'blueprint') {
+    const rng = makeRng(s.seed, s.rngCursor)
+    const pool = BLUEPRINT_POOL.filter(
+      (id) => !s.unlockedBuildings.includes(id) && !choice.options.includes(id),
+    )
+    const fresh = rng.shuffle(pool).slice(0, 3)
+    s.rngCursor = rng.cursor()
+    if (fresh.length === 0) return 'There is nothing else to offer.'
+    choice.options = fresh
+  } else {
+    const rng = makeRng(s.seed, s.rngCursor)
+    const pool = CORNERSTONE_LIST.filter(
+      (c) => !s.cornerstones.includes(c.id) && !choice.options.includes(c.id),
+    )
+    const options: string[] = []
+    const remaining = [...pool]
+    for (let i = 0; i < 3 && remaining.length > 0; i++) {
+      const pick = rng.weighted(remaining, (c) => RARITY_WEIGHTS[c.rarity])
+      options.push(pick.id)
+      remaining.splice(remaining.indexOf(pick), 1)
+    }
+    s.rngCursor = rng.cursor()
+    if (options.length === 0) return 'There is nothing else to offer.'
+    choice.options = options
+  }
+
+  spend(s.stock, { amber: cost })
+  s.rerollsUsed++
+  pushLog(s, `The offer is redrawn for ${cost} amber.`, 'info')
+  return null
 }
 
 // ---------------------------------------------------------------------------

@@ -345,7 +345,8 @@ const defs: BuildingDef[] = [
       { id: 'plank', inputs: { wood: 2 }, outputs: { plank: 2 }, seconds: 16 },
       { id: 'part', inputs: { wood: 2, resin: 1 }, outputs: { part: 2 }, seconds: 24 },
     ],
-    description: 'Saws wood into planks, or glues up mechanical parts.',
+    adjacency: { nearId: 'woodcuttersCamp', percent: 20 },
+    description: 'Saws wood into planks, or glues up mechanical parts. Works faster beside a Woodcutters’ Camp.',
   },
   {
     id: 'brickyard',
@@ -360,7 +361,8 @@ const defs: BuildingDef[] = [
       { id: 'brick', inputs: { clay: 2 }, outputs: { brick: 2 }, seconds: 17 },
       { id: 'brickStone', inputs: { clay: 1, stone: 2 }, outputs: { brick: 3 }, seconds: 22 },
     ],
-    description: 'Fires clay into bricks.',
+    adjacency: { nearId: 'clayPit', percent: 20 },
+    description: 'Fires clay into bricks. Works faster beside a Clay Pit.',
   },
   {
     id: 'weaver',
@@ -375,7 +377,8 @@ const defs: BuildingDef[] = [
       { id: 'fabric', inputs: { plantFiber: 3 }, outputs: { fabric: 3 }, seconds: 18 },
       { id: 'gear', inputs: { fabric: 1, plank: 1 }, outputs: { trainingGear: 3 }, seconds: 22 },
     ],
-    description: 'Spins plant fibre into fabric and stitches training gear.',
+    adjacency: { nearId: 'herbalistsCamp', percent: 15 },
+    description: 'Spins plant fibre into fabric and stitches training gear. Works faster beside an Herbalists’ Camp.',
   },
   {
     id: 'smelter',
@@ -389,7 +392,8 @@ const defs: BuildingDef[] = [
     recipes: [
       { id: 'bar', inputs: { copperOre: 2, wood: 1 }, outputs: { copperBar: 2 }, seconds: 22 },
     ],
-    description: 'Burns wood to render copper ore into bars.',
+    adjacency: { nearId: 'copperMine', percent: 20 },
+    description: 'Burns wood to render copper ore into bars. Works faster beside a Copper Mine.',
   },
   {
     id: 'toolshop',
@@ -404,7 +408,8 @@ const defs: BuildingDef[] = [
       { id: 'tool', inputs: { copperBar: 1, plank: 1 }, outputs: { tool: 2 }, seconds: 24 },
       { id: 'part', inputs: { copperBar: 1, fabric: 1 }, outputs: { part: 3 }, seconds: 26 },
     ],
-    description: 'Turns bars and planks into tools and parts.',
+    adjacency: { nearId: 'smelter', percent: 20 },
+    description: 'Turns bars and planks into tools and parts. Works faster beside a Smelter.',
   },
   {
     id: 'cookhouse',
@@ -420,7 +425,8 @@ const defs: BuildingDef[] = [
       { id: 'skewer', inputs: { meat: 2 }, outputs: { skewer: 3 }, seconds: 18 },
       { id: 'porridge', inputs: { root: 2, grain: 1 }, outputs: { porridge: 4 }, seconds: 22 },
     ],
-    description: 'Cooked food feeds villagers twice as far and lifts resolve.',
+    adjacency: { nearId: 'smallFarm', percent: 20 },
+    description: 'Cooked food feeds villagers twice as far and lifts resolve. Works faster beside a Small Farm.',
   },
   {
     id: 'smokehouse',
@@ -435,7 +441,8 @@ const defs: BuildingDef[] = [
       { id: 'jerky', inputs: { meat: 2, wood: 1 }, outputs: { jerky: 4 }, seconds: 20 },
       { id: 'eggJerky', inputs: { egg: 2, herb: 1 }, outputs: { jerky: 3 }, seconds: 20 },
     ],
-    description: 'Preserves meat over a slow fire.',
+    adjacency: { nearId: 'trappersCamp', percent: 20 },
+    description: 'Preserves meat over a slow fire. Works faster beside a Trappers’ Camp.',
   },
   {
     id: 'picklingShed',
@@ -465,7 +472,8 @@ const defs: BuildingDef[] = [
       { id: 'aleGrain', inputs: { grain: 2 }, outputs: { ale: 3 }, seconds: 18 },
       { id: 'aleBerry', inputs: { berry: 3 }, outputs: { ale: 3 }, seconds: 18 },
     ],
-    description: 'Ale keeps the tavern open and the villagers agreeable.',
+    adjacency: { nearId: 'smallFarm', percent: 15 },
+    description: 'Ale keeps the tavern open and the villagers agreeable. Works faster beside a Small Farm.',
   },
   {
     id: 'scribesOffice',
@@ -494,7 +502,8 @@ const defs: BuildingDef[] = [
       { id: 'tea', inputs: { herb: 2 }, outputs: { tea: 3 }, seconds: 18 },
       { id: 'incense', inputs: { herb: 2, resin: 1 }, outputs: { incense: 3 }, seconds: 20 },
     ],
-    description: 'Brews tea and rolls incense from gathered herbs.',
+    adjacency: { nearId: 'herbalistsCamp', percent: 15 },
+    description: 'Brews tea and rolls incense from gathered herbs. Works faster beside an Herbalists’ Camp.',
   },
 
   // -------------------------------------------------------------------------

@@ -20,10 +20,12 @@ import {
   stepClearing,
   stepNewcomers,
   stepOrders,
+  stepThreats,
 } from './events'
 import { computeModifiers } from './modifiers'
 import { stepProduction } from './production'
-import { computeStorageCap, idleVillagers, population, totalHousing } from './queries'
+import { computeStorageCap, population, totalHousing } from './queries'
+import { stepCaravan } from './trade'
 import {
   stepDepartures,
   stepFood,
@@ -52,12 +54,14 @@ export function tick(s: RunState, dt: number): void {
 
   advanceSeason(s, dt)
 
-  const idle = idleVillagers(s).length
-  stepProduction(s, dt, mods, idle)
+  stepProduction(s, dt, mods)
   stepClearing(s, dt, mods)
+  stepThreats(s, dt)
+  stepCaravan(s, dt)
 
   const fuelRate =
-    s.season.season === 'storm' ? HEARTH_FUEL_PER_SECOND : HEARTH_IDLE_FUEL_PER_SECOND
+    (s.season.season === 'storm' ? HEARTH_FUEL_PER_SECOND : HEARTH_IDLE_FUEL_PER_SECOND) *
+    mods.hearthFuel
   s.coldHearth = stepHearth(s, dt, fuelRate)
 
   stepFood(s, dt, mods)
@@ -65,12 +69,17 @@ export function tick(s: RunState, dt: number): void {
 
   const breakdowns = stepResolve(s, dt, mods)
   stepReputation(s, dt, mods, breakdowns)
-  stepImpatience(s, dt)
+  stepImpatience(s, dt, mods)
 
   for (const message of stepDepartures(s, dt)) pushLog(s, message, 'bad')
 
   if (NEWCOMER_SEASONS.includes(s.season.season)) {
-    stepNewcomers(s, dt, newcomerInterval(population(s)), totalHousing(s))
+    stepNewcomers(
+      s,
+      dt,
+      newcomerInterval(population(s)) * mods.newcomerRate,
+      totalHousing(s),
+    )
   }
 
   stepOrders(s)
