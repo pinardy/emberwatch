@@ -209,6 +209,10 @@ describe('app shell', () => {
     fireEvent.keyDown(input, { code: 'KeyD' })
     expect(panOf()).toEqual(before)
     input.remove()
+
+    // H jumps the camera home.
+    fireEvent.keyDown(window, { code: 'KeyH' })
+    expect(panOf()).toEqual({ x: 0, y: 0 })
   })
 
   it('advances the simulation when unpaused', () => {
