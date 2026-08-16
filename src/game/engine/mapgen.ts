@@ -35,14 +35,20 @@ export interface GeneratedMap {
 }
 
 /** Deposit themes, so each glade feels like it is *about* something. */
+/**
+ * Deposit themes, so each glade feels like it is *about* something. Every
+ * theme carries at least one renewable food source in its first four entries
+ * — with four deposits guaranteed per glade, even a quarry can graze a
+ * forager, which keeps far-flung expansions from being pure starvation traps.
+ */
 const GLADE_THEMES: { deposits: DepositId[]; terrain: TerrainId }[] = [
   { deposits: ['trees', 'trees', 'vegetation'], terrain: 'forest' },
   { deposits: ['trees', 'vegetation', 'game'], terrain: 'forest' },
-  { deposits: ['stoneVein', 'stoneVein', 'clayPatch'], terrain: 'rock' },
+  { deposits: ['stoneVein', 'stoneVein', 'clayPatch', 'vegetation'], terrain: 'rock' },
   { deposits: ['clayPatch', 'vegetation', 'trees'], terrain: 'marsh' },
   { deposits: ['fertileSoil', 'fertileSoil', 'vegetation'], terrain: 'fertile' },
   { deposits: ['game', 'game', 'vegetation'], terrain: 'forest' },
-  { deposits: ['orePatch', 'stoneVein', 'trees'], terrain: 'rock' },
+  { deposits: ['orePatch', 'stoneVein', 'trees', 'vegetation'], terrain: 'rock' },
   { deposits: ['vegetation', 'vegetation', 'fertileSoil'], terrain: 'fertile' },
 ]
 
@@ -194,7 +200,9 @@ export function generateMap(rng: Rng): GeneratedMap {
     // hovers there everywhere else.
     taken.push({ pos: seed.center, radius: isSettlement ? 1.6 : 1.0 })
 
-    const count = isSettlement ? theme.deposits.length : rng.range(3, 6)
+    // A guaranteed fourth deposit keeps the food economy honest — three-deposit
+    // glades starved too many otherwise-competent runs in continuous space.
+    const count = isSettlement ? theme.deposits.length : rng.range(4, 6)
     for (let i = 0; i < count; i++) {
       const kind = theme.deposits[i % theme.deposits.length]
       const radius = DEPOSIT_RADIUS[kind]
