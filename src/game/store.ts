@@ -33,7 +33,7 @@ import {
   saveSettings,
   type Settings,
 } from './persistence'
-import type { MetaState, ResourceId, RunState, SpeciesId } from './types'
+import type { MetaState, ResourceId, RunState, SpeciesId, Vec2 } from './types'
 
 export type Screen = 'menu' | 'setup' | 'game' | 'citadel'
 export type SidePanel = 'build' | 'villagers' | 'orders' | 'log' | 'trade' | null
@@ -52,7 +52,8 @@ interface GameStore {
 
   // --- UI selection --------------------------------------------------------
   buildMode: string | null
-  selectedTile: string | null
+  selectedBuilding: string | null
+  selectedDeposit: string | null
   selectedGlade: string | null
   panel: SidePanel
 
@@ -71,10 +72,12 @@ interface GameStore {
 
   // --- commands ------------------------------------------------------------
   setBuildMode: (defId: string | null) => void
-  selectTile: (tileKey: string | null) => void
+  selectBuilding: (buildingId: string | null) => void
+  selectDeposit: (depositId: string | null) => void
   selectGlade: (gladeId: string | null) => void
+  clearSelection: () => void
   setPanel: (panel: SidePanel) => void
-  place: (tileKey: string) => void
+  place: (pos: Vec2) => void
   demolish: (buildingId: string) => void
   hire: (buildingId: string, villagerId?: string) => void
   fire: (buildingId: string, villagerId?: string) => void
@@ -118,7 +121,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   speed: 1,
   notice: null,
   buildMode: null,
-  selectedTile: null,
+  selectedBuilding: null,
+  selectedDeposit: null,
   selectedGlade: null,
   panel: 'build',
 
@@ -135,7 +139,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       version: get().version + 1,
       speed: 1,
       buildMode: null,
-      selectedTile: null,
+      selectedBuilding: null,
+      selectedDeposit: null,
       selectedGlade: null,
       panel: 'build',
       notice: null,
@@ -220,23 +225,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // Commands
   // -------------------------------------------------------------------------
   setBuildMode: (defId) =>
-    set({ buildMode: defId, selectedTile: null, notice: null }),
+    set({ buildMode: defId, selectedBuilding: null, selectedDeposit: null, notice: null }),
 
-  selectTile: (tileKey) => set({ selectedTile: tileKey, selectedGlade: null }),
-  selectGlade: (gladeId) => set({ selectedGlade: gladeId, selectedTile: null }),
+  selectBuilding: (buildingId) =>
+    set({ selectedBuilding: buildingId, selectedDeposit: null, selectedGlade: null }),
+  selectDeposit: (depositId) =>
+    set({ selectedDeposit: depositId, selectedBuilding: null, selectedGlade: null }),
+  selectGlade: (gladeId) =>
+    set({ selectedGlade: gladeId, selectedBuilding: null, selectedDeposit: null }),
+  clearSelection: () =>
+    set({ selectedBuilding: null, selectedDeposit: null, selectedGlade: null }),
   setPanel: (panel) => set({ panel }),
 
-  place: (tileKey) => {
+  // Build mode stays active after a successful placement, so camps and
+  // shelters can be laid down in quick succession, RTS-style.
+  place: (pos) => {
     const defId = get().buildMode
     if (!defId) return
-    runCommand(set, get, (run) => {
-      const error = placeBuilding(run, defId, tileKey)
-      if (!error) {
-        // Keep build mode active for rapid placement of camps and shelters.
-        set({ selectedTile: tileKey })
-      }
-      return error
-    })
+    runCommand(set, get, (run) => placeBuilding(run, defId, pos))
   },
 
   demolish: (buildingId) =>

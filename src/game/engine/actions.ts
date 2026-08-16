@@ -6,13 +6,18 @@ import type {
   ResourceBag,
   ResourceId,
   RunState,
+  Vec2,
 } from '../types'
 import {
+  BUILDING_GAP,
+  FOOTPRINT_RADIUS,
   RUSH_COST_PER_SECOND,
   SOOTHE_BASE_COST,
   SOOTHE_COST_GROWTH,
 } from './balance'
 import { pushLog } from './createRun'
+import { dist } from './geometry'
+import { gladeAt, insideWorld } from './mapgen'
 import { depositsInRangeOf } from './production'
 import {
   availableRecipes,
@@ -32,26 +37,41 @@ export type ActionError = string | null
 // Building placement
 // ---------------------------------------------------------------------------
 
-export function canPlaceBuilding(
-  s: RunState,
-  defId: string,
-  tileKey: string,
-): ActionError {
+/** Footprint radius for a building def, from its category. */
+export function footprintOf(defId: string): number {
+  const def = BUILDINGS[defId]
+  return def ? FOOTPRINT_RADIUS[def.category] : 0.6
+}
+
+export function canPlaceBuilding(s: RunState, defId: string, pos: Vec2): ActionError {
   const def = BUILDINGS[defId]
   if (!def) return 'Unknown building.'
   if (!s.unlockedBuildings.includes(defId)) return 'You do not have this blueprint.'
-  const tile = s.tiles[tileKey]
-  if (!tile) return 'Nothing there.'
-  if (tile.blocked) return 'The ground will not take a foundation.'
-  if (tile.buildingId) return 'Something is already built here.'
-  if (tile.deposit) return 'Clear the deposit tile — build beside it instead.'
-  if (!s.glades[tile.gladeId]?.cleared) return 'That glade has not been cleared.'
+  const radius = FOOTPRINT_RADIUS[def.category]
+  if (!insideWorld(s.world, pos, radius)) return 'Beyond the forest edge.'
+  const glade = gladeAt(s.glades, pos)
+  if (!glade?.cleared) return 'That ground has not been cleared.'
+  for (const obstacle of s.obstacles) {
+    if (dist(pos, obstacle.pos) < radius + obstacle.radius) {
+      return 'The ground will not take a foundation.'
+    }
+  }
+  for (const deposit of Object.values(s.deposits)) {
+    if (dist(pos, deposit.pos) < radius + deposit.radius) {
+      return 'A deposit is in the way — build beside it.'
+    }
+  }
+  for (const other of Object.values(s.buildings)) {
+    if (dist(pos, other.pos) < radius + footprintOf(other.defId) + BUILDING_GAP) {
+      return 'Too close to another building.'
+    }
+  }
   if (def.unique && Object.values(s.buildings).some((b) => b.defId === defId)) {
     return `You may only have one ${def.name}.`
   }
   if (!canAfford(s.stock, def.cost)) return 'Not enough materials.'
   if (def.gatherRadius) {
-    const deposits = depositsInRangeOf(s, tileKey, def.gatherRadius)
+    const deposits = depositsInRangeOf(s, pos, def.gatherRadius)
     const needed = [
       ...new Set(
         def.recipes
@@ -65,8 +85,8 @@ export function canPlaceBuilding(
   return null
 }
 
-export function placeBuilding(s: RunState, defId: string, tileKey: string): ActionError {
-  const error = canPlaceBuilding(s, defId, tileKey)
+export function placeBuilding(s: RunState, defId: string, pos: Vec2): ActionError {
+  const error = canPlaceBuilding(s, defId, pos)
   if (error) return error
   const def = BUILDINGS[defId]
   spend(s.stock, def.cost)
@@ -75,7 +95,8 @@ export function placeBuilding(s: RunState, defId: string, tileKey: string): Acti
   const instance: BuildingInstance = {
     id,
     defId,
-    tile: tileKey,
+    pos: { x: pos.x, y: pos.y },
+    gladeId: gladeAt(s.glades, pos)?.id ?? 'glade0',
     built: def.buildSeconds <= 0,
     buildProgress: 0,
     workers: [],
@@ -83,7 +104,7 @@ export function placeBuilding(s: RunState, defId: string, tileKey: string): Acti
     recipeProgress: 0,
     paused: false,
     depositsInRange: def.gatherRadius
-      ? depositsInRangeOf(s, tileKey, def.gatherRadius)
+      ? depositsInRangeOf(s, pos, def.gatherRadius)
       : {},
   }
   // Default a gathering camp to a recipe it can actually run.
@@ -91,7 +112,58 @@ export function placeBuilding(s: RunState, defId: string, tileKey: string): Acti
   if (usable.length > 0) instance.activeRecipeId = usable[0].id
 
   s.buildings[id] = instance
-  s.tiles[tileKey].buildingId = id
+  return null
+}
+
+/**
+ * Finds a legal position for a building: rings of candidate points spiralling
+ * out from each anchor. Camps anchor on the deposits they need; everything
+ * else packs in around the hearth. Used by the balance bot, the tests, and
+ * the "find a spot" UI helper — a competent-but-not-clever placement.
+ */
+export function findPlacement(s: RunState, defId: string, near?: Vec2): Vec2 | null {
+  const def = BUILDINGS[defId]
+  if (!def) return null
+  const hearth = Object.values(s.buildings).find(
+    (b) => BUILDINGS[b.defId]?.category === 'hearth',
+  )
+  const home = hearth?.pos ?? { x: 0, y: 0 }
+
+  const anchors: Vec2[] = []
+  if (near) anchors.push(near)
+  else {
+    const needed = new Set(
+      def.recipes.map((r) => r.requiresDeposit).filter((d): d is DepositId => d !== undefined),
+    )
+    if (def.gatherRadius && needed.size > 0) {
+      const usable = Object.values(s.deposits)
+        .filter(
+          (d) =>
+            needed.has(d.kind) &&
+            s.glades[d.gladeId]?.cleared &&
+            (d.amount === null || d.amount > 0),
+        )
+        .sort((a, b) => dist(a.pos, home) - dist(b.pos, home))
+      if (usable.length === 0) return null
+      anchors.push(...usable.slice(0, 4).map((d) => d.pos))
+    } else {
+      anchors.push(home)
+    }
+  }
+
+  const step = 0.5
+  for (const anchor of anchors) {
+    const maxRing = Math.ceil((def.gatherRadius ?? 8) / step)
+    for (let ring = 1; ring <= maxRing; ring++) {
+      const r = ring * step
+      const count = Math.max(6, Math.ceil((2 * Math.PI * r) / step))
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + ring * 0.7
+        const pos = { x: anchor.x + Math.cos(angle) * r, y: anchor.y + Math.sin(angle) * r }
+        if (canPlaceBuilding(s, defId, pos) === null) return pos
+      }
+    }
+  }
   return null
 }
 
@@ -111,7 +183,6 @@ export function demolishBuilding(s: RunState, buildingId: string): ActionError {
   }
   grant(s.stock, refund, s.storageCap, storageUsed(s))
 
-  delete s.tiles[building.tile].buildingId
   delete s.buildings[buildingId]
   return null
 }
@@ -253,7 +324,7 @@ export function rushConstruction(s: RunState, buildingId: string): ActionError {
   building.buildProgress = def?.buildSeconds ?? building.buildProgress
   s.stats.buildingsBuilt++
   if (def?.gatherRadius) {
-    building.depositsInRange = depositsInRangeOf(s, building.tile, def.gatherRadius)
+    building.depositsInRange = depositsInRangeOf(s, building.pos, def.gatherRadius)
   }
   pushLog(s, `${def?.name ?? 'A building'} rushed for ${cost} amber.`, 'info')
   return null

@@ -27,9 +27,7 @@ import {
 } from './balance'
 import { offerBlueprint } from './events'
 import { defaultCaravan } from './trade'
-import { hexKey } from './hex'
 import { generateMap } from './mapgen'
-import { depositsInRangeOf } from './production'
 import { makeRng } from './rng'
 
 export interface NewRunOptions {
@@ -41,7 +39,7 @@ export interface NewRunOptions {
 
 export function createRun({ seed, meta, species }: NewRunOptions): RunState {
   const rng = makeRng(seed, 0)
-  const { tiles, glades } = generateMap(rng)
+  const { world, glades, deposits, obstacles } = generateMap(rng)
 
   const available = meta
     ? [...new Set([...STARTING_SPECIES, ...meta.unlockedSpecies])]
@@ -49,11 +47,12 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
   const speciesPool = species ?? rng.sample(available, Math.min(3, available.length))
 
   // --- hearth ---------------------------------------------------------------
-  const hearthTile = hexKey(0, 0)
+  // The ancient hearth stands at the world's origin, in the settlement glade.
   const hearth: BuildingInstance = {
     id: 'hearth',
     defId: 'ancientHearth',
-    tile: hearthTile,
+    pos: { x: 0, y: 0 },
+    gladeId: 'glade0',
     built: true,
     buildProgress: 0,
     workers: [],
@@ -62,7 +61,6 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
     paused: false,
     depositsInRange: {},
   }
-  tiles[hearthTile].buildingId = hearth.id
 
   // --- starting villagers, spread across the drawn species ------------------
   const villagers: Record<string, Villager> = {}
@@ -91,8 +89,10 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
     phase: 'playing',
     season: { year: 1, season: 'drizzle', elapsed: 0, length: SEASON_LENGTH.drizzle },
     clock: 0,
-    tiles,
+    world,
     glades,
+    deposits,
+    obstacles,
     buildings: { [hearth.id]: hearth },
     villagers,
     stock,
@@ -141,9 +141,6 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
       ordersCompleted: 0,
     },
   }
-
-  // The hearth's storage is already counted above; recompute deposits cache.
-  hearth.depositsInRange = depositsInRangeOf(state, hearthTile, 0)
 
   // --- opening orders -------------------------------------------------------
   for (let i = 0; i < 3; i++) drawOrder(state)

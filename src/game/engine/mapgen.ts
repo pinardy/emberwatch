@@ -1,21 +1,37 @@
+import { Delaunay } from 'd3-delaunay'
 import { eventsOfKind } from '../content/gladeEvents'
 import type {
   DepositId,
   Glade,
   GladeKind,
-  Hex,
+  Obstacle,
   ResourceBag,
   TerrainId,
-  Tile,
+  Vec2,
+  WorldDeposit,
+  WorldInfo,
 } from '../types'
-import { hexDistance, hexKey, hexNeighbors, hexesInRadius } from './hex'
+import { dist, distToPolygonEdge, pointInPolygon, randomPointInPolygon } from './geometry'
 import type { Rng } from './rng'
 
-export const MAP_RADIUS = 8
+/**
+ * The world is a continuous rectangle centred on the hearth, partitioned into
+ * glades by a Voronoi diagram over seeded points. There is no grid: buildings
+ * stand at arbitrary positions, deposits and obstacles are circular features
+ * scattered inside their glade's polygon.
+ */
+
+export const WORLD_WIDTH = 28
+export const WORLD_HEIGHT = 22
+
+/** Keep everything a little inside the world's edge. */
+const EDGE_MARGIN = 1.2
 
 export interface GeneratedMap {
-  tiles: Record<string, Tile>
+  world: WorldInfo
   glades: Record<string, Glade>
+  deposits: Record<string, WorldDeposit>
+  obstacles: Obstacle[]
 }
 
 /** Deposit themes, so each glade feels like it is *about* something. */
@@ -37,42 +53,74 @@ const GLADE_NAMES = [
   'Rimefall', 'Harrowdeep', 'Broken Cairn', 'Nettlewick',
 ]
 
-export function generateMap(rng: Rng): GeneratedMap {
-  const all = hexesInRadius({ q: 0, r: 0 }, MAP_RADIUS)
+export const DEPOSIT_RADIUS: Record<DepositId, number> = {
+  trees: 0.85,
+  stoneVein: 0.6,
+  clayPatch: 0.55,
+  orePatch: 0.6,
+  vegetation: 0.55,
+  game: 0.6,
+  fertileSoil: 0.8,
+}
 
-  // --- 1. Seed the glades ---------------------------------------------------
-  const seeds: { id: string; center: Hex; kind: GladeKind }[] = [
-    { id: 'glade0', center: { q: 0, r: 0 }, kind: 'settlement' },
+export function generateMap(rng: Rng): GeneratedMap {
+  const world: WorldInfo = { width: WORLD_WIDTH, height: WORLD_HEIGHT }
+
+  // --- 1. Seed the glade centres --------------------------------------------
+  // Two rings around the settlement so the player always has a couple of easy
+  // neighbours, jittered so no two maps share a skeleton.
+  const seeds: { id: string; center: Vec2; kind: GladeKind }[] = [
+    { id: 'glade0', center: { x: 0, y: 0 }, kind: 'settlement' },
   ]
 
-  // Two rings of seeds so the player always has a couple of easy neighbours.
-  const innerCandidates = all.filter((h) => {
-    const d = hexDistance(h, { q: 0, r: 0 })
-    return d >= 3 && d <= 5
-  })
-  const outerCandidates = all.filter((h) => {
-    const d = hexDistance(h, { q: 0, r: 0 })
-    return d >= 6 && d <= MAP_RADIUS - 1
-  })
+  const placeRing = (count: number, minDist: number, maxDist: number, minGap: number) => {
+    const placed: Vec2[] = []
+    for (let i = 0; i < count; i++) {
+      for (let attempt = 0; attempt < 24; attempt++) {
+        const angle = ((i + rng.next() * 0.8) / count) * Math.PI * 2
+        const d = minDist + rng.next() * (maxDist - minDist)
+        const p = {
+          x: clamp(Math.cos(angle) * d, -(world.width / 2 - EDGE_MARGIN), world.width / 2 - EDGE_MARGIN),
+          y: clamp(Math.sin(angle) * d, -(world.height / 2 - EDGE_MARGIN), world.height / 2 - EDGE_MARGIN),
+        }
+        const clashes = [...placed, ...seeds.map((s) => s.center)].some(
+          (q) => dist(p, q) < minGap,
+        )
+        if (!clashes) {
+          placed.push(p)
+          break
+        }
+      }
+    }
+    return placed
+  }
 
-  const innerSeeds = pickSpread(rng, innerCandidates, 6, 3)
-  const outerSeeds = pickSpread(rng, outerCandidates, 8, 3)
+  const inner = placeRing(6, 6, 8, 2.6)
+  const outer = placeRing(8, 9.5, 12.5, 2.6)
 
-  innerSeeds.forEach((center, i) => {
+  inner.forEach((center, i) => {
     // Inner ring skews safe so the opening is survivable.
     const kind: GladeKind = rng.chance(0.45) ? 'small' : 'dangerous'
     seeds.push({ id: `glade${i + 1}`, center, kind })
   })
-  outerSeeds.forEach((center, i) => {
+  outer.forEach((center, i) => {
     const roll = rng.next()
     const kind: GladeKind = roll < 0.2 ? 'small' : roll < 0.7 ? 'dangerous' : 'forbidden'
-    seeds.push({ id: `glade${innerSeeds.length + i + 1}`, center, kind })
+    seeds.push({ id: `glade${inner.length + i + 1}`, center, kind })
   })
 
-  // --- 2. Voronoi assign every tile to its nearest seed ---------------------
-  const tiles: Record<string, Tile> = {}
-  const gladeTiles: Record<string, string[]> = {}
-  for (const seed of seeds) gladeTiles[seed.id] = []
+  // --- 2. Voronoi partition ---------------------------------------------------
+  const delaunay = Delaunay.from(
+    seeds.map((s) => s.center),
+    (p) => p.x,
+    (p) => p.y,
+  )
+  const voronoi = delaunay.voronoi([
+    -world.width / 2,
+    -world.height / 2,
+    world.width / 2,
+    world.height / 2,
+  ])
 
   const themeByGlade: Record<string, (typeof GLADE_THEMES)[number]> = {}
   for (const seed of seeds) {
@@ -88,64 +136,7 @@ export function generateMap(rng: Rng): GeneratedMap {
         : rng.pick(GLADE_THEMES)
   }
 
-  for (const h of all) {
-    let best = seeds[0]
-    let bestD = Infinity
-    for (const seed of seeds) {
-      // Bias toward the settlement so the starting glade is comfortably sized.
-      const bias = seed.kind === 'settlement' ? -1.2 : 0
-      const d = hexDistance(h, seed.center) + bias
-      if (d < bestD) {
-        bestD = d
-        best = seed
-      }
-    }
-    const key = hexKey(h.q, h.r)
-    const theme = themeByGlade[best.id]
-    const isCenter = best.center.q === h.q && best.center.r === h.r
-    const edgeOfMap = hexDistance(h, { q: 0, r: 0 }) === MAP_RADIUS
-
-    tiles[key] = {
-      q: h.q,
-      r: h.r,
-      key,
-      terrain: isCenter ? 'clearing' : jitterTerrain(rng, theme.terrain),
-      gladeId: best.id,
-      blocked: edgeOfMap ? true : theme.terrain === 'rock' && rng.chance(0.12),
-    }
-    gladeTiles[best.id].push(key)
-  }
-
-  // --- 3. Scatter deposits inside each glade -------------------------------
-  for (const seed of seeds) {
-    const theme = themeByGlade[seed.id]
-    const keys = rng.shuffle(gladeTiles[seed.id].filter((k) => !tiles[k].blocked))
-    // Settlement gets a guaranteed starter kit; others get 3-6 deposits.
-    const count =
-      seed.kind === 'settlement'
-        ? Math.min(6, keys.length)
-        : Math.min(keys.length, rng.range(3, 6))
-
-    for (let i = 0; i < count; i++) {
-      const key = keys[i]
-      if (!key) break
-      const depositId = theme.deposits[i % theme.deposits.length]
-      tiles[key].deposit = {
-        id: depositId,
-        amount: infiniteDeposit(depositId) ? null : rng.range(14, 30),
-      }
-      if (depositId === 'fertileSoil') tiles[key].terrain = 'fertile'
-    }
-
-    // Keep the hearth's own tile free of deposits so we can place it there.
-    const centerKey = hexKey(seed.center.q, seed.center.r)
-    if (seed.kind === 'settlement') {
-      delete tiles[centerKey].deposit
-      tiles[centerKey].blocked = false
-    }
-  }
-
-  // --- 4. Build glade records ----------------------------------------------
+  // --- 3. Glade records --------------------------------------------------------
   const glades: Record<string, Glade> = {}
   const dangerousEvents = rng.shuffle(eventsOfKind('dangerous').map((e) => e.id))
   const forbiddenEvents = rng.shuffle(eventsOfKind('forbidden').map((e) => e.id))
@@ -154,7 +145,10 @@ export function generateMap(rng: Rng): GeneratedMap {
   const names = rng.shuffle(GLADE_NAMES)
 
   seeds.forEach((seed, index) => {
-    const distance = hexDistance(seed.center, { q: 0, r: 0 })
+    const raw = voronoi.cellPolygon(index) ?? []
+    // d3 closes the ring (last point repeats the first) — drop the duplicate.
+    const polygon: Vec2[] = raw.slice(0, -1).map(([x, y]) => ({ x, y }))
+    const distance = dist(seed.center, { x: 0, y: 0 })
     const isSettlement = seed.kind === 'settlement'
     let eventId: string | undefined
     if (seed.kind === 'dangerous') {
@@ -167,9 +161,10 @@ export function generateMap(rng: Rng): GeneratedMap {
       id: seed.id,
       kind: seed.kind,
       name: isSettlement ? 'The Hearth' : (names[index % names.length] ?? `Glade ${index}`),
-      tiles: gladeTiles[seed.id],
+      polygon,
       center: seed.center,
-      neighbors: [],
+      terrain: themeByGlade[seed.id].terrain,
+      neighbors: [...voronoi.neighbors(index)].map((n) => seeds[n].id),
       discovered: isSettlement,
       cleared: isSettlement,
       clearWork: isSettlement ? 0 : clearWorkFor(seed.kind, distance),
@@ -180,31 +175,99 @@ export function generateMap(rng: Rng): GeneratedMap {
     }
   })
 
-  // --- 5. Work out glade adjacency -----------------------------------------
-  for (const tile of Object.values(tiles)) {
-    for (const n of hexNeighbors(tile)) {
-      const other = tiles[hexKey(n.q, n.r)]
-      if (!other || other.gladeId === tile.gladeId) continue
-      const list = glades[tile.gladeId].neighbors
-      if (!list.includes(other.gladeId)) list.push(other.gladeId)
-    }
-  }
-
   // Neighbours of the starting glade are visible from the outset.
   for (const id of glades.glade0.neighbors) glades[id].discovered = true
 
-  return { tiles, glades }
+  // --- 4. Scatter deposits and obstacles inside each glade ---------------------
+  const deposits: Record<string, WorldDeposit> = {}
+  const obstacles: Obstacle[] = []
+  let depositCounter = 0
+  let obstacleCounter = 0
+
+  for (const seed of seeds) {
+    const glade = glades[seed.id]
+    const theme = themeByGlade[seed.id]
+    const isSettlement = seed.kind === 'settlement'
+    const taken: { pos: Vec2; radius: number }[] = []
+    // The glade centre stays open: the hearth stands there in the settlement
+    // (with room to build a ring around it), and the clearing crew's plate
+    // hovers there everywhere else.
+    taken.push({ pos: seed.center, radius: isSettlement ? 1.6 : 1.0 })
+
+    const count = isSettlement ? theme.deposits.length : rng.range(3, 6)
+    for (let i = 0; i < count; i++) {
+      const kind = theme.deposits[i % theme.deposits.length]
+      const radius = DEPOSIT_RADIUS[kind]
+      const pos = scatter(rng, glade.polygon, radius * 0.5 + 0.25, taken, radius)
+      if (!pos) continue
+      taken.push({ pos, radius })
+      const id = `d${depositCounter++}`
+      deposits[id] = {
+        id,
+        kind,
+        pos,
+        radius,
+        amount: infiniteDeposit(kind) ? null : rng.range(14, 30),
+        gladeId: seed.id,
+      }
+    }
+
+    // Rocky and marshy ground gets unbuildable patches for placement to dodge.
+    const obstacleCount =
+      theme.terrain === 'rock' ? rng.range(2, 3) : theme.terrain === 'marsh' ? rng.range(1, 2) : rng.chance(0.3) ? 1 : 0
+    for (let i = 0; i < obstacleCount; i++) {
+      const radius = 0.5 + rng.next() * 0.5
+      const pos = scatter(rng, glade.polygon, radius + 0.2, taken, radius)
+      if (!pos) continue
+      taken.push({ pos, radius })
+      obstacles.push({
+        id: `o${obstacleCounter++}`,
+        kind: theme.terrain === 'marsh' ? 'mire' : 'crag',
+        pos,
+        radius,
+        gladeId: seed.id,
+      })
+    }
+  }
+
+  return { world, glades, deposits, obstacles }
 }
 
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
-function jitterTerrain(rng: Rng, base: TerrainId): TerrainId {
-  if (rng.chance(0.2)) {
-    return rng.pick<TerrainId>(['clearing', 'forest', 'marsh', 'rock', 'fertile'])
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v))
+}
+
+/**
+ * A point inside the polygon whose circle of `radius` keeps a small breathing
+ * gap from everything already placed. Cramped polygons relax the margins in
+ * stages rather than dropping the feature — a settlement without its starter
+ * trees is an unwinnable run, not a cosy one.
+ */
+function scatter(
+  rng: Rng,
+  polygon: Vec2[],
+  edgeMargin: number,
+  taken: { pos: Vec2; radius: number }[],
+  radius: number,
+): Vec2 | null {
+  const relaxations: [number, number][] = [
+    [edgeMargin, 0.35],
+    [Math.min(edgeMargin, 0.3), 0.15],
+    [0.1, 0],
+  ]
+  for (const [margin, gap] of relaxations) {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const p = randomPointInPolygon(() => rng.next(), polygon, margin, 20)
+      if (!p) break
+      if (taken.some((t) => dist(p, t.pos) < t.radius + radius + gap)) continue
+      return p
+    }
   }
-  return base
+  return null
 }
 
 function infiniteDeposit(id: DepositId): boolean {
@@ -214,7 +277,7 @@ function infiniteDeposit(id: DepositId): boolean {
 
 function clearWorkFor(kind: GladeKind, distance: number): number {
   const base = kind === 'small' ? 55 : kind === 'dangerous' ? 110 : 190
-  return Math.round(base * (1 + distance * 0.08))
+  return Math.round(base * (1 + distance * 0.06))
 }
 
 function rewardFor(kind: GladeKind, rng: Rng): ResourceBag {
@@ -241,29 +304,7 @@ function rewardFor(kind: GladeKind, rng: Rng): ResourceBag {
   ])
 }
 
-/**
- * Greedily picks up to `count` hexes that are at least `minGap` apart, so glade
- * centres do not clump.
- */
-function pickSpread(rng: Rng, candidates: Hex[], count: number, minGap: number): Hex[] {
-  const shuffled = rng.shuffle(candidates)
-  const chosen: Hex[] = []
-  for (const h of shuffled) {
-    if (chosen.length >= count) break
-    if (chosen.every((c) => hexDistance(c, h) >= minGap)) chosen.push(h)
-  }
-  // Relax the gap if the map was too tight to fit them all.
-  if (chosen.length < count) {
-    for (const h of shuffled) {
-      if (chosen.length >= count) break
-      if (chosen.every((c) => hexDistance(c, h) >= minGap - 1)) {
-        if (!chosen.some((c) => c.q === h.q && c.r === h.r)) chosen.push(h)
-      }
-    }
-  }
-  return chosen
-}
-
+/** Deep-forest gloom aside, these read best against the 3D lighting too. */
 export const TERRAIN_COLORS: Record<TerrainId, string> = {
   clearing: '#4a5a44',
   forest: '#2f4634',
@@ -280,4 +321,31 @@ export const DEPOSIT_INFO: Record<DepositId, { name: string; icon: string }> = {
   vegetation: { name: 'Undergrowth', icon: '🌿' },
   game: { name: 'Game Trails', icon: '🐗' },
   fertileSoil: { name: 'Fertile Soil', icon: '🌾' },
+}
+
+/** True when the point lies inside the playable rectangle (minus a margin). */
+export function insideWorld(world: WorldInfo, p: Vec2, margin = 0): boolean {
+  return (
+    Math.abs(p.x) <= world.width / 2 - margin && Math.abs(p.y) <= world.height / 2 - margin
+  )
+}
+
+/** The glade whose polygon contains the point; they partition the world. */
+export function gladeAt(
+  glades: Record<string, Glade>,
+  p: Vec2,
+): Glade | undefined {
+  let best: Glade | undefined
+  let bestEdge = -Infinity
+  for (const glade of Object.values(glades)) {
+    if (!pointInPolygon(p, glade.polygon)) continue
+    // Points exactly on a shared border can test inside both; prefer the one
+    // the point sits deeper in so the answer is stable.
+    const edge = distToPolygonEdge(p, glade.polygon)
+    if (edge > bestEdge) {
+      bestEdge = edge
+      best = glade
+    }
+  }
+  return best
 }

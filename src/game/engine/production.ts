@@ -9,12 +9,13 @@ import type {
   Season,
 } from '../types'
 import {
+  ADJACENCY_RANGE,
   BUILD_RATE_PER_VILLAGER,
   FARM_SEASON_MULTIPLIER,
   GATHER_SEASON_MULTIPLIER,
   WORKER_RATE,
 } from './balance'
-import { hexDistance, hexesInRadius, hexKey, hexNeighbors } from './hex'
+import { dist } from './geometry'
 import type { Modifiers } from './modifiers'
 import { extraOutputChance, productionMultiplier } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'
@@ -22,24 +23,23 @@ import { makeRng } from './rng'
 import { buildMultiplier, workTraitMultiplier } from './traits'
 
 /**
- * Which deposits a building at `tileKey` can reach. Only counts deposits inside
- * cleared glades — you cannot harvest what you have not taken back yet.
+ * Which deposits a building at `pos` can reach. Only counts deposits inside
+ * cleared glades — you cannot harvest what you have not taken back yet. Range
+ * is measured to the deposit's edge, so a wide stand of trees is a little
+ * easier to reach than a point.
  */
 export function depositsInRangeOf(
   s: RunState,
-  tileKey: string,
+  pos: { x: number; y: number },
   radius: number,
 ): Partial<Record<DepositId, string[]>> {
-  const origin = s.tiles[tileKey]
   const out: Partial<Record<DepositId, string[]>> = {}
-  if (!origin) return out
-  for (const h of hexesInRadius(origin, radius)) {
-    const tile = s.tiles[hexKey(h.q, h.r)]
-    if (!tile?.deposit) continue
-    if (!s.glades[tile.gladeId]?.cleared) continue
-    if (tile.deposit.amount !== null && tile.deposit.amount <= 0) continue
-    const list = out[tile.deposit.id] ?? (out[tile.deposit.id] = [])
-    list.push(tile.key)
+  for (const deposit of Object.values(s.deposits)) {
+    if (dist(pos, deposit.pos) > radius + deposit.radius) continue
+    if (!s.glades[deposit.gladeId]?.cleared) continue
+    if (deposit.amount !== null && deposit.amount <= 0) continue
+    const list = out[deposit.kind] ?? (out[deposit.kind] = [])
+    list.push(deposit.id)
   }
   return out
 }
@@ -49,24 +49,21 @@ export function refreshDepositCaches(s: RunState): void {
   for (const b of Object.values(s.buildings)) {
     const def = BUILDINGS[b.defId]
     if (!def?.gatherRadius) continue
-    b.depositsInRange = depositsInRangeOf(s, b.tile, def.gatherRadius)
+    b.depositsInRange = depositsInRangeOf(s, b.pos, def.gatherRadius)
   }
 }
 
 /**
  * Work-speed multiplier from a satisfied adjacency (a mill beside its felling
- * grounds, a cookhouse beside the farm). Neighbours are six tile lookups, so
- * this is cheap enough to read every tick.
+ * grounds, a cookhouse beside the farm). A linear scan over a few dozen
+ * buildings, cheap enough to read every tick.
  */
 export function adjacencyMultiplier(s: RunState, b: BuildingInstance): number {
   const def = BUILDINGS[b.defId]
   if (!def?.adjacency) return 1
-  const origin = s.tiles[b.tile]
-  if (!origin) return 1
-  for (const n of hexNeighbors(origin)) {
-    const neighbor = s.tiles[hexKey(n.q, n.r)]
-    const other = neighbor?.buildingId ? s.buildings[neighbor.buildingId] : undefined
-    if (other?.built && other.defId === def.adjacency.nearId) {
+  for (const other of Object.values(s.buildings)) {
+    if (!other.built || other.id === b.id || other.defId !== def.adjacency.nearId) continue
+    if (dist(b.pos, other.pos) <= ADJACENCY_RANGE) {
       return 1 + def.adjacency.percent / 100
     }
   }
@@ -159,7 +156,7 @@ export function stepProduction(
         s.stats.buildingsBuilt++
         result.completed.push(b.id)
         if (def.gatherRadius) {
-          b.depositsInRange = depositsInRangeOf(s, b.tile, def.gatherRadius)
+          b.depositsInRange = depositsInRangeOf(s, b.pos, def.gatherRadius)
         }
       }
     }
@@ -252,31 +249,30 @@ function doubleBag(bag: Recipe['outputs']): Recipe['outputs'] {
 }
 
 function hasLiveDeposit(s: RunState, b: BuildingInstance, id: DepositId): boolean {
-  const tiles = b.depositsInRange[id]
-  if (!tiles || tiles.length === 0) return false
-  return tiles.some((key) => {
-    const deposit = s.tiles[key]?.deposit
+  const ids = b.depositsInRange[id]
+  if (!ids || ids.length === 0) return false
+  return ids.some((depositId) => {
+    const deposit = s.deposits[depositId]
     return deposit && (deposit.amount === null || deposit.amount > 0)
   })
 }
 
 /** Decrements the nearest live deposit. Returns true if one ran out. */
 function consumeDeposit(s: RunState, b: BuildingInstance, id: DepositId): boolean {
-  const tiles = b.depositsInRange[id]
-  if (!tiles) return false
-  const origin = s.tiles[b.tile]
-  const live = tiles
-    .map((key) => s.tiles[key])
-    .filter((t) => t?.deposit && (t.deposit.amount === null || t.deposit.amount > 0))
-    .sort((a, c) => hexDistance(origin, a) - hexDistance(origin, c))
+  const ids = b.depositsInRange[id]
+  if (!ids) return false
+  const live = ids
+    .map((depositId) => s.deposits[depositId])
+    .filter((d) => d && (d.amount === null || d.amount > 0))
+    .sort((a, c) => dist(b.pos, a.pos) - dist(b.pos, c.pos))
 
   const target = live[0]
-  if (!target?.deposit) return false
-  if (target.deposit.amount === null) return false
-  target.deposit.amount -= 1
-  if (target.deposit.amount <= 0) {
-    delete target.deposit
-    b.depositsInRange[id] = tiles.filter((k) => k !== target.key)
+  if (!target) return false
+  if (target.amount === null) return false
+  target.amount -= 1
+  if (target.amount <= 0) {
+    delete s.deposits[target.id]
+    b.depositsInRange[id] = ids.filter((k) => k !== target.id)
     return true
   }
   return false
