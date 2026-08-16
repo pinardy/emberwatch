@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
@@ -61,11 +61,26 @@ export default defineConfig({
   ],
   test: {
     globals: true,
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
-    // The sim tests are environment-agnostic; the UI tests need a DOM.
-    environmentMatchGlobs: [
-      ['src/**/*.test.tsx', 'jsdom'],
-      ['src/**/*.test.ts', 'node'],
+    // The sim tests are environment-agnostic; the UI tests need a DOM. Each
+    // environment is its own project, and `extends` hands them the plugins and
+    // aliases above.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'sim',
+          environment: 'node',
+          include: ['src/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'ui',
+          environment: 'jsdom',
+          include: ['src/**/*.test.tsx'],
+        },
+      },
     ],
   },
-} as Parameters<typeof defineConfig>[0])
+})
