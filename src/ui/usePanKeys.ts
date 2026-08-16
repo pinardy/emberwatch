@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react'
  * Uses `e.code` so W/A/S/D stay in place on non-QWERTY layouts.
  */
 
-export type PanDirection = 'up' | 'down' | 'left' | 'right'
+export type PanDirection = 'up' | 'down' | 'left' | 'right' | 'rotateLeft' | 'rotateRight'
 
 const CODE_TO_DIRECTION: Record<string, PanDirection> = {
   KeyW: 'up',
@@ -19,6 +19,9 @@ const CODE_TO_DIRECTION: Record<string, PanDirection> = {
   ArrowLeft: 'left',
   KeyD: 'right',
   ArrowRight: 'right',
+  // 3D only: orbit the camera around its focus. The 2D view ignores these.
+  KeyQ: 'rotateLeft',
+  KeyE: 'rotateRight',
 }
 
 export function panDirectionOf(e: KeyboardEvent): PanDirection | null {

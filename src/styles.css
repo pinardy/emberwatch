@@ -2167,3 +2167,53 @@ code {
   fill: #26332e;
   stroke: rgba(0, 0, 0, 0.3);
 }
+
+/* ---------------------------------------------------------------------------
+ * 3D UX: ghost hints, minimap, threat focus
+ * ------------------------------------------------------------------------- */
+
+.ghost-hint {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(9, 13, 16, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.ghost-hint.is-ok {
+  color: #9fd8a4;
+  border-color: rgba(111, 191, 114, 0.5);
+}
+
+.ghost-hint.is-bad {
+  color: #e8a1a1;
+  border-color: rgba(192, 80, 80, 0.55);
+}
+
+/* Top-left of the map: the tips coach owns the bottom-left corner. */
+.minimap {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 30;
+  display: block;
+  border: 1px solid rgba(217, 180, 106, 0.3);
+  border-radius: 8px;
+  background: rgba(9, 13, 16, 0.85);
+  cursor: pointer;
+}
+
+.minimap:hover {
+  border-color: rgba(217, 180, 106, 0.6);
+}
+
+.threat-card {
+  cursor: pointer;
+}
+
+.threat-card:hover {
+  outline: 1px solid rgba(217, 180, 106, 0.45);
+}

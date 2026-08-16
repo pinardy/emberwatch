@@ -70,13 +70,20 @@ export function MapView2D() {
   /*
    * WASD / arrow panning. Each keydown nudges the view; holding the key pans
    * via the OS key-repeat. Pressing "right" moves the camera right, so the
-   * world slides left.
+   * world slides left. H jumps back home to the hearth.
    */
   useEffect(() => {
     const STEP = 46
     const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag && ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.code === 'KeyH') {
+        setView({ x: 0, y: 0, scale: 1 })
+        return
+      }
       const direction = panDirectionOf(e)
-      if (!direction) return
+      if (!direction || direction === 'rotateLeft' || direction === 'rotateRight') return
       if (e.code.startsWith('Arrow')) e.preventDefault()
       setView((v) => ({
         ...v,
@@ -87,6 +94,14 @@ export function MapView2D() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Fly-to requests from elsewhere in the UI (threat cards, the minimap).
+  const cameraFocus = useGameStore((s) => s.cameraFocus)
+  useEffect(() => {
+    if (!cameraFocus) return
+    setView((v) => ({ ...v, x: -cameraFocus.x * S * v.scale, y: -cameraFocus.y * S * v.scale }))
+    useGameStore.setState({ cameraFocus: null })
+  }, [cameraFocus])
 
   const onPointerDown = (e: React.PointerEvent) => {
     pinch.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -403,7 +418,8 @@ export function BuildBanner({ buildMode }: { buildMode: string }) {
   return (
     <div className="build-banner">
       <span>
-        Placing <strong>{BUILDINGS[buildMode]?.name}</strong> — click on cleared ground
+        Placing <strong>{BUILDINGS[buildMode]?.name}</strong> — click on cleared ground ·
+        Esc cancels
       </span>
       <button type="button" onClick={() => useGameStore.getState().setBuildMode(null)}>
         Cancel

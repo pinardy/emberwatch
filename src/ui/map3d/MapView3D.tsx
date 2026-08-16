@@ -1,27 +1,33 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Html, MapControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
 import { BUILDINGS } from '../../game/content/buildings'
 import { canPlaceBuilding, footprintOf, isReachable } from '../../game/engine/actions'
-import { HEARTH_WARMTH_RADIUS } from '../../game/engine/balance'
-import { DEPOSIT_INFO } from '../../game/engine/mapgen'
+import { ADJACENCY_RANGE, HEARTH_WARMTH_RADIUS } from '../../game/engine/balance'
+import { dist } from '../../game/engine/geometry'
+import { depositsInRangeOf } from '../../game/engine/production'
 import { useGameStore, useRun } from '../../game/store'
-import type { Glade, RunState, TerrainId, Vec2, WorldInfo } from '../../game/types'
+import type { DepositId, Glade, RunState, TerrainId, Vec2 } from '../../game/types'
 import { Atmosphere } from './Atmosphere'
-import { ForestCover } from './ForestCover'
+import { CameraRig } from './CameraRig'
+import { FellingForest, ForestCover } from './ForestCover'
+import { MiniMap } from './MiniMap'
+import { Villagers } from './Villagers'
 import { BuildBanner } from '../MapView2D'
-import { usePanKeys } from '../usePanKeys'
 import {
-  BuildingModel,
-  ConstructionSite,
-  DepositProp,
+  BuildingNode,
+  PulseRing,
+  ThreatMarker,
+  type ZoomBucket,
+  DepositNode,
+} from './entities'
+import {
   GHOST_BAD_MAT,
   GHOST_OK_MAT,
   GOLD,
   IconSprite,
-  LabelSprite,
   NO_RAYCAST,
   ObstacleProp,
 } from './models'
@@ -37,11 +43,6 @@ const TERRAIN_3D: Record<TerrainId, string> = {
   marsh: '#4c6055',
   rock: '#62666c',
   fertile: '#7d8749',
-}
-
-/** World (x, y) → scene (x, 0, z). */
-function groundPos(p: Vec2): [number, number, number] {
-  return [p.x, 0, p.y]
 }
 
 /** Flat mesh of a glade polygon, sitting just above the forest floor. */
@@ -76,18 +77,59 @@ function GladeSurface({ glade, onFoggedClick }: { glade: Glade; onFoggedClick?: 
   )
 }
 
+interface CursorState {
+  pos: Vec2
+  ok: boolean
+  reason: string | null
+  /** Deposit ids a camp placed here could actually work. */
+  reach: string[]
+  /** Adjacency bonus percent if the ghost sits beside its partner. */
+  bonus: number | null
+}
+
 /**
  * The invisible placement plane plus the build-mode ghost. Owns the cursor
  * state so 60 Hz pointer moves re-render this subtree only, not the scene.
  */
 function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | null }) {
-  const [cursor, setCursor] = useState<{ pos: Vec2; ok: boolean } | null>(null)
+  const [cursor, setCursor] = useState<CursorState | null>(null)
   const def = buildMode ? BUILDINGS[buildMode] : undefined
+  const wantsDeposits = def?.recipes.some((r) => r.requiresDeposit) ?? false
+
+  useEffect(() => {
+    if (!buildMode) setCursor(null)
+  }, [buildMode])
+
+  const evaluate = useCallback(
+    (pos: Vec2): CursorState => {
+      const reason = canPlaceBuilding(run, buildMode!, pos)
+      const ghostDef = BUILDINGS[buildMode!]
+      let reach: string[] = []
+      if (ghostDef?.gatherRadius) {
+        const needed = new Set(
+          ghostDef.recipes.map((r) => r.requiresDeposit).filter((d): d is DepositId => !!d),
+        )
+        const inRange = depositsInRangeOf(run, pos, ghostDef.gatherRadius)
+        reach = [...needed].flatMap((kind) => inRange[kind] ?? [])
+      }
+      let bonus: number | null = null
+      if (ghostDef?.adjacency) {
+        const near = Object.values(run.buildings).some(
+          (b) =>
+            b.built &&
+            b.defId === ghostDef.adjacency!.nearId &&
+            dist(b.pos, pos) <= ADJACENCY_RANGE,
+        )
+        if (near) bonus = ghostDef.adjacency.percent
+      }
+      return { pos, ok: reason === null, reason, reach, bonus }
+    },
+    [run, buildMode],
+  )
 
   const handleMove = (e: ThreeEvent<PointerEvent>) => {
     if (!buildMode) return
-    const pos = { x: e.point.x, y: e.point.z }
-    setCursor({ pos, ok: canPlaceBuilding(run, buildMode, pos) === null })
+    setCursor(evaluate({ x: e.point.x, y: e.point.z }))
   }
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -96,13 +138,30 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
     const pos = { x: e.point.x, y: e.point.z }
     if (state.buildMode) {
       state.place(pos)
-      setCursor((c) => (c ? { ...c, ok: canPlaceBuilding(run, state.buildMode!, c.pos) === null } : c))
+      // The spot just filled up (or errored) — refresh the ghost in place.
+      if (useGameStore.getState().buildMode) setCursor(evaluate(pos))
       return
     }
     state.clearSelection()
   }
 
   const radius = buildMode ? footprintOf(buildMode) : 0
+
+  // What the floating hint should say, if anything.
+  let hint: string | null = null
+  if (cursor && def) {
+    if (!cursor.ok) hint = cursor.reason
+    else {
+      const parts: string[] = []
+      if (def.gatherRadius && wantsDeposits) {
+        parts.push(`${cursor.reach.length} deposit${cursor.reach.length === 1 ? '' : 's'} in reach`)
+      }
+      if (cursor.bonus && def.adjacency) {
+        parts.push(`+${cursor.bonus}% beside ${BUILDINGS[def.adjacency.nearId]?.name}`)
+      }
+      hint = parts.length > 0 ? parts.join(' · ') : null
+    }
+  }
 
   return (
     <>
@@ -118,8 +177,8 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
       </mesh>
 
       {buildMode && def && cursor && (
-        <group position={groundPos(cursor.pos)} raycast={NO_RAYCAST}>
-          <group scale={[1, 1, 1]}>
+        <>
+          <group position={[cursor.pos.x, 0, cursor.pos.y]} raycast={NO_RAYCAST}>
             <mesh
               material={cursor.ok ? GHOST_OK_MAT : GHOST_BAD_MAT}
               position={[0, 0.35, 0]}
@@ -144,75 +203,39 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
               </mesh>
             )}
             <IconSprite icon={def.icon} y={1.1} size={0.8} />
+            {hint && (
+              <Html
+                position={[0, 1.9, 0]}
+                center
+                distanceFactor={12}
+                zIndexRange={[20, 0]}
+                style={{ pointerEvents: 'none' }}
+              >
+                <div className={`ghost-hint ${cursor.ok ? 'is-ok' : 'is-bad'}`}>{hint}</div>
+              </Html>
+            )}
           </group>
-        </group>
+
+          {/* Deposits this camp would actually work light up. */}
+          {cursor.reach.map((id) => {
+            const deposit = run.deposits[id]
+            if (!deposit) return null
+            return (
+              <group key={id} position={[deposit.pos.x, 0, deposit.pos.y]} raycast={NO_RAYCAST}>
+                <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.045, 0]} raycast={NO_RAYCAST}>
+                  <ringGeometry args={[deposit.radius + 0.05, deposit.radius + 0.18, 32]} />
+                  <meshBasicMaterial color="#9fc9a3" transparent opacity={0.8} side={THREE.DoubleSide} />
+                </mesh>
+              </group>
+            )
+          })}
+        </>
       )}
     </>
   )
 }
 
-// Scratch vectors so keyboard panning allocates nothing per frame.
-const PAN_FORWARD = new THREE.Vector3()
-const PAN_RIGHT = new THREE.Vector3()
-const PAN_BEFORE = new THREE.Vector3()
-const WORLD_UP = new THREE.Vector3(0, 1, 0)
-
-/**
- * WASD / arrow-key camera panning. Directions are camera-relative on the
- * ground plane — W always pushes toward the top of the screen no matter how
- * the view has been rotated — and speed scales with zoom so panning feels the
- * same up close and pulled back.
- */
-function KeyboardPan({
-  controls,
-  world,
-}: {
-  controls: React.MutableRefObject<MapControlsImpl | null>
-  world: WorldInfo
-}) {
-  const held = usePanKeys()
-
-  useFrame((_, rawDelta) => {
-    const c = controls.current
-    const keys = held.current
-    if (!c || keys.size === 0) return
-    let x = 0
-    let z = 0
-    if (keys.has('up')) z += 1
-    if (keys.has('down')) z -= 1
-    if (keys.has('left')) x -= 1
-    if (keys.has('right')) x += 1
-    if (x === 0 && z === 0) return
-    // Diagonals must not be √2 faster.
-    const norm = Math.hypot(x, z)
-    x /= norm
-    z /= norm
-
-    const camera = c.object
-    PAN_FORWARD.subVectors(c.target, camera.position)
-    PAN_FORWARD.y = 0
-    if (PAN_FORWARD.lengthSq() < 1e-6) PAN_FORWARD.set(0, 0, -1)
-    PAN_FORWARD.normalize()
-    PAN_RIGHT.crossVectors(PAN_FORWARD, WORLD_UP)
-
-    const delta = Math.min(rawDelta, 0.1)
-    const speed = Math.max(4, camera.position.distanceTo(c.target)) * 0.45 * delta
-
-    PAN_BEFORE.copy(c.target)
-    c.target
-      .addScaledVector(PAN_FORWARD, z * speed)
-      .addScaledVector(PAN_RIGHT, x * speed)
-    // Keep the focus on (or just beyond) the world.
-    c.target.x = THREE.MathUtils.clamp(c.target.x, -(world.width / 2 + 2), world.width / 2 + 2)
-    c.target.z = THREE.MathUtils.clamp(c.target.z, -(world.height / 2 + 2), world.height / 2 + 2)
-    camera.position.add(c.target).sub(PAN_BEFORE)
-    c.update()
-  })
-
-  return null
-}
-
-/** The hearth's reach, shown while placing housing. Breathes like its 2D twin. */
+/** The hearth's reach, shown while placing housing or inspecting the hearth. */
 function WarmthRing() {
   const material = useRef<THREE.MeshBasicMaterial>(null)
   useFrame(({ clock }) => {
@@ -234,23 +257,25 @@ function WarmthRing() {
   )
 }
 
-function SelectionRing({ radius, color = GOLD }: { radius: number; color?: string }) {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.06, 0]} raycast={NO_RAYCAST}>
-      <ringGeometry args={[radius, radius + 0.12, 32]} />
-      <meshBasicMaterial color={color} transparent opacity={0.9} side={THREE.DoubleSide} />
-    </mesh>
-  )
-}
-
 export function MapView3D() {
   const run = useRun()
   const buildMode = useGameStore((s) => s.buildMode)
   const selectedBuilding = useGameStore((s) => s.selectedBuilding)
   const selectedDeposit = useGameStore((s) => s.selectedDeposit)
   const selectGlade = useGameStore((s) => s.selectGlade)
+  const cameraFocus = useGameStore((s) => s.cameraFocus)
 
   const controls = useRef<MapControlsImpl | null>(null)
+  const [bucket, setBucket] = useState<ZoomBucket>('mid')
+  const rightClick = useRef<{ x: number; y: number } | null>(null)
+
+  const handleControlsChange = () => {
+    const c = controls.current
+    if (!c) return
+    const distance = c.object.position.distanceTo(c.target)
+    const next: ZoomBucket = distance < 13 ? 'near' : distance > 26 ? 'far' : 'mid'
+    setBucket((prev) => (prev === next ? prev : next))
+  }
 
   const zoomBy = (factor: number) => {
     const c = controls.current
@@ -262,22 +287,84 @@ export function MapView3D() {
     c.update()
   }
 
-  const recenter = () => {
+  const recenter = useCallback(() => {
     const c = controls.current
     if (!c) return
     c.target.set(0, 0, 0)
     c.object.position.set(...CAMERA_HOME)
     c.update()
+  }, [])
+
+  /** Keep the current zoom and tilt, but put north back at the top. */
+  const faceNorth = () => {
+    const c = controls.current
+    if (!c) return
+    const offset = c.object.position.clone().sub(c.target)
+    const horizontal = Math.hypot(offset.x, offset.z)
+    offset.x = 0
+    offset.z = horizontal
+    c.object.position.copy(c.target).add(offset)
+    c.update()
   }
+
+  /** Slide the camera so the world point sits at the focus. */
+  const focusOn = useCallback((p: Vec2) => {
+    const c = controls.current
+    if (!c) return
+    const dx = p.x - c.target.x
+    const dz = p.y - c.target.z
+    c.target.x += dx
+    c.target.z += dz
+    c.object.position.x += dx
+    c.object.position.z += dz
+    c.update()
+  }, [])
+
+  // Fly-to requests from elsewhere in the UI (threat cards, the minimap).
+  useEffect(() => {
+    if (!cameraFocus) return
+    focusOn(cameraFocus)
+    useGameStore.setState({ cameraFocus: null })
+  }, [cameraFocus, focusOn])
 
   if (!run) return null
 
   const glades = Object.values(run.glades)
+  const storm = run.season.season === 'storm'
+  const ghostDef = buildMode ? BUILDINGS[buildMode] : undefined
   const selectedCamp = selectedBuilding ? run.buildings[selectedBuilding] : undefined
   const selectedCampDef = selectedCamp ? BUILDINGS[selectedCamp.defId] : undefined
+  const hearthSelected = selectedCamp?.defId === 'ancientHearth'
+
+  // Buildings that pair with the blueprint in hand, in either direction.
+  const adjacencyPartners = ghostDef
+    ? Object.values(run.buildings).filter((b) => {
+        if (!b.built) return false
+        const bDef = BUILDINGS[b.defId]
+        return ghostDef.adjacency?.nearId === b.defId || bDef?.adjacency?.nearId === buildMode
+      })
+    : []
 
   return (
-    <div className="map-wrap map-wrap-3d" role="application" aria-label="Settlement map">
+    <div
+      className="map-wrap map-wrap-3d"
+      role="application"
+      aria-label="Settlement map"
+      onContextMenu={(e) => e.preventDefault()}
+      onPointerDown={(e) => {
+        if (e.button === 2) rightClick.current = { x: e.clientX, y: e.clientY }
+      }}
+      onPointerUp={(e) => {
+        // A right-click that never turned into a rotate-drag cancels.
+        if (e.button !== 2 || !rightClick.current) return
+        const moved = Math.hypot(e.clientX - rightClick.current.x, e.clientY - rightClick.current.y)
+        rightClick.current = null
+        if (moved > 6) return
+        const state = useGameStore.getState()
+        if (state.buildMode) state.setBuildMode(null)
+        else state.clearSelection()
+      }}
+    >
       <Canvas
         shadows
         dpr={[1, 1.75]}
@@ -295,8 +382,15 @@ export function MapView3D() {
           maxPolarAngle={Math.PI / 2.45}
           panSpeed={1.1}
           rotateSpeed={0.7}
+          onChange={handleControlsChange}
         />
-        <KeyboardPan controls={controls} world={run.world} />
+        <CameraRig
+          controls={controls}
+          world={run.world}
+          minDistance={MIN_DISTANCE}
+          maxDistance={MAX_DISTANCE}
+          home={recenter}
+        />
 
         <GroundPlane run={run} buildMode={buildMode} />
 
@@ -309,12 +403,15 @@ export function MapView3D() {
         ))}
 
         <ForestCover glades={glades} />
+        <FellingForest glades={run.glades} />
 
-        {buildMode && (BUILDINGS[buildMode]?.housing ?? 0) > 0 && <WarmthRing />}
+        {((buildMode && (BUILDINGS[buildMode]?.housing ?? 0) > 0) || hearthSelected) && (
+          <WarmthRing />
+        )}
 
         {/* Gather reach of the selected camp. */}
         {selectedCamp && selectedCampDef?.gatherRadius && (
-          <group position={groundPos(selectedCamp.pos)} raycast={NO_RAYCAST}>
+          <group position={[selectedCamp.pos.x, 0, selectedCamp.pos.y]} raycast={NO_RAYCAST}>
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]} raycast={NO_RAYCAST}>
               <ringGeometry
                 args={[selectedCampDef.gatherRadius - 0.06, selectedCampDef.gatherRadius, 64]}
@@ -324,89 +421,54 @@ export function MapView3D() {
           </group>
         )}
 
+        {/* Buildings that would pair with the blueprint in hand. */}
+        {adjacencyPartners.map((b) => (
+          <group key={`adj-${b.id}`} position={[b.pos.x, 0, b.pos.y]} raycast={NO_RAYCAST}>
+            <PulseRing radius={footprintOf(b.defId) + 0.35} />
+          </group>
+        ))}
+
         {run.obstacles.map((obstacle) =>
           run.glades[obstacle.gladeId]?.cleared ? (
-            <group key={obstacle.id} position={groundPos(obstacle.pos)}>
-              <ObstacleProp id={obstacle.id} kind={obstacle.kind} radius={obstacle.radius} />
-            </group>
+            <ObstacleAt key={obstacle.id} id={obstacle.id} kind={obstacle.kind} radius={obstacle.radius} pos={obstacle.pos} />
           ) : null,
         )}
 
-        {Object.values(run.deposits).map((deposit) => {
-          if (!run.glades[deposit.gladeId]?.cleared) return null
-          return (
-            <group
+        {Object.values(run.deposits).map((deposit) =>
+          run.glades[deposit.gladeId]?.cleared ? (
+            <DepositNode
               key={deposit.id}
-              position={groundPos(deposit.pos)}
-              onClick={(e) => {
-                if (e.delta > 6) return
-                e.stopPropagation()
-                const state = useGameStore.getState()
-                if (state.buildMode) {
-                  state.place({ x: e.point.x, y: e.point.z })
-                  return
-                }
-                state.selectDeposit(deposit.id)
-              }}
-            >
-              {/* Invisible hit disc so the cluster is easy to tap. */}
-              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]} visible={false}>
-                <circleGeometry args={[deposit.radius, 12]} />
-              </mesh>
-              <DepositProp id={deposit.id} kind={deposit.kind} radius={deposit.radius} />
-              <IconSprite icon={DEPOSIT_INFO[deposit.kind].icon} y={1.35} size={0.7} />
-              {deposit.amount !== null && (
-                <LabelSprite text={String(deposit.amount)} y={0.85} size={0.6} />
-              )}
-              {selectedDeposit === deposit.id && <SelectionRing radius={deposit.radius + 0.1} />}
-            </group>
-          )
-        })}
+              deposit={deposit}
+              selected={selectedDeposit === deposit.id}
+              bucket={bucket}
+            />
+          ) : null,
+        )}
 
         {Object.values(run.buildings).map((building) => {
           const def = BUILDINGS[building.defId]
-          if (!def) return null
-          const radius = footprintOf(building.defId)
-          const scale = radius / 0.6
+          const cold =
+            storm &&
+            building.built &&
+            (def?.housing ?? 0) > 0 &&
+            Math.hypot(building.pos.x, building.pos.y) > HEARTH_WARMTH_RADIUS
           return (
-            <group
+            <BuildingNode
               key={building.id}
-              position={groundPos(building.pos)}
-              onClick={(e) => {
-                if (e.delta > 6) return
-                e.stopPropagation()
-                const state = useGameStore.getState()
-                if (state.buildMode) {
-                  state.place({ x: e.point.x, y: e.point.z })
-                  return
-                }
-                state.selectBuilding(building.id)
-              }}
-            >
-              {/* Invisible hit disc — models are thin, footprints are the target. */}
-              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]} visible={false}>
-                <circleGeometry args={[radius + 0.1, 12]} />
-              </mesh>
-              {building.built ? (
-                <BuildingModel category={def.category} scale={scale} />
-              ) : (
-                <ConstructionSite
-                  progress={building.buildProgress / Math.max(1, def.buildSeconds)}
-                  scale={scale}
-                />
-              )}
-              <IconSprite icon={def.icon} y={building.built ? 1.15 * scale + 0.45 : 1.0} size={0.75} />
-              {building.built && def.workerSlots > 0 && (
-                <LabelSprite
-                  text={`${building.workers.length}/${def.workerSlots}`}
-                  y={1.15 * scale}
-                  size={0.65}
-                />
-              )}
-              {building.paused && <IconSprite icon="⏸" y={1.15 * scale + 0.95} size={0.45} />}
-              {selectedBuilding === building.id && <SelectionRing radius={radius + 0.15} />}
-            </group>
+              building={building}
+              selected={selectedBuilding === building.id}
+              bucket={bucket}
+              cold={cold}
+              partnerHint={adjacencyPartners.some((b) => b.id === building.id)}
+            />
           )
+        })}
+
+        {bucket !== 'far' && <Villagers run={run} />}
+
+        {run.threats.map((threat) => {
+          const glade = run.glades[threat.gladeId]
+          return glade ? <ThreatMarker key={threat.id} pos={glade.center} /> : null
         })}
 
         {/* Name plates over discovered, uncleared glades. */}
@@ -447,6 +509,8 @@ export function MapView3D() {
         })}
       </Canvas>
 
+      <MiniMap run={run} controls={controls} />
+
       <div className="map-controls">
         <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.8)}>
           +
@@ -454,13 +518,35 @@ export function MapView3D() {
         <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1.25)}>
           −
         </button>
-        <button type="button" aria-label="Recentre" onClick={recenter}>
+        <button type="button" aria-label="Face north" title="Face north" onClick={faceNorth}>
+          🧭
+        </button>
+        <button type="button" aria-label="Recentre" title="Recentre (H)" onClick={recenter}>
           ⌖
         </button>
       </div>
 
       {buildMode && <BuildBanner buildMode={buildMode} />}
     </div>
+  )
+}
+
+/** Obstacle wrapper kept here — it has no interactions or LOD of its own. */
+function ObstacleAt({
+  id,
+  kind,
+  radius,
+  pos,
+}: {
+  id: string
+  kind: 'crag' | 'mire'
+  radius: number
+  pos: Vec2
+}) {
+  return (
+    <group position={[pos.x, 0, pos.y]}>
+      <ObstacleProp id={id} kind={kind} radius={radius} />
+    </group>
   )
 }
 

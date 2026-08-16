@@ -64,6 +64,7 @@ const SITE_MAT = new THREE.MeshStandardMaterial({
   opacity: 0.45,
   roughness: 1,
 })
+const SCAFFOLD_MAT = new THREE.MeshStandardMaterial({ color: '#a58a58', roughness: 1 })
 
 /** Deterministic per-id jitter so prop layouts survive re-renders. */
 export function hash01(key: string, salt: number): number {
@@ -291,16 +292,40 @@ export function BuildingModel({ category, scale = 1 }: { category: BuildingCateg
   return <group scale={[scale, scale, scale]}>{body}</group>
 }
 
-/** A construction site: a ghost frame that rises with build progress. */
+const SCAFFOLD_POLES: [number, number][] = [
+  [-0.48, -0.48],
+  [0.48, -0.48],
+  [-0.48, 0.48],
+  [0.48, 0.48],
+]
+
+/** A construction site: scaffolding around a ghost frame that rises with progress. */
 export function ConstructionSite({ progress, scale = 1 }: { progress: number; scale?: number }) {
   const height = 0.65 * Math.max(0.12, progress)
   return (
-    <mesh
-      geometry={BOX_GEO}
-      material={SITE_MAT}
-      position={[0, (height * scale) / 2, 0]}
-      scale={[0.8 * scale, height * scale, 0.8 * scale]}
-      raycast={NO_RAYCAST}
-    />
+    <group scale={[scale, scale, scale]}>
+      <mesh
+        geometry={BOX_GEO}
+        material={SITE_MAT}
+        position={[0, height / 2, 0]}
+        scale={[0.8, height, 0.8]}
+        raycast={NO_RAYCAST}
+      />
+      {SCAFFOLD_POLES.map(([px, pz], i) => (
+        <mesh
+          key={i}
+          geometry={BOX_GEO}
+          material={SCAFFOLD_MAT}
+          position={[px, 0.45, pz]}
+          scale={[0.06, 0.9, 0.06]}
+          castShadow
+          raycast={NO_RAYCAST}
+        />
+      ))}
+      <mesh geometry={BOX_GEO} material={SCAFFOLD_MAT} position={[0, 0.87, -0.48]} scale={[1.02, 0.05, 0.05]} raycast={NO_RAYCAST} />
+      <mesh geometry={BOX_GEO} material={SCAFFOLD_MAT} position={[0, 0.87, 0.48]} scale={[1.02, 0.05, 0.05]} raycast={NO_RAYCAST} />
+      <mesh geometry={BOX_GEO} material={SCAFFOLD_MAT} position={[-0.48, 0.87, 0]} scale={[0.05, 0.05, 1.02]} raycast={NO_RAYCAST} />
+      <mesh geometry={BOX_GEO} material={SCAFFOLD_MAT} position={[0.48, 0.87, 0]} scale={[0.05, 0.05, 1.02]} raycast={NO_RAYCAST} />
+    </group>
   )
 }

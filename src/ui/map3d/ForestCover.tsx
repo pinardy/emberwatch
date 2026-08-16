@@ -1,4 +1,5 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { distToPolygonEdge, pointInPolygon, polygonBounds } from '../../game/engine/geometry'
 import type { Glade } from '../../game/types'
@@ -10,14 +11,14 @@ import { NO_RAYCAST, hash01 } from './models'
  * trees by rebuilding the instance list.
  */
 
-interface TreeInstance {
+export interface TreeInstance {
   x: number
   z: number
   s: number
   discovered: boolean
 }
 
-function treesFor(glades: Glade[]): TreeInstance[] {
+export function treesFor(glades: Glade[]): TreeInstance[] {
   const out: TreeInstance[] = []
   const spacing = 1.15
   for (const glade of glades) {
@@ -88,5 +89,83 @@ function ForestInstances({ trees }: { trees: TreeInstance[] }) {
       <coneGeometry args={[0.42, 1.15, 6]} />
       <meshStandardMaterial color="#ffffff" roughness={1} />
     </instancedMesh>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Felling animation
+// ---------------------------------------------------------------------------
+
+const FELL_SECONDS = 1.1
+
+interface FallingGrove {
+  id: string
+  trees: TreeInstance[]
+  start: number
+}
+
+/**
+ * When a glade is cleared, `ForestCover` drops its trees instantly. This
+ * component notices the transition and replays the same trees sinking into
+ * the ground for a beat, so clearing reads as felling rather than a blink.
+ */
+export function FellingForest({ glades }: { glades: Record<string, Glade> }) {
+  const prevCleared = useRef<Set<string> | null>(null)
+  const [falling, setFalling] = useState<FallingGrove[]>([])
+
+  // Glades mutate in place, so compare cleared ids after every render.
+  useEffect(() => {
+    const cleared = Object.values(glades).filter((g) => g.cleared)
+    if (prevCleared.current === null) {
+      // First render of a run: nothing is "newly" cleared.
+      prevCleared.current = new Set(cleared.map((g) => g.id))
+      return
+    }
+    const fresh = cleared.filter((g) => !prevCleared.current!.has(g.id))
+    if (fresh.length === 0) return
+    prevCleared.current = new Set(cleared.map((g) => g.id))
+    setFalling((current) => [
+      ...current,
+      ...fresh.map((g) => ({
+        id: g.id,
+        trees: treesFor([{ ...g, cleared: false, discovered: true }]),
+        start: performance.now(),
+      })),
+    ])
+  })
+
+  if (falling.length === 0) return null
+  return (
+    <>
+      {falling.map((grove) => (
+        <SinkingTrees
+          key={grove.id}
+          grove={grove}
+          onDone={() => setFalling((current) => current.filter((g) => g.id !== grove.id))}
+        />
+      ))}
+    </>
+  )
+}
+
+function SinkingTrees({ grove, onDone }: { grove: FallingGrove; onDone: () => void }) {
+  const group = useRef<THREE.Group>(null)
+  const done = useRef(false)
+  useFrame(() => {
+    const t = (performance.now() - grove.start) / (FELL_SECONDS * 1000)
+    if (t >= 1) {
+      if (!done.current) {
+        done.current = true
+        onDone()
+      }
+      return
+    }
+    // Sink vertically in place; x/z stay 1 so positions do not slide.
+    group.current?.scale.set(1, Math.max(0.001, 1 - t * t), 1)
+  })
+  return (
+    <group ref={group}>
+      <ForestInstances trees={grove.trees} />
+    </group>
   )
 }
