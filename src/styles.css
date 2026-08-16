@@ -2011,3 +2011,159 @@ code {
     stroke-opacity: 0.45;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * 3D map (react-three-fiber)
+ * ------------------------------------------------------------------------- */
+
+.map-wrap-3d {
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.map-wrap-3d:active {
+  cursor: grabbing;
+}
+
+.map-wrap-3d canvas {
+  display: block;
+  outline: none;
+}
+
+.map-loading {
+  display: grid;
+  place-items: center;
+  color: var(--gold);
+  font-style: italic;
+  letter-spacing: 0.03em;
+}
+
+/* Floating plates over undiscovered glades. Sized in scene units via drei's
+ * distanceFactor, so keep the base font size generous. */
+.glade-plate-3d {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  min-width: 130px;
+  padding: 8px 14px;
+  background: rgba(9, 13, 16, 0.82);
+  border: 1px solid rgba(217, 180, 106, 0.35);
+  border-radius: 10px;
+  color: #e6ece9;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.glade-plate-3d:hover {
+  border-color: var(--gold);
+}
+
+.glade-plate-3d.is-locked {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.glade-plate-3d small {
+  font-size: 11px;
+  color: var(--warn);
+  letter-spacing: 0.04em;
+}
+
+.glade-plate-3d.is-locked small {
+  color: #6d7a7a;
+}
+
+.glade-plate-3d strong {
+  font-size: 14px;
+}
+
+.glade-plate-3d em {
+  font-size: 11px;
+  font-style: normal;
+  color: var(--gold);
+}
+
+.glade-plate-3d-bar {
+  width: 100px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.glade-plate-3d-bar span {
+  display: block;
+  height: 100%;
+  background: var(--good);
+}
+
+/* ---------------------------------------------------------------------------
+ * 2D continuous-world map (SVG fallback)
+ * ------------------------------------------------------------------------- */
+
+.glade-poly {
+  stroke: rgba(0, 0, 0, 0.4);
+  stroke-width: 1.5;
+  transition: fill 200ms ease;
+}
+
+.glade-poly.is-fogged {
+  cursor: pointer;
+}
+
+.glade-poly.is-fogged:hover,
+.glade-poly.is-selected {
+  stroke: rgba(217, 180, 106, 0.6);
+  stroke-width: 2;
+}
+
+.glade-poly.is-hidden {
+  pointer-events: none;
+}
+
+.deposit,
+.building {
+  cursor: pointer;
+}
+
+.deposit-disc {
+  fill: rgba(0, 0, 0, 0.25);
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 1;
+}
+
+.deposit:hover .deposit-disc,
+.deposit.is-selected .deposit-disc {
+  stroke: var(--gold);
+  stroke-width: 2;
+}
+
+.building .building-disc {
+  stroke: rgba(255, 255, 255, 0.2);
+}
+
+.building:hover .building-disc,
+.building.is-selected .building-disc {
+  stroke: var(--gold);
+  stroke-width: 2.5;
+}
+
+.building.is-site .building-disc {
+  stroke-dasharray: 5 4;
+  fill-opacity: 0.5;
+}
+
+.obstacle {
+  pointer-events: none;
+}
+
+.obstacle.is-crag {
+  fill: #5a5e64;
+  stroke: rgba(0, 0, 0, 0.4);
+}
+
+.obstacle.is-mire {
+  fill: #26332e;
+  stroke: rgba(0, 0, 0, 0.3);
+}

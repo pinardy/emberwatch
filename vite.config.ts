@@ -30,6 +30,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // The whole game is client-side, so a single app-shell fallback is enough.
         navigateFallback: 'index.html',
+        // The lazy-loaded three.js chunk exceeds the default 2 MiB cap; keep it
+        // precached so the 3D map works offline too.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
       manifest: {
         name: 'Emberwatch — Roguelite City Builder',

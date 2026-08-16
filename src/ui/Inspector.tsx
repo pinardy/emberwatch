@@ -15,69 +15,64 @@ import { useGameStore, useRun } from '../game/store'
 import type { BuildingInstance, Recipe, RunState } from '../game/types'
 
 /**
- * Context panel for whatever the player last tapped: a building, an empty tile,
+ * Context panel for whatever the player last tapped: a building, a deposit,
  * or an uncleared glade.
  */
 export function Inspector() {
   const run = useRun()
-  const selectedTile = useGameStore((s) => s.selectedTile)
+  const selectedBuilding = useGameStore((s) => s.selectedBuilding)
+  const selectedDeposit = useGameStore((s) => s.selectedDeposit)
   const selectedGlade = useGameStore((s) => s.selectedGlade)
   if (!run) return null
 
   if (selectedGlade) return <GladeInspector run={run} gladeId={selectedGlade} />
-  if (!selectedTile) return null
 
-  const tile = run.tiles[selectedTile]
-  if (!tile) return null
-  const building = tile.buildingId ? run.buildings[tile.buildingId] : undefined
-
-  return (
-    <div className="inspector">
-      {building ? (
+  if (selectedBuilding) {
+    const building = run.buildings[selectedBuilding]
+    if (!building) return null
+    return (
+      <div className="inspector">
         <BuildingInspector run={run} building={building} />
-      ) : (
+      </div>
+    )
+  }
+
+  if (selectedDeposit) {
+    const deposit = run.deposits[selectedDeposit]
+    if (!deposit) return null
+    return (
+      <div className="inspector">
         <div className="inspector-body">
           <header className="inspector-head">
-            <span className="inspector-icon">
-              {tile.deposit ? DEPOSIT_INFO[tile.deposit.id].icon : '▫'}
-            </span>
+            <span className="inspector-icon">{DEPOSIT_INFO[deposit.kind].icon}</span>
             <div>
-              <strong>
-                {tile.deposit ? DEPOSIT_INFO[tile.deposit.id].name : 'Empty ground'}
-              </strong>
-              <small>
-                {run.glades[tile.gladeId]?.name} · {tile.terrain}
-                {tile.blocked ? ' · unbuildable' : ''}
-              </small>
+              <strong>{DEPOSIT_INFO[deposit.kind].name}</strong>
+              <small>{run.glades[deposit.gladeId]?.name}</small>
             </div>
             <CloseButton />
           </header>
-          {tile.deposit && (
-            <p className="muted">
-              {tile.deposit.amount === null
-                ? 'Renewable — this deposit never runs out.'
-                : `${tile.deposit.amount} harvests remaining.`}{' '}
-              Place a camp on a nearby empty tile to work it.
-            </p>
-          )}
+          <p className="muted">
+            {deposit.amount === null
+              ? 'Renewable — this deposit never runs out.'
+              : `${deposit.amount} harvests remaining.`}{' '}
+            Place a camp within reach to work it.
+          </p>
         </div>
-      )}
-    </div>
-  )
+      </div>
+    )
+  }
+
+  return null
 }
 
 function CloseButton() {
-  const selectTile = useGameStore((s) => s.selectTile)
-  const selectGlade = useGameStore((s) => s.selectGlade)
+  const clearSelection = useGameStore((s) => s.clearSelection)
   return (
     <button
       type="button"
       className="icon-btn inspector-close"
       aria-label="Close"
-      onClick={() => {
-        selectTile(null)
-        selectGlade(null)
-      }}
+      onClick={clearSelection}
     >
       ✕
     </button>
@@ -109,7 +104,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
         <div>
           <strong>{def.name}</strong>
           <small>
-            {run.glades[run.tiles[building.tile].gladeId]?.name}
+            {run.glades[building.gladeId]?.name}
             {building.paused ? ' · paused' : ''}
           </small>
         </div>
@@ -283,7 +278,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             className="danger"
             onClick={() => {
               demolish(building.id)
-              useGameStore.getState().selectTile(null)
+              useGameStore.getState().clearSelection()
             }}
           >
             Demolish
@@ -360,8 +355,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
                 ? 'Small glade'
                 : glade.kind === 'dangerous'
                   ? 'Dangerous glade'
-                  : 'Forbidden glade'}{' '}
-              · {glade.tiles.length} tiles
+                  : 'Forbidden glade'}
             </small>
           </div>
           <CloseButton />
