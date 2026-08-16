@@ -6,13 +6,12 @@ import type { RunState, ServiceNeed, SpeciesId } from '../types'
 import {
   addClearer,
   assignWorker,
-  canPlaceBuilding,
+  findPlacement,
   isReachable,
   placeBuilding,
   setRecipe,
 } from './actions'
 import { createRun } from './createRun'
-import { hexDistance } from './hex'
 import { computeModifiers } from './modifiers'
 import { resolveBreakdowns } from './society'
 import { appeaseThreat, resolveGladeEvent, takeChoice } from './events'
@@ -130,23 +129,18 @@ function countBuilt(s: RunState, defId: string): number {
 }
 
 /**
- * Tries to place `defId` on the legal tile nearest the hearth. Building
- * compactly is what a competent player does — and it keeps housing inside the
- * hearth's warmth, which matters once the Storm chills distant homes.
+ * Tries to place `defId` at the legal spot the engine's placement search
+ * suggests — camps beside their deposits, everything else packed around the
+ * hearth. Building compactly is what a competent player does, and it keeps
+ * housing inside the hearth's warmth once the Storm chills distant homes.
  */
 function tryPlace(s: RunState, defId: string): boolean {
   if (!s.unlockedBuildings.includes(defId)) return false
   const def = BUILDINGS[defId]
   if (!def || !canAfford(s.stock, def.cost)) return false
-  const tiles = Object.values(s.tiles).sort(
-    (a, b) => hexDistance(a, { q: 0, r: 0 }) - hexDistance(b, { q: 0, r: 0 }),
-  )
-  for (const tile of tiles) {
-    if (canPlaceBuilding(s, defId, tile.key) === null) {
-      return placeBuilding(s, defId, tile.key) === null
-    }
-  }
-  return false
+  const pos = findPlacement(s, defId)
+  if (!pos) return false
+  return placeBuilding(s, defId, pos) === null
 }
 
 /** Needs demanded by the species actually living here. */

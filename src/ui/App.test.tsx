@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
-import { canPlaceBuilding } from '../game/engine/actions'
+import { findPlacement } from '../game/engine/actions'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 
@@ -53,7 +53,8 @@ beforeEach(() => {
     run: null,
     speed: 0,
     buildMode: null,
-    selectedTile: null,
+    selectedBuilding: null,
+    selectedDeposit: null,
     selectedGlade: null,
     panel: 'build',
     notice: null,
@@ -107,27 +108,34 @@ describe('app shell', () => {
     // Enter build mode for a shelter.
     clickBuildCard('Shelter')
     expect(useGameStore.getState().buildMode).toBe('shelter')
-    expect(screen.getByText(/tap a highlighted tile/i)).toBeTruthy()
+    expect(screen.getByText(/click on cleared ground/i)).toBeTruthy()
 
-    // Find a tile the sim agrees is legal, then click its rendered hex.
-    const run = currentRun()
-    const target = Object.values(run.tiles).find(
-      (t) => canPlaceBuilding(run, 'shelter', t.key) === null,
-    )
-    expect(target).toBeDefined()
-
+    // The map draws the continuous world: glade polygons and feature markers.
     const svg = screen.getByRole('application', { name: /Settlement map/i })
-    const hexes = svg.querySelectorAll('g.hex')
-    expect(hexes.length).toBeGreaterThan(100)
+    expect(svg.querySelectorAll('polygon.glade-poly').length).toBeGreaterThan(10)
+    expect(svg.querySelectorAll('g.deposit').length).toBeGreaterThan(0)
+
+    // Ask the engine for a legal spot, then place there — the same call the
+    // map's click handler makes with the cursor's world position.
+    const run = currentRun()
+    const target = findPlacement(run, 'shelter')
+    expect(target).toBeTruthy()
 
     const before = Object.keys(currentRun().buildings).length
     act(() => {
-      useGameStore.getState().place(target!.key)
+      useGameStore.getState().place(target!)
     })
     expect(Object.keys(currentRun().buildings).length).toBe(before + 1)
 
-    // The inspector should now describe the shelter under construction. Scope
-    // the query — "Shelter" also appears on the build card behind it.
+    // Select the new site; the inspector should describe it. Scope the query —
+    // "Shelter" also appears on the build card behind it.
+    const shelter = Object.values(currentRun().buildings).find(
+      (b) => b.defId === 'shelter',
+    )!
+    act(() => {
+      useGameStore.getState().setBuildMode(null)
+      useGameStore.getState().selectBuilding(shelter.id)
+    })
     const inspector = document.querySelector('.inspector') as HTMLElement | null
     expect(inspector).toBeTruthy()
     expect(within(inspector!).getByText(BUILDINGS.shelter.name)).toBeTruthy()
@@ -167,6 +175,40 @@ describe('app shell', () => {
     })
     expect(zoomOut.defaultPrevented).toBe(true)
     expect(scaleOf()).toBeLessThan(zoomedIn)
+  })
+
+  it('pans the camera with WASD and arrow keys', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+
+    const svg = screen.getByRole('application', { name: /Settlement map/i })
+    const panOf = () => {
+      const g = svg.querySelector('g[transform]') as SVGGElement
+      const m = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(g.getAttribute('transform') ?? '')
+      return { x: Number(m?.[1]), y: Number(m?.[2]) }
+    }
+
+    const start = panOf()
+    // D pans the camera right: the world slides left.
+    fireEvent.keyDown(window, { code: 'KeyD' })
+    expect(panOf().x).toBeLessThan(start.x)
+    // ArrowLeft pans back the other way.
+    fireEvent.keyDown(window, { code: 'ArrowLeft' })
+    fireEvent.keyDown(window, { code: 'ArrowLeft' })
+    expect(panOf().x).toBeGreaterThan(start.x)
+    // W moves the camera up: the world slides down.
+    fireEvent.keyDown(window, { code: 'KeyW' })
+    expect(panOf().y).toBeGreaterThan(start.y)
+
+    // Typing in a form field must not move the camera.
+    const before = panOf()
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    fireEvent.keyDown(input, { code: 'KeyD' })
+    expect(panOf()).toEqual(before)
+    input.remove()
   })
 
   it('advances the simulation when unpaused', () => {

@@ -9,12 +9,14 @@ import {
   assignWorker,
   canPlaceBuilding,
   addClearer,
+  findPlacement,
   rushConstruction,
   rushCost,
   sootheCost,
   sootheQueen,
 } from './actions'
 import {
+  ADJACENCY_RANGE,
   CARAVAN_OFFERS,
   HEARTH_WARMTH_RADIUS,
   OPENING_BLUEPRINT_PICKS,
@@ -33,8 +35,8 @@ import {
   stepThreats,
   takeChoice,
 } from './events'
-import { hexDistance, hexKey, hexesInRadius } from './hex'
-import { MAP_RADIUS } from './mapgen'
+import { dist, pointInPolygon } from './geometry'
+import { gladeAt } from './mapgen'
 import { computeModifiers } from './modifiers'
 import { adjacencyMultiplier, seasonMultiplier } from './production'
 import {
@@ -137,29 +139,43 @@ describe('rng', () => {
   })
 })
 
-describe('hex geometry', () => {
-  it('counts the right number of tiles for a radius', () => {
-    // Centred hexagon of radius r has 3r² + 3r + 1 tiles.
-    const r = 4
-    expect(hexesInRadius({ q: 0, r: 0 }, r)).toHaveLength(3 * r * r + 3 * r + 1)
+describe('world geometry', () => {
+  it('tests point-in-polygon on a square', () => {
+    const square = [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: 1, y: 1 },
+      { x: -1, y: 1 },
+    ]
+    expect(pointInPolygon({ x: 0, y: 0 }, square)).toBe(true)
+    expect(pointInPolygon({ x: 2, y: 0 }, square)).toBe(false)
   })
 
   it('measures distance symmetrically', () => {
-    expect(hexDistance({ q: 0, r: 0 }, { q: 2, r: -1 })).toBe(2)
-    expect(hexDistance({ q: 2, r: -1 }, { q: 0, r: 0 })).toBe(2)
+    const a = { x: 1, y: 2 }
+    const b = { x: -3, y: 5 }
+    expect(dist(a, b)).toBeCloseTo(dist(b, a))
+    expect(dist(a, b)).toBeCloseTo(5)
   })
 })
 
 describe('map generation', () => {
-  it('assigns every tile to a glade and is reproducible', () => {
+  it('scatters every feature inside its own glade and is reproducible', () => {
     const a = newRun()
     const b = newRun()
-    expect(Object.keys(a.tiles)).toHaveLength(3 * MAP_RADIUS ** 2 + 3 * MAP_RADIUS + 1)
-    for (const tile of Object.values(a.tiles)) {
-      expect(a.glades[tile.gladeId]).toBeDefined()
+    expect(Object.keys(a.glades).length).toBeGreaterThan(10)
+    for (const deposit of Object.values(a.deposits)) {
+      const glade = a.glades[deposit.gladeId]
+      expect(glade).toBeDefined()
+      expect(pointInPolygon(deposit.pos, glade.polygon)).toBe(true)
     }
-    expect(Object.keys(b.tiles).length).toBe(Object.keys(a.tiles).length)
-    expect(b.glades.glade0.tiles.length).toBe(a.glades.glade0.tiles.length)
+    for (const obstacle of a.obstacles) {
+      expect(pointInPolygon(obstacle.pos, a.glades[obstacle.gladeId].polygon)).toBe(true)
+    }
+    // Same seed, same world.
+    expect(Object.keys(b.glades)).toEqual(Object.keys(a.glades))
+    expect(b.glades.glade0.polygon).toEqual(a.glades.glade0.polygon)
+    expect(Object.keys(b.deposits)).toEqual(Object.keys(a.deposits))
   })
 
   it('starts with exactly one cleared glade containing the hearth', () => {
@@ -167,7 +183,8 @@ describe('map generation', () => {
     const cleared = Object.values(state.glades).filter((g) => g.cleared)
     expect(cleared).toHaveLength(1)
     expect(cleared[0].id).toBe('glade0')
-    expect(state.tiles[hexKey(0, 0)].buildingId).toBe('hearth')
+    expect(state.buildings.hearth.pos).toEqual({ x: 0, y: 0 })
+    expect(gladeAt(state.glades, state.buildings.hearth.pos)?.id).toBe('glade0')
   })
 
   it('reveals the starting glade neighbours and nothing further', () => {
@@ -178,10 +195,8 @@ describe('map generation', () => {
 
   it('gives the starting glade workable deposits', () => {
     const state = newRun()
-    const deposits = state.glades.glade0.tiles
-      .map((key) => state.tiles[key].deposit?.id)
-      .filter(Boolean)
-    expect(deposits.length).toBeGreaterThan(0)
+    const starters = Object.values(state.deposits).filter((d) => d.gladeId === 'glade0')
+    expect(starters.length).toBeGreaterThan(0)
   })
 })
 
@@ -224,29 +239,44 @@ describe('run setup', () => {
 })
 
 describe('building placement', () => {
-  it('refuses tiles outside cleared glades', () => {
+  it('refuses ground outside cleared glades', () => {
     const state = newRun()
-    const foreign = Object.values(state.tiles).find(
-      (t) => !state.glades[t.gladeId].cleared && !t.blocked && !t.deposit,
-    )!
-    expect(canPlaceBuilding(state, 'shelter', foreign.key)).toMatch(/not been cleared/)
+    const foreign = Object.values(state.glades).find((g) => !g.cleared)!
+    expect(canPlaceBuilding(state, 'shelter', foreign.center)).toMatch(/not been cleared/)
+  })
+
+  it('refuses overlap with the hearth and other buildings', () => {
+    const state = newRun()
+    expect(canPlaceBuilding(state, 'shelter', state.buildings.hearth.pos)).toMatch(
+      /Too close/,
+    )
+    const pos = findPlacement(state, 'shelter')!
+    expect(placeBuilding(state, 'shelter', pos)).toBeNull()
+    expect(canPlaceBuilding(state, 'shelter', pos)).toMatch(/Too close/)
   })
 
   it('refuses a gathering camp with no deposits in range', () => {
     const state = newRun()
     // Strip every deposit so no camp can be useful anywhere.
-    for (const tile of Object.values(state.tiles)) delete tile.deposit
-    const free = state.glades.glade0.tiles.find((k) => !state.tiles[k].buildingId)!
-    expect(canPlaceBuilding(state, 'woodcuttersCamp', free)).toMatch(/deposits/)
+    state.deposits = {}
+    let sawRangeError = false
+    for (let x = -4; x <= 4 && !sawRangeError; x += 0.5) {
+      for (let y = -4; y <= 4 && !sawRangeError; y += 0.5) {
+        const error = canPlaceBuilding(state, 'woodcuttersCamp', { x, y })
+        if (error && /deposits/.test(error)) sawRangeError = true
+      }
+    }
+    expect(sawRangeError).toBe(true)
+    // And the placement search agrees there is nowhere useful.
+    expect(findPlacement(state, 'woodcuttersCamp')).toBeNull()
   })
 
   it('spends materials and finishes construction with idle builders', () => {
     const state = newRun()
-    const free = state.glades.glade0.tiles.find(
-      (k) => !state.tiles[k].buildingId && !state.tiles[k].deposit && !state.tiles[k].blocked,
-    )!
+    const pos = findPlacement(state, 'shelter')!
+    expect(pos).toBeTruthy()
     const woodBefore = state.stock.wood ?? 0
-    expect(placeBuilding(state, 'shelter', free)).toBeNull()
+    expect(placeBuilding(state, 'shelter', pos)).toBeNull()
     expect(state.stock.wood).toBe(woodBefore - (BUILDINGS.shelter.cost.wood ?? 0))
 
     const housingBefore = totalHousing(state)
@@ -258,23 +288,17 @@ describe('building placement', () => {
 describe('production', () => {
   it('harvests from a deposit in range', () => {
     const state = newRun()
-    const treeTile = state.glades.glade0.tiles.find(
-      (k) => state.tiles[k].deposit?.id === 'trees',
-    )
-    if (!treeTile) return // seed-dependent; other tests cover the generic path
-
-    const spot = state.glades.glade0.tiles.find(
-      (k) =>
-        !state.tiles[k].buildingId &&
-        !state.tiles[k].deposit &&
-        !state.tiles[k].blocked &&
-        hexDistance(state.tiles[k], state.tiles[treeTile]) <= 3,
+    // The placement search anchors camps on the deposits they need.
+    const pos = findPlacement(state, 'woodcuttersCamp')!
+    expect(pos).toBeTruthy()
+    expect(placeBuilding(state, 'woodcuttersCamp', pos)).toBeNull()
+    const building = Object.values(state.buildings).find(
+      (b) => b.defId === 'woodcuttersCamp',
     )!
-    expect(placeBuilding(state, 'woodcuttersCamp', spot)).toBeNull()
-    const buildingId = state.tiles[spot].buildingId!
+    expect(Object.keys(building.depositsInRange).length).toBeGreaterThan(0)
     run(state, 20) // let it finish building
-    expect(state.buildings[buildingId].built).toBe(true)
-    expect(assignWorker(state, buildingId)).toBeNull()
+    expect(building.built).toBe(true)
+    expect(assignWorker(state, building.id)).toBeNull()
 
     const produced = state.producedTotals.wood ?? 0
     run(state, 40)
@@ -580,12 +604,8 @@ describe('trade & amber sinks', () => {
   /** Stands up a built Trading Post so caravans start calling. */
   function withTradingPost(state: RunState): void {
     state.unlockedBuildings.push('tradingPost')
-    for (const tile of Object.values(state.tiles)) {
-      if (canPlaceBuilding(state, 'tradingPost', tile.key) === null) {
-        placeBuilding(state, 'tradingPost', tile.key)
-        break
-      }
-    }
+    const pos = findPlacement(state, 'tradingPost')!
+    placeBuilding(state, 'tradingPost', pos)
     const post = Object.values(state.buildings).find((b) => b.defId === 'tradingPost')!
     post.built = true
   }
@@ -640,12 +660,7 @@ describe('trade & amber sinks', () => {
 
   it('rushes construction for amber', () => {
     const state = newRun()
-    for (const tile of Object.values(state.tiles)) {
-      if (canPlaceBuilding(state, 'shelter', tile.key) === null) {
-        placeBuilding(state, 'shelter', tile.key)
-        break
-      }
-    }
+    placeBuilding(state, 'shelter', findPlacement(state, 'shelter')!)
     const site = Object.values(state.buildings).find((b) => !b.built)!
     state.stock.amber = 100
     const cost = rushCost(state, site.id)
@@ -668,22 +683,27 @@ describe('trade & amber sinks', () => {
 })
 
 describe('placement: warmth & adjacency', () => {
+  /** A cleared glade whose centre is far enough that homes there are cold. */
+  function farGlade(state: RunState) {
+    const glade = Object.values(state.glades)
+      .filter((g) => dist(g.center, { x: 0, y: 0 }) > HEARTH_WARMTH_RADIUS + 3)
+      .sort((a, b) => dist(b.center, { x: 0, y: 0 }) - dist(a.center, { x: 0, y: 0 }))[0]!
+    glade.discovered = true
+    glade.cleared = true
+    return glade
+  }
+
   it('counts housing inside the hearth warmth radius', () => {
     const state = newRun()
     // Everything starts compact, so all housing is warm.
     expect(warmHousing(state, HEARTH_WARMTH_RADIUS)).toBe(totalHousing(state))
 
     // A far shelter houses people but does not count as warm.
-    const far = Object.values(state.tiles).find(
-      (t) =>
-        hexDistance(t, { q: 0, r: 0 }) > HEARTH_WARMTH_RADIUS + 1 &&
-        !t.blocked &&
-        !t.deposit &&
-        !t.buildingId,
-    )!
-    state.glades[far.gladeId].cleared = true
-    expect(placeBuilding(state, 'shelter', far.key)).toBeNull()
-    const shelter = Object.values(state.buildings).find((b) => b.tile === far.key)!
+    const glade = farGlade(state)
+    const pos = findPlacement(state, 'shelter', glade.center)!
+    expect(dist(pos, { x: 0, y: 0 })).toBeGreaterThan(HEARTH_WARMTH_RADIUS)
+    expect(placeBuilding(state, 'shelter', pos)).toBeNull()
+    const shelter = Object.values(state.buildings).find((b) => b.defId === 'shelter')!
     shelter.built = true
     expect(warmHousing(state, HEARTH_WARMTH_RADIUS)).toBe(
       totalHousing(state) - (BUILDINGS.shelter.housing ?? 0),
@@ -692,15 +712,8 @@ describe('placement: warmth & adjacency', () => {
 
   it('chills distant homes during the Storm', () => {
     const state = newRun()
-    const far = Object.values(state.tiles).find(
-      (t) =>
-        hexDistance(t, { q: 0, r: 0 }) > HEARTH_WARMTH_RADIUS + 1 &&
-        !t.blocked &&
-        !t.deposit &&
-        !t.buildingId,
-    )!
-    state.glades[far.gladeId].cleared = true
-    placeBuilding(state, 'shelter', far.key)
+    const glade = farGlade(state)
+    placeBuilding(state, 'shelter', findPlacement(state, 'shelter', glade.center)!)
     Object.values(state.buildings).forEach((b) => {
       b.built = true
     })
@@ -719,27 +732,24 @@ describe('placement: warmth & adjacency', () => {
     const state = newRun()
     state.stock.wood = 200
     state.stock.stone = 200
+    state.unlockedBuildings.push('lumberMill')
 
-    // Find a camp spot with a free neighbour for the mill.
-    let campTile: string | null = null
-    let millTile: string | null = null
-    for (const tile of Object.values(state.tiles)) {
-      if (canPlaceBuilding(state, 'woodcuttersCamp', tile.key) !== null) continue
-      const neighbor = hexesInRadius(tile, 1).find(
-        (h) =>
-          hexKey(h.q, h.r) !== tile.key &&
-          canPlaceBuilding(state, 'lumberMill', hexKey(h.q, h.r)) === null,
-      )
-      if (neighbor) {
-        campTile = tile.key
-        millTile = hexKey(neighbor.q, neighbor.r)
-        break
+    placeBuilding(state, 'woodcuttersCamp', findPlacement(state, 'woodcuttersCamp')!)
+    const camp = Object.values(state.buildings).find((b) => b.defId === 'woodcuttersCamp')!
+
+    // Scan a tight ring around the camp for a legal mill spot within range.
+    let millPos: { x: number; y: number } | null = null
+    outer: for (let r = 1.5; r <= ADJACENCY_RANGE - 0.05; r += 0.2) {
+      for (let a = 0; a < Math.PI * 2; a += 0.25) {
+        const p = { x: camp.pos.x + Math.cos(a) * r, y: camp.pos.y + Math.sin(a) * r }
+        if (canPlaceBuilding(state, 'lumberMill', p) === null) {
+          millPos = p
+          break outer
+        }
       }
     }
-    expect(campTile).toBeTruthy()
-    placeBuilding(state, 'woodcuttersCamp', campTile!)
-    placeBuilding(state, 'lumberMill', millTile!)
-    const camp = Object.values(state.buildings).find((b) => b.defId === 'woodcuttersCamp')!
+    expect(millPos).toBeTruthy()
+    placeBuilding(state, 'lumberMill', millPos!)
     const mill = Object.values(state.buildings).find((b) => b.defId === 'lumberMill')!
     camp.built = true
     mill.built = true
@@ -747,7 +757,6 @@ describe('placement: warmth & adjacency', () => {
 
     // Alone in a field, no bonus.
     delete state.buildings[camp.id]
-    delete state.tiles[camp.tile].buildingId
     expect(adjacencyMultiplier(state, mill)).toBe(1)
   })
 })
