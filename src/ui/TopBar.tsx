@@ -53,6 +53,7 @@ export function TopBar() {
   const setSpeed = useGameStore((s) => s.setSpeed)
   const goToScreen = useGameStore((s) => s.goToScreen)
   const sound = useGameStore((s) => s.settings.sound)
+  const renderer = useGameStore((s) => s.settings.renderer)
   const updateSettings = useGameStore((s) => s.updateSettings)
   const repFloats = useFloaters(run?.reputation ?? 0, 'up-good')
   const impFloats = useFloaters(run?.impatience ?? 0, 'up-bad')
@@ -139,6 +140,15 @@ export function TopBar() {
       </div>
 
       <div className="topbar-right">
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => updateSettings({ renderer: renderer === '3d' ? '2d' : '3d' })}
+          title={renderer === '3d' ? 'Switch to 2D map' : 'Switch to 3D map'}
+          aria-label={renderer === '3d' ? 'Switch to 2D map' : 'Switch to 3D map'}
+        >
+          {renderer === '3d' ? '🗺️' : '🏔️'}
+        </button>
         <button
           type="button"
           className="icon-btn"

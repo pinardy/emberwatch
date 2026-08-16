@@ -85,7 +85,7 @@ export function useHotkeys(active: boolean): void {
           break
         case 'Escape':
           if (store.buildMode) store.setBuildMode(null)
-          else store.selectTile(null)
+          else store.clearSelection()
           break
       }
     }

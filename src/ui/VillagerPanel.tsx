@@ -15,7 +15,7 @@ import { useGameStore, useRun } from '../game/store'
 export function VillagerPanel() {
   const run = useRun()
   const recallAll = useGameStore((s) => s.recallAll)
-  const selectTile = useGameStore((s) => s.selectTile)
+  const selectBuilding = useGameStore((s) => s.selectBuilding)
   if (!run) return null
 
   const mods = computeModifiers(run)
@@ -123,7 +123,7 @@ export function VillagerPanel() {
           {villagers.map((v) => {
             const assignment = v.assignment
             let label = 'Idle · building & hauling'
-            let tileKey: string | null = null
+            let buildingId: string | null = null
             if (assignment?.startsWith('clearing:')) {
               const glade = run.glades[assignment.slice('clearing:'.length)]
               label = `Clearing ${glade?.name ?? '—'}`
@@ -131,7 +131,7 @@ export function VillagerPanel() {
               const building = run.buildings[assignment]
               const def = building ? BUILDINGS[building.defId] : undefined
               label = def ? `${def.icon} ${def.name}` : 'Working'
-              tileKey = building?.tile ?? null
+              buildingId = building?.id ?? null
             }
             const trait = v.trait ? VILLAGER_TRAITS[v.trait] : undefined
             return (
@@ -139,7 +139,7 @@ export function VillagerPanel() {
                 type="button"
                 className={`villager ${assignment ? '' : 'is-idle'}`}
                 key={v.id}
-                onClick={() => tileKey && selectTile(tileKey)}
+                onClick={() => buildingId && selectBuilding(buildingId)}
                 title={trait ? `${trait.name}: ${trait.description}` : undefined}
               >
                 <span>{SPECIES[v.species].icon}</span>
