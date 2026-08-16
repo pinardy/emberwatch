@@ -101,13 +101,20 @@ export function GameScreen() {
 function ThreatBar() {
   const run = useRun()
   const appease = useGameStore((s) => s.appease)
+  const focusCamera = useGameStore((s) => s.focusCamera)
   if (!run || run.threats.length === 0) return null
   return (
     <div className="threat-bar">
       {run.threats.map((threat) => {
         const affordable = canAfford(run.stock, threat.appease)
+        const glade = run.glades[threat.gladeId]
         return (
-          <div key={threat.id} className="threat-card">
+          <div
+            key={threat.id}
+            className="threat-card"
+            onClick={() => glade && focusCamera(glade.center)}
+            title={glade ? `Show ${glade.name} on the map` : undefined}
+          >
             <span className="threat-icon">{threat.icon}</span>
             <div className="threat-text">
               <strong>{threat.name}</strong>
@@ -118,7 +125,10 @@ function ThreatBar() {
             <button
               type="button"
               disabled={!affordable}
-              onClick={() => appease(threat.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                appease(threat.id)
+              }}
               title={affordable ? 'Pay it off' : 'You cannot afford this yet'}
             >
               Appease:{' '}

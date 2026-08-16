@@ -56,6 +56,8 @@ interface GameStore {
   selectedDeposit: string | null
   selectedGlade: string | null
   panel: SidePanel
+  /** One-shot request for the map to fly its camera here; the view clears it. */
+  cameraFocus: Vec2 | null
 
   // --- lifecycle -----------------------------------------------------------
   boot: () => void
@@ -76,6 +78,7 @@ interface GameStore {
   selectDeposit: (depositId: string | null) => void
   selectGlade: (gladeId: string | null) => void
   clearSelection: () => void
+  focusCamera: (pos: Vec2) => void
   setPanel: (panel: SidePanel) => void
   place: (pos: Vec2) => void
   demolish: (buildingId: string) => void
@@ -125,6 +128,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   selectedDeposit: null,
   selectedGlade: null,
   panel: 'build',
+  cameraFocus: null,
 
   boot: () => {
     set({ meta: loadMeta(), settings: loadSettings() })
@@ -235,6 +239,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ selectedGlade: gladeId, selectedBuilding: null, selectedDeposit: null }),
   clearSelection: () =>
     set({ selectedBuilding: null, selectedDeposit: null, selectedGlade: null }),
+  focusCamera: (pos) => set({ cameraFocus: { x: pos.x, y: pos.y } }),
   setPanel: (panel) => set({ panel }),
 
   // Build mode stays active after a successful placement, so camps and
