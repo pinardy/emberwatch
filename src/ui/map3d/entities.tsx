@@ -7,6 +7,8 @@ import { footprintOf } from '../../game/engine/actions'
 import { DEPOSIT_INFO } from '../../game/engine/mapgen'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, Vec2, WorldDeposit } from '../../game/types'
+import { REDUCED_MOTION } from '../motion'
+import { requestGhost } from './ghostBus'
 import {
   BuildingModel,
   ConstructionSite,
@@ -44,6 +46,7 @@ export function SelectionRing({
 export function PulseRing({ radius, color = '#9fc9a3' }: { radius: number; color?: string }) {
   const material = useRef<THREE.MeshBasicMaterial>(null)
   useFrame(({ clock }) => {
+    if (REDUCED_MOTION) return
     if (material.current) {
       material.current.opacity = 0.45 + Math.sin(clock.elapsedTime * 3.4) * 0.25
     }
@@ -51,18 +54,23 @@ export function PulseRing({ radius, color = '#9fc9a3' }: { radius: number; color
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.055, 0]} raycast={NO_RAYCAST}>
       <ringGeometry args={[radius, radius + 0.1, 32]} />
-      <meshBasicMaterial ref={material} color={color} transparent side={THREE.DoubleSide} />
+      <meshBasicMaterial ref={material} color={color} transparent opacity={0.55} side={THREE.DoubleSide} />
     </mesh>
   )
 }
 
-/** Shared click behaviour: build mode places at the clicked point instead. */
+/**
+ * Shared click behaviour. In build mode a mouse click places at the clicked
+ * point; a touch tap only aims the ghost — its ✓ button confirms.
+ */
 function activate(e: ThreeEvent<MouseEvent>, select: () => void) {
   if (e.delta > 6) return
   e.stopPropagation()
   const state = useGameStore.getState()
   if (state.buildMode) {
-    state.place({ x: e.point.x, y: e.point.z })
+    const pos = { x: e.point.x, y: e.point.z }
+    if ((e.nativeEvent as PointerEvent).pointerType === 'touch') requestGhost(pos)
+    else state.place(pos)
     return
   }
   select()
@@ -128,7 +136,9 @@ export function BuildingNode({
   const prevBuilt = useRef(building.built)
   const popAt = useRef<number | null>(null)
   useEffect(() => {
-    if (building.built && !prevBuilt.current) popAt.current = performance.now()
+    if (!REDUCED_MOTION && building.built && !prevBuilt.current) {
+      popAt.current = performance.now()
+    }
     prevBuilt.current = building.built
   }, [building.built])
   useFrame(() => {
@@ -200,6 +210,7 @@ export function BuildingNode({
 export function ThreatMarker({ pos }: { pos: Vec2 }) {
   const sprite = useRef<THREE.Group>(null)
   useFrame(({ clock }) => {
+    if (REDUCED_MOTION) return
     const group = sprite.current
     if (!group) return
     const pulse = 1 + Math.sin(clock.elapsedTime * 4.2) * 0.18

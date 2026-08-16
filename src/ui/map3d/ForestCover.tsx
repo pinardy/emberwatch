@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { distToPolygonEdge, pointInPolygon, polygonBounds } from '../../game/engine/geometry'
 import type { Glade } from '../../game/types'
+import { REDUCED_MOTION } from '../motion'
 import { NO_RAYCAST, hash01 } from './models'
 
 /**
@@ -115,6 +116,7 @@ export function FellingForest({ glades }: { glades: Record<string, Glade> }) {
 
   // Glades mutate in place, so compare cleared ids after every render.
   useEffect(() => {
+    if (REDUCED_MOTION) return
     const cleared = Object.values(glades).filter((g) => g.cleared)
     if (prevCleared.current === null) {
       // First render of a run: nothing is "newly" cleared.

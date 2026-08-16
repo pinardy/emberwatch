@@ -104,14 +104,18 @@ export function CameraRig({ controls, world, minDistance, maxDistance, home }: C
       RAYCASTER.setFromCamera(NDC, c.object)
       if (!RAYCASTER.ray.intersectPlane(GROUND, HIT)) return
 
-      const factor = e.deltaY < 0 ? 1 / 1.16 : 1.16
       const camera = c.object
+      // Velocity-scaled: a trackpad flick zooms further than a single notch,
+      // clamped per event so nothing teleports.
+      let factor = THREE.MathUtils.clamp(Math.exp(e.deltaY * 0.0012), 0.6, 1.7)
+      const current = camera.position.distanceTo(c.target)
+      const desired = THREE.MathUtils.clamp(current * factor, minDistance, maxDistance)
+      factor = desired / current
+      if (Math.abs(factor - 1) < 1e-4) return
       // Shrink (or grow) both the camera and the focus point about the hit,
       // so whatever is under the cursor stays under the cursor.
       BEFORE.copy(camera.position).sub(HIT).multiplyScalar(factor).add(HIT)
       OFFSET.copy(c.target).sub(HIT).multiplyScalar(factor).add(HIT)
-      const distance = BEFORE.distanceTo(OFFSET)
-      if (distance < minDistance || distance > maxDistance) return
       camera.position.copy(BEFORE)
       c.target.copy(OFFSET)
       c.update()

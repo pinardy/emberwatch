@@ -2217,3 +2217,126 @@ code {
 .threat-card:hover {
   outline: 1px solid rgba(217, 180, 106, 0.45);
 }
+
+/* ---------------------------------------------------------------------------
+ * Touch placement confirm, controls help, menu settings
+ * ------------------------------------------------------------------------- */
+
+.ghost-confirm {
+  display: flex;
+  gap: 10px;
+}
+
+.ghost-confirm button {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  font-size: 20px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(9, 13, 16, 0.9);
+}
+
+.ghost-confirm .ok {
+  color: #9fd8a4;
+  border-color: rgba(111, 191, 114, 0.6);
+}
+
+.ghost-confirm .ok:disabled {
+  color: #5a6a5c;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.ghost-confirm .no {
+  color: #e8a1a1;
+  border-color: rgba(192, 80, 80, 0.55);
+}
+
+.controls-help {
+  position: absolute;
+  right: 54px;
+  bottom: 10px;
+  z-index: 32;
+  width: 300px;
+  padding: 12px 14px;
+  background: rgba(9, 13, 16, 0.94);
+  border: 1px solid rgba(217, 180, 106, 0.35);
+  border-radius: 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.controls-help strong {
+  color: var(--gold);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.controls-help ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.controls-help em {
+  font-style: normal;
+  color: var(--gold);
+}
+
+.map-controls button.is-active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.settings-block label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+  cursor: pointer;
+}
+
+.settings-block input[type='checkbox'] {
+  accent-color: var(--gold);
+}
+
+/* On phones the 3D overlays must shrink with the canvas. */
+@media (max-width: 700px) {
+  .glade-plate-3d {
+    min-width: 90px;
+    padding: 5px 9px;
+  }
+
+  .glade-plate-3d strong {
+    font-size: 11px;
+  }
+
+  .glade-plate-3d small,
+  .glade-plate-3d em {
+    font-size: 9px;
+  }
+
+  .glade-plate-3d-bar {
+    width: 66px;
+    height: 5px;
+  }
+
+  .minimap {
+    width: 108px;
+    height: auto;
+  }
+
+  .ghost-hint {
+    font-size: 11px;
+    padding: 4px 9px;
+  }
+
+  .controls-help {
+    left: 10px;
+    right: 10px;
+    bottom: 54px;
+    width: auto;
+  }
+}

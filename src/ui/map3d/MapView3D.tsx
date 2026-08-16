@@ -13,9 +13,13 @@ import type { DepositId, Glade, RunState, TerrainId, Vec2 } from '../../game/typ
 import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
 import { FellingForest, ForestCover } from './ForestCover'
+import { onGhostRequest } from './ghostBus'
 import { MiniMap } from './MiniMap'
+import { Paths } from './Paths'
+import { Smoke } from './Smoke'
 import { Villagers } from './Villagers'
 import { BuildBanner } from '../MapView2D'
+import { REDUCED_MOTION } from '../motion'
 import {
   BuildingNode,
   PulseRing,
@@ -85,6 +89,8 @@ interface CursorState {
   reach: string[]
   /** Adjacency bonus percent if the ghost sits beside its partner. */
   bonus: number | null
+  /** Touch flow: the ghost is aimed and waiting for its ✓ to confirm. */
+  pending: boolean
 }
 
 /**
@@ -122,13 +128,21 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
         )
         if (near) bonus = ghostDef.adjacency.percent
       }
-      return { pos, ok: reason === null, reason, reach, bonus }
+      return { pos, ok: reason === null, reason, reach, bonus, pending: false }
     },
     [run, buildMode],
   )
 
+  // Taps on deposits/buildings during touch build-mode land here too.
+  useEffect(() => {
+    if (!buildMode) return
+    return onGhostRequest((pos) => setCursor({ ...evaluate(pos), pending: true }))
+  }, [buildMode, evaluate])
+
   const handleMove = (e: ThreeEvent<PointerEvent>) => {
     if (!buildMode) return
+    // Touch has no hover: the ghost is aimed by taps, not by finger drags.
+    if (e.pointerType === 'touch') return
     setCursor(evaluate({ x: e.point.x, y: e.point.z }))
   }
 
@@ -137,12 +151,23 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
     const state = useGameStore.getState()
     const pos = { x: e.point.x, y: e.point.z }
     if (state.buildMode) {
+      // Touch: first tap aims the ghost; its ✓ button places.
+      if ((e.nativeEvent as PointerEvent).pointerType === 'touch') {
+        setCursor({ ...evaluate(pos), pending: true })
+        return
+      }
       state.place(pos)
       // The spot just filled up (or errored) — refresh the ghost in place.
       if (useGameStore.getState().buildMode) setCursor(evaluate(pos))
       return
     }
     state.clearSelection()
+  }
+
+  const confirmPending = () => {
+    if (!cursor?.pending) return
+    useGameStore.getState().place(cursor.pos)
+    setCursor(null)
   }
 
   const radius = buildMode ? footprintOf(buildMode) : 0
@@ -214,6 +239,29 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
                 <div className={`ghost-hint ${cursor.ok ? 'is-ok' : 'is-bad'}`}>{hint}</div>
               </Html>
             )}
+            {cursor.pending && (
+              <Html position={[0, 2.7, 0]} center distanceFactor={12} zIndexRange={[25, 0]}>
+                <div className="ghost-confirm">
+                  <button
+                    type="button"
+                    className="ok"
+                    disabled={!cursor.ok}
+                    onClick={confirmPending}
+                    aria-label="Confirm placement"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    className="no"
+                    onClick={() => setCursor(null)}
+                    aria-label="Cancel placement"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </Html>
+            )}
           </group>
 
           {/* Deposits this camp would actually work light up. */}
@@ -235,10 +283,46 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
   )
 }
 
+/** An in-flight camera move: eased glide of both the focus and the camera. */
+interface Flight {
+  fromPos: THREE.Vector3
+  toPos: THREE.Vector3
+  fromTarget: THREE.Vector3
+  toTarget: THREE.Vector3
+  start: number
+  duration: number
+}
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}
+
+function FlightAnimator({
+  controls,
+  flight,
+}: {
+  controls: React.MutableRefObject<MapControlsImpl | null>
+  flight: React.MutableRefObject<Flight | null>
+}) {
+  useFrame(() => {
+    const f = flight.current
+    const c = controls.current
+    if (!f || !c) return
+    const t = Math.min(1, (performance.now() - f.start) / (f.duration * 1000))
+    const eased = easeInOutCubic(t)
+    c.target.copy(f.fromTarget).lerp(f.toTarget, eased)
+    c.object.position.copy(f.fromPos).lerp(f.toPos, eased)
+    c.update()
+    if (t >= 1) flight.current = null
+  })
+  return null
+}
+
 /** The hearth's reach, shown while placing housing or inspecting the hearth. */
 function WarmthRing() {
   const material = useRef<THREE.MeshBasicMaterial>(null)
   useFrame(({ clock }) => {
+    if (REDUCED_MOTION) return
     if (material.current) {
       material.current.opacity = 0.45 + Math.sin(clock.elapsedTime * 2.4) * 0.2
     }
@@ -265,9 +349,32 @@ export function MapView3D() {
   const selectGlade = useGameStore((s) => s.selectGlade)
   const cameraFocus = useGameStore((s) => s.cameraFocus)
 
+  const shadowsEnabled = useGameStore((s) => s.settings.shadows)
   const controls = useRef<MapControlsImpl | null>(null)
+  const flight = useRef<Flight | null>(null)
   const [bucket, setBucket] = useState<ZoomBucket>('mid')
+  const [showHelp, setShowHelp] = useState(false)
   const rightClick = useRef<{ x: number; y: number } | null>(null)
+
+  /** Glide (or, under reduced motion, jump) to a new camera pose. */
+  const flyTo = useCallback((toTarget: THREE.Vector3, toPos: THREE.Vector3) => {
+    const c = controls.current
+    if (!c) return
+    if (REDUCED_MOTION) {
+      c.target.copy(toTarget)
+      c.object.position.copy(toPos)
+      c.update()
+      return
+    }
+    flight.current = {
+      fromPos: c.object.position.clone(),
+      fromTarget: c.target.clone(),
+      toPos,
+      toTarget,
+      start: performance.now(),
+      duration: 0.45,
+    }
+  }, [])
 
   const handleControlsChange = () => {
     const c = controls.current
@@ -288,12 +395,8 @@ export function MapView3D() {
   }
 
   const recenter = useCallback(() => {
-    const c = controls.current
-    if (!c) return
-    c.target.set(0, 0, 0)
-    c.object.position.set(...CAMERA_HOME)
-    c.update()
-  }, [])
+    flyTo(new THREE.Vector3(0, 0, 0), new THREE.Vector3(...CAMERA_HOME))
+  }, [flyTo])
 
   /** Keep the current zoom and tilt, but put north back at the top. */
   const faceNorth = () => {
@@ -303,22 +406,19 @@ export function MapView3D() {
     const horizontal = Math.hypot(offset.x, offset.z)
     offset.x = 0
     offset.z = horizontal
-    c.object.position.copy(c.target).add(offset)
-    c.update()
+    flyTo(c.target.clone(), c.target.clone().add(offset))
   }
 
-  /** Slide the camera so the world point sits at the focus. */
-  const focusOn = useCallback((p: Vec2) => {
-    const c = controls.current
-    if (!c) return
-    const dx = p.x - c.target.x
-    const dz = p.y - c.target.z
-    c.target.x += dx
-    c.target.z += dz
-    c.object.position.x += dx
-    c.object.position.z += dz
-    c.update()
-  }, [])
+  /** Glide the camera so the world point sits at the focus. */
+  const focusOn = useCallback(
+    (p: Vec2) => {
+      const c = controls.current
+      if (!c) return
+      const delta = new THREE.Vector3(p.x - c.target.x, 0, p.y - c.target.z)
+      flyTo(c.target.clone().add(delta), c.object.position.clone().add(delta))
+    },
+    [flyTo],
+  )
 
   // Fly-to requests from elsewhere in the UI (threat cards, the minimap).
   useEffect(() => {
@@ -366,7 +466,7 @@ export function MapView3D() {
       }}
     >
       <Canvas
-        shadows
+        shadows={shadowsEnabled}
         dpr={[1, 1.75]}
         camera={{ position: CAMERA_HOME, fov: 42, near: 0.5, far: 150 }}
       >
@@ -391,8 +491,10 @@ export function MapView3D() {
           maxDistance={MAX_DISTANCE}
           home={recenter}
         />
+        <FlightAnimator controls={controls} flight={flight} />
 
         <GroundPlane run={run} buildMode={buildMode} />
+        <Paths run={run} />
 
         {glades.map((glade) => (
           <GladeSurface
@@ -465,6 +567,7 @@ export function MapView3D() {
         })}
 
         {bucket !== 'far' && <Villagers run={run} />}
+        <Smoke run={run} />
 
         {run.threats.map((threat) => {
           const glade = run.glades[threat.gladeId]
@@ -524,7 +627,34 @@ export function MapView3D() {
         <button type="button" aria-label="Recentre" title="Recentre (H)" onClick={recenter}>
           ⌖
         </button>
+        <button
+          type="button"
+          aria-label="Controls help"
+          title="Controls"
+          className={showHelp ? 'is-active' : ''}
+          onClick={() => setShowHelp((v) => !v)}
+        >
+          ?
+        </button>
       </div>
+
+      {showHelp && (
+        <div className="controls-help" role="dialog" aria-label="Controls">
+          <strong>Controls</strong>
+          <ul>
+            <li><em>Pan</em> — drag · WASD / arrows · mouse at edge</li>
+            <li><em>Rotate</em> — right-drag · Q / E</li>
+            <li><em>Zoom</em> — wheel toward cursor · pinch</li>
+            <li><em>Home</em> — H or ⌖ · <em>North</em> — 🧭</li>
+            <li><em>Select</em> — click · <em>Deselect / cancel</em> — right-click or Esc</li>
+            <li><em>Jump</em> — click the minimap</li>
+            <li><em>Pause</em> — Space · <em>Speed</em> — 1 / 2 / 3</li>
+          </ul>
+          <button type="button" onClick={() => setShowHelp(false)}>
+            Close
+          </button>
+        </div>
+      )}
 
       {buildMode && <BuildBanner buildMode={buildMode} />}
     </div>

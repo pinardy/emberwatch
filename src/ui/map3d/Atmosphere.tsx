@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Season } from '../../game/types'
+import { REDUCED_MOTION } from '../motion'
 
 interface SeasonLook {
   bg: string
@@ -99,9 +100,29 @@ function Rain({ count, speed, opacity }: { count: number; speed: number; opacity
   )
 }
 
+/** Occasional storm lightning: a cold flash that decays over a few frames. */
+function Lightning() {
+  const light = useRef<THREE.DirectionalLight>(null)
+  const nextAt = useRef(0)
+  useFrame(({ clock }, delta) => {
+    const flash = light.current
+    if (!flash) return
+    const t = clock.elapsedTime
+    if (nextAt.current === 0) nextAt.current = t + 3 + Math.random() * 6
+    if (t >= nextAt.current) {
+      flash.intensity = 2.4
+      nextAt.current = t + 4 + Math.random() * 9
+    } else if (flash.intensity > 0) {
+      flash.intensity = Math.max(0, flash.intensity - 11 * delta)
+    }
+  })
+  return <directionalLight ref={light} position={[7, 26, -9]} color="#cfe0ff" intensity={0} />
+}
+
 /** Sky colour, fog, sun and rain for the current season. */
 export function Atmosphere({ season }: { season: Season }) {
   const look = LOOKS[season]
+  const rainCount = REDUCED_MOTION ? 0 : look.rainCount
   return (
     <>
       <color attach="background" args={[look.bg]} />
@@ -121,14 +142,10 @@ export function Atmosphere({ season }: { season: Season }) {
         shadow-camera-far={70}
         shadow-bias={-0.0004}
       />
-      {look.rainCount > 0 && (
-        <Rain
-          key={season}
-          count={look.rainCount}
-          speed={look.rainSpeed}
-          opacity={look.rainOpacity}
-        />
+      {rainCount > 0 && (
+        <Rain key={season} count={rainCount} speed={look.rainSpeed} opacity={look.rainOpacity} />
       )}
+      {season === 'storm' && !REDUCED_MOTION && <Lightning />}
     </>
   )
 }

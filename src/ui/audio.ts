@@ -12,6 +12,8 @@ export type Cue =
   | 'seasonStorm'
   | 'orderComplete'
   | 'draftOpen'
+  | 'place'
+  | 'placeError'
   | 'buildComplete'
   | 'villagerLeft'
   | 'villagerArrived'
@@ -140,6 +142,17 @@ export function cue(name: Cue): void {
       play([
         { f: 440, at: 0, d: 0.5, g: 0.06, type: 'triangle' },
         { f: 660, at: 0.05, d: 0.6, g: 0.05, type: 'triangle' },
+      ])
+      break
+    case 'place':
+      // A soft stake-in-the-ground thunk.
+      noiseBurst(0.07, 420, 0.09)
+      break
+    case 'placeError':
+      // A low, brief refusal.
+      play([
+        { f: 165, at: 0, d: 0.14, g: 0.05, type: 'square' },
+        { f: 123, at: 0.07, d: 0.16, g: 0.045, type: 'square' },
       ])
       break
     case 'buildComplete':
