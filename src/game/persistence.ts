@@ -13,10 +13,12 @@ export interface Settings {
   sound: boolean
   /** Map renderer. 3D falls back to 2D automatically where WebGL is missing. */
   renderer: '3d' | '2d'
+  /** Real-time shadows in the 3D view — the main GPU cost on weak devices. */
+  shadows: boolean
 }
 
 export function defaultSettings(): Settings {
-  return { pauseOnBlur: true, sound: true, renderer: '3d' }
+  return { pauseOnBlur: true, sound: true, renderer: '3d', shadows: true }
 }
 
 function read<T>(key: string): T | null {

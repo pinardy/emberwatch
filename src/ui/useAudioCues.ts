@@ -15,6 +15,7 @@ export function useAudioCues(run: RunState | null): void {
     season: string
     orders: number
     built: number
+    sites: number
     lost: number
     pop: number
     choices: number
@@ -22,6 +23,13 @@ export function useAudioCues(run: RunState | null): void {
     caravanHere: boolean
     phase: string
   } | null>(null)
+
+  // Rejected commands surface as notices; give them a physical refusal too.
+  const notice = useGameStore((s) => s.notice)
+  useEffect(() => {
+    if (run && notice) cue('placeError')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notice])
 
   // The context can only start from a user gesture.
   useEffect(() => {
@@ -55,6 +63,7 @@ export function useAudioCues(run: RunState | null): void {
       season: run.season.season,
       orders: run.stats.ordersCompleted,
       built: run.stats.buildingsBuilt,
+      sites: Object.keys(run.buildings).length,
       lost: run.stats.villagersLost,
       pop: population(run),
       choices: run.pendingChoices.length,
@@ -77,6 +86,7 @@ export function useAudioCues(run: RunState | null): void {
       else cue('seasonClearance')
     }
     if (now.orders > before.orders) cue('orderComplete')
+    if (now.sites > before.sites) cue('place')
     if (now.built > before.built) cue('buildComplete')
     if (now.lost > before.lost) cue('villagerLeft')
     else if (now.pop > before.pop) cue('villagerArrived')

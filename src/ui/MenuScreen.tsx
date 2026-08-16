@@ -7,6 +7,8 @@ export function MenuScreen() {
   const resumeSaved = useGameStore((s) => s.resumeSaved)
   const meta = useGameStore((s) => s.meta)
   const run = useGameStore((s) => s.run)
+  const settings = useGameStore((s) => s.settings)
+  const updateSettings = useGameStore((s) => s.updateSettings)
   const [hasSave, setHasSave] = useState(false)
 
   useEffect(() => {
@@ -76,9 +78,46 @@ export function MenuScreen() {
             </li>
           </ol>
           <p className="muted">
-            Space pauses · 1/2/3 set speed · Esc cancels placement. Progress saves
-            automatically and the game works offline once loaded.
+            Space pauses · 1/2/3 set speed · WASD/arrows pan · Q/E rotate · H homes ·
+            right-click or Esc cancels placement. Progress saves automatically and the
+            game works offline once loaded.
           </p>
+        </details>
+
+        <details className="how-to settings-block">
+          <summary>Settings</summary>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.sound}
+              onChange={(e) => updateSettings({ sound: e.target.checked })}
+            />
+            Sound & rain ambience
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.pauseOnBlur}
+              onChange={(e) => updateSettings({ pauseOnBlur: e.target.checked })}
+            />
+            Pause when the window loses focus
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.renderer === '3d'}
+              onChange={(e) => updateSettings({ renderer: e.target.checked ? '3d' : '2d' })}
+            />
+            3D map (2D vector map otherwise)
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.shadows}
+              onChange={(e) => updateSettings({ shadows: e.target.checked })}
+            />
+            Shadows — turn off on slower devices
+          </label>
         </details>
 
         <p className="menu-foot muted">

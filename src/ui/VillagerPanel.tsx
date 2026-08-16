@@ -15,7 +15,6 @@ import { useGameStore, useRun } from '../game/store'
 export function VillagerPanel() {
   const run = useRun()
   const recallAll = useGameStore((s) => s.recallAll)
-  const selectBuilding = useGameStore((s) => s.selectBuilding)
   if (!run) return null
 
   const mods = computeModifiers(run)
@@ -123,15 +122,28 @@ export function VillagerPanel() {
           {villagers.map((v) => {
             const assignment = v.assignment
             let label = 'Idle · building & hauling'
-            let buildingId: string | null = null
+            let goTo: (() => void) | null = null
             if (assignment?.startsWith('clearing:')) {
               const glade = run.glades[assignment.slice('clearing:'.length)]
               label = `Clearing ${glade?.name ?? '—'}`
+              if (glade) {
+                goTo = () => {
+                  const store = useGameStore.getState()
+                  store.selectGlade(glade.id)
+                  store.focusCamera(glade.center)
+                }
+              }
             } else if (assignment) {
               const building = run.buildings[assignment]
               const def = building ? BUILDINGS[building.defId] : undefined
               label = def ? `${def.icon} ${def.name}` : 'Working'
-              buildingId = building?.id ?? null
+              if (building) {
+                goTo = () => {
+                  const store = useGameStore.getState()
+                  store.selectBuilding(building.id)
+                  store.focusCamera(building.pos)
+                }
+              }
             }
             const trait = v.trait ? VILLAGER_TRAITS[v.trait] : undefined
             return (
@@ -139,7 +151,7 @@ export function VillagerPanel() {
                 type="button"
                 className={`villager ${assignment ? '' : 'is-idle'}`}
                 key={v.id}
-                onClick={() => buildingId && selectBuilding(buildingId)}
+                onClick={() => goTo?.()}
                 title={trait ? `${trait.name}: ${trait.description}` : undefined}
               >
                 <span>{SPECIES[v.species].icon}</span>
