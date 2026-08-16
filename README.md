@@ -17,7 +17,7 @@ npm run preview    # serve the built PWA (installable, works offline)
 | System | What it does |
 | --- | --- |
 | **Seasons** | Drizzle → Clearance → Storm, ~7 minutes a year. Farms fail in the Storm, gathering halves, and the hearth burns wood. |
-| **Glades** | The map is a hex field of fogged glades. Assign villagers to clear those bordering your territory for resources; dangerous and forbidden glades force a decision when opened. |
+| **Glades** | The world is a continuous forest partitioned into fogged glades. Assign villagers to clear those bordering your territory for resources; dangerous and forbidden glades force a decision when opened. |
 | **Threats** | The greedy option in a glade event can unleash a timed menace that strikes on a repeating countdown — stealing stock, raising hostility, fraying the Queen's patience — until you pay it off. Other options grant run-long pacts instead. |
 | **Resolve** | Each species has a resolve score driven by housing, food variety, satisfied service needs, and hostility. Above its threshold, a species earns **reputation**. Every species also bends one rule — lizards shrug off a cold hearth, idle beavers build faster, harpies clear glades from the air — and most villagers arrive with a personal quirk. |
 | **Warmth** | Housing within the hearth's warmth radius is safe; homes beyond it chill their residents during the Storm. A few production buildings also work faster placed beside their supplier. |
@@ -30,6 +30,8 @@ npm run preview    # serve the built PWA (installable, works offline)
 
 Idle villagers are your builders and your clearing crews, so every worker you assign is a builder you gave up. That tension is deliberate — the top bar always shows the idle count.
 
+The game plays RTS-style in continuous space: there is no grid. Buildings are placed anywhere on cleared ground with a live ghost cursor, camps must stand within reach of the deposits they work, and warmth and adjacency are real distances. The settlement renders as a 3D scene — low-poly buildings, a wild instanced forest over uncleared glades, season-driven light and rain — with a 2D vector map available from the top-bar toggle (and used automatically where WebGL is missing).
+
 ## Architecture
 
 ```
@@ -41,7 +43,9 @@ src/
     engine/             # pure simulation — no React, no DOM
       balance.ts        #   every tunable number, in one place
       rng.ts            #   counter-based RNG: a value is f(seed, cursor)
-      mapgen.ts         #   hex map + Voronoi glade partitioning
+      geometry.ts       #   plain 2D maths: distances, point-in-polygon
+      mapgen.ts         #   continuous world: Voronoi glades, scattered
+                        #   deposits & obstacles
       tick.ts           #   one fixed step of the world
       production.ts     #   construction, recipes, deposits, adjacency
       society.ts        #   food, resolve, reputation, impatience, departures
@@ -53,6 +57,12 @@ src/
     store.ts            # zustand store + the game loop's entry point
   ui/                   # React components; read the sim, never contain rules
                         # (audio.ts synthesises all cues & rain — no assets)
+    MapView.tsx         #   picks the map renderer: 3D by default, 2D fallback
+    MapView2D.tsx       #   SVG vector map of the same world (no-WebGL, tests)
+    map3d/              #   three.js scene via react-three-fiber: glade
+                        #   polygons, instanced forest, procedural buildings,
+                        #   ghost placement cursor, season lighting & rain —
+                        #   all lazy-loaded
 ```
 
 Two rules keep this maintainable:
@@ -68,7 +78,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 `npm test` runs three suites:
 
-- **`engine.test.ts`** — the simulation: RNG determinism, hex geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
+- **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains, and clears glades. It asserts every run reaches a verdict, that a competent-but-not-great player wins some maps and loses others, and that wins take a real settlement rather than a lucky opening. It prints a per-seed diagnosis, which is the fastest way to see what a balance change did:
 
   ```
@@ -89,4 +99,4 @@ Icons are generated at build time by `scripts/generate-icons.mjs`, which writes 
 - Art is emoji throughout; there are no sprites. Audio is synthesised in WebAudio (season stings, event cues, a rain loop that follows the season) — no recorded assets.
 - Meta progression is intentionally small: five Citadel upgrades, no world map campaign.
 - ~30 buildings, 25 glade events, and 30+ cornerstones — enough for the loop to have real decisions, a small catalogue for the genre.
-- Buildings occupy a single hex; there are no multi-tile footprints or road networks, though hearth warmth and adjacency bonuses make placement matter.
+- Buildings have circular footprints and free placement; there are no road networks or villager pathing, though hearth warmth, deposit reach and adjacency bonuses make placement matter.
