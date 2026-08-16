@@ -8,7 +8,7 @@ import type { BuildingDef } from '../types'
  *  - `seconds` is work-seconds at one worker's base speed (1/s). Two workers
  *    halve the wall-clock time; species bonuses stack on top.
  *  - Gathering recipes name a deposit; the camp only offers them if that
- *    deposit sits within `gatherRadius` hexes.
+ *    deposit sits within `gatherRadius` world units of the camp.
  */
 const defs: BuildingDef[] = [
   // -------------------------------------------------------------------------

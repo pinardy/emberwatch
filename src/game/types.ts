@@ -200,13 +200,13 @@ export interface BuildingDef {
    * consuming `recipes[0].inputs` per completed cycle.
    */
   service?: { need: ServiceNeed; capacity: number }
-  /** Gathering camps only harvest deposits within this hex radius. */
+  /** Gathering camps only harvest deposits within this world-unit radius. */
   gatherRadius?: number
   /** Only one may exist per settlement. */
   unique?: boolean
   /**
-   * Work-speed bonus when a built instance of `nearId` sits on an adjacent
-   * tile. Makes placement a puzzle instead of a canvas.
+   * Work-speed bonus when a built instance of `nearId` stands close by.
+   * Makes placement a puzzle instead of a canvas.
    */
   adjacency?: { nearId: string; percent: number }
   description: string
@@ -227,27 +227,41 @@ export type DepositId =
   | 'game'
   | 'fertileSoil'
 
-export interface Deposit {
-  id: DepositId
+/** A point in continuous world space. +x east, +y south (screen-like). */
+export interface Vec2 {
+  x: number
+  y: number
+}
+
+/** The playable rectangle, centred on the origin where the hearth stands. */
+export interface WorldInfo {
+  width: number
+  height: number
+}
+
+/**
+ * A resource feature standing somewhere in the world — a stand of trees, a
+ * stone outcrop. Its footprint blocks construction; camps harvest it from
+ * within their gather radius.
+ */
+export interface WorldDeposit {
+  id: string
+  kind: DepositId
+  pos: Vec2
+  /** Footprint radius in world units. */
+  radius: number
   /** Remaining harvests; `null` for infinite (fertile soil, trees regrow). */
   amount: number | null
-}
-
-/** Axial hex coordinate. */
-export interface Hex {
-  q: number
-  r: number
-}
-
-export interface Tile extends Hex {
-  key: string
-  terrain: TerrainId
   gladeId: string
-  deposit?: Deposit
-  /** Id of the building instance occupying this tile. */
-  buildingId?: string
-  /** Blocked tiles can never be built on (cliffs, deep marsh). */
-  blocked: boolean
+}
+
+/** Unbuildable ground — a crag, a sink of deep mire. Purely spatial. */
+export interface Obstacle {
+  id: string
+  kind: 'crag' | 'mire'
+  pos: Vec2
+  radius: number
+  gladeId: string
 }
 
 export type GladeKind = 'settlement' | 'small' | 'dangerous' | 'forbidden'
@@ -256,9 +270,12 @@ export interface Glade {
   id: string
   kind: GladeKind
   name: string
-  tiles: string[]
-  /** Centre tile, used for labels and camera focus. */
-  center: Hex
+  /** Voronoi cell in world coordinates; the glades partition the world. */
+  polygon: Vec2[]
+  /** Seed point of the cell, used for labels and camera focus. */
+  center: Vec2
+  /** Dominant ground cover, used for rendering and flavour. */
+  terrain: TerrainId
   /** Glade ids sharing a border. Only glades next to a cleared one are reachable. */
   neighbors: string[]
   /** Fogged glades hide their contents. */
@@ -293,7 +310,10 @@ export interface Villager {
 export interface BuildingInstance {
   id: string
   defId: string
-  tile: string
+  /** Where it stands; footprint radius comes from the def's category. */
+  pos: Vec2
+  /** The glade whose ground it stands on, fixed at placement. */
+  gladeId: string
   /** Under construction until `buildProgress >= buildSeconds`. */
   built: boolean
   buildProgress: number
@@ -305,8 +325,8 @@ export interface BuildingInstance {
   /** Paused buildings keep workers but do no work. */
   paused: boolean
   /**
-   * Tile keys of deposits reachable from this building, cached at placement
-   * time and refreshed when a glade is cleared or a deposit runs dry.
+   * Ids of deposits reachable from this building, cached at placement time
+   * and refreshed when a glade is cleared or a deposit runs dry.
    */
   depositsInRange: Partial<Record<DepositId, string[]>>
 }
@@ -537,8 +557,10 @@ export interface RunState {
   /** Total seconds of simulation elapsed. */
   clock: number
 
-  tiles: Record<string, Tile>
+  world: WorldInfo
   glades: Record<string, Glade>
+  deposits: Record<string, WorldDeposit>
+  obstacles: Obstacle[]
   buildings: Record<string, BuildingInstance>
   villagers: Record<string, Villager>
 

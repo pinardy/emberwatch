@@ -195,13 +195,33 @@ export const HEARTH_FUEL_PER_SECOND = 0.16
 export const HEARTH_IDLE_FUEL_PER_SECOND = 0.04
 
 /**
- * Housing within this many hexes of the hearth counts as warm. During the
- * Storm, villagers bunked beyond it take a resolve penalty — the map's way of
- * making sprawl a decision rather than free real estate.
+ * Housing within this many world units of the hearth counts as warm. During
+ * the Storm, villagers bunked beyond it take a resolve penalty — the map's way
+ * of making sprawl a decision rather than free real estate.
  */
 export const HEARTH_WARMTH_RADIUS = 5
 /** Resolve penalty (scaled by the exposed share) for cold homes in the Storm. */
 export const RESOLVE_COLD_HOME = -8
+
+// ---------------------------------------------------------------------------
+// Placement (continuous world space)
+// ---------------------------------------------------------------------------
+
+/** Circular footprint radius per building category, in world units. */
+export const FOOTPRINT_RADIUS = {
+  hearth: 1.0,
+  housing: 0.55,
+  gathering: 0.6,
+  production: 0.7,
+  service: 0.7,
+  logistics: 0.75,
+} as const
+
+/** Minimum clearance between two building footprints. */
+export const BUILDING_GAP = 0.1
+
+/** Centre distance within which an adjacency bonus counts as "next to". */
+export const ADJACENCY_RANGE = 2.4
 
 // ---------------------------------------------------------------------------
 // Caravans & amber sinks

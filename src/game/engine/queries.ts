@@ -1,6 +1,6 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE, RESOURCES } from '../content/resources'
-import { hexDistance } from './hex'
+import { dist } from './geometry'
 import type {
   BuildingInstance,
   ResourceBag,
@@ -56,15 +56,12 @@ export function warmHousing(s: RunState, radius: number): number {
     (b) => BUILDINGS[b.defId]?.category === 'hearth',
   )
   if (!hearth) return 0
-  const origin = s.tiles[hearth.tile]
   let sum = 0
   for (const b of Object.values(s.buildings)) {
     if (!b.built) continue
     const housing = BUILDINGS[b.defId]?.housing ?? 0
     if (housing <= 0) continue
-    const tile = s.tiles[b.tile]
-    if (!tile) continue
-    if (hexDistance(origin, tile) <= radius) sum += housing
+    if (dist(hearth.pos, b.pos) <= radius) sum += housing
   }
   return sum
 }
@@ -226,11 +223,6 @@ export function sortBag(bag: ResourceBag): [ResourceId, number][] {
 // ---------------------------------------------------------------------------
 // Buildings
 // ---------------------------------------------------------------------------
-
-export function buildingsOnTile(s: RunState, tileKey: string): BuildingInstance | undefined {
-  const tile = s.tiles[tileKey]
-  return tile?.buildingId ? s.buildings[tile.buildingId] : undefined
-}
 
 export function activeRecipe(b: BuildingInstance) {
   const def = BUILDINGS[b.defId]
