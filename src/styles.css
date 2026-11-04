@@ -17,6 +17,11 @@
   --good: #7fbf7a;
   --bad: #d9695f;
   --warn: #e0a755;
+  /* Chart steps of --gold and --bad, validated as a pair on --panel (OKLCH
+     lightness band, chroma, colour-blind and normal-vision separation). */
+  --viz-reputation: #b38d2e;
+  --viz-impatience: #c8463c;
+  --viz-storm: rgba(143, 169, 201, 0.09);
   --radius: 10px;
   --radius-sm: 6px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
@@ -1488,6 +1493,34 @@ code {
 
 .modal-end.is-lost {
   border-color: #6b3f3a;
+}
+
+/* The end screen: the timeline beside the stats and supplies on wide
+   screens, stacked on narrow ones. */
+.modal.modal-end {
+  width: min(1000px, 100%);
+  scrollbar-gutter: stable;
+}
+
+.end-layout {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+@media (min-width: 900px) {
+  .end-layout {
+    grid-template-columns: minmax(0, 1.8fr) minmax(250px, 1fr);
+    align-items: start;
+  }
+
+  .end-layout .end-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.end-side .end-stats {
+  margin-bottom: 12px;
 }
 
 .end-stats {
@@ -3192,4 +3225,372 @@ button.is-armed {
 
 .condition-progress .bar-fill {
   display: block;
+}
+
+/* ==========================================================================
+   Run timeline — the end-screen chart and the Orders panel sparkline
+   ========================================================================== */
+
+.run-timeline {
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 12px 12px 10px;
+}
+
+.tl-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tl-head h3 {
+  font-size: 15px;
+}
+
+.tl-switch {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.tl-switch button {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 5px 10px;
+  font-size: 12px;
+  min-height: 30px;
+}
+
+.tl-switch button.is-active {
+  background: var(--panel-3);
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
+
+.tl-summary {
+  margin: 8px 0 2px;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.tl-subtitle {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.tl-empty {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.tl-plot {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  touch-action: pan-y;
+}
+
+.tl-plot:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.tl-svg {
+  /* Sized by its container only, so a measured width can never feed back
+     into the layout it was measured from. */
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.tl-grid {
+  stroke: var(--line-soft);
+  stroke-width: 1;
+}
+
+.tl-baseline {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.tl-threshold {
+  stroke: var(--muted);
+  stroke-width: 1;
+  opacity: 0.7;
+}
+
+.tl-axis {
+  fill: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-storm {
+  fill: var(--viz-storm);
+}
+
+.tl-storm-label {
+  fill: var(--muted);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tl-despair {
+  fill: rgba(200, 70, 60, 0.1);
+}
+
+.tl-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.tl-line.is-reputation {
+  stroke: var(--viz-reputation);
+}
+
+.tl-line.is-impatience {
+  stroke: var(--viz-impatience);
+}
+
+.tl-line.is-population {
+  stroke: var(--text);
+  opacity: 0.75;
+}
+
+.tl-direct {
+  fill: var(--text);
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3px;
+}
+
+.tl-row-title {
+  fill: var(--text);
+  font-size: 11.5px;
+}
+
+.tl-row-note {
+  fill: var(--muted);
+}
+
+.tl-mark {
+  stroke: var(--panel);
+  stroke-width: 2;
+  paint-order: stroke;
+}
+
+.tl-mark.is-lost {
+  fill: var(--viz-impatience);
+}
+
+.tl-mark.is-threat {
+  fill: var(--text);
+}
+
+.tl-mark.is-boon {
+  fill: var(--viz-reputation);
+}
+
+.tl-mark.is-missed {
+  fill: var(--panel);
+  stroke: var(--viz-impatience);
+  stroke-width: 1.5;
+}
+
+.tl-count {
+  fill: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-crosshair {
+  stroke: var(--text);
+  stroke-width: 1;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.tl-dot {
+  stroke: var(--panel);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.tl-dot.is-reputation {
+  fill: var(--viz-reputation);
+}
+
+.tl-dot.is-impatience {
+  fill: var(--viz-impatience);
+}
+
+.tl-dot.is-population {
+  fill: var(--text);
+}
+
+.tl-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  align-items: baseline;
+  min-height: 40px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--bg-deep);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tl-when {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tl-value b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-near {
+  flex-basis: 100%;
+  color: var(--text);
+}
+
+.tl-key {
+  display: inline-block;
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+  vertical-align: middle;
+  margin-right: 5px;
+  background: var(--muted);
+}
+
+.tl-key.is-reputation {
+  background: var(--viz-reputation);
+}
+
+.tl-key.is-impatience {
+  background: var(--viz-impatience);
+}
+
+.tl-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 5px;
+  background: rgba(143, 169, 201, 0.28);
+}
+
+.tl-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.tl-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tl-legend svg {
+  overflow: visible;
+}
+
+.tl-table {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.tl-table summary {
+  cursor: pointer;
+  color: var(--muted);
+  min-height: 24px;
+}
+
+.tl-table-scroll {
+  max-height: 220px;
+  overflow: auto;
+  margin-top: 6px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+}
+
+.tl-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-table caption {
+  text-align: left;
+  padding: 4px 8px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tl-table th,
+.tl-table td {
+  padding: 3px 8px;
+  text-align: left;
+  border-top: 1px solid var(--line-soft);
+  white-space: nowrap;
+}
+
+.tl-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.race-spark {
+  display: block;
+  flex: none;
+}
+
+.orders-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.orders-head h3 {
+  margin-bottom: 0;
+}
+
+@media (max-width: 560px) {
+  .modal.modal-end {
+    padding: 16px 12px;
+  }
+
+  .run-timeline {
+    padding: 10px 8px 8px;
+  }
 }
