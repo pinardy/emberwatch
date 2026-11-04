@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
+import { storageBlocked } from '../game/engine/forecast'
+import { computeModifiers } from '../game/engine/modifiers'
 import { population } from '../game/engine/queries'
 import { cue, setMuted, setRainSeason, unlockAudio } from './audio'
 
@@ -20,6 +22,10 @@ export function useAudioCues(run: RunState | null): void {
     pop: number
     choices: number
     threats: number
+    /** Seconds to the next strike, per threat id; a jump upward is a strike. */
+    threatTimers: Record<string, number>
+    glades: number
+    storageFull: boolean
     caravanHere: boolean
     phase: string
   } | null>(null)
@@ -68,6 +74,9 @@ export function useAudioCues(run: RunState | null): void {
       pop: population(run),
       choices: run.pendingChoices.length,
       threats: run.threats.length,
+      threatTimers: Object.fromEntries(run.threats.map((t) => [t.id, t.timer])),
+      glades: run.stats.gladesCleared,
+      storageFull: storageBlocked(run, computeModifiers(run)).length > 0,
       caravanHere: run.caravan.here,
       phase: run.phase,
     }
@@ -93,5 +102,13 @@ export function useAudioCues(run: RunState | null): void {
     if (now.choices > before.choices) cue('draftOpen')
     if (now.threats > before.threats) cue('threat')
     if (now.caravanHere && !before.caravanHere) cue('caravan')
+    else if (!now.caravanHere && before.caravanHere) cue('caravanLeaving')
+    const struck = run.threats.some((t) => {
+      const was = before.threatTimers[t.id]
+      return was !== undefined && t.timer > was + 0.5
+    })
+    if (struck) cue('threatStrike')
+    if (now.glades > before.glades) cue('gladeCleared')
+    if (now.storageFull && !before.storageFull) cue('storageFull')
   })
 }
