@@ -19,10 +19,12 @@ npm run preview    # serve the built PWA (installable, works offline)
 | **Seasons** | Drizzle → Clearance → Storm, ~7 minutes a year. Farms fail in the Storm, gathering halves, and the hearth burns wood. |
 | **Glades** | The world is a continuous forest partitioned into fogged glades. Assign villagers to clear those bordering your territory for resources; dangerous and forbidden glades force a decision when opened. |
 | **Threats** | The greedy option in a glade event can unleash a timed menace that strikes on a repeating countdown — stealing stock, raising hostility, fraying the Queen's patience — until you pay it off. Other options grant run-long pacts instead. |
+| **Lingering conditions** | Some glade choices leave an aftermath tied to the build loop — flooded paths slow construction until you lay planks, a spirit wants incense before its deadline, a blight saps resolve until a new service hall stands. The bar above the threats tracks each one's progress. |
 | **Resolve** | Each species has a resolve score driven by housing, food variety, satisfied service needs, and hostility. Above its threshold, a species earns **reputation**. Every species also bends one rule — lizards shrug off a cold hearth, idle beavers build faster, harpies clear glades from the air — and most villagers arrive with a personal quirk. |
 | **Warmth** | Housing within the hearth's warmth radius is safe; homes beyond it chill their residents during the Storm. A few production buildings also work faster placed beside their supplier. |
 | **Caravans** | Once a Trading Post stands, caravans call on a cycle with rotating lots to buy — and pay double for one good they want that visit. Amber also rerolls drafts, rushes construction, and soothes the Queen. |
 | **Reputation** | Fills from high resolve, completed orders, and reclaimed land. Fill it and you win. |
+| **Decrees & charter** | Every few minutes the Queen issues a timed decree: meet it before the countdown ends for extra reputation and amber, or miss it and her patience frays. At 10 reputation she grants a one-time charter — a run-shaping perk, more patience, or a guaranteed blueprint. |
 | **Impatience** | The Queen's patience. Grows over time, when villagers leave, and sharply once hostility is high. Fill it and you lose. |
 | **Hostility** | Rises with time, population and cleared glades. Drags resolve down for everyone. |
 | **Drafts** | The run opens on a blueprint draft, and reputation milestones alternate blueprints and cornerstones. You can never unlock everything, so which needs you *can* satisfy is the run's central decision. |
@@ -50,6 +52,8 @@ src/
       production.ts     #   construction, recipes, deposits, adjacency
       society.ts        #   food, resolve, reputation, impatience, departures
       events.ts         #   glade clearing, drafts, threats, orders, newcomers
+      structure.ts      #   mid-run beats: timed decrees, the charter,
+                        #   lingering glade conditions
       traits.ts         #   species quirks & villager quirks as multipliers
       trade.ts          #   caravan visits, offers, buying and selling
       actions.ts        #   player commands, each returning a reason on failure
