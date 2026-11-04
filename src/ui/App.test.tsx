@@ -1,10 +1,11 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
 import { findPlacement } from '../game/engine/actions'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
+import { CONFIRM_WINDOW_MS } from './useConfirm'
 
 /**
  * UI smoke tests. Typechecking cannot catch a component that throws on render or
@@ -292,5 +293,174 @@ describe('app shell', () => {
     })
     expect(screen.getByText(/The settlement holds/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: /Return to the Citadel/i })).toBeTruthy()
+  })
+
+  /** Starts a run, takes the draft, and stands up a finished woodcutters' camp. */
+  function settleWithCamp(): string {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+    const spot = findPlacement(currentRun(), 'woodcuttersCamp')
+    expect(spot).toBeTruthy()
+    act(() => {
+      useGameStore.getState().setBuildMode('woodcuttersCamp')
+      useGameStore.getState().place(spot!)
+      useGameStore.getState().setBuildMode(null)
+    })
+    const camp = Object.values(currentRun().buildings).find(
+      (b) => b.defId === 'woodcuttersCamp',
+    )!
+    act(() => {
+      camp.built = true
+      camp.buildProgress = BUILDINGS.woodcuttersCamp.buildSeconds
+      useGameStore.getState().selectBuilding(camp.id)
+    })
+    return camp.id
+  }
+
+  it('lets the player choose which villager works a building', () => {
+    const campId = settleWithCamp()
+    const inspector = document.querySelector('.inspector') as HTMLElement
+    const camp = () => currentRun().buildings[campId]
+
+    // Open the picker for an empty slot: idle villagers, ranked fastest first.
+    fireEvent.click(within(inspector).getAllByRole('button', { name: /Choose a worker/i })[0])
+    const picker = within(inspector).getByRole('group', { name: /Choose a worker/i })
+    const options = within(picker).getAllByRole('button').filter((b) =>
+      b.className.includes('picker-option'),
+    )
+    expect(options.length).toBe(Object.keys(currentRun().villagers).length)
+
+    // Deliberately pick the last-ranked villager, not the default "best".
+    const lastName = options[options.length - 1].querySelector('strong')!.textContent!
+    fireEvent.click(options[options.length - 1])
+    const chosen = Object.values(currentRun().villagers).find((v) => v.name === lastName)!
+    expect(camp().workers).toEqual([chosen.id])
+    expect(chosen.assignment).toBe(campId)
+
+    // Swap that worker for someone specific.
+    fireEvent.click(within(inspector).getByRole('button', { name: `Swap ${lastName}` }))
+    const swapPicker = within(inspector).getByRole('group', { name: /Choose a worker/i })
+    const swapOption = within(swapPicker)
+      .getAllByRole('button')
+      .find((b) => b.className.includes('picker-option'))!
+    const swapName = swapOption.querySelector('strong')!.textContent!
+    fireEvent.click(swapOption)
+    expect(camp().workers.map((id) => currentRun().villagers[id].name)).toEqual([swapName])
+    expect(chosen.assignment).toBeNull()
+
+    // Remove that specific worker again.
+    fireEvent.click(within(inspector).getByRole('button', { name: `Remove ${swapName}` }))
+    expect(camp().workers).toEqual([])
+
+    // From the People panel, send a named villager to the camp.
+    fireEvent.click(screen.getByRole('tab', { name: /People/i }))
+    const target = Object.values(currentRun().villagers)[2]
+    fireEvent.change(screen.getByRole('combobox', { name: `Assign ${target.name}` }), {
+      target: { value: campId },
+    })
+    expect(camp().workers).toEqual([target.id])
+    // ...and back to idle.
+    fireEvent.change(screen.getByRole('combobox', { name: `Assign ${target.name}` }), {
+      target: { value: '' },
+    })
+    expect(target.assignment).toBeNull()
+  })
+
+  it('asks for a second click before demolishing, and shows the refund', () => {
+    vi.useFakeTimers()
+    try {
+      const campId = settleWithCamp()
+      const inspector = document.querySelector('.inspector') as HTMLElement
+
+      const demolish = within(inspector).getByRole('button', { name: /Demolish/i })
+      fireEvent.click(demolish)
+      // Armed, not gone: the button now says what comes back.
+      expect(currentRun().buildings[campId]).toBeTruthy()
+      expect(demolish.textContent).toMatch(/Confirm\? Refund/)
+
+      // Left alone, it disarms again.
+      act(() => {
+        vi.advanceTimersByTime(CONFIRM_WINDOW_MS + 100)
+      })
+      expect(demolish.textContent).toBe('Demolish')
+      fireEvent.click(demolish)
+      expect(currentRun().buildings[campId]).toBeTruthy()
+
+      // The second click inside the window tears it down.
+      fireEvent.click(within(inspector).getByRole('button', { name: /Confirm\? Refund/ }))
+      expect(currentRun().buildings[campId]).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('presents the draft as a labelled modal dialog that holds focus', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+
+    const dialog = screen.getByRole('dialog', { name: /New Blueprint/i })
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    expect(dialog.contains(document.activeElement)).toBe(true)
+
+    // Tab wraps from the last control back to the first, and Shift+Tab back.
+    const focusables = within(dialog)
+      .getAllByRole('button')
+      .filter((b) => !(b as HTMLButtonElement).disabled)
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    last.focus()
+    fireEvent.keyDown(dialog, { key: 'Tab' })
+    expect(document.activeElement).toBe(first)
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(last)
+
+    // The draft is mandatory: Esc does not dismiss it.
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByRole('dialog', { name: /New Blueprint/i })).toBeTruthy()
+    expect(currentRun().pendingChoices.length).toBeGreaterThan(0)
+
+    takeOpeningDraft()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('switches side panels with hotkeys, ignoring modifiers and held keys', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+
+    const tab = (name: RegExp) => screen.getByRole('tab', { name })
+    for (const [code, name] of [
+      ['KeyP', /People/],
+      ['KeyO', /Orders/],
+      ['KeyT', /Trade/],
+      ['KeyL', /Log/],
+      ['KeyB', /Build/],
+    ] as const) {
+      fireEvent.keyDown(window, { code, key: code.slice(3).toLowerCase() })
+      expect(tab(name).getAttribute('aria-selected')).toBe('true')
+    }
+    // Tabs advertise their shortcut.
+    expect(tab(/People/).getAttribute('title')).toMatch(/\(P\)/)
+
+    // Pressing the open panel's key again closes it; Ctrl+P is the browser's.
+    fireEvent.keyDown(window, { code: 'KeyB', key: 'b' })
+    expect(useGameStore.getState().panel).toBeNull()
+    fireEvent.keyDown(window, { code: 'KeyP', key: 'p', ctrlKey: true })
+    expect(useGameStore.getState().panel).toBeNull()
+
+    // Speed keys ignore modifiers; a held Space pauses once instead of flickering.
+    act(() => useGameStore.getState().setSpeed(1))
+    fireEvent.keyDown(window, { key: '3', code: 'Digit3', metaKey: true })
+    expect(useGameStore.getState().speed).toBe(1)
+    fireEvent.keyDown(window, { key: ' ', code: 'Space' })
+    expect(useGameStore.getState().speed).toBe(0)
+    for (let i = 0; i < 3; i++) {
+      fireEvent.keyDown(window, { key: ' ', code: 'Space', repeat: true })
+      expect(useGameStore.getState().speed).toBe(0)
+    }
   })
 })
