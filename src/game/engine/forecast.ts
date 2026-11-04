@@ -1,11 +1,11 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
 import type { BuildingInstance, ResourceId, RunState } from '../types'
-import { COMPLEX_FOOD_MULTIPLIER, SEASON_LENGTH } from './balance'
+import { COMPLEX_FOOD_MULTIPLIER, HEARTH_FUEL_PER_SECOND, SEASON_LENGTH } from './balance'
 import type { Modifiers } from './modifiers'
 import { countOutputs, seasonMultiplier, workRate } from './production'
 import { activeRecipe, storageUsed } from './queries'
-import { hearthFuelRate, impatienceRate, mealsPerSecond } from './society'
+import { hearthFuelRate, impatienceRate, mealsPerSecond, stormFuelPerSecond } from './society'
 import { hostilityRate } from './tick'
 
 /**
@@ -31,7 +31,7 @@ export interface HearthForecast {
   wood: number
   /** Wood burned per second right now. */
   rate: number
-  /** Wood burned per second during the Storm. */
+  /** Wood burned per second during the Storm, hearth and braziers together. */
   stormRate: number
   /** Seconds of fuel at the current rate. */
   runway: number
@@ -46,8 +46,9 @@ export interface HearthForecast {
 
 export function hearthForecast(s: RunState, mods: Modifiers): HearthForecast {
   const wood = s.stock.wood ?? 0
-  const rate = hearthFuelRate(s.season.season, mods)
-  const stormRate = hearthFuelRate('storm', mods)
+  // In the Storm every lit brazier draws on the same woodpile as the hearth.
+  const stormRate = stormFuelPerSecond(s, HEARTH_FUEL_PER_SECOND, mods.hearthFuel)
+  const rate = s.season.season === 'storm' ? stormRate : hearthFuelRate(s.season.season, mods)
   const untilStorm = secondsUntilStorm(s)
   let needed: number
   if (untilStorm === null) {

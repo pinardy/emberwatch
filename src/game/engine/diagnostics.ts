@@ -1,7 +1,7 @@
 import { BUILDINGS } from '../content/buildings'
-import { NEED_LABELS } from '../content/species'
+import { NEED_LABELS, SPECIES } from '../content/species'
 import { RESOURCES } from '../content/resources'
-import type { ResourceId, RunState } from '../types'
+import type { ResourceId, RunState, SpeciesId } from '../types'
 import {
   RUNWAY_WARNING_SECONDS,
   foodForecast,
@@ -10,7 +10,13 @@ import {
   storageBlocked,
 } from './forecast'
 import { computeModifiers } from './modifiers'
-import { canAfford, idleVillagers, population, totalHousing } from './queries'
+import {
+  canAfford,
+  idleVillagers,
+  population,
+  secondsUntilDeparture,
+  totalHousing,
+} from './queries'
 
 /**
  * Things that are quietly going wrong.
@@ -38,31 +44,55 @@ export function collectWarnings(s: RunState): Warning[] {
     })
   }
 
+  const braziers = Object.values(s.buildings).filter(
+    (b) => b.built && BUILDINGS[b.defId]?.warmth,
+  )
+  const unlit = braziers.filter((b) => b.unlit).length
   if (s.coldHearth) {
     out.push({
       id: 'cold',
       severity: 'danger',
-      text: '🔥 The hearth has gone out. It needs wood.',
+      text:
+        braziers.length > 0
+          ? '🔥 The hearth and its braziers have gone out. They need wood.'
+          : '🔥 The hearth has gone out. It needs wood.',
+    })
+  } else if (unlit > 0) {
+    out.push({
+      id: 'cold-braziers',
+      severity: 'danger',
+      text: `🏮 ${unlit} brazier${unlit > 1 ? 's have' : ' has'} gone cold — the homes around ${unlit > 1 ? 'them' : 'it'} are freezing. Bring wood.`,
+    })
+  }
+
+  // A species in despair is on a visible countdown, not a silent one.
+  for (const [sp, seconds] of Object.entries(secondsUntilDeparture(s))) {
+    out.push({
+      id: `leaving-${sp}`,
+      severity: 'danger',
+      text: `🚪 ${SPECIES[sp as SpeciesId].name} will start leaving in ${Math.ceil(seconds ?? 0)}s.`,
     })
   }
 
   const mods = computeModifiers(s)
 
   // Say so *before* the hearth goes out, while there is still time to chop.
+  // The forecast counts every lit brazier, which shares the woodpile.
   if (!s.coldHearth) {
     const hearth = hearthForecast(s, mods)
+    const fires = braziers.length > 0 ? 'Hearth and brazier' : 'Hearth'
     const seasonLeft = s.season.length - s.season.elapsed
     if (hearth.runway < RUNWAY_WARNING_SECONDS) {
       out.push({
         id: 'hearth-low',
         severity: 'danger',
-        text: `🔥 Hearth wood runs out in ${formatDuration(hearth.runway)}. Cut more wood.`,
+        text: `🔥 ${fires} wood runs out in ${formatDuration(hearth.runway)}. Cut more wood.`,
       })
     } else if (s.season.season === 'storm' && hearth.stormShortfall > 0) {
       out.push({
         id: 'hearth-storm',
         severity: 'caution',
-        text: `🔥 Hearth wood lasts ${formatDuration(hearth.runway)}; the Storm has ${formatDuration(seasonLeft)} left.`,
+        text: `🔥 ${fires} wood lasts ${formatDuration(hearth.runway)}; the Storm has ${formatDuration(seasonLeft)} left.`,
       })
     } else if (s.season.season === 'clearance' && hearth.stormShortfall > 0) {
       out.push({
