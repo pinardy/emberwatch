@@ -395,13 +395,15 @@ function answerChoices(s: RunState): void {
     if (choice.kind === 'gladeEvent') {
       const def = GLADE_EVENTS[choice.options[0]]
       // Prefer an affordable option that does not cost villagers or patience —
-      // and never one that unleashes a threat the bot would have to pay off.
+      // and never one that unleashes a threat the bot would have to pay off, or
+      // leaves a lingering condition it has no plan to lift.
       let index = def.options.findIndex(
         (o) =>
           (!o.requires || canAfford(s.stock, o.requires)) &&
           !o.villagerLoss &&
           !o.impatience &&
           !o.threat &&
+          !o.condition &&
           (o.hostility ?? 0) <= 0,
       )
       if (index < 0) {
