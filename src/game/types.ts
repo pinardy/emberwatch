@@ -438,6 +438,11 @@ export interface GladeEventOptionDef {
   villagerGain?: number
   /** Requires this much of each resource to be selectable. */
   requires?: ResourceBag
+  /**
+   * Units of food of any kind, paid from the largest stacks the way villagers
+   * eat. Required to be selectable, like `requires`.
+   */
+  foodCost?: number
   /** Unleashes a timed threat that strikes until it is appeased. */
   threat?: ThreatSpec
   /** Grants a permanent run-long effect (a pact, a curse, a blessing). */

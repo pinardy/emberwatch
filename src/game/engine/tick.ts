@@ -10,6 +10,7 @@ import {
   HOSTILITY_YEAR_SCALING,
   NEWCOMER_SEASONS,
   newcomerInterval,
+  QUEEN_DEADLINE_YEAR,
   SEASON_INFO,
   SEASON_LENGTH,
   SEASON_ORDER,
@@ -73,7 +74,8 @@ export function tick(s: RunState, dt: number): void {
 
   for (const message of stepDepartures(s, dt)) pushLog(s, message, 'bad')
 
-  if (NEWCOMER_SEASONS.includes(s.season.season)) {
+  // Nobody moves to a settlement that cannot feed the mouths it has.
+  if (NEWCOMER_SEASONS.includes(s.season.season) && !s.starving) {
     stepNewcomers(
       s,
       dt,
@@ -116,6 +118,15 @@ function advanceSeason(s: RunState, dt: number): void {
     )
   } else if (next === 'drizzle') {
     pushLog(s, `Year ${s.season.year} begins. The storm has passed.`, 'good')
+    if (s.season.year === QUEEN_DEADLINE_YEAR - 1) {
+      pushLog(
+        s,
+        `The Queen expects the settlement secured by Year ${QUEEN_DEADLINE_YEAR}. After that, her patience drains by the day.`,
+        'bad',
+      )
+    } else if (s.season.year === QUEEN_DEADLINE_YEAR) {
+      pushLog(s, `The Queen's deadline has passed. Her patience now drains faster every day.`, 'bad')
+    }
   } else {
     pushLog(s, `${SEASON_INFO[next].name}. ${SEASON_INFO[next].blurb}`, 'info')
   }
