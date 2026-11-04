@@ -38,6 +38,7 @@ import { makeRng } from './rng'
 import { addCondition, refreshCharterOffer, takeCharter } from './structure'
 import { addImpatience, addReputation, pickVictim, removeVillager, unassign } from './society'
 import { clearMultiplier } from './traits'
+import { recordEvent } from './timeline'
 
 /** Scales a resource bag, rounding to whole units. */
 function scaleBag(bag: ResourceBag, factor: number): ResourceBag {
@@ -69,6 +70,7 @@ export function stepClearing(s: RunState, dt: number, mods: Modifiers): void {
     glade.cleared = true
     glade.clearProgress = glade.clearWork
     s.stats.gladesCleared++
+    recordEvent(s, 'glade')
 
     // Send the clearing crew back to the idle pool.
     for (const v of Object.values(s.villagers)) {
@@ -181,6 +183,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
       if (!victim) break
       removeVillager(s, victim.id)
       s.stats.villagersLost++
+      recordEvent(s, 'lost', victim.species)
       pushLog(s, `${victim.name} the ${SPECIES[victim.species].name.slice(0, -1)} is lost.`, 'bad')
     }
   }
@@ -196,6 +199,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
       gladeId,
       timer: option.threat.interval,
     })
+    recordEvent(s, 'threat', option.threat.name)
     pushLog(s, `${option.threat.name} is loose. Appease it before it strikes.`, 'bad')
   }
 
@@ -250,6 +254,7 @@ export function stepThreats(s: RunState, dt: number): void {
         if (!victim) break
         removeVillager(s, victim.id)
         s.stats.villagersLost++
+        recordEvent(s, 'lost', victim.species)
         addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
         parts.push(`${victim.name} is taken`)
       }
@@ -265,6 +270,7 @@ export function appeaseThreat(s: RunState, threatId: string): string | null {
   if (!canAfford(s.stock, threat.appease)) return 'Not enough to appease it.'
   spend(s.stock, threat.appease)
   s.threats = s.threats.filter((t) => t.id !== threatId)
+  recordEvent(s, 'appeased', threat.name)
   pushLog(s, `${threat.icon} ${threat.name} has been dealt with.`, 'good')
   return null
 }
@@ -469,6 +475,7 @@ export function takeChoice(s: RunState, optionId: string): void {
     if (!choice.options.includes(optionId)) return
     if (s.cornerstones.includes(optionId)) return
     s.cornerstones.push(optionId)
+    recordEvent(s, 'cornerstone', CORNERSTONES[optionId]?.name ?? optionId)
     pushLog(s, `Cornerstone laid: ${CORNERSTONES[optionId]?.name ?? optionId}.`, 'good')
   } else if (choice.kind === 'blueprint') {
     if (!choice.options.includes(optionId)) return

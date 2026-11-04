@@ -688,6 +688,54 @@ export interface LogEntry {
   tone: 'info' | 'good' | 'bad'
 }
 
+// ---------------------------------------------------------------------------
+// Run timeline (end-screen chart)
+// ---------------------------------------------------------------------------
+
+/**
+ * One snapshot of the run, stored as a flat tuple so a long run stays a few KB
+ * in the save. Column order is `TIMELINE_COLUMNS` in `engine/timeline.ts`:
+ * clock, reputation, impatience (both including fractional progress),
+ * hostility, population, average resolve, food, wood, then each species'
+ * resolve in `RunTimeline.species` order.
+ */
+export type TimelineSample = number[]
+
+export type TimelineEventKind =
+  | 'storm' // the Blightstorm breaks
+  | 'year' // a new year begins (the Storm has passed); detail = year
+  | 'left' // a villager walked out in despair; detail = species
+  | 'lost' // a villager taken by a threat, an event or a condition; detail = species
+  | 'threat' // a threat unleashed; detail = its name
+  | 'appeased' // a threat paid off; detail = its name
+  | 'glade' // a glade cleared
+  | 'cornerstone' // detail = cornerstone name
+  | 'charter' // detail = charter name
+  | 'decreeMet' // detail = decree name
+  | 'decreeMissed' // detail = decree name
+
+export interface TimelineEvent {
+  /** Clock seconds. */
+  t: number
+  k: TimelineEventKind
+  d?: string
+}
+
+export interface RunTimeline {
+  /** Seconds between samples. */
+  interval: number
+  /** Clock at which the next sample is due. */
+  next: number
+  /** Species order of the per-species resolve columns. */
+  species: SpeciesId[]
+  /** Oldest first; older samples are thinned once the cap is reached. */
+  samples: TimelineSample[]
+  /** `[clock, maxReputation, maxImpatience]`, appended only when a goal moves. */
+  limits: [number, number, number][]
+  /** Oldest first, capped. */
+  events: TimelineEvent[]
+}
+
 export interface RunState {
   /** Seed for all run randomness; enables shareable/reproducible runs. */
   seed: number
@@ -767,6 +815,9 @@ export interface RunState {
   /** Newest first, capped. */
   log: LogEntry[]
   logCounter: number
+
+  /** Compact, bounded history of the run for the end-screen chart. */
+  timeline: RunTimeline
 
   /** Species present on this map (drawn at run start). */
   speciesPool: SpeciesId[]
