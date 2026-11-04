@@ -1,6 +1,7 @@
-import { useRef } from 'react'
+import { memo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useRunKey, villagerKey } from './layerKeys'
 import type { RunState, SpeciesId, Vec2, Villager } from '../../game/types'
 import { NO_RAYCAST, hash01 } from './models'
 
@@ -35,7 +36,10 @@ function routeFor(v: Villager, run: RunState): { a: Vec2; b: Vec2 } | null {
   return building ? { a: HEARTH, b: building.pos } : null
 }
 
-export function Villagers({ run }: { run: RunState }) {
+export const Villagers = memo(function Villagers({ run }: { run: RunState }) {
+  // Positions animate in useFrame; React only cares who exists and where
+  // they are headed.
+  useRunKey(villagerKey)
   const group = useRef<THREE.Group>(null)
   const villagers = Object.values(run.villagers)
 
@@ -88,4 +92,4 @@ export function Villagers({ run }: { run: RunState }) {
       ))}
     </group>
   )
-}
+})

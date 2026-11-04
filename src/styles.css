@@ -2081,6 +2081,29 @@ code {
   background: var(--good);
 }
 
+/* Glade kinds carry their own accent (set inline as --kind-color); locked
+ * plates stay grey, reachable ones glow, plates under a crew pulse green. */
+.glade-plate-3d:not(.is-locked) {
+  border-color: var(--kind-color, rgba(217, 180, 106, 0.35));
+}
+
+.glade-plate-3d:not(.is-locked) small {
+  color: var(--kind-color, var(--warn));
+}
+
+.glade-plate-3d.is-reachable {
+  box-shadow: 0 0 12px -2px var(--kind-color, var(--gold));
+}
+
+.glade-plate-3d.is-clearing {
+  border-color: var(--good);
+  box-shadow: 0 0 0 2px rgba(111, 191, 114, 0.35);
+}
+
+.glade-plate-3d.is-locked em {
+  color: #6d7a7a;
+}
+
 /* ---------------------------------------------------------------------------
  * 2D continuous-world map (SVG fallback)
  * ------------------------------------------------------------------------- */
