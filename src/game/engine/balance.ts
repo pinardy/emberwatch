@@ -291,6 +291,12 @@ export const SOOTHE_BASE_COST = 40
 export const SOOTHE_COST_GROWTH = 15
 /** Rush construction: amber per work-second remaining (min 5). */
 export const RUSH_COST_PER_SECOND = 0.5
+/**
+ * Share of a building's cost handed back when it comes down. A site nobody has
+ * worked on yet returns everything, so a misplaced building costs nothing; the
+ * share slides down to this while it goes up, and a finished building keeps it.
+ */
+export const DEMOLISH_REFUND_BUILT = 0.5
 
 // ---------------------------------------------------------------------------
 // Villager traits

@@ -10,6 +10,7 @@ import type {
 } from '../types'
 import {
   BUILDING_GAP,
+  DEMOLISH_REFUND_BUILT,
   FOOTPRINT_RADIUS,
   RUSH_COST_PER_SECOND,
   SOOTHE_BASE_COST,
@@ -167,11 +168,39 @@ export function findPlacement(s: RunState, defId: string, near?: Vec2): Vec2 | n
   return null
 }
 
-/** Materials handed back when a building is torn down: half, rounded down. */
-export function demolishRefund(defId: string): ResourceBag {
+type RefundSubject = Pick<BuildingInstance, 'defId' | 'built' | 'buildProgress'>
+
+/**
+ * Share of the cost a building returns when it comes down: all of it while
+ * nobody has worked on the site, sliding to `DEMOLISH_REFUND_BUILT` as
+ * construction progresses, and that share once it stands.
+ */
+export function demolishRefundShare(building: RefundSubject): number {
+  if (building.built) return DEMOLISH_REFUND_BUILT
+  const seconds = BUILDINGS[building.defId]?.buildSeconds ?? 0
+  if (seconds <= 0 || building.buildProgress <= 0) return 1
+  const done = Math.min(1, building.buildProgress / seconds)
+  return 1 - (1 - DEMOLISH_REFUND_BUILT) * done
+}
+
+/** True while nobody has done any work on the site: removing it is a cancel. */
+export function isUnstartedSite(building: Pick<BuildingInstance, 'built' | 'buildProgress'>): boolean {
+  return !building.built && building.buildProgress <= 0
+}
+
+/**
+ * Materials handed back when a building is torn down, rounded down. A bare
+ * definition id means a finished building.
+ */
+export function demolishRefund(building: string | RefundSubject): ResourceBag {
+  const subject: RefundSubject =
+    typeof building === 'string' ? { defId: building, built: true, buildProgress: 0 } : building
+  const share = demolishRefundShare(subject)
   const refund: ResourceBag = {}
-  for (const [id, amount] of Object.entries(BUILDINGS[defId]?.cost ?? {}) as [ResourceId, number][]) {
-    const qty = Math.floor((amount ?? 0) / 2)
+  const cost = Object.entries(BUILDINGS[subject.defId]?.cost ?? {}) as [ResourceId, number][]
+  for (const [id, amount] of cost) {
+    // The epsilon keeps a share like 0.7 × 10 from flooring to 6.
+    const qty = Math.floor((amount ?? 0) * share + 1e-9)
     if (qty > 0) refund[id] = qty
   }
   return refund
@@ -185,7 +214,7 @@ export function demolishBuilding(s: RunState, buildingId: string): ActionError {
 
   for (const workerId of [...building.workers]) unassign(s, workerId)
 
-  grant(s.stock, demolishRefund(building.defId), s.storageCap, storageUsed(s))
+  grant(s.stock, demolishRefund(building), s.storageCap, storageUsed(s))
 
   delete s.buildings[buildingId]
   return null
