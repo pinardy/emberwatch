@@ -1,4 +1,4 @@
-import { META_VERSION, defaultMeta } from './content/meta'
+import { defaultMeta, emptyCitadelPerks, migrateMeta } from './content/meta'
 import { defaultDecreeState } from './engine/structure'
 import { defaultCaravan } from './engine/trade'
 import type { MetaState, RunState } from './types'
@@ -64,6 +64,9 @@ export function loadRun(): RunState | null {
   run.decreeTimer ??= decreeDefaults.decreeTimer
   run.charterOffered ??= false
   run.charter ??= null
+  // Saves from before the Citadel tree and the Queen's Edicts.
+  run.edict ??= 0
+  run.citadel = { ...emptyCitadelPerks(), ...(run.citadel ?? {}) }
   return run
 }
 
@@ -80,9 +83,10 @@ export function saveRun(run: RunState | null): void {
 }
 
 export function loadMeta(): MetaState {
-  const meta = read<MetaState>(META_KEY)
-  if (!meta || meta.version !== META_VERSION) return defaultMeta()
-  return { ...defaultMeta(), ...meta }
+  const raw = read<unknown>(META_KEY)
+  // Older versions are migrated in place rather than discarded: supplies and
+  // upgrades are the player's progress and must survive any format change.
+  return raw ? migrateMeta(raw) : defaultMeta()
 }
 
 export function saveMeta(meta: MetaState): void {
