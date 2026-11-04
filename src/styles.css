@@ -2340,3 +2340,151 @@ code {
     width: auto;
   }
 }
+
+/* ==========================================================================
+   Citadel: upgrade tree, decree ladder, ledger, reward breakdown
+   ========================================================================== */
+
+.citadel-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.upgrade-tree {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.upgrade-branch {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.upgrade-branch > header h3 {
+  margin: 0;
+}
+
+.upgrade-branch > header small {
+  color: var(--muted);
+}
+
+.upgrade-card.is-locked {
+  opacity: 0.5;
+}
+
+.upgrade-card .upgrade-req {
+  color: var(--warn);
+  font-size: 11px;
+}
+
+.upgrade-card.is-child {
+  margin-left: 10px;
+  border-left: 2px solid var(--line);
+}
+
+.decree-ladder {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.decree-step {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  font-size: 12px;
+  align-content: start;
+}
+
+.decree-step strong {
+  font-size: 13px;
+}
+
+.decree-step small {
+  color: var(--muted);
+}
+
+.decree-step.is-picked {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold);
+  background: var(--panel-2);
+}
+
+.decree-step.is-locked {
+  opacity: 0.45;
+}
+
+.decree-step em {
+  color: var(--gold);
+  font-style: normal;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.history-table th,
+.history-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.history-table th {
+  color: var(--muted);
+  font-weight: normal;
+  font-size: 11px;
+}
+
+.history-scroll {
+  overflow-x: auto;
+}
+
+.reward-breakdown {
+  margin: 0 0 14px;
+}
+
+.reward-breakdown h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.reward-breakdown ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 3px;
+  font-size: 13px;
+}
+
+.reward-breakdown li {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 8px;
+  background: var(--panel);
+  border-radius: var(--radius-sm);
+}
+
+.reward-breakdown .reward-total {
+  font-weight: bold;
+  color: var(--gold);
+}
+
+.reward-breakdown p {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
