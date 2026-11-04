@@ -106,6 +106,16 @@ describe('2D map parity', () => {
     expect(ring()).toBeNull()
   })
 
+  it('ignores map keys while a modal dialog is open', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    // The opening blueprint draft is a modal dialog.
+    expect(document.querySelector('[aria-modal="true"]')).not.toBeNull()
+    fireEvent.keyDown(window, { code: 'KeyR' })
+    expect(useMapOverlays.getState().showWarmth).toBe(false)
+  })
+
   it('badges buildings with what they are doing', () => {
     startGame()
     act(() => {

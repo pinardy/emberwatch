@@ -311,6 +311,8 @@ export function useWarmthRingVisible(): boolean {
 export function isMapKeyIgnored(e: KeyboardEvent): boolean {
   const tag = (e.target as HTMLElement | null)?.tagName
   if (tag && ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return true
+  // Like every other hotkey, map keys wait while a modal dialog holds focus.
+  if (typeof document !== 'undefined' && document.querySelector('[aria-modal="true"]')) return true
   return e.ctrlKey || e.metaKey || e.altKey
 }
 

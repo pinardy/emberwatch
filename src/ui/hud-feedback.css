@@ -5,9 +5,9 @@
 
 /*
  * --- Event toasts ----------------------------------------------------------
- * Bottom-right of the map, stacked above the zoom controls: the warning strip
- * owns the top centre, the minimap the top-left, the inspector and tips the
- * bottom-left, and threats the bottom centre.
+ * Bottom-right of the map. Inside the game screen they live in .hud-stack
+ * (styles.css), which places them beside the inspector, tips and threats so
+ * nothing overlaps; the absolute positioning below is only a fallback.
  */
 
 .event-toasts {

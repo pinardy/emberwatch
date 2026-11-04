@@ -68,3 +68,16 @@ export function workTraitMultiplier(
   if (season === 'storm') m *= def.stormWork ?? 1
   return m
 }
+
+/**
+ * Everything one worker brings to a building, relative to an average worker:
+ * species work bonuses for the building's tags times the personal quirk. This
+ * is the per-villager factor inside `workRate`, exposed so the UI can rank
+ * who should work where.
+ */
+export function workerMultiplier(v: Villager, tags: readonly string[], season: Season): number {
+  const bonuses = SPECIES[v.species].workBonus as Record<string, number | undefined>
+  let bonus = 0
+  for (const tag of tags) bonus += bonuses[tag] ?? 0
+  return (1 + bonus) * workTraitMultiplier(v, tags.includes('gathering'), season)
+}

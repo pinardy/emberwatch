@@ -22,9 +22,9 @@ export function MenuScreen() {
           Ember<span>watch</span>
         </h1>
         <p className="tagline">
-          A roguelite city builder. Raise a settlement in the rain-soaked forest, keep five
-          species from walking out on you, and earn the Queen's favour before her patience
-          runs out.
+          A roguelite city builder. Raise a settlement in the rain-soaked forest, keep the
+          three species you bring from walking out on you, and earn the Queen's favour
+          before her patience runs out.
         </p>
 
         <div className="menu-actions">
@@ -78,9 +78,11 @@ export function MenuScreen() {
             </li>
           </ol>
           <p className="muted">
-            Space pauses · 1/2/3 set speed · WASD/arrows pan · Q/E rotate · H homes ·
-            right-click or Esc cancels placement. Progress saves automatically and the
-            game works offline once loaded.
+            <strong>Keys:</strong> Space pauses · 1/2/3 set speed · B build · P people · O
+            orders · T trade · L log · WASD/arrows pan · Q/E rotate · H homes · right-click
+            or Esc cancels placement and closes tips. On touch screens, drag to pan, pinch
+            to zoom and tap ✓ to place. Progress saves automatically and the game works
+            offline once loaded.
           </p>
         </details>
 
@@ -100,7 +102,7 @@ export function MenuScreen() {
               checked={settings.pauseOnBlur}
               onChange={(e) => updateSettings({ pauseOnBlur: e.target.checked })}
             />
-            Pause when the window loses focus
+            Pause when you switch to another tab or app
           </label>
           <label>
             <input

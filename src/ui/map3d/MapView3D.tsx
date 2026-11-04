@@ -35,6 +35,7 @@ import {
   type GladeAccess,
   type GladeLook,
 } from '../mapShared'
+import { useEscapeLayer } from '../useGameLoop'
 import { REDUCED_MOTION } from '../motion'
 import {
   BuildingNode,
@@ -604,6 +605,7 @@ export function MapView3D() {
   const flight = useRef<Flight | null>(null)
   const [bucket, setBucket] = useState<ZoomBucket>('mid')
   const [showHelp, setShowHelp] = useState(false)
+  useEscapeLayer(showHelp, () => setShowHelp(false))
   const rightClick = useRef<{ x: number; y: number } | null>(null)
 
   /** Glide (or, under reduced motion, jump) to a new camera pose. */
@@ -779,7 +781,8 @@ export function MapView3D() {
         <button
           type="button"
           aria-label="Controls help"
-          title="Controls"
+          aria-expanded={showHelp}
+          title="Controls (Esc closes)"
           className={showHelp ? 'is-active' : ''}
           onClick={() => setShowHelp((v) => !v)}
         >
@@ -799,6 +802,8 @@ export function MapView3D() {
             <li><em>Select</em> — click · <em>Deselect / cancel</em> — right-click or Esc</li>
             <li><em>Jump</em> — click the minimap</li>
             <li><em>Pause</em> — Space · <em>Speed</em> — 1 / 2 / 3</li>
+            <li><em>Panels</em> — B build · P people · O orders · T trade · L log</li>
+            <li><em>Close</em> — Esc closes this help and tips</li>
           </ul>
           <button type="button" onClick={() => setShowHelp(false)}>
             Close
