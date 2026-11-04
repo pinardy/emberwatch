@@ -35,6 +35,16 @@ import {
 } from './persistence'
 import type { MetaState, ResourceId, RunState, SpeciesId, Vec2 } from './types'
 
+/** Most simulated seconds a single frame may consume. */
+const MAX_FRAME_BUDGET = 2
+const MAX_STEPS_PER_FRAME = 64
+
+/**
+ * Simulated seconds owed to the world but not yet ticked. Lives outside the
+ * store because it changes every frame and nothing renders from it.
+ */
+let simCarry = 0
+
 export type Screen = 'menu' | 'setup' | 'game' | 'citadel'
 export type SidePanel = 'build' | 'villagers' | 'orders' | 'log' | 'trade' | null
 
@@ -205,18 +215,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // -------------------------------------------------------------------------
   advance: (realSeconds) => {
     const { run, speed } = get()
-    if (!run || speed === 0 || run.phase !== 'playing') return
-    if (run.pendingChoices.length > 0) return
+    if (!run || speed === 0 || run.phase !== 'playing' || run.pendingChoices.length > 0) {
+      // Nothing is running, so nothing may carry into the next frame.
+      simCarry = 0
+      return
+    }
 
-    // Clamp so a backgrounded tab does not fast-forward hours on return.
-    const budget = Math.min(realSeconds * speed, 2)
-    let remaining = budget
+    /*
+     * A frame at 60 Hz is ~0.017 s, far shorter than one fixed tick, so the
+     * unspent remainder carries into the next frame. Without the carry no
+     * frame ever reaches a whole tick and the world stands still on any
+     * display faster than 8 fps. The clamp stops a backgrounded tab from
+     * fast-forwarding on return.
+     */
+    simCarry = Math.min(simCarry + realSeconds * speed, MAX_FRAME_BUDGET)
     let steps = 0
-    while (remaining >= TICK_SECONDS && steps < 64) {
+    while (simCarry >= TICK_SECONDS && steps < MAX_STEPS_PER_FRAME) {
       tick(run, TICK_SECONDS)
-      remaining -= TICK_SECONDS
+      simCarry -= TICK_SECONDS
       steps++
-      if (run.phase !== 'playing' || run.pendingChoices.length > 0) break
+      if (run.phase !== 'playing' || run.pendingChoices.length > 0) {
+        simCarry = 0
+        break
+      }
     }
     if (steps === 0) return
     set({ version: get().version + 1 })
