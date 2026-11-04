@@ -1,8 +1,6 @@
 import type { RunState, Season } from '../types'
 import {
   BASE_STORAGE,
-  HEARTH_FUEL_PER_SECOND,
-  HEARTH_IDLE_FUEL_PER_SECOND,
   HOSTILITY_PER_POPULATION,
   HOSTILITY_PER_SECOND,
   HOSTILITY_PER_STORM,
@@ -31,6 +29,7 @@ import { stepCaravan } from './trade'
 import {
   stepBraziers,
   stepDepartures,
+  hearthFuelRate,
   stepFood,
   stepHearth,
   stepImpatience,
@@ -65,10 +64,7 @@ export function tick(s: RunState, dt: number): void {
   stepConditions(s, dt)
   stepCaravan(s, dt)
 
-  const fuelRate =
-    (s.season.season === 'storm' ? HEARTH_FUEL_PER_SECOND : HEARTH_IDLE_FUEL_PER_SECOND) *
-    mods.hearthFuel
-  s.coldHearth = stepHearth(s, dt, fuelRate)
+  s.coldHearth = stepHearth(s, dt, hearthFuelRate(s.season.season, mods))
   // Braziers draw on the same woodpile, after the hearth. Said once a Storm,
   // however often a thin woodpile makes them gutter.
   if (stepBraziers(s, dt, mods.hearthFuel) > 0) {
@@ -104,12 +100,19 @@ export function tick(s: RunState, dt: number): void {
   checkEndConditions(s)
 }
 
-function stepHostility(s: RunState, dt: number, rateMultiplier: number): void {
+/**
+ * Passive hostility gained per second right now (before storms, glades and
+ * threat strikes). Shared with the HUD so its forecast matches the sim.
+ */
+export function hostilityRate(s: RunState, rateMultiplier: number): number {
   const yearScale = 1 + (s.season.year - 1) * HOSTILITY_YEAR_SCALING
   const popScale = 1 + population(s) * HOSTILITY_PER_POPULATION
   const seasonScale = HOSTILITY_SEASON_MULTIPLIER[s.season.season]
-  const gain =
-    HOSTILITY_PER_SECOND * yearScale * popScale * seasonScale * rateMultiplier * dt
+  return HOSTILITY_PER_SECOND * yearScale * popScale * seasonScale * rateMultiplier
+}
+
+function stepHostility(s: RunState, dt: number, rateMultiplier: number): void {
+  const gain = hostilityRate(s, rateMultiplier) * dt
   s.hostility = Math.min(MAX_HOSTILITY, Math.max(0, s.hostility + gain))
 }
 

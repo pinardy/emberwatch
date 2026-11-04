@@ -1,11 +1,13 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
 import { SPECIES } from '../content/species'
-import type { ResourceId, RunState, SpeciesId, Villager } from '../types'
+import type { ResourceId, RunState, Season, SpeciesId, Villager } from '../types'
 import {
   COMPLEX_FOOD_MULTIPLIER,
   DEPARTURE_GRACE,
   FOOD_VARIETY_CAP,
+  HEARTH_FUEL_PER_SECOND,
+  HEARTH_IDLE_FUEL_PER_SECOND,
   HEARTH_WARMTH_RADIUS,
   IMPATIENCE_BASE,
   IMPATIENCE_HOSTILITY_THRESHOLD,
@@ -62,11 +64,7 @@ export function stepFood(s: RunState, dt: number, mods: Modifiers): void {
     return
   }
 
-  // Foxes and frugal villagers eat less; gluttons eat more.
-  let mouths = 0
-  for (const v of Object.values(s.villagers)) mouths += mealMultiplier(v)
-
-  s.foodDebt += (mouths * dt * Math.max(0.1, mods.foodUpkeep)) / SECONDS_PER_MEAL
+  s.foodDebt += mealsPerSecond(s, mods) * dt
 
   let guard = 0
   while (s.foodDebt >= 1 && guard++ < 500) {
@@ -86,6 +84,14 @@ export function stepFood(s: RunState, dt: number, mods: Modifiers): void {
   s.starving = s.foodDebt >= 1
 }
 
+/** Meals the settlement eats per second at its current size and upkeep. */
+export function mealsPerSecond(s: RunState, mods: Modifiers): number {
+  // Foxes and frugal villagers eat less; gluttons eat more.
+  let mouths = 0
+  for (const v of Object.values(s.villagers)) mouths += mealMultiplier(v)
+  return (mouths * Math.max(0.1, mods.foodUpkeep)) / SECONDS_PER_MEAL
+}
+
 /** Cooked food first (better value), then the biggest raw stack. */
 function pickFood(s: RunState): ResourceId | null {
   let best: ResourceId | null = null
@@ -100,6 +106,14 @@ function pickFood(s: RunState): ResourceId | null {
     }
   }
   return best
+}
+
+/** Wood the hearth burns per second in `season`. */
+export function hearthFuelRate(season: Season, mods: Modifiers): number {
+  return (
+    (season === 'storm' ? HEARTH_FUEL_PER_SECOND : HEARTH_IDLE_FUEL_PER_SECOND) *
+    mods.hearthFuel
+  )
 }
 
 /** Burns hearth fuel. Returns true if the hearth went cold. */
@@ -327,7 +341,12 @@ export function stepReputation(
   return gain
 }
 
-export function stepImpatience(s: RunState, dt: number, mods: Modifiers): void {
+/**
+ * Passive impatience gained per second right now, including the Queen's
+ * deadline overtime. Shared by the sim and the HUD so the rate the player is
+ * shown is the rate that is applied.
+ */
+export function impatienceRate(s: RunState, mods: Modifiers): number {
   const yearScale = 1 + (s.season.year - 1) * IMPATIENCE_YEAR_SCALING
   let rate = IMPATIENCE_BASE * yearScale
   if (s.hostility > IMPATIENCE_HOSTILITY_THRESHOLD) {
@@ -337,7 +356,11 @@ export function stepImpatience(s: RunState, dt: number, mods: Modifiers): void {
   const overtime = secondsPastDeadline(s)
   const overtimeRate =
     overtime > 0 ? IMPATIENCE_OVERTIME_BASE + overtime * IMPATIENCE_OVERTIME_RAMP : 0
-  addImpatience(s, (rate * mods.impatienceRate + overtimeRate) * dt)
+  return rate * mods.impatienceRate + overtimeRate
+}
+
+export function stepImpatience(s: RunState, dt: number, mods: Modifiers): void {
+  addImpatience(s, impatienceRate(s, mods) * dt)
 }
 
 /** Game-clock second at which the Queen's deadline year begins. */

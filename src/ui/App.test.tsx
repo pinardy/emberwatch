@@ -5,10 +5,11 @@ import { BUILDINGS } from '../game/content/buildings'
 import { DECREES } from '../game/content/decrees'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { findPlacement } from '../game/engine/actions'
+import { pushLog } from '../game/engine/createRun'
 import { CHARTER_REPUTATION, REWARD_MILESTONES } from '../game/engine/balance'
 import { addCondition, issueDecree } from '../game/engine/structure'
 import { useGameStore } from '../game/store'
-import type { RunState } from '../game/types'
+import type { BuildingInstance, RunState } from '../game/types'
 
 /**
  * UI smoke tests. Typechecking cannot catch a component that throws on render or
@@ -323,7 +324,116 @@ describe('app shell', () => {
     expect(screen.getByText(/The settlement holds/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: /Return to the Citadel/i })).toBeTruthy()
   })
+
+  it('toasts sim events as they happen, but not the opening entries', () => {
+    startPlaying()
+    // The opening narration and the blueprint draft are set-up, not news.
+    expect(document.querySelector('.event-toast')).toBeNull()
+
+    act(() => {
+      pushLog(currentRun(), 'Ada the Human left the settlement.', 'bad')
+      bump()
+    })
+    const toast = document.querySelector('.event-toast.is-bad') as HTMLElement | null
+    expect(toast?.textContent).toContain('Ada the Human left the settlement.')
+
+    // A repeat collapses into the same toast with a counter.
+    act(() => {
+      pushLog(currentRun(), 'Ada the Human left the settlement.', 'bad')
+      bump()
+    })
+    expect(document.querySelectorAll('.event-toast')).toHaveLength(1)
+    expect(document.querySelector('.event-toast-count')?.textContent).toBe('×2')
+
+    // Clicking dismisses it.
+    fireEvent.click(document.querySelector('.event-toast')!)
+    expect(document.querySelector('.event-toast')).toBeNull()
+  })
+
+  it('counts unread chronicle entries on the Log tab until it is opened', () => {
+    startPlaying()
+    const tabs = screen.getByRole('tablist')
+    const logTab = () => within(tabs).getByRole('tab', { name: /Log/i })
+    expect(logTab().querySelector('.tab-badge')).toBeNull()
+
+    act(() => {
+      pushLog(currentRun(), 'The Wolf Pack strikes.', 'bad')
+      pushLog(currentRun(), 'A caravan has arrived.', 'good')
+      bump()
+    })
+    expect(logTab().querySelector('.tab-badge')?.textContent).toBe('2')
+
+    fireEvent.click(logTab())
+    expect(logTab().querySelector('.tab-badge')).toBeNull()
+    const log = document.querySelector('.log-list') as HTMLElement
+    expect(within(log).getByText('The Wolf Pack strikes.')).toBeTruthy()
+  })
+
+  it('tells the player what an input-starved workshop is waiting for', () => {
+    startPlaying()
+    const run = currentRun()
+    const worker = Object.values(run.villagers).find((v) => v.assignment === null)!
+    const hearth = Object.values(run.buildings)[0]
+    const mill: BuildingInstance = {
+      id: 'test-mill',
+      defId: 'lumberMill',
+      pos: { x: hearth.pos.x + 3, y: hearth.pos.y },
+      gladeId: hearth.gladeId,
+      built: true,
+      buildProgress: BUILDINGS.lumberMill.buildSeconds,
+      workers: [worker.id],
+      activeRecipeId: 'plank',
+      // Held at the brim: the bar looks full, which on its own reads as healthy.
+      recipeProgress: 16,
+      paused: false,
+      depositsInRange: {},
+    }
+    act(() => {
+      worker.assignment = mill.id
+      run.buildings[mill.id] = mill
+      delete run.stock.wood
+      useGameStore.getState().selectBuilding(mill.id)
+    })
+    const inspector = document.querySelector('.inspector') as HTMLElement
+    expect(within(inspector).getByText(/Waiting for 2 .*Wood/)).toBeTruthy()
+  })
+
+  it('fills the hostility meter in proportion to hostility', () => {
+    startPlaying()
+    const fill = () =>
+      document.querySelector('.meter-warn .meter-fill') as HTMLElement
+    const impatienceFill = document.querySelector('.meter-bad .meter-fill')
+
+    act(() => {
+      const run = currentRun()
+      run.hostility = 37.5
+      run.impatience += 1 // a pulse must not remount the meter
+      bump()
+    })
+    expect(fill().style.width).toBe('37.5%')
+    // The impatience bar is the same node, so its width transition keeps running.
+    expect(document.querySelector('.meter-bad .meter-fill')).toBe(impatienceFill)
+  })
 })
+
+/** Menu → setup → draft → a moment of play, so the clock has started. */
+function startPlaying() {
+  render(<App />)
+  fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+  fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+  takeOpeningDraft()
+  act(() => {
+    useGameStore.getState().setSpeed(1)
+    useGameStore.getState().advance(0.5)
+    useGameStore.getState().setSpeed(0)
+  })
+  expect(currentRun().clock).toBeGreaterThan(0)
+}
+
+/** Tells subscribers the run changed, as every sim step and command does. */
+function bump() {
+  useGameStore.setState({ version: useGameStore.getState().version + 1 })
+}
 
 describe('mid-run structure UI', () => {
   it('shows decrees and lingering conditions, and takes the charter', () => {
