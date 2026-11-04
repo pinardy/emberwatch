@@ -3,6 +3,7 @@ import { CORNERSTONES } from '../game/content/cornerstones'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
 import { NEED_LABELS } from '../game/content/species'
+import { freeRerollsLeft, gladeEventOptions } from '../game/engine/citadel'
 import { optionAffordable, rerollCost } from '../game/engine/events'
 import { useGameStore, useRun } from '../game/store'
 import type { ResourceBag } from '../game/types'
@@ -37,7 +38,7 @@ export function ChoiceModal() {
           </header>
           <p className="modal-flavour">{def.description}</p>
           <div className="option-list">
-            {def.options.map((option, index) => {
+            {gladeEventOptions(run, def).map((option, index) => {
               const affordable = optionAffordable(run.stock, option)
               return (
                 <button
@@ -201,7 +202,9 @@ function RerollButton() {
         disabled={(run.stock.amber ?? 0) < cost}
         onClick={reroll}
       >
-        🎲 Reroll the offer — {cost} {RESOURCES.amber.icon}
+        {freeRerollsLeft(run) > 0
+          ? `🎲 Reroll the offer — free (${freeRerollsLeft(run)} left)`
+          : `🎲 Reroll the offer — ${cost} ${RESOURCES.amber.icon}`}
       </button>
     </footer>
   )

@@ -1,14 +1,26 @@
-import { supplyReward } from '../game/content/meta'
+import {
+  EDICT_REWARD_STEP,
+  MAX_EDICT,
+  edictLabel,
+  supplyBreakdown,
+} from '../game/content/meta'
 import { useGameStore, useRun } from '../game/store'
 import { Overlay } from './ChoiceModal'
 
 export function EndModal() {
   const run = useRun()
   const finishRun = useGameStore((s) => s.finishRun)
+  const edictUnlocked = useGameStore((s) => s.meta.edictUnlocked)
   if (!run || run.phase === 'playing') return null
 
   const won = run.phase === 'won'
-  const reward = supplyReward(run)
+  const breakdown = supplyBreakdown(run)
+  const reward = breakdown.total
+  // Winning at the highest edict earned so far opens the next rung.
+  const opensEdict =
+    won && breakdown.edict >= edictUnlocked && breakdown.edict < MAX_EDICT
+      ? breakdown.edict + 1
+      : null
 
   return (
     <Overlay>
@@ -61,6 +73,36 @@ export function EndModal() {
             <dd>{Math.floor(run.stats.resourcesProduced)}</dd>
           </div>
         </dl>
+
+        <section className="reward-breakdown" aria-label="Citadel supplies">
+          <h3>Supplies sent home</h3>
+          <ul>
+            {breakdown.lines.map((line) => (
+              <li key={line.label}>
+                <span>{line.label}</span>
+                <span>+{line.amount}</span>
+              </li>
+            ))}
+            {breakdown.edict > 0 && (
+              <li className="is-good">
+                <span>
+                  Queen's {edictLabel(breakdown.edict)} (+
+                  {Math.round(breakdown.edict * EDICT_REWARD_STEP * 100)}%)
+                </span>
+                <span>+{breakdown.edictBonus}</span>
+              </li>
+            )}
+            <li className="reward-total">
+              <span>Total</span>
+              <span>📦 {reward}</span>
+            </li>
+          </ul>
+          {opensEdict !== null && (
+            <p className="is-good">
+              📜 Victory under these terms unlocks {edictLabel(opensEdict)}.
+            </p>
+          )}
+        </section>
 
         <p className="modal-flavour">
           Seed <code>{run.seed}</code> — reuse it from the menu to replay this map.

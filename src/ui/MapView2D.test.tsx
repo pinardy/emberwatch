@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
+import { findPlacement } from '../game/engine/actions'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { gladeFillGeometry, mapStats, useStaticGeometry } from './map3d/staticGeometry'
@@ -111,14 +112,15 @@ describe('2D map parity', () => {
       const store = useGameStore.getState()
       store.setBuildMode('shelter')
     })
-    // Place through the store, as the map's click handler would.
+    // Place through the store, as the map's click handler would, at a spot
+    // the engine says is legal. Maps are random, so fixed coordinates can land
+    // on a deposit or a crag.
     const run = currentRun()
     const before = Object.keys(run.buildings).length
+    const spot = findPlacement(run, 'shelter')
+    expect(spot).not.toBeNull()
     act(() => {
-      for (const [x, y] of [[2, 1], [-2, 1], [1, -2], [-1.5, -2], [2.5, -1]]) {
-        useGameStore.getState().place({ x, y })
-        if (Object.keys(currentRun().buildings).length > before) break
-      }
+      useGameStore.getState().place(spot!)
       useGameStore.getState().setBuildMode(null)
     })
     expect(Object.keys(currentRun().buildings).length).toBe(before + 1)
