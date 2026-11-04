@@ -12,6 +12,7 @@ import {
   workRate,
 } from '../game/engine/production'
 import { useGameStore, useRun } from '../game/store'
+import { GLADE_KIND_STYLE } from './mapShared'
 import type { BuildingInstance, Recipe, RunState } from '../game/types'
 
 /**
@@ -345,18 +346,10 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
     <div className="inspector">
       <div className="inspector-body">
         <header className="inspector-head">
-          <span className="inspector-icon">
-            {glade.kind === 'small' ? '🌿' : glade.kind === 'dangerous' ? '⚠️' : '☠️'}
-          </span>
+          <span className="inspector-icon">{GLADE_KIND_STYLE[glade.kind].icon}</span>
           <div>
             <strong>{glade.name}</strong>
-            <small>
-              {glade.kind === 'small'
-                ? 'Small glade'
-                : glade.kind === 'dangerous'
-                  ? 'Dangerous glade'
-                  : 'Forbidden glade'}
-            </small>
+            <small>{GLADE_KIND_STYLE[glade.kind].title}</small>
           </div>
           <CloseButton />
         </header>
