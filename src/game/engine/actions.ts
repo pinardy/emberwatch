@@ -167,6 +167,16 @@ export function findPlacement(s: RunState, defId: string, near?: Vec2): Vec2 | n
   return null
 }
 
+/** Materials handed back when a building is torn down: half, rounded down. */
+export function demolishRefund(defId: string): ResourceBag {
+  const refund: ResourceBag = {}
+  for (const [id, amount] of Object.entries(BUILDINGS[defId]?.cost ?? {}) as [ResourceId, number][]) {
+    const qty = Math.floor((amount ?? 0) / 2)
+    if (qty > 0) refund[id] = qty
+  }
+  return refund
+}
+
 export function demolishBuilding(s: RunState, buildingId: string): ActionError {
   const building = s.buildings[buildingId]
   if (!building) return 'No such building.'
@@ -175,13 +185,7 @@ export function demolishBuilding(s: RunState, buildingId: string): ActionError {
 
   for (const workerId of [...building.workers]) unassign(s, workerId)
 
-  // Half the materials come back, rounded down.
-  const refund: ResourceBag = {}
-  for (const [id, amount] of Object.entries(def?.cost ?? {}) as [ResourceId, number][]) {
-    const qty = Math.floor((amount ?? 0) / 2)
-    if (qty > 0) refund[id] = qty
-  }
-  grant(s.stock, refund, s.storageCap, storageUsed(s))
+  grant(s.stock, demolishRefund(building.defId), s.storageCap, storageUsed(s))
 
   delete s.buildings[buildingId]
   return null

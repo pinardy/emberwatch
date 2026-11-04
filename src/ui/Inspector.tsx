@@ -1,8 +1,9 @@
 import { BUILDINGS } from '../game/content/buildings'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
-import { NEED_LABELS, SPECIES } from '../game/content/species'
-import { isReachable, rushCost } from '../game/engine/actions'
+import { useEffect, useRef, useState } from 'react'
+import { NEED_LABELS, SPECIES, VILLAGER_TRAITS } from '../game/content/species'
+import { demolishRefund, isReachable, rushCost } from '../game/engine/actions'
 import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { computeModifiers } from '../game/engine/modifiers'
 import { availableRecipes, idleVillagers } from '../game/engine/queries'
@@ -16,9 +17,18 @@ import { terrainHint } from '../game/engine/placement'
 import { homesWithin, isWarmAt } from '../game/engine/queries'
 import { TERRAIN } from '../game/content/terrain'
 import { terrainOf } from '../game/engine/production'
+import { workerMultiplier } from '../game/engine/traits'
 import { useGameStore, useRun } from '../game/store'
 import { BuildingStatusLine } from './BuildingStatusLine'
-import type { BuildingInstance, Recipe, RunState } from '../game/types'
+import type {
+  BuildingDef,
+  BuildingInstance,
+  Recipe,
+  ResourceBag,
+  RunState,
+  Villager,
+} from '../game/types'
+import { useConfirm } from './useConfirm'
 
 /**
  * Context panel for whatever the player last tapped: a building, a deposit,
@@ -38,7 +48,7 @@ export function Inspector() {
     if (!building) return null
     return (
       <div className="inspector">
-        <BuildingInspector run={run} building={building} />
+        <BuildingInspector key={building.id} run={run} building={building} />
       </div>
     )
   }
@@ -87,11 +97,13 @@ function CloseButton() {
 
 function BuildingInspector({ run, building }: { run: RunState; building: BuildingInstance }) {
   const def = BUILDINGS[building.defId]
-  const hire = useGameStore((s) => s.hire)
-  const fire = useGameStore((s) => s.fire)
   const chooseRecipe = useGameStore((s) => s.chooseRecipe)
   const pauseBuilding = useGameStore((s) => s.pauseBuilding)
   const demolish = useGameStore((s) => s.demolish)
+  const confirmDemolish = useConfirm(`demolish:${building.id}`, () => {
+    demolish(building.id)
+    useGameStore.getState().clearSelection()
+  })
   if (!def) return null
 
   const mods = computeModifiers(run)
@@ -140,51 +152,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
       ) : (
         <>
           {def.workerSlots > 0 && (
-            <section className="inspector-section">
-              <div className="row-between">
-                <h4>
-                  Workers {building.workers.length}/{def.workerSlots}
-                </h4>
-                <div className="btn-row">
-                  <button
-                    type="button"
-                    onClick={() => fire(building.id)}
-                    disabled={building.workers.length === 0}
-                  >
-                    −
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => hire(building.id)}
-                    disabled={building.workers.length >= def.workerSlots || idle === 0}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-              <div className="worker-chips">
-                {building.workers.map((id) => {
-                  const villager = run.villagers[id]
-                  if (!villager) return null
-                  const bonus = bonusPercent(villager.species, def.tags)
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      className="worker-chip"
-                      title={`Remove ${villager.name}`}
-                      onClick={() => fire(building.id, id)}
-                    >
-                      {SPECIES[villager.species].icon} {villager.name}
-                      {bonus > 0 && <em>+{bonus}%</em>}
-                    </button>
-                  )
-                })}
-                {building.workers.length === 0 && (
-                  <span className="muted">Nobody is working here.</span>
-                )}
-              </div>
-            </section>
+            <WorkerSection run={run} building={building} def={def} />
           )}
 
           {recipes.length > 0 && (
@@ -316,25 +284,245 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
         {def.category !== 'hearth' && (
           <button
             type="button"
-            className="danger"
-            onClick={() => {
-              demolish(building.id)
-              useGameStore.getState().clearSelection()
-            }}
+            className={`danger ${confirmDemolish.armed ? 'is-armed' : ''}`}
+            onClick={confirmDemolish.trigger}
+            title={
+              confirmDemolish.armed
+                ? 'Click again to tear it down'
+                : 'Tear this building down for half its materials back'
+            }
           >
-            Demolish
+            {confirmDemolish.armed ? (
+              <>
+                Confirm? Refund <BagLabel bag={demolishRefund(building.defId)} />
+              </>
+            ) : (
+              'Demolish'
+            )}
           </button>
         )}
+        <span className="sr-only" aria-live="polite">
+          {confirmDemolish.armed
+            ? `Press Demolish again within a few seconds to tear down the ${def.name}.`
+            : ''}
+        </span>
       </footer>
     </div>
   )
 }
 
-function bonusPercent(species: keyof typeof SPECIES, tags: string[]): number {
-  const bonuses = SPECIES[species].workBonus as Record<string, number | undefined>
-  let sum = 0
-  for (const tag of tags) sum += bonuses[tag] ?? 0
-  return Math.round(sum * 100)
+/** "+40%", "−12%" or "±0%" for a worker multiplier like 1.4. */
+export function formatMultiplier(multiplier: number): string {
+  const pct = Math.round((multiplier - 1) * 100)
+  if (pct === 0) return '±0%'
+  return pct > 0 ? `+${pct}%` : `−${-pct}%`
+}
+
+/** Why a villager is faster or slower at a building, for tooltips. */
+export function multiplierReason(v: Villager, def: BuildingDef): string {
+  const parts: string[] = []
+  const bonuses = SPECIES[v.species].workBonus as Record<string, number | undefined>
+  const speciesBonus = def.tags.reduce((sum, tag) => sum + (bonuses[tag] ?? 0), 0)
+  if (speciesBonus !== 0) {
+    parts.push(`${SPECIES[v.species].name} ${formatMultiplier(1 + speciesBonus)}`)
+  }
+  if (v.trait) {
+    const trait = VILLAGER_TRAITS[v.trait]
+    parts.push(`${trait.name}: ${trait.description}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : 'An average worker here'
+}
+
+function BagLabel({ bag }: { bag: ResourceBag }) {
+  const entries = Object.entries(bag)
+  if (entries.length === 0) return <span>nothing</span>
+  return (
+    <span className="bag-label">
+      {entries.map(([id, amount]) => (
+        <span key={id} title={RESOURCES[id as keyof typeof RESOURCES]?.name}>
+          {RESOURCES[id as keyof typeof RESOURCES]?.icon}
+          {amount}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+function MultiplierTag({ mult }: { mult: number }) {
+  return (
+    <em className={`mult ${mult > 1 ? 'is-good' : mult < 1 ? 'is-bad' : 'muted'}`}>
+      {formatMultiplier(mult)}
+    </em>
+  )
+}
+
+/**
+ * Who works here, slot by slot. Each filled slot can be swapped or emptied;
+ * an empty slot opens a picker of idle villagers ranked by how fast they would
+ * work this building (species bonus × personal quirk).
+ */
+function WorkerSection({
+  run,
+  building,
+  def,
+}: {
+  run: RunState
+  building: BuildingInstance
+  def: BuildingDef
+}) {
+  const hire = useGameStore((s) => s.hire)
+  const fire = useGameStore((s) => s.fire)
+  /** `undefined`: picker closed · `null`: filling an empty slot · id: swapping that worker. */
+  const [picking, setPicking] = useState<string | null | undefined>(undefined)
+  const pickerRef = useRef<HTMLDivElement>(null)
+  const pickerOpen = picking !== undefined
+
+  // On a short inspector (phones) the picker opens below the fold.
+  useEffect(() => {
+    if (pickerOpen) pickerRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [pickerOpen, picking])
+
+  const season = run.season.season
+  const candidates = idleVillagers(run)
+    .map((v) => ({ v, mult: workerMultiplier(v, def.tags, season) }))
+    .sort((a, b) => b.mult - a.mult || a.v.name.localeCompare(b.v.name))
+  const best = candidates[0]
+  const full = building.workers.length >= def.workerSlots
+  const slots = Array.from({ length: def.workerSlots }, (_, i) => building.workers[i] ?? null)
+  const replacing = picking ? run.villagers[picking] : undefined
+
+  const choose = (villagerId: string) => {
+    if (picking) fire(building.id, picking)
+    hire(building.id, villagerId)
+    setPicking(undefined)
+  }
+
+  return (
+    <section className="inspector-section" aria-label="Workers">
+      <div className="row-between">
+        <h4>
+          Workers {building.workers.length}/{def.workerSlots}
+        </h4>
+        <button
+          type="button"
+          className="hire-best"
+          onClick={() => best && hire(building.id, best.v.id)}
+          disabled={full || !best}
+          title={
+            full
+              ? 'Every slot is filled'
+              : best
+                ? `Hire ${best.v.name}, the fastest idle villager here (${formatMultiplier(best.mult)})`
+                : 'No idle villagers'
+          }
+        >
+          + Best available
+        </button>
+      </div>
+      <ul className="worker-slots">
+        {slots.map((id, index) => {
+          const villager = id ? run.villagers[id] : undefined
+          if (!villager) {
+            return (
+              <li key={`empty-${index}`} className="worker-slot is-empty">
+                <button
+                  type="button"
+                  className="slot-pick"
+                  aria-expanded={picking === null}
+                  onClick={() => setPicking(picking === null ? undefined : null)}
+                >
+                  <span aria-hidden>＋</span> Choose a worker…
+                </button>
+              </li>
+            )
+          }
+          const trait = villager.trait ? VILLAGER_TRAITS[villager.trait] : undefined
+          return (
+            <li key={villager.id} className="worker-slot">
+              <span className="worker-who" title={multiplierReason(villager, def)}>
+                <span aria-hidden>{SPECIES[villager.species].icon}</span>
+                <strong>{villager.name}</strong>
+                {trait && (
+                  <span className="worker-trait" title={`${trait.name}: ${trait.description}`}>
+                    {trait.icon}
+                    <span className="sr-only"> {trait.name}</span>
+                  </span>
+                )}
+                <MultiplierTag mult={workerMultiplier(villager, def.tags, season)} />
+              </span>
+              <button
+                type="button"
+                aria-label={`Swap ${villager.name}`}
+                title="Swap for an idle villager"
+                aria-expanded={picking === villager.id}
+                onClick={() => setPicking(picking === villager.id ? undefined : villager.id)}
+              >
+                Swap
+              </button>
+              <button
+                type="button"
+                aria-label={`Remove ${villager.name}`}
+                title={`Send ${villager.name} back to idle`}
+                onClick={() => {
+                  if (picking === villager.id) setPicking(undefined)
+                  fire(building.id, villager.id)
+                }}
+              >
+                ✕
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+
+      {picking !== undefined && (
+        <div
+          ref={pickerRef}
+          className="worker-picker"
+          role="group"
+          aria-label="Choose a worker"
+        >
+          <div className="row-between">
+            <small className="muted">
+              {replacing
+                ? `Replace ${replacing.name} with… (fastest first)`
+                : 'Idle villagers, fastest here first'}
+            </small>
+            <button type="button" className="link-button" onClick={() => setPicking(undefined)}>
+              Cancel
+            </button>
+          </div>
+          {candidates.length === 0 ? (
+            <p className="muted">
+              Nobody is idle. Free someone up from the People tab or another building.
+            </p>
+          ) : (
+            <ul className="picker-list">
+              {candidates.map(({ v, mult }, rank) => {
+                const trait = v.trait ? VILLAGER_TRAITS[v.trait] : undefined
+                return (
+                  <li key={v.id}>
+                    <button
+                      type="button"
+                      className="picker-option"
+                      title={multiplierReason(v, def)}
+                      onClick={() => choose(v.id)}
+                    >
+                      <span aria-hidden>{SPECIES[v.species].icon}</span>
+                      <strong>{v.name}</strong>
+                      <small>{trait ? `${trait.icon} ${trait.name}` : SPECIES[v.species].name}</small>
+                      <MultiplierTag mult={mult} />
+                      {rank === 0 && candidates.length > 1 && <span className="best-tag">★ best</span>}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
+  )
 }
 
 export function RecipeLabel({ recipe }: { recipe: Recipe }) {

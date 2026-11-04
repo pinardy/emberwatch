@@ -28,6 +28,7 @@ import {
   takeChoice,
 } from './engine/events'
 import { randomSeed } from './engine/rng'
+import { unassign } from './engine/society'
 import { tick } from './engine/tick'
 import { buyOffer, sellResource } from './engine/trade'
 import {
@@ -101,6 +102,8 @@ interface GameStore {
   demolish: (buildingId: string) => void
   hire: (buildingId: string, villagerId?: string) => void
   fire: (buildingId: string, villagerId?: string) => void
+  /** Sends one specific villager back to idle, whatever they were doing. */
+  release: (villagerId: string) => void
   chooseRecipe: (buildingId: string, recipeId: string) => void
   pauseBuilding: (buildingId: string) => void
   clearGladeAdd: (gladeId: string) => void
@@ -278,6 +281,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     runCommand(set, get, (run) => assignWorker(run, buildingId, villagerId)),
   fire: (buildingId, villagerId) =>
     runCommand(set, get, (run) => removeWorker(run, buildingId, villagerId)),
+  release: (villagerId) =>
+    runCommand(set, get, (run) => {
+      if (!run.villagers[villagerId]) return 'No such villager.'
+      unassign(run, villagerId)
+      return null
+    }),
   chooseRecipe: (buildingId, recipeId) =>
     runCommand(set, get, (run) => setRecipe(run, buildingId, recipeId)),
   pauseBuilding: (buildingId) =>
