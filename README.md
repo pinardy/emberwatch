@@ -10,6 +10,7 @@ npm run dev        # play at the printed localhost URL
 npm test           # 187 tests: simulation, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
+npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
 ```
 
 ## The loop
@@ -106,6 +107,41 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 `vite-plugin-pwa` generates the manifest and a Workbox service worker precaching the whole app shell, so after one load the game runs fully offline — there is no server component. Runs autosave to `localStorage` every 8 seconds, on tab hide, and on page unload; the game pauses itself when the tab is backgrounded rather than fast-forwarding on return.
 
 Icons are generated at build time by `scripts/generate-icons.mjs`, which writes real PNGs using only `node:zlib` — no binary assets in the repo and no image dependencies.
+
+## CI & deployment
+
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`:
+
+1. **Checks** (all events): `npm ci` → typecheck → `npx vitest run` → `npm run build` → the Playwright smoke test against that build. A newer push to the same PR cancels the run it supersedes. If the smoke test fails, its HTML report and traces are uploaded as a run artifact (`playwright-report-*`); open a trace with `npx playwright show-trace <trace.zip>`.
+2. **Deploy** (pushes to `main` only, after the checks pass): rebuilds with `BASE_PATH=/roguelite-game/`, runs the smoke test again against that exact build served under the sub-path, then publishes `dist/` with `actions/upload-pages-artifact` + `actions/deploy-pages` to the `github-pages` environment. It can also be re-run by hand (Actions → CI → Run workflow on `main`).
+
+The site is served at **https://pinardy.github.io/roguelite-game/**.
+
+### The smoke test
+
+`e2e/smoke.spec.ts` drives a production build in real Chromium — the things the jsdom tests cannot see, since they call the store directly:
+
+- menu → New settlement → Set out → answer the opening draft → the game;
+- the in-game clock advances in real time at 1× (measured on the 2D map against the frame time the page actually received, so a sim that never ticks at 60 fps fails while a slow machine does not), and the autosave persists it;
+- the 3D map mounts a WebGL canvas (headless Chromium uses SwiftShader) and the 2D map's SVG renders;
+- the manifest, its icons and the service worker resolve under the base path, and the app boots offline;
+- a 390×844 touch phone reaches the game without horizontal overflow;
+- no page errors, console errors or failed requests along the way.
+
+```bash
+npx playwright install chromium        # once; CI uses --with-deps
+npm run test:e2e                       # builds, serves on :4319, runs (~30 s)
+BASE_PATH=/roguelite-game/ npm run test:e2e   # same, under the Pages sub-path
+E2E_SKIP_BUILD=1 npm run test:e2e      # reuse an existing dist/
+```
+
+`BASE_PATH` sets Vite's `base`. Unset, it stays relative (`./`), so `npm run dev`, `vitest` and `npm run preview` behave as before; the manifest's `start_url`/`scope` and icon paths are relative to it, and the service worker registers at the base with the base as its scope. The app has no router, so no SPA 404 fallback is needed.
+
+### One-time setup for the repository owner
+
+- **Settings → Pages → Build and deployment → Source: "GitHub Actions".** Until this is set, the deploy job fails at the deploy step.
+- GitHub Pages on a **private** repository requires a paid plan (GitHub Pro, Team or Enterprise). On the free plan the repository must be public for the site to publish.
+- Optional: in Settings → Branches, require the "Typecheck, tests, build, browser smoke test" check before merging to `main`.
 
 ## Known scope limits
 
