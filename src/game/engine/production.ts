@@ -231,7 +231,8 @@ export function stepProduction(
   return result
 }
 
-function countOutputs(recipe: Recipe): number {
+/** Stockpile space one batch of `recipe` needs (amber takes none). */
+export function countOutputs(recipe: Recipe): number {
   let sum = 0
   for (const [id, amount] of Object.entries(recipe.outputs)) {
     if (id === 'amber') continue

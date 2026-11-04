@@ -2,6 +2,14 @@ import { BUILDINGS } from '../content/buildings'
 import { NEED_LABELS } from '../content/species'
 import { RESOURCES } from '../content/resources'
 import type { ResourceId, RunState } from '../types'
+import {
+  RUNWAY_WARNING_SECONDS,
+  foodForecast,
+  formatDuration,
+  hearthForecast,
+  storageBlocked,
+} from './forecast'
+import { computeModifiers } from './modifiers'
 import { canAfford, idleVillagers, population, totalHousing } from './queries'
 
 /**
@@ -38,7 +46,45 @@ export function collectWarnings(s: RunState): Warning[] {
     })
   }
 
+  const mods = computeModifiers(s)
+
+  // Say so *before* the hearth goes out, while there is still time to chop.
+  if (!s.coldHearth) {
+    const hearth = hearthForecast(s, mods)
+    const seasonLeft = s.season.length - s.season.elapsed
+    if (hearth.runway < RUNWAY_WARNING_SECONDS) {
+      out.push({
+        id: 'hearth-low',
+        severity: 'danger',
+        text: `🔥 Hearth wood runs out in ${formatDuration(hearth.runway)}. Cut more wood.`,
+      })
+    } else if (s.season.season === 'storm' && hearth.stormShortfall > 0) {
+      out.push({
+        id: 'hearth-storm',
+        severity: 'caution',
+        text: `🔥 Hearth wood lasts ${formatDuration(hearth.runway)}; the Storm has ${formatDuration(seasonLeft)} left.`,
+      })
+    } else if (s.season.season === 'clearance' && hearth.stormShortfall > 0) {
+      out.push({
+        id: 'hearth-storm',
+        severity: 'caution',
+        text: `🔥 Not enough wood for the Storm — about ${Math.ceil(hearth.stormShortfall)} more needed (it burns ${hearth.stormRate.toFixed(2)}/s).`,
+      })
+    }
+  }
+
   const pop = population(s)
+  if (!s.starving && pop > 0) {
+    const food = foodForecast(s, mods)
+    if (food.runway < RUNWAY_WARNING_SECONDS) {
+      out.push({
+        id: 'food-low',
+        severity: 'caution',
+        text: `🍽️ Food runs out in ${formatDuration(food.runway)} at the current rate.`,
+      })
+    }
+  }
+
   const housing = totalHousing(s)
   if (pop > housing) {
     out.push({
@@ -55,6 +101,16 @@ export function collectWarnings(s: RunState): Warning[] {
       id: 'no-builders',
       severity: 'caution',
       text: `🔨 ${sites} building${sites > 1 ? 's' : ''} stalled — idle villagers are your builders.`,
+    })
+  }
+
+  // A full stockpile silently halts every producer at the brim.
+  const blocked = storageBlocked(s, mods)
+  if (blocked.length > 0) {
+    out.push({
+      id: 'storage-full',
+      severity: 'caution',
+      text: `📦 Stockpile full — ${blocked.length} building${blocked.length > 1 ? 's have' : ' has'} stopped. Build a Warehouse or sell surplus.`,
     })
   }
 
