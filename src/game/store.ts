@@ -18,6 +18,7 @@ import {
   setRecipe,
   sootheQueen,
   togglePause,
+  upgradeBuilding,
 } from './engine/actions'
 import { TICK_SECONDS, type GameSpeed } from './engine/balance'
 import { createRun } from './engine/createRun'
@@ -115,6 +116,8 @@ interface GameStore {
   sell: (resource: ResourceId) => void
   appease: (threatId: string) => void
   rush: (buildingId: string) => void
+  /** Starts raising a building to its next upgrade tier. */
+  upgrade: (buildingId: string) => void
   soothe: () => void
   recallAll: () => void
   dismissNotice: () => void
@@ -311,6 +314,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   sell: (resource) => runCommand(set, get, (run) => sellResource(run, resource)),
   appease: (threatId) => runCommand(set, get, (run) => appeaseThreat(run, threatId)),
   rush: (buildingId) => runCommand(set, get, (run) => rushConstruction(run, buildingId)),
+  upgrade: (buildingId) => runCommand(set, get, (run) => upgradeBuilding(run, buildingId)),
   soothe: () => runCommand(set, get, (run) => sootheQueen(run)),
   recallAll: () =>
     runCommand(set, get, (run) => {

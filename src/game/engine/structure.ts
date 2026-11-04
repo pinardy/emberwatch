@@ -23,6 +23,7 @@ import { pushLog } from './createRun'
 import { relevantBlueprints } from './events'
 import { grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
+import { tierOf } from './upgrades'
 import { addImpatience, addReputation, removeVillager } from './society'
 
 /**
@@ -55,16 +56,27 @@ export function goalCount(goal: OrderGoal, s: RunState): number | null {
       return s.producedTotals[goal.resource] ?? 0
     case 'gladesCleared':
       return s.stats.gladesCleared
+    /*
+     * Each finished construction job counts — a new building, or a tier
+     * raised on one already standing — so "build 2 more homes" can be met by
+     * upgrading two shelters, and a demolished-and-rebuilt site is not free.
+     */
     case 'buildingId':
-      return Object.values(s.buildings).filter((b) => b.built && b.defId === goal.buildingId)
-        .length
+      return constructionCount(s, (defId) => defId === goal.buildingId)
     case 'buildingsOfCategory':
-      return Object.values(s.buildings).filter(
-        (b) => b.built && BUILDINGS[b.defId]?.category === goal.category,
-      ).length
+      return constructionCount(s, (defId) => BUILDINGS[defId]?.category === goal.category)
     default:
       return null
   }
+}
+
+/** Finished buildings matching `match`, plus every tier they have been raised. */
+function constructionCount(s: RunState, match: (defId: string) => boolean): number {
+  let n = 0
+  for (const b of Object.values(s.buildings)) {
+    if (b.built && match(b.defId)) n += 1 + tierOf(b)
+  }
+  return n
 }
 
 /** 0..1 progress toward a goal, counting from `baseline` where it applies. */
@@ -83,9 +95,9 @@ export function describeTimedGoal(goal: OrderGoal): string {
     case 'gladesCleared':
       return `Clear ${goal.amount} more glade${goal.amount === 1 ? '' : 's'}`
     case 'buildingId':
-      return `Build ${goal.amount} more ${BUILDINGS[goal.buildingId]?.name ?? goal.buildingId}`
+      return `Build or upgrade ${goal.amount} more ${BUILDINGS[goal.buildingId]?.name ?? goal.buildingId}`
     case 'buildingsOfCategory':
-      return `Build ${goal.amount} more ${goal.category} building${goal.amount === 1 ? '' : 's'}`
+      return `Build or upgrade ${goal.amount} more ${goal.category} building${goal.amount === 1 ? '' : 's'}`
     default:
       return describeGoal(goal)
   }

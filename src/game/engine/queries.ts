@@ -4,6 +4,15 @@ import { serviceCapacity } from './adjacency'
 import { HEARTH_WARMTH_RADIUS, RESOLVE_LEAVE_THRESHOLD, SECONDS_TO_LEAVE } from './balance'
 import { dist } from './geometry'
 import { despairRate } from './traits'
+import {
+  housingOf,
+  isComfortable,
+  isInsulated,
+  recipesOf,
+  storageOf,
+  warmthRadiusOf,
+  workerSlotsOf,
+} from './upgrades'
 import type {
   BuildingInstance,
   ResourceBag,
@@ -36,17 +45,20 @@ export function totalHousing(s: RunState): number {
   let sum = 0
   for (const b of Object.values(s.buildings)) {
     if (!b.built) continue
-    sum += BUILDINGS[b.defId]?.housing ?? 0
+    sum += housingOf(b)
   }
   return sum
 }
 
-/** Villagers living in a proper cabin get a small extra resolve bonus. */
+/**
+ * Villagers living in a proper cabin get a small extra resolve bonus — and so
+ * do those in a home upgraded to comfort (a shelter made into a lodge).
+ */
 export function comfortableHousing(s: RunState): number {
   let sum = 0
   for (const b of Object.values(s.buildings)) {
-    if (!b.built || b.defId !== 'cabin') continue
-    sum += BUILDINGS[b.defId]?.housing ?? 0
+    if (!b.built || !isComfortable(b)) continue
+    sum += housingOf(b)
   }
   return sum
 }
@@ -74,10 +86,19 @@ export function warmthSources(
     if (def.category === 'hearth') {
       out.push({ id: b.id, kind: 'hearth', pos: b.pos, radius: hearthRadius })
     } else if (def.warmth && b.built && !b.unlit) {
-      out.push({ id: b.id, kind: 'brazier', pos: b.pos, radius: def.warmth.radius })
+      out.push({ id: b.id, kind: 'brazier', pos: b.pos, radius: warmthRadiusOf(b) })
     }
   }
   return out
+}
+
+/**
+ * Whether a built home stays warm in the Storm: inside a live warmth source,
+ * or insulated by an upgrade. Pass `sources` when checking many homes.
+ */
+export function isWarmHome(s: RunState, b: BuildingInstance, sources?: WarmthSource[]): boolean {
+  if (isInsulated(b)) return true
+  return (sources ?? warmthSources(s)).some((w) => dist(w.pos, b.pos) <= w.radius)
 }
 
 /** Whether a home at `pos` sits inside any live warmth source. */
@@ -106,13 +127,12 @@ export function homesWithin(s: RunState, pos: Vec2, radius: number): BuildingIns
  */
 export function warmHousing(s: RunState, radius: number = HEARTH_WARMTH_RADIUS): number {
   const sources = warmthSources(s, radius)
-  if (sources.length === 0) return 0
   let sum = 0
   for (const b of Object.values(s.buildings)) {
     if (!b.built) continue
-    const housing = BUILDINGS[b.defId]?.housing ?? 0
+    const housing = housingOf(b)
     if (housing <= 0) continue
-    if (sources.some((w) => dist(w.pos, b.pos) <= w.radius)) sum += housing
+    if (isWarmHome(s, b, sources)) sum += housing
   }
   return sum
 }
@@ -121,7 +141,7 @@ export function computeStorageCap(s: RunState, bonus = 0): number {
   let cap = 0
   for (const b of Object.values(s.buildings)) {
     if (!b.built) continue
-    cap += BUILDINGS[b.defId]?.storage ?? 0
+    cap += storageOf(b)
   }
   return cap + bonus
 }
@@ -212,7 +232,7 @@ export function serviceCoverage(s: RunState): Record<ServiceNeed, ServiceCoverag
     if (!b.built || !def?.service || b.paused) continue
     if (b.workers.length === 0) continue
     // A service only counts while it has the goods to hand out.
-    const recipe = def.recipes[0]
+    const recipe = recipesOf(b)[0]
     const supplied = !recipe || canAfford(s.stock, recipe.inputs)
     if (!supplied) continue
     const entry = out[def.service.need]
@@ -294,15 +314,13 @@ export function sortBag(bag: ResourceBag): [ResourceId, number][] {
 // ---------------------------------------------------------------------------
 
 export function activeRecipe(b: BuildingInstance) {
-  const def = BUILDINGS[b.defId]
-  return def?.recipes.find((r) => r.id === b.activeRecipeId) ?? def?.recipes[0]
+  const recipes = recipesOf(b)
+  return recipes.find((r) => r.id === b.activeRecipeId) ?? recipes[0]
 }
 
 /** Recipes a building can actually run, given the deposits it can reach. */
 export function availableRecipes(b: BuildingInstance) {
-  const def = BUILDINGS[b.defId]
-  if (!def) return []
-  return def.recipes.filter(
+  return recipesOf(b).filter(
     (r) => !r.requiresDeposit || (b.depositsInRange[r.requiresDeposit]?.length ?? 0) > 0,
   )
 }
@@ -313,7 +331,7 @@ export function workerCapacity(s: RunState): { used: number; total: number } {
   for (const b of Object.values(s.buildings)) {
     const def = BUILDINGS[b.defId]
     if (!def || !b.built) continue
-    total += def.workerSlots
+    total += workerSlotsOf(b)
     used += b.workers.length
   }
   return { used, total }

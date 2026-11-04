@@ -67,6 +67,8 @@ export function loadRun(): RunState | null {
   // Saves from before the Citadel tree and the Queen's Edicts.
   run.edict ??= 0
   run.citadel = { ...emptyCitadelPerks(), ...(run.citadel ?? {}) }
+  // Saves from before building upgrades: every building stands at tier 0.
+  for (const b of Object.values(run.buildings ?? {})) b.tier ??= 0
   return run
 }
 

@@ -71,6 +71,7 @@ export function createRun({ seed, meta, species, edict }: NewRunOptions): RunSta
     workers: [],
     activeRecipeId: '',
     recipeProgress: 0,
+    tier: 0,
     paused: false,
     depositsInRange: {},
   }

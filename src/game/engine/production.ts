@@ -24,6 +24,14 @@ import { extraOutputChance, productionMultiplier } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { buildMultiplier, workTraitMultiplier } from './traits'
+import {
+  gatherRadiusOf,
+  isUpgrading,
+  nextUpgrade,
+  recipesOf,
+  tierOf,
+  tierSpeedMultiplier,
+} from './upgrades'
 
 /**
  * Which deposits a building at `pos` can reach. Only counts deposits inside
@@ -50,9 +58,9 @@ export function depositsInRangeOf(
 /** Recomputes the deposit cache for every building. Called after clearing. */
 export function refreshDepositCaches(s: RunState): void {
   for (const b of Object.values(s.buildings)) {
-    const def = BUILDINGS[b.defId]
-    if (!def?.gatherRadius) continue
-    b.depositsInRange = depositsInRangeOf(s, b.pos, def.gatherRadius)
+    const radius = gatherRadiusOf(b)
+    if (!radius) continue
+    b.depositsInRange = depositsInRangeOf(s, b.pos, radius)
   }
 }
 
@@ -129,6 +137,7 @@ export function workRate(s: RunState, b: BuildingInstance, mods: Modifiers): num
     rate *
     productionMultiplier(mods, def.tags) *
     adjacencyMultiplier(s, b) *
+    tierSpeedMultiplier(b) *
     terrainWorkMultiplier(b.defId, terrainOf(s, b))
   )
 }
@@ -154,6 +163,8 @@ export function seasonMultiplier(
 export interface ProductionResult {
   /** Ids of buildings that finished construction this tick. */
   completed: string[]
+  /** Ids of buildings that finished an upgrade (reached a new tier) this tick. */
+  upgraded: string[]
   /** Deposits that ran dry, so caches can be refreshed. */
   depletedDeposit: boolean
   /** True if at least one cycle was blocked purely by a full stockpile. */
@@ -174,12 +185,20 @@ export function stepProduction(
 ): ProductionResult {
   const result: ProductionResult = {
     completed: [],
+    upgraded: [],
     depletedDeposit: false,
     storageFull: false,
   }
 
   // --- construction ---------------------------------------------------------
-  const underConstruction = Object.values(s.buildings).filter((b) => !b.built)
+  /*
+   * Upgrades are construction jobs like any other: an upgrading building is
+   * one more site sharing the builder pool, so raising a tier slows new
+   * construction rather than costing a worker.
+   */
+  const underConstruction = Object.values(s.buildings).filter(
+    (b) => !b.built || isUpgrading(b),
+  )
   // Idle villagers are the shared builder pool; beavers and strong backs count
   // for more than one pair of hands.
   let buildPower = 0
@@ -192,15 +211,19 @@ export function stepProduction(
     for (const b of underConstruction) {
       const def = BUILDINGS[b.defId]
       if (!def) continue
-      b.buildProgress += perSite * terrainBuildMultiplier(b.defId, terrainOf(s, b)) * dt
+      const work = perSite * terrainBuildMultiplier(b.defId, terrainOf(s, b)) * dt
+      if (b.built) {
+        if (advanceUpgrade(s, b, work)) result.upgraded.push(b.id)
+        continue
+      }
+      b.buildProgress += work
       if (b.buildProgress >= def.buildSeconds) {
         b.built = true
         b.buildProgress = def.buildSeconds
         s.stats.buildingsBuilt++
         result.completed.push(b.id)
-        if (def.gatherRadius) {
-          b.depositsInRange = depositsInRangeOf(s, b.pos, def.gatherRadius)
-        }
+        const radius = gatherRadiusOf(b)
+        if (radius) b.depositsInRange = depositsInRangeOf(s, b.pos, radius)
       }
     }
   }
@@ -212,9 +235,11 @@ export function stepProduction(
   for (const b of Object.values(s.buildings)) {
     const def = BUILDINGS[b.defId]
     if (!def || !b.built || b.paused || b.workers.length === 0) continue
-    if (def.recipes.length === 0) continue
+    // An upgrading building keeps working at its current tier.
+    const recipes = recipesOf(b)
+    if (recipes.length === 0) continue
 
-    const recipe = def.recipes.find((r) => r.id === b.activeRecipeId) ?? def.recipes[0]
+    const recipe = recipes.find((r) => r.id === b.activeRecipeId) ?? recipes[0]
     if (!recipe) continue
 
     // Deposit-gated recipes need a live deposit in range.
@@ -272,6 +297,31 @@ export function stepProduction(
   }
 
   return result
+}
+
+/**
+ * Banks `work` toward a building's next tier. Returns true when the tier is
+ * reached: the instance's tier rises and its stats change from then on.
+ */
+export function advanceUpgrade(s: RunState, b: BuildingInstance, work: number): boolean {
+  const upgrade = nextUpgrade(b)
+  if (!upgrade || b.upgradeProgress === undefined) {
+    delete b.upgradeProgress
+    return false
+  }
+  b.upgradeProgress += work
+  if (b.upgradeProgress < upgrade.buildSeconds) return false
+  completeUpgrade(s, b)
+  return true
+}
+
+/** Raises a building to its next tier (construction finished or rushed). */
+export function completeUpgrade(s: RunState, b: BuildingInstance): void {
+  b.tier = tierOf(b) + 1
+  delete b.upgradeProgress
+  // A longer reach can bring new deposits within range.
+  const radius = gatherRadiusOf(b)
+  if (radius) b.depositsInRange = depositsInRangeOf(s, b.pos, radius)
 }
 
 /** Stockpile space one batch of `recipe` needs (amber takes none). */

@@ -18,7 +18,7 @@ import {
 import { pushLog } from './createRun'
 import { dist } from './geometry'
 import { gladeAt, insideWorld } from './mapgen'
-import { depositsInRangeOf } from './production'
+import { completeUpgrade, depositsInRangeOf } from './production'
 import {
   availableRecipes,
   canAfford,
@@ -29,6 +29,17 @@ import {
 } from './queries'
 import { unassign } from './society'
 import { clearMultiplier } from './traits'
+import {
+  displayName,
+  gatherRadiusOf,
+  isUpgrading,
+  maxTier,
+  nextUpgrade,
+  recipesOf,
+  tierName,
+  tierOf,
+  workerSlotsOf,
+} from './upgrades'
 
 /** Player commands. Each returns `null` on success or a reason for failure. */
 export type ActionError = string | null
@@ -103,6 +114,7 @@ export function placeBuilding(s: RunState, defId: string, pos: Vec2): ActionErro
     activeRecipeId: def.recipes[0]?.id ?? '',
     recipeProgress: 0,
     paused: false,
+    tier: 0,
     depositsInRange: def.gatherRadius
       ? depositsInRangeOf(s, pos, def.gatherRadius)
       : {},
@@ -208,8 +220,9 @@ export function assignWorker(
   if (!building) return 'No such building.'
   const def = BUILDINGS[building.defId]
   if (!def) return 'No such building.'
-  if (def.workerSlots <= 0) return 'This building needs no workers.'
-  if (building.workers.length >= def.workerSlots) return 'All slots are full.'
+  const slots = workerSlotsOf(building)
+  if (slots <= 0) return 'This building needs no workers.'
+  if (building.workers.length >= slots) return 'All slots are full.'
 
   let chosen = villagerId ? s.villagers[villagerId] : undefined
   if (chosen && chosen.assignment !== null) return `${chosen.name} is already busy.`
@@ -248,8 +261,8 @@ export function removeWorker(
 export function setRecipe(s: RunState, buildingId: string, recipeId: string): ActionError {
   const building = s.buildings[buildingId]
   if (!building) return 'No such building.'
-  const def = BUILDINGS[building.defId]
-  if (!def?.recipes.some((r) => r.id === recipeId)) return 'Unknown recipe.'
+  // Recipes unlocked by an upgrade tier count once that tier is reached.
+  if (!recipesOf(building).some((r) => r.id === recipeId)) return 'Unknown recipe.'
   if (building.activeRecipeId === recipeId) return null
   building.activeRecipeId = recipeId
   // Switching product loses banked work — same rule as the real thing.
@@ -306,12 +319,19 @@ export function isReachable(s: RunState, gladeId: string): boolean {
 // Amber sinks
 // ---------------------------------------------------------------------------
 
-/** Amber to finish a construction site on the spot. */
+/** Amber to finish a construction site — or an upgrade under way — on the spot. */
 export function rushCost(s: RunState, buildingId: string): number {
   const building = s.buildings[buildingId]
   const def = building ? BUILDINGS[building.defId] : undefined
-  if (!building || !def || building.built) return 0
-  const remaining = Math.max(0, def.buildSeconds - building.buildProgress)
+  if (!building || !def) return 0
+  let remaining: number
+  if (!building.built) {
+    remaining = Math.max(0, def.buildSeconds - building.buildProgress)
+  } else {
+    const upgrade = nextUpgrade(building)
+    if (!upgrade || !isUpgrading(building)) return 0
+    remaining = Math.max(0, upgrade.buildSeconds - (building.upgradeProgress ?? 0))
+  }
   return Math.max(5, Math.ceil(remaining * RUSH_COST_PER_SECOND))
 }
 
@@ -319,18 +339,65 @@ export function rushCost(s: RunState, buildingId: string): number {
 export function rushConstruction(s: RunState, buildingId: string): ActionError {
   const building = s.buildings[buildingId]
   if (!building) return 'No such building.'
-  if (building.built) return 'Already finished.'
+  if (building.built && !isUpgrading(building)) return 'Already finished.'
   const cost = rushCost(s, buildingId)
   if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
   const def = BUILDINGS[building.defId]
+  if (building.built) {
+    // Rushing an upgrade: the next tier stands at once.
+    spend(s.stock, { amber: cost })
+    completeUpgrade(s, building)
+    pushLog(s, `${displayName(building)} rushed for ${cost} amber.`, 'info')
+    return null
+  }
   spend(s.stock, { amber: cost })
   building.built = true
   building.buildProgress = def?.buildSeconds ?? building.buildProgress
   s.stats.buildingsBuilt++
-  if (def?.gatherRadius) {
-    building.depositsInRange = depositsInRangeOf(s, building.pos, def.gatherRadius)
-  }
+  const radius = gatherRadiusOf(building)
+  if (radius) building.depositsInRange = depositsInRangeOf(s, building.pos, radius)
   pushLog(s, `${def?.name ?? 'A building'} rushed for ${cost} amber.`, 'info')
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Upgrades
+// ---------------------------------------------------------------------------
+
+/** Why a building cannot start its next upgrade right now, or null if it can. */
+export function canUpgradeBuilding(s: RunState, buildingId: string): ActionError {
+  const building = s.buildings[buildingId]
+  if (!building) return 'No such building.'
+  const def = BUILDINGS[building.defId]
+  if (!def) return 'No such building.'
+  if (maxTier(building.defId) === 0) return `The ${def.name} cannot be upgraded.`
+  if (!building.built) return 'Finish building it first.'
+  if (isUpgrading(building)) return 'An upgrade is already under way.'
+  const upgrade = nextUpgrade(building)
+  if (!upgrade) return `The ${displayName(building)} is fully upgraded.`
+  if (!canAfford(s.stock, upgrade.cost)) return 'Not enough materials.'
+  return null
+}
+
+/**
+ * Starts raising a building to its next tier: pays the materials and opens an
+ * upgrade site that idle builders work like any construction. The building
+ * keeps working at its current tier until the upgrade completes, so a venue
+ * never drops its coverage and no worker has to be shuffled off it.
+ */
+export function upgradeBuilding(s: RunState, buildingId: string): ActionError {
+  const error = canUpgradeBuilding(s, buildingId)
+  if (error) return error
+  const building = s.buildings[buildingId]
+  const upgrade = nextUpgrade(building)!
+  spend(s.stock, upgrade.cost)
+  building.tier = tierOf(building)
+  building.upgradeProgress = 0
+  pushLog(
+    s,
+    `Builders begin raising the ${displayName(building)} into a ${tierName(building.defId, tierOf(building) + 1)}.`,
+    'info',
+  )
   return null
 }
 
