@@ -1,3 +1,4 @@
+import { defaultAutoPause, migrateAutoPause, type AutoPauseSettings } from './autoPause'
 import { defaultMeta, emptyCitadelPerks, migrateMeta } from './content/meta'
 import { defaultDecreeState } from './engine/structure'
 import { defaultCaravan } from './engine/trade'
@@ -8,8 +9,10 @@ const META_KEY = 'emberwatch.meta.v1'
 const SETTINGS_KEY = 'emberwatch.settings.v1'
 
 export interface Settings {
-  /** Auto-pause when a choice appears or the window loses focus. */
+  /** Pause when the tab or app is hidden (choices always halt the sim). */
   pauseOnBlur: boolean
+  /** Opt-in pauses for in-run moments: a threat, a decree, the Storm... */
+  autoPause: AutoPauseSettings
   /** Master switch for the synthesised cues and rain ambience. */
   sound: boolean
   /** Map renderer. 3D falls back to 2D automatically where WebGL is missing. */
@@ -19,7 +22,13 @@ export interface Settings {
 }
 
 export function defaultSettings(): Settings {
-  return { pauseOnBlur: true, sound: true, renderer: '3d', shadows: true }
+  return {
+    pauseOnBlur: true,
+    autoPause: defaultAutoPause(),
+    sound: true,
+    renderer: '3d',
+    shadows: true,
+  }
 }
 
 function read<T>(key: string): T | null {
@@ -94,7 +103,10 @@ export function saveMeta(meta: MetaState): void {
 }
 
 export function loadSettings(): Settings {
-  return { ...defaultSettings(), ...(read<Partial<Settings>>(SETTINGS_KEY) ?? {}) }
+  const saved = read<Partial<Settings>>(SETTINGS_KEY) ?? {}
+  // Settings saved before auto-pause existed (or with a partial set of
+  // triggers) get the defaults for whatever is missing.
+  return { ...defaultSettings(), ...saved, autoPause: migrateAutoPause(saved.autoPause) }
 }
 
 export function saveSettings(settings: Settings): void {
