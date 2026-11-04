@@ -24,21 +24,29 @@ import {
   DECREE_FIRST_DELAY,
   DECREE_INTERVAL,
   DECREE_MISS_IMPATIENCE,
+  DEPARTURE_GRACE,
   HEARTH_WARMTH_RADIUS,
   OPENING_BLUEPRINT_PICKS,
+  REPUTATION_UNSERVED_SHARE,
   REWARD_MILESTONES,
   SEASON_LENGTH,
+  SECONDS_TO_LEAVE,
   STARTING_VILLAGERS,
+  STARVING_MIN_SEVERITY,
   TRADE_LOT,
 } from './balance'
+import { collectWarnings } from './diagnostics'
 import { createRun } from './createRun'
 import {
   addVillager,
   appeaseThreat,
+  describeOptionCost,
+  optionAffordable,
   relevantBlueprints,
   rerollChoice,
   rerollCost,
   resolveGladeEvent,
+  spendFood,
   stepThreats,
   takeChoice,
 } from './events'
@@ -47,8 +55,8 @@ import { gladeAt } from './mapgen'
 import { computeModifiers } from './modifiers'
 import { adjacencyMultiplier, seasonMultiplier } from './production'
 import {
-  canAfford,
   foodStock,
+  secondsUntilDeparture,
   idleVillagers,
   population,
   storageUsed,
@@ -56,7 +64,15 @@ import {
   warmHousing,
 } from './queries'
 import { makeRng } from './rng'
-import { resolveBreakdowns } from './society'
+import {
+  QUEEN_DEADLINE_SECONDS,
+  hungerSeverity,
+  resolveBreakdowns,
+  secondsPastDeadline,
+  stepDepartures,
+  stepImpatience,
+  stepReputation,
+} from './society'
 import {
   checkCharter,
   goalFeasible,
@@ -126,9 +142,7 @@ function drainChoices(state: RunState): void {
 function chooseAffordable(state: RunState): number {
   const choice = state.pendingChoices[0]
   const def = GLADE_EVENTS[choice.options[0]]
-  const index = def.options.findIndex(
-    (o) => !o.requires || canAfford(state.stock, o.requires),
-  )
+  const index = def.options.findIndex((o) => optionAffordable(state.stock, o))
   return index >= 0 ? index : def.options.length - 1
 }
 
@@ -592,6 +606,61 @@ describe('threats', () => {
     expect(state.threats).toHaveLength(0)
     expect(state.stock.wood ?? 0).toBe(wood - 5)
   })
+
+  it('takes a villager chosen by the run RNG, not always the first', () => {
+    const victims = new Set<string>()
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const state = createRun({ seed, species: ['human', 'beaver', 'lizard'] })
+      drainChoices(state)
+      const first = Object.keys(state.villagers)[0]
+      armThreat(state)
+      state.threats[0].strike = { villagerLoss: 1 }
+      const cursor = state.rngCursor
+      stepThreats(state, 2)
+      expect(state.rngCursor).toBeGreaterThan(cursor)
+      victims.add(state.villagers[first] ? 'other' : 'first')
+    }
+    expect(victims.has('other')).toBe(true)
+
+    // Deterministic: the same state loses the same villager.
+    const a = newRun()
+    armThreat(a)
+    a.threats[0].strike = { villagerLoss: 1 }
+    const b = JSON.parse(JSON.stringify(a)) as RunState
+    stepThreats(a, 2)
+    stepThreats(b, 2)
+    expect(Object.keys(b.villagers)).toEqual(Object.keys(a.villagers))
+  })
+})
+
+describe('food costs', () => {
+  const option = { label: 'Feed', description: 'Spend 10 food.', foodCost: 10 }
+
+  it('accepts any edible stock, not just berries', () => {
+    expect(optionAffordable({ meat: 6, root: 4 }, option)).toBe(true)
+    expect(optionAffordable({ berry: 9 }, option)).toBe(false)
+    expect(optionAffordable({ wood: 50 }, option)).toBe(false)
+  })
+
+  it('draws from the largest stacks first', () => {
+    const stock = { berry: 3, meat: 12, root: 8, wood: 20 }
+    spendFood(stock, 10)
+    expect(stock).toEqual({ berry: 3, meat: 5, root: 5, wood: 20 })
+  })
+
+  it('describes the price including food', () => {
+    expect(describeOptionCost({ ...option, cost: { ale: 5 } })).toBe('10 food, 5 Ale')
+  })
+
+  it('lets a food-priced glade option be paid with meat', () => {
+    const state = newRun()
+    state.stock = { meat: 20 }
+    state.pendingChoices.unshift({ kind: 'gladeEvent', options: ['drownedShrine'] })
+    const reputation = state.reputation
+    resolveGladeEvent(state, 0)
+    expect(state.reputation).toBe(reputation + 1)
+    expect(state.stock.meat).toBe(10)
+  })
 })
 
 describe('ongoing effects & rule-bending cornerstones', () => {
@@ -782,6 +851,7 @@ describe('glade event content invariants', () => {
     for (const def of GLADE_EVENT_LIST) {
       const last = def.options[def.options.length - 1]
       expect(last.requires, `${def.id} last option must be requires-free`).toBeUndefined()
+      expect(last.foodCost, `${def.id} last option must be free`).toBeUndefined()
     }
   })
 
@@ -1132,5 +1202,115 @@ describe('lingering glade conditions', () => {
     } finally {
       globalThis.localStorage = original
     }
+  })
+})
+
+describe('departure countdown', () => {
+  it('reports seconds until each despairing species leaves, and warns about it', () => {
+    const state = newRun()
+    for (const sp of state.speciesPool) {
+      const id = addVillager(state)
+      if (id) state.villagers[id].species = sp
+    }
+    expect(secondsUntilDeparture(state)).toEqual({})
+    state.resolve.beaver = -20
+    state.despair.beaver = SECONDS_TO_LEAVE - 40
+    expect(secondsUntilDeparture(state).beaver).toBeCloseTo(40)
+    expect(secondsUntilDeparture(state).human).toBeUndefined()
+    const warning = collectWarnings(state).find((w) => w.id === 'leaving-beaver')
+    expect(warning?.text).toBe('🚪 Beavers will start leaving in 40s.')
+    // Humans grind despair out at half speed, so their countdown is longer.
+    state.resolve.human = -20
+    state.despair.human = 0
+    expect(secondsUntilDeparture(state).human).toBeCloseTo(
+      SECONDS_TO_LEAVE / despairRate('human'),
+    )
+  })
+})
+
+describe('pacing: departures, hunger and the Queen', () => {
+  function despairing(state: RunState): void {
+    for (const sp of state.speciesPool) state.resolve[sp] = -20
+  }
+
+  const beavers = (state: RunState) =>
+    Object.values(state.villagers).filter((v) => v.species === 'beaver').length
+
+  it('lets one villager leave per species, then holds a grace period', () => {
+    const state = newRun()
+    // Make sure there are beavers to lose.
+    for (let i = 0; i < 4; i++) {
+      const id = addVillager(state)
+      if (id) state.villagers[id].species = 'beaver'
+    }
+    despairing(state)
+    const before = beavers(state)
+    // Beavers have no despair trait, so they leave on the plain timer.
+    stepDepartures(state, SECONDS_TO_LEAVE - 1)
+    expect(beavers(state)).toBe(before)
+    stepDepartures(state, 1)
+    expect(beavers(state)).toBe(before - 1)
+    expect(state.despair.beaver).toBe(-DEPARTURE_GRACE)
+    // The next beaver waits out the grace period *and* a full despair timer.
+    stepDepartures(state, SECONDS_TO_LEAVE)
+    expect(beavers(state)).toBe(before - 1)
+    stepDepartures(state, DEPARTURE_GRACE)
+    expect(beavers(state)).toBe(before - 2)
+  })
+
+  it('ramps hunger in rather than slamming resolve on the first missed meal', () => {
+    const state = newRun()
+    state.starving = true
+    state.foodDebt = 1
+    expect(hungerSeverity(state)).toBeCloseTo(STARVING_MIN_SEVERITY)
+    state.foodDebt = population(state) * 2
+    expect(hungerSeverity(state)).toBe(1)
+    state.starving = false
+    expect(hungerSeverity(state)).toBe(0)
+  })
+
+  it('stops newcomers arriving while the settlement starves', () => {
+    const state = newRun()
+    state.stock = { wood: 200 }
+    state.foodDebt = 50
+    state.starving = true
+    state.newcomerTimer = 999
+    const before = population(state)
+    tick(state, 0.125)
+    expect(state.starving).toBe(true)
+    expect(population(state)).toBeLessThanOrEqual(before)
+  })
+
+  it("escalates impatience past the Queen's deadline, whatever the cornerstones say", () => {
+    const early = newRun()
+    early.hostility = 0
+    early.clock = QUEEN_DEADLINE_SECONDS - 60
+    stepImpatience(early, 10, computeModifiers(early))
+    expect(secondsPastDeadline(early)).toBe(0)
+    expect(early.impatience + early.impatienceProgress).toBeLessThan(0.1)
+
+    const late = newRun()
+    late.hostility = 0
+    late.clock = QUEEN_DEADLINE_SECONDS + 600
+    // Even a Queen soothed to stillness by cornerstones keeps her deadline.
+    const calm = { ...computeModifiers(late), impatienceRate: 0 }
+    stepImpatience(late, 10, calm)
+    expect(secondsPastDeadline(late)).toBe(600)
+    expect(late.impatience + late.impatienceProgress).toBeGreaterThan(0.4)
+  })
+
+  it('pays resolve reputation mostly for served needs, not idle contentment', () => {
+    const state = newRun()
+    const mods = computeModifiers(state)
+    const breakdowns = resolveBreakdowns(state, mods)
+    for (const sp of state.speciesPool) state.resolve[sp] = 40
+
+    state.reputationProgress = 0
+    const idle = stepReputation(state, 10, mods, breakdowns.map((b) => ({ ...b, needsMet: 0 })))
+    state.reputationProgress = 0
+    const full = stepReputation(state, 10, mods, breakdowns.map((b) => ({ ...b, needsMet: 1 })))
+
+    expect(idle).toBeGreaterThan(0)
+    expect(idle / full).toBeCloseTo(REPUTATION_UNSERVED_SHARE)
   })
 })
