@@ -21,6 +21,41 @@ export default defineConfig({
         : {}),
     },
   },
+  build: {
+    // three.js alone is ~850 kB minified and cannot be tree-shaken under r3f
+    // (it registers the whole THREE namespace), so the lazy vendor chunk is
+    // allowed to exceed the default 500 kB warning; anything else may not.
+    chunkSizeWarningLimit: 900,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              /*
+               * React itself is needed up front by both the shell and the 3D
+               * renderer. Claiming it first (higher priority) keeps it out of
+               * the three-vendor group below, which otherwise drags its
+               * dependencies along and would make that chunk load eagerly.
+               */
+              name: 'react-vendor',
+              test: /node_modules[\\/](react|react-dom|scheduler|use-sync-external-store|zustand)[\\/]/,
+              priority: 2,
+            },
+            {
+              /*
+               * three.js and its React bindings change far less often than
+               * the map code, so they get their own long-cached chunk that
+               * only the lazy 3D map imports.
+               */
+              name: 'three-vendor',
+              priority: 1,
+              test: /node_modules[\\/](three|three-stdlib|@react-three[\\/](fiber|drei)|react-reconciler|its-fine|suspend-react|react-use-measure)[\\/]/,
+            },
+          ],
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
