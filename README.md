@@ -20,7 +20,8 @@ npm run preview    # serve the built PWA (installable, works offline)
 | **Glades** | The world is a continuous forest partitioned into fogged glades. Assign villagers to clear those bordering your territory for resources; dangerous and forbidden glades force a decision when opened. |
 | **Threats** | The greedy option in a glade event can unleash a timed menace that strikes on a repeating countdown — stealing stock, raising hostility, fraying the Queen's patience — until you pay it off. Other options grant run-long pacts instead. |
 | **Resolve** | Each species has a resolve score driven by housing, food variety, satisfied service needs, and hostility. Above its threshold, a species earns **reputation**. Every species also bends one rule — lizards shrug off a cold hearth, idle beavers build faster, harpies clear glades from the air — and most villagers arrive with a personal quirk. |
-| **Warmth** | Housing within the hearth's warmth radius is safe; homes beyond it chill their residents during the Storm. A few production buildings also work faster placed beside their supplier. |
+| **Warmth** | Housing within the hearth's warmth radius is safe; homes beyond it chill their residents during the Storm unless a **brazier** stands near them — a small fire bowl (a starting blueprint) that warms homes in its own radius but burns wood every Storm second, and goes cold when the woodpile runs dry. |
+| **Placement** | Ground matters: fertile glades speed farms, rocky ones masons and miners (and break ploughs), marsh yields rich clay but slows construction, forest speeds gatherers. Buildings have several adjacency partners each, and every service venue reaches more villagers with homes around it (+10% capacity per home, up to three) and its supplier next door. The placement ghost and the Inspector spell all of it out. |
 | **Caravans** | Once a Trading Post stands, caravans call on a cycle with rotating lots to buy — and pay double for one good they want that visit. Amber also rerolls drafts, rushes construction, and soothes the Queen. |
 | **Reputation** | Fills from high resolve, completed orders, and reclaimed land. Fill it and you win. |
 | **Impatience** | The Queen's patience. Grows over time, when villagers leave, and sharply once hostility is high. Fill it and you lose. |
@@ -39,7 +40,7 @@ src/
   game/
     types.ts            # the whole domain model; RunState is plain & serialisable
     content/            # data-only definitions: resources, buildings, species,
-                        # cornerstones, glade events, orders, meta upgrades
+                        # terrain, cornerstones, glade events, orders, meta upgrades
     engine/             # pure simulation — no React, no DOM
       balance.ts        #   every tunable number, in one place
       rng.ts            #   counter-based RNG: a value is f(seed, cursor)
@@ -47,7 +48,9 @@ src/
       mapgen.ts         #   continuous world: Voronoi glades, scattered
                         #   deposits & obstacles
       tick.ts           #   one fixed step of the world
-      production.ts     #   construction, recipes, deposits, adjacency
+      production.ts     #   construction, recipes, deposits, terrain yields
+      adjacency.ts      #   neighbourhood bonuses (speed & service capacity)
+      placement.ts      #   the placement-ghost hint shared by both maps
       society.ts        #   food, resolve, reputation, impatience, departures
       events.ts         #   glade clearing, drafts, threats, orders, newcomers
       traits.ts         #   species quirks & villager quirks as multipliers
@@ -99,4 +102,4 @@ Icons are generated at build time by `scripts/generate-icons.mjs`, which writes 
 - Art is emoji throughout; there are no sprites. Audio is synthesised in WebAudio (season stings, event cues, a rain loop that follows the season) — no recorded assets.
 - Meta progression is intentionally small: five Citadel upgrades, no world map campaign.
 - ~30 buildings, 25 glade events, and 30+ cornerstones — enough for the loop to have real decisions, well short of Against the Storm's catalogue.
-- Buildings have circular footprints and free placement; there are no road networks or villager pathing, though hearth warmth, deposit reach and adjacency bonuses make placement matter.
+- Buildings have circular footprints and free placement; there are no road networks or villager pathing, though warmth (hearth and braziers), terrain, deposit reach and adjacency bonuses make placement matter.
