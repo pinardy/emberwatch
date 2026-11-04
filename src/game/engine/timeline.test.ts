@@ -139,7 +139,9 @@ describe('run timeline events', () => {
     run(state, 2)
     expect(kinds(state)).toEqual(['storm', 'year'])
     expect(state.timeline.events[1].d).toBe('2')
-    expect(stormPeriods(state.timeline, state.clock)).toEqual([[storm.t, state.timeline.events[1].t]])
+    expect(stormPeriods(state.timeline, state.clock)).toEqual([
+      [storm.t, state.timeline.events[1].t],
+    ])
   })
 
   it('records villagers walking out, by species', () => {
@@ -246,7 +248,7 @@ describe('describeOutcome', () => {
 
   it('names the turning point and what caused it', () => {
     expect(describeOutcome(lostRun())).toMatch(
-      /^Impatience overtook your pace in Year 4 after 3 Foxes left during the Storm\./,
+      /^Impatience overtook your pace in Year 4 after 3 Foxes left during the Storm, while reputation stalled at 14\./,
     )
   })
 
@@ -261,7 +263,9 @@ describe('describeOutcome', () => {
       return out
     })
     tl.events = []
-    expect(describeOutcome(state)).toMatch(/^Reputation pulled ahead of the Queen's impatience in Year 1/)
+    expect(describeOutcome(state)).toMatch(
+      /^Reputation pulled ahead of the Queen's impatience in Year 1/,
+    )
   })
 
   it('falls back gracefully without a timeline', () => {

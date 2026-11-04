@@ -98,8 +98,8 @@ export function takeSample(s: RunState, species: SpeciesId[]): TimelineSample {
   return [
     round1(s.clock),
     s.season.year,
-    round1(s.reputation + s.reputationProgress),
-    round1(s.impatience + s.impatienceProgress),
+    round1(Math.min(s.maxReputation, s.reputation + s.reputationProgress)),
+    round1(Math.min(s.maxImpatience, s.impatience + s.impatienceProgress)),
     round1(s.hostility),
     pop,
     round1(avgResolve),
@@ -202,7 +202,12 @@ function speciesPlural(id: string): string {
 }
 
 /** What went wrong (or right) between two clocks, as a short clause. */
-function causeClause(tl: RunTimeline, from: number, to: number, storms: [number, number][]): string | null {
+function causeClause(
+  tl: RunTimeline,
+  from: number,
+  to: number,
+  storms: [number, number][],
+): string | null {
   const inWindow = (e: TimelineEvent) => e.t >= from && e.t <= to
   const losses = tl.events.filter((e) => LOSS_KINDS.includes(e.k) && inWindow(e))
   if (losses.length > 0) {
@@ -217,9 +222,13 @@ function causeClause(tl: RunTimeline, from: number, to: number, storms: [number,
     return `after ${who} ${n === 1 && walked === 'were lost' ? 'was lost' : walked}${stormy ? ' during the Storm' : ''}`
   }
   const missed = tl.events.filter((e) => e.k === 'decreeMissed' && inWindow(e)).length
-  if (missed > 0) return missed === 1 ? 'after a royal decree lapsed' : `after ${missed} royal decrees lapsed`
+  if (missed > 0)
+    return missed === 1 ? 'after a royal decree lapsed' : `after ${missed} royal decrees lapsed`
   const threats = tl.events.filter((e) => e.k === 'threat' && inWindow(e)).length
-  if (threats > 0) return threats === 1 ? 'after a threat was unleashed' : `after ${threats} threats were unleashed`
+  if (threats > 0)
+    return threats === 1
+      ? 'after a threat was unleashed'
+      : `after ${threats} threats were unleashed`
   return null
 }
 
@@ -268,17 +277,38 @@ export function describeOutcome(run: RunState): string {
   }
 
   const emptied = run.impatience < run.maxImpatience && Object.keys(run.villagers).length === 0
-  const cause =
-    causeClause(tl, turnClock - CAUSE_WINDOW, turnClock, storms) ??
-    causeClause(tl, turnClock, end, storms)
-  const deadline = turnYear >= QUEEN_DEADLINE_YEAR ? ` once the Queen's deadline had passed` : ''
-  const why = cause ? ` ${cause}` : deadline || ` as reputation stalled at ${Math.floor(samples[turn >= 0 ? turn : 0][COL.reputation])}`
-  const opening =
-    turn > 0
-      ? `Impatience overtook your pace in Year ${turnYear}${why}.`
-      : `Impatience led your reputation all run${cause ? ` and pulled away ${cause}` : ''}.`
+  const repAt = (t: number) => {
+    let rep = samples[0][COL.reputation]
+    for (const smp of samples) {
+      if (smp[COL.clock] > t) break
+      rep = smp[COL.reputation]
+    }
+    return rep
+  }
+  const repAtTurn = repAt(turnClock)
+  const stalled =
+    repAtTurn - repAt(turnClock - CAUSE_WINDOW) < 1
+      ? `while reputation stalled at ${Math.floor(repAtTurn)}`
+      : null
+
+  let opening: string
+  let counted = turnClock
+  if (turn > 0) {
+    const cause = causeClause(tl, turnClock - CAUSE_WINDOW, turnClock, storms)
+    const deadline = turnYear >= QUEEN_DEADLINE_YEAR ? `once the Queen's deadline had passed` : null
+    const why = [cause, stalled].filter(Boolean).join(', ') || deadline
+    opening = `Impatience overtook your pace in Year ${turnYear}${why ? ` ${why}` : ''}.`
+  } else {
+    const cause = causeClause(tl, -Infinity, end, storms)
+    counted = end
+    opening = `Impatience led your reputation all run${cause ? ` and pulled away ${cause}` : ''}.`
+  }
+
+  const later = tl.events.filter((e) => LOSS_KINDS.includes(e.k) && e.t > counted).length
   const ending = emptied
     ? ` The last villager left in Year ${endYear}.`
-    : ` Her patience ran out in Year ${endYear} with reputation at ${Math.round(finalRace.reputation * 100)}%.`
+    : later > 0
+      ? ` ${later === 1 ? 'Another villager' : `${later} more villagers`} left before her patience ran out in Year ${endYear}.`
+      : ` Her patience ran out in Year ${endYear} with reputation at ${Math.round(finalRace.reputation * 100)}%.`
   return opening + ending
 }
