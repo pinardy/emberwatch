@@ -1,12 +1,29 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
 
 const isTest = process.env.VITEST === 'true'
 
+/*
+ * Where the app is served from. The default relative base works from any
+ * directory for dev, tests and `vite preview`; the GitHub Pages build sets
+ * BASE_PATH=/roguelite-game/ so asset URLs, the manifest link and the service
+ * worker's scope are all anchored to the project-site sub-path.
+ */
+function resolveBase(raw: string | undefined): string {
+  const value = raw?.trim()
+  if (!value) return './'
+  if (value === '.' || value === './') return './'
+  const withLead = value.startsWith('/') ? value : `/${value}`
+  return withLead.endsWith('/') ? withLead : `${withLead}/`
+}
+
+/** Real-browser smoke tests live in e2e/ and run under Playwright, not vitest. */
+const testExclude = [...configDefaults.exclude, 'e2e/**']
+
 export default defineConfig({
-  base: './',
+  base: resolveBase(process.env.BASE_PATH),
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -106,6 +123,7 @@ export default defineConfig({
           name: 'sim',
           environment: 'node',
           include: ['src/**/*.test.ts'],
+          exclude: testExclude,
         },
       },
       {
@@ -114,6 +132,7 @@ export default defineConfig({
           name: 'ui',
           environment: 'jsdom',
           include: ['src/**/*.test.tsx'],
+          exclude: testExclude,
         },
       },
     ],
