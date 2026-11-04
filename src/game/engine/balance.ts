@@ -19,6 +19,9 @@ export const SEASON_LENGTH: Record<Season, number> = {
 
 export const SEASON_ORDER: Season[] = ['drizzle', 'clearance', 'storm']
 
+/** Seconds in one in-game year. */
+export const YEAR_SECONDS = SEASON_ORDER.reduce((sum, season) => sum + SEASON_LENGTH[season], 0)
+
 export const SEASON_INFO: Record<Season, { name: string; icon: string; blurb: string }> = {
   drizzle: {
     name: 'Drizzle',
@@ -111,9 +114,16 @@ export const FOOD_VARIETY_CAP = 6
  * squeeze, not an unpayable tax — at the practical late-run ceiling (~70) this
  * costs 7 resolve, which good service coverage can outrun.
  */
-export const RESOLVE_PER_HOSTILITY = 0.075
-/** Resolve penalty while the settlement is starving. */
+export const RESOLVE_PER_HOSTILITY = 0.1
+/**
+ * Resolve penalty while the settlement is starving, at full hunger. Hunger
+ * ramps in: the first missed meal costs `STARVING_MIN_SEVERITY` of this, and the
+ * full penalty lands once the unpaid food debt reaches one meal per villager
+ * (about `SECONDS_PER_MEAL`). That is the window a player gets to react to an
+ * empty larder before resolve collapses.
+ */
 export const RESOLVE_STARVING = -18
+export const STARVING_MIN_SEVERITY = 0.35
 /** Resolve penalty while villagers are unhoused (scaled by how many). */
 export const RESOLVE_UNHOUSED = -14
 /** Resolve penalty when the hearth goes cold during the Storm. */
@@ -124,8 +134,18 @@ export const RESOLVE_DRIFT = 0.55
 
 /** Below this resolve, villagers start packing up. */
 export const RESOLVE_LEAVE_THRESHOLD = -5
-/** Seconds of sustained despair before one villager leaves. */
-export const SECONDS_TO_LEAVE = 22
+/**
+ * Seconds of sustained despair before one villager leaves. Long enough that a
+ * player who sees the warning can still fix the cause — at 22s, three species
+ * leaving in parallel emptied a settlement of 13 inside two minutes.
+ */
+export const SECONDS_TO_LEAVE = 70
+/**
+ * After a villager leaves, their species' despair restarts this many seconds
+ * *below* zero: the departure is a shock, and the rest wait to see whether
+ * things improve before following.
+ */
+export const DEPARTURE_GRACE = 30
 
 // ---------------------------------------------------------------------------
 // Reputation & impatience
@@ -133,22 +153,43 @@ export const SECONDS_TO_LEAVE = 22
 
 /**
  * Reputation per second per point of resolve above a species' target. Tuned
- * against the balance harness: a well-run settlement sitting ~10 above its
- * thresholds earns roughly a reputation point per minute.
+ * against the balance harness: a settlement sitting ~10 above its thresholds
+ * with every need served earns roughly a reputation point every 100 seconds —
+ * about a third of a winning run's reputation, the rest coming from orders,
+ * glade events and reclaimed land.
  */
-export const REPUTATION_PER_RESOLVE_POINT = 0.002
+export const REPUTATION_PER_RESOLVE_POINT = 0.001
+/**
+ * Share of resolve-driven reputation a species earns with *none* of its needs
+ * met; the rest scales with how well its services cover it. Contentment from
+ * housing and a varied larder keeps villagers from leaving, but the Queen
+ * judges you on what you built for them — a settlement that idles above its
+ * thresholds without services should not be able to win on resolve alone.
+ */
+export const REPUTATION_UNSERVED_SHARE = 0.2
 /** Impatience gained for each villager that leaves or dies. */
 export const IMPATIENCE_PER_VILLAGER_LOST = 0.6
 /** Baseline impatience per second (grows each year). */
 export const IMPATIENCE_BASE = 0.0022
-export const IMPATIENCE_YEAR_SCALING = 0.25
+export const IMPATIENCE_YEAR_SCALING = 0.18
 /**
- * Extra impatience per second once hostility passes the threshold. This is what
- * guarantees a verdict: a settlement that lets the forest max out will lose,
- * however long it survives, so a run can never stagnate indefinitely.
+ * Extra impatience per second once hostility passes the threshold: a
+ * settlement that lets the forest close in loses the Queen's confidence fast.
  */
-export const IMPATIENCE_HOSTILITY_THRESHOLD = 70
-export const IMPATIENCE_PER_HOSTILITY_OVER = 0.0007
+export const IMPATIENCE_HOSTILITY_THRESHOLD = 65
+export const IMPATIENCE_PER_HOSTILITY_OVER = 0.0012
+/**
+ * The Queen's deadline. From the start of this year her impatience climbs on
+ * top of everything else, and keeps steepening, so every run reaches a
+ * verdict: from an empty impatience bar the overtime alone fills it in about
+ * 11 minutes (the deadline lands at ~27 minutes of game time, so every run
+ * ends by ~38). Cornerstones that calm the Queen do not slow the deadline.
+ */
+export const QUEEN_DEADLINE_YEAR = 5
+/** Overtime impatience per second at the deadline… */
+export const IMPATIENCE_OVERTIME_BASE = 0.008
+/** …plus this much more per second for every second past it. */
+export const IMPATIENCE_OVERTIME_RAMP = 0.00006
 
 // ---------------------------------------------------------------------------
 // Hostility
@@ -159,7 +200,7 @@ export const HOSTILITY_YEAR_SCALING = 0.06
 export const HOSTILITY_PER_POPULATION = 0.007
 export const HOSTILITY_PER_GLADE_CLEARED = 2.5
 /** Every Nth glade reclaimed earns a point of reputation. */
-export const GLADES_PER_REPUTATION = 4
+export const GLADES_PER_REPUTATION = 5
 export const HOSTILITY_PER_STORM = 4
 /** Clearance is calmer. */
 export const HOSTILITY_SEASON_MULTIPLIER: Record<Season, number> = {
@@ -274,3 +315,43 @@ export type GameSpeed = (typeof SPEED_OPTIONS)[number]
 
 /** Base stockpile capacity before any warehouses. */
 export const BASE_STORAGE = 40
+
+// ===========================================================================
+// Placement depth (new section — braziers, terrain, neighbourhoods)
+//
+// Added alongside the existing tuning rather than changing it. Terrain
+// percentages live with their terrain in `content/terrain.ts` and adjacency
+// percentages with their buildings in `content/buildings.ts`, the same way
+// recipes carry their own seconds.
+// ===========================================================================
+
+/**
+ * A brazier keeps housing within this many world units warm during the Storm.
+ * Smaller than the hearth's reach, so it extends a neighbourhood rather than
+ * replacing the hearth.
+ */
+export const BRAZIER_WARMTH_RADIUS = 3
+/** Wood a lit brazier burns per second, only while the Storm rages. */
+export const BRAZIER_FUEL_PER_SECOND = 0.035
+/** A brazier is a fire bowl, not a building: it squeezes between homes. */
+export const BRAZIER_FOOTPRINT = 0.4
+
+// ---------------------------------------------------------------------------
+// Mid-run structure: royal decrees, the Queen's charter, lingering conditions
+// (new features — kept apart from the core pacing numbers above)
+// ---------------------------------------------------------------------------
+
+/** Seconds into the run before the Queen issues her first timed decree. */
+export const DECREE_FIRST_DELAY = 240
+/** Seconds between one decree ending (met or missed) and the next. */
+export const DECREE_INTERVAL = 200
+/** Impatience when a decree's deadline passes unmet. */
+export const DECREE_MISS_IMPATIENCE = 1.5
+/**
+ * Decrees are only drawn from goals the settlement has not already mostly
+ * met, so a deadline is a real push rather than a free payout.
+ */
+export const DECREE_MAX_START_PROGRESS = 0.6
+
+/** Reputation at which the Queen grants her one-time charter. */
+export const CHARTER_REPUTATION = 10

@@ -10,7 +10,7 @@ import type {
 } from '../types'
 
 /**
- * Between-run progression: the Citadel's upgrade tree and the Queen's Decrees.
+ * Between-run progression: the Citadel's upgrade tree and the Queen's Edicts.
  *
  * Upgrades are data, like cornerstones: each declares what it changes and
  * `citadelPerks` folds the owned set into one summary that `createRun` reads.
@@ -435,16 +435,16 @@ export function citadelLoadout(upgrades: readonly string[]): CitadelLoadout {
 }
 
 // ---------------------------------------------------------------------------
-// Queen's Decrees — the difficulty ladder
+// Queen's Edicts — the difficulty ladder
 // ---------------------------------------------------------------------------
 
-export interface DecreeDef {
-  /** 1-based; decree N is active at every difficulty level >= N. */
+export interface EdictDef {
+  /** 1-based; edict N is active at every difficulty level >= N. */
   level: number
   name: string
   icon: string
   description: string
-  /** Run-long modifiers, folded into one "Queen's Decree" ongoing effect. */
+  /** Run-long modifiers, folded into one "Queen's Edict" ongoing effect. */
   effects?: CornerstoneEffect[]
   /** Percent change to the starting stockpile (negative = less). */
   startStockPercent?: number
@@ -454,10 +454,10 @@ export interface DecreeDef {
 }
 
 /**
- * Each level adds its decree on top of all the ones below it. Winning at a
+ * Each level adds its edict on top of all the ones below it. Winning at a
  * level unlocks the next.
  */
-export const DECREES: DecreeDef[] = [
+export const EDICTS: EdictDef[] = [
   {
     level: 1,
     name: 'Impatient Court',
@@ -516,27 +516,27 @@ export const DECREES: DecreeDef[] = [
   },
 ]
 
-export const MAX_DECREE = DECREES.length
+export const MAX_EDICT = EDICTS.length
 
-/** Supply payout bonus per decree level (0.25 = +25% per level). */
-export const DECREE_REWARD_STEP = 0.25
+/** Supply payout bonus per edict level (0.25 = +25% per level). */
+export const EDICT_REWARD_STEP = 0.25
 
-export function clampDecree(level: number | undefined): number {
+export function clampEdict(level: number | undefined): number {
   if (typeof level !== 'number' || !Number.isFinite(level)) return 0
-  return Math.max(0, Math.min(MAX_DECREE, Math.floor(level)))
+  return Math.max(0, Math.min(MAX_EDICT, Math.floor(level)))
 }
 
 /** Roman numerals for the ladder's labels. */
-export function decreeNumeral(level: number): string {
+export function edictNumeral(level: number): string {
   const numerals = ['—', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']
   return numerals[level] ?? String(level)
 }
 
-export function decreeLabel(level: number): string {
-  return level <= 0 ? 'No decree' : `Decree ${decreeNumeral(level)}`
+export function edictLabel(level: number): string {
+  return level <= 0 ? 'No edict' : `Edict ${edictNumeral(level)}`
 }
 
-export interface DecreeModifiers {
+export interface EdictModifiers {
   level: number
   effects: CornerstoneEffect[]
   /** Multiplier on every starting stock amount. */
@@ -548,19 +548,19 @@ export interface DecreeModifiers {
   rewardMultiplier: number
 }
 
-/** Folds every decree up to `level` into one set of run-start modifiers. */
-export function decreeModifiers(level: number | undefined): DecreeModifiers {
-  const lvl = clampDecree(level)
-  const out: DecreeModifiers = {
+/** Folds every edict up to `level` into one set of run-start modifiers. */
+export function edictModifiers(level: number | undefined): EdictModifiers {
+  const lvl = clampEdict(level)
+  const out: EdictModifiers = {
     level: lvl,
     effects: [],
     stockFactor: 1,
     startVillagers: 0,
     maxImpatience: 0,
     maxReputation: 0,
-    rewardMultiplier: 1 + DECREE_REWARD_STEP * lvl,
+    rewardMultiplier: 1 + EDICT_REWARD_STEP * lvl,
   }
-  for (const d of DECREES) {
+  for (const d of EDICTS) {
     if (d.level > lvl) continue
     out.effects.push(...(d.effects ?? []))
     out.stockFactor *= 1 + (d.startStockPercent ?? 0) / 100
@@ -576,8 +576,8 @@ export function decreeModifiers(level: number | undefined): DecreeModifiers {
 // ---------------------------------------------------------------------------
 
 /**
- * v1: five flat upgrades, no decrees.
- * v2: upgrade tree with prerequisites, Queen's Decrees, richer history.
+ * v1: five flat upgrades, no edicts.
+ * v2: upgrade tree with prerequisites, Queen's Edicts, richer history.
  */
 export const META_VERSION = 2
 
@@ -592,7 +592,7 @@ export function defaultMeta(): MetaState {
     runsLost: 0,
     unlockedSpecies: [],
     upgrades: [],
-    decreeUnlocked: 0,
+    edictUnlocked: 0,
     history: [],
   }
 }
@@ -619,7 +619,7 @@ function migrateHistoryEntry(raw: unknown): MetaHistoryEntry | null {
       SPECIES_IDS.includes(s as SpeciesId),
     )
   }
-  if (typeof e.decree === 'number') entry.decree = clampDecree(e.decree)
+  if (typeof e.edict === 'number') entry.edict = clampEdict(e.edict)
   if (typeof e.supplies === 'number') entry.supplies = e.supplies
   return entry
 }
@@ -648,11 +648,11 @@ export function migrateMeta(raw: unknown): MetaState {
     .filter((e): e is MetaHistoryEntry => e !== null)
     .slice(0, HISTORY_LIMIT)
 
-  // Every win in the ledger proves the decree above it was earned; pre-v2 wins
+  // Every win in the ledger proves the edict above it was earned; pre-v2 wins
   // count as wins at level 0.
   const earned = history
     .filter((e) => e.won)
-    .reduce((best, e) => Math.max(best, (e.decree ?? 0) + 1), 0)
+    .reduce((best, e) => Math.max(best, (e.edict ?? 0) + 1), 0)
   const v1Wins = num(m.runsWon) > 0 ? 1 : 0
 
   return {
@@ -662,7 +662,7 @@ export function migrateMeta(raw: unknown): MetaState {
     runsLost: Math.max(0, num(m.runsLost)),
     unlockedSpecies: [...new Set([...storedSpecies, ...charterSpecies])],
     upgrades,
-    decreeUnlocked: clampDecree(Math.max(num(m.decreeUnlocked), earned, v1Wins)),
+    edictUnlocked: clampEdict(Math.max(num(m.edictUnlocked), earned, v1Wins)),
     history,
   }
 }
@@ -678,17 +678,17 @@ export interface RewardLine {
 
 export interface RewardBreakdown {
   lines: RewardLine[]
-  /** Sum of `lines`, before the decree bonus. */
+  /** Sum of `lines`, before the edict bonus. */
   subtotal: number
-  decree: number
-  decreeBonus: number
+  edict: number
+  edictBonus: number
   total: number
 }
 
 /**
  * Supplies awarded when a run ends. A loss that reached the late game pays
  * roughly half of a win, so every serious attempt moves the Citadel forward;
- * higher decrees multiply the whole payout.
+ * higher edicts multiply the whole payout.
  */
 export function supplyBreakdown(run: RunState): RewardBreakdown {
   const won = run.phase === 'won'
@@ -700,9 +700,9 @@ export function supplyBreakdown(run: RunState): RewardBreakdown {
     { label: 'Years endured', amount: Math.min(5, Math.max(0, run.season.year - 1)) },
   ]
   const subtotal = lines.reduce((sum, l) => sum + l.amount, 0)
-  const decree = clampDecree(run.decree)
-  const decreeBonus = Math.round(subtotal * DECREE_REWARD_STEP * decree)
-  return { lines, subtotal, decree, decreeBonus, total: subtotal + decreeBonus }
+  const edict = clampEdict(run.edict)
+  const edictBonus = Math.round(subtotal * EDICT_REWARD_STEP * edict)
+  return { lines, subtotal, edict, edictBonus, total: subtotal + edictBonus }
 }
 
 export function supplyReward(run: RunState): number {
@@ -711,12 +711,12 @@ export function supplyReward(run: RunState): number {
 
 /**
  * Banks a finished run: pays out supplies, records it in the ledger, and
- * unlocks the next decree on a win at the highest one available.
+ * unlocks the next edict on a win at the highest one available.
  */
 export function bankRun(meta: MetaState, run: RunState, now = Date.now()): MetaState {
   const won = run.phase === 'won'
   const reward = supplyReward(run)
-  const decree = clampDecree(run.decree)
+  const edict = clampEdict(run.edict)
   const entry: MetaHistoryEntry = {
     seed: run.seed,
     won,
@@ -724,7 +724,7 @@ export function bankRun(meta: MetaState, run: RunState, now = Date.now()): MetaS
     reputation: run.reputation,
     at: now,
     species: [...run.speciesPool],
-    decree,
+    edict,
     supplies: reward,
   }
   return {
@@ -732,9 +732,9 @@ export function bankRun(meta: MetaState, run: RunState, now = Date.now()): MetaS
     citadelSupplies: meta.citadelSupplies + reward,
     runsWon: meta.runsWon + (won ? 1 : 0),
     runsLost: meta.runsLost + (run.phase === 'lost' ? 1 : 0),
-    decreeUnlocked: won
-      ? Math.max(meta.decreeUnlocked, clampDecree(decree + 1))
-      : meta.decreeUnlocked,
+    edictUnlocked: won
+      ? Math.max(meta.edictUnlocked, clampEdict(edict + 1))
+      : meta.edictUnlocked,
     history: [entry, ...meta.history].slice(0, HISTORY_LIMIT),
   }
 }

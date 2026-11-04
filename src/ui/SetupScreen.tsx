@@ -4,7 +4,7 @@ import { NEED_LABELS } from '../game/content/species'
 import { parseSeed, randomSeed } from '../game/engine/rng'
 import { useGameStore } from '../game/store'
 import type { SpeciesId } from '../game/types'
-import { DecreePicker } from './DecreePicker'
+import { EdictPicker } from './EdictPicker'
 
 /** Pre-run setup: pick a seed and which three species answer the call. */
 export function SetupScreen() {
@@ -13,8 +13,8 @@ export function SetupScreen() {
   const goToScreen = useGameStore((s) => s.goToScreen)
 
   const [seedText, setSeedText] = useState('')
-  // Queen's Decree: defaults to the hardest rung earned so far.
-  const [decree, setDecree] = useState(meta.decreeUnlocked)
+  // Queen's Edict: defaults to the hardest rung earned so far.
+  const [edict, setEdict] = useState(meta.edictUnlocked)
   const available = useMemo(
     () => [...new Set([...STARTING_SPECIES, ...meta.unlockedSpecies])],
     [meta.unlockedSpecies],
@@ -33,7 +33,7 @@ export function SetupScreen() {
 
   const start = () => {
     const seed = seedText.trim() ? parseSeed(seedText) : randomSeed()
-    startRun(seed, chosen, decree)
+    startRun(seed, chosen, edict)
   }
 
   return (
@@ -105,13 +105,13 @@ export function SetupScreen() {
           </div>
         </section>
 
-        <section className="setup-section decree-section">
-          <h3>Queen's Decree</h3>
+        <section className="setup-section edict-section">
+          <h3>Queen's Edict</h3>
           <p className="muted">
-            Harsher terms for richer supplies. Each decree stacks on the ones below it; win
+            Harsher terms for richer supplies. Each edict stacks on the ones below it; win
             under the hardest you have earned to unlock the next.
           </p>
-          <DecreePicker unlocked={meta.decreeUnlocked} value={decree} onPick={setDecree} />
+          <EdictPicker unlocked={meta.edictUnlocked} value={edict} onPick={setEdict} />
         </section>
 
         <footer className="modal-foot">

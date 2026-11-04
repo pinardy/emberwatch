@@ -1,5 +1,5 @@
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
-import { citadelLoadout, clampDecree, decreeLabel, decreeModifiers } from '../content/meta'
+import { citadelLoadout, clampEdict, edictLabel, edictModifiers } from '../content/meta'
 import { ORDER_LIST } from '../content/orders'
 import {
   SPECIES,
@@ -29,6 +29,7 @@ import {
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { offerBlueprint, offerCornerstone } from './events'
+import { defaultDecreeState } from './structure'
 import { defaultCaravan } from './trade'
 import { generateMap } from './mapgen'
 import { makeRng } from './rng'
@@ -38,19 +39,19 @@ export interface NewRunOptions {
   meta?: MetaState
   /** Override the species drawn for this map (used by the run setup screen). */
   species?: SpeciesId[]
-  /** Queen's Decree difficulty level (0 = none). Clamped to the ladder. */
-  decree?: number
+  /** Queen's Edict difficulty level (0 = none). Clamped to the ladder. */
+  edict?: number
 }
 
-/** A settlement never starts with fewer villagers than this, whatever the decree. */
+/** A settlement never starts with fewer villagers than this, whatever the edict. */
 const MIN_STARTING_VILLAGERS = 3
 
-export function createRun({ seed, meta, species, decree }: NewRunOptions): RunState {
+export function createRun({ seed, meta, species, edict }: NewRunOptions): RunState {
   const rng = makeRng(seed, 0)
-  // Citadel upgrades and the chosen decree, folded into plain numbers.
+  // Citadel upgrades and the chosen edict, folded into plain numbers.
   const loadout = citadelLoadout(meta?.upgrades ?? [])
-  const decreeLevel = clampDecree(decree)
-  const decreeMods = decreeModifiers(decreeLevel)
+  const edictLevel = clampEdict(edict)
+  const edictMods = edictModifiers(edictLevel)
   const { world, glades, deposits, obstacles } = generateMap(rng)
 
   const available = meta
@@ -78,7 +79,7 @@ export function createRun({ seed, meta, species, decree }: NewRunOptions): RunSt
   const villagers: Record<string, Villager> = {}
   const villagerCount = Math.max(
     MIN_STARTING_VILLAGERS,
-    STARTING_VILLAGERS + loadout.startVillagers + decreeMods.startVillagers,
+    STARTING_VILLAGERS + loadout.startVillagers + edictMods.startVillagers,
   )
   for (let i = 0; i < villagerCount; i++) {
     const sp = speciesPool[i % speciesPool.length]
@@ -95,17 +96,17 @@ export function createRun({ seed, meta, species, decree }: NewRunOptions): RunSt
     }
   }
 
-  // Decrees shrink the Queen's allotment; Citadel provisions ride on top.
+  // Edicts shrink the Queen's allotment; Citadel provisions ride on top.
   const stock: ResourceBag = {}
   for (const [id, amount] of Object.entries(STARTING_STOCK)) {
-    stock[id as ResourceId] = Math.round(amount * decreeMods.stockFactor)
+    stock[id as ResourceId] = Math.round(amount * edictMods.stockFactor)
   }
   for (const [id, amount] of Object.entries(loadout.startStock)) {
     const key = id as ResourceId
     stock[key] = (stock[key] ?? 0) + (amount ?? 0)
   }
 
-  // Run-long modifiers from the Citadel and the decree, shown in the run.
+  // Run-long modifiers from the Citadel and the edict, shown in the run.
   const ongoing: OngoingEffect[] = []
   if (loadout.ongoing.length > 0) {
     ongoing.push({
@@ -116,13 +117,13 @@ export function createRun({ seed, meta, species, decree }: NewRunOptions): RunSt
       effects: loadout.ongoing,
     })
   }
-  if (decreeMods.effects.length > 0) {
+  if (edictMods.effects.length > 0) {
     ongoing.push({
-      id: 'decree',
-      name: `Queen's ${decreeLabel(decreeLevel)}`,
+      id: 'edict',
+      name: `Queen's ${edictLabel(edictLevel)}`,
       icon: '📜',
       description: 'The harsher terms this settlement was founded under.',
-      effects: decreeMods.effects,
+      effects: edictMods.effects,
     })
   }
 
@@ -141,12 +142,12 @@ export function createRun({ seed, meta, species, decree }: NewRunOptions): RunSt
     stock,
     storageCap: BASE_STORAGE + (BUILDINGS.ancientHearth.storage ?? 0),
     reputation: 0,
-    maxReputation: MAX_REPUTATION + decreeMods.maxReputation,
+    maxReputation: MAX_REPUTATION + edictMods.maxReputation,
     reputationProgress: 0,
     impatience: 0,
     maxImpatience: Math.max(
       6,
-      MAX_IMPATIENCE + loadout.maxImpatience + decreeMods.maxImpatience,
+      MAX_IMPATIENCE + loadout.maxImpatience + edictMods.maxImpatience,
     ),
     impatienceProgress: 0,
     hostility: 0,
@@ -167,6 +168,11 @@ export function createRun({ seed, meta, species, decree }: NewRunOptions): RunSt
     threats: [],
     threatCounter: 0,
     ongoing,
+    conditions: [],
+    conditionCounter: 0,
+    ...defaultDecreeState(),
+    charterOffered: false,
+    charter: null,
     caravan: defaultCaravan(),
     rerollsUsed: 0,
     soothesUsed: 0,
@@ -179,7 +185,7 @@ export function createRun({ seed, meta, species, decree }: NewRunOptions): RunSt
     producedTotals: {},
     ordersSeen: [],
     orderCounter: 0,
-    decree: decreeLevel,
+    edict: edictLevel,
     citadel: loadout.perks,
     stats: {
       resourcesProduced: 0,

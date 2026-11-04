@@ -1,16 +1,16 @@
 import {
-  DECREES,
-  DECREE_REWARD_STEP,
-  MAX_DECREE,
-  decreeLabel,
+  EDICTS,
+  EDICT_REWARD_STEP,
+  MAX_EDICT,
+  edictLabel,
 } from '../game/content/meta'
 
 /**
- * The Queen's Decree ladder. Each rung adds its own condition on top of every
+ * The Queen's Edict ladder. Each rung adds its own condition on top of every
  * rung below it. Used as a picker on the setup screen and as a read-only
  * overview in the Citadel (omit `onPick`).
  */
-export function DecreePicker({
+export function EdictPicker({
   unlocked,
   value,
   onPick,
@@ -21,25 +21,25 @@ export function DecreePicker({
   value?: number
   onPick?: (level: number) => void
 }) {
-  const levels = Array.from({ length: MAX_DECREE + 1 }, (_, i) => i)
+  const levels = Array.from({ length: MAX_EDICT + 1 }, (_, i) => i)
   return (
-    <div className="decree-ladder" role={onPick ? 'radiogroup' : undefined}>
+    <div className="edict-ladder" role={onPick ? 'radiogroup' : undefined}>
       {levels.map((level) => {
-        const def = DECREES.find((d) => d.level === level)
+        const def = EDICTS.find((d) => d.level === level)
         const locked = level > unlocked
         const picked = value === level
-        const bonus = Math.round(level * DECREE_REWARD_STEP * 100)
+        const bonus = Math.round(level * EDICT_REWARD_STEP * 100)
         const body = (
           <>
             <strong>
               {def ? `${def.icon} ` : '🕊️ '}
-              {decreeLabel(level)}
+              {edictLabel(level)}
             </strong>
             <small>{def ? `${def.name}: ${def.description}` : 'The standard terms.'}</small>
             <em>{locked ? '🔒 Win the rung below' : bonus > 0 ? `+${bonus}% supplies` : 'Base supplies'}</em>
           </>
         )
-        const className = `decree-step ${picked ? 'is-picked' : ''} ${locked ? 'is-locked' : ''}`
+        const className = `edict-step ${picked ? 'is-picked' : ''} ${locked ? 'is-locked' : ''}`
         return onPick ? (
           <button
             key={level}

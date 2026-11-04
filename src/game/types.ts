@@ -205,11 +205,36 @@ export interface BuildingDef {
   /** Only one may exist per settlement. */
   unique?: boolean
   /**
-   * Work-speed bonus when a built instance of `nearId` stands close by.
-   * Makes placement a puzzle instead of a canvas.
+   * Bonuses for standing close to built partners — several per building, each
+   * matched by def id or by category (e.g. any home). Makes placement a puzzle
+   * instead of a canvas. See `engine/adjacency.ts`.
    */
-  adjacency?: { nearId: string; percent: number }
+  adjacency?: AdjacencyBonus[]
+  /**
+   * A secondary warmth source: during the Storm it keeps housing within
+   * `radius` warm while it burns `fuelPerSecond` wood, and goes cold without.
+   */
+  warmth?: { radius: number; fuelPerSecond: number }
+  /** Footprint radius override; defaults to the category's footprint. */
+  footprint?: number
   description: string
+}
+
+/**
+ * One neighbourhood relationship. A partner is a *built* building within
+ * `ADJACENCY_RANGE`, matched by `nearId` or by `nearCategory`.
+ */
+export interface AdjacencyBonus {
+  /** A specific building def that counts as a partner. */
+  nearId?: string
+  /** Or any building of this category — e.g. any home for a service. */
+  nearCategory?: BuildingCategory
+  /** Percent per partner counted. */
+  percent: number
+  /** What improves: work speed (default) or a service's capacity. */
+  effect?: 'speed' | 'capacity'
+  /** Partners counted, each adding `percent` (default 1). */
+  maxPartners?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -217,6 +242,26 @@ export interface BuildingDef {
 // ---------------------------------------------------------------------------
 
 export type TerrainId = 'clearing' | 'forest' | 'marsh' | 'rock' | 'fertile'
+
+/**
+ * What the ground under a building does to it. Declarative like cornerstone
+ * effects; the table lives in `content/terrain.ts` and is read by production.
+ */
+export type TerrainEffect =
+  /** Buildings carrying this tag work faster (or slower) here. */
+  | { kind: 'workSpeed'; tag: BuildingTag; percent: number }
+  /** Buildings with a recipe that yields this resource work faster here. */
+  | { kind: 'yield'; resource: ResourceId; percent: number }
+  /** Every building raised here goes up faster (or slower). */
+  | { kind: 'buildSpeed'; percent: number }
+
+export interface TerrainDef {
+  id: TerrainId
+  name: string
+  icon: string
+  blurb: string
+  effects: TerrainEffect[]
+}
 
 export type DepositId =
   | 'trees'
@@ -329,6 +374,8 @@ export interface BuildingInstance {
    * and refreshed when a glade is cleared or a deposit runs dry.
    */
   depositsInRange: Partial<Record<DepositId, string[]>>
+  /** Warmth sources only: set while a Storm finds no wood to burn. */
+  unlit?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -378,6 +425,20 @@ export interface Order {
   /** 0..1 */
   progress: number
   complete: boolean
+}
+
+/** A Queen's order with a deadline: richer reward, and a price for missing it. */
+export interface DecreeDef extends OrderDef {
+  /** Seconds allowed to meet the goal. */
+  timeLimit: number
+}
+
+export interface RoyalDecree extends Order {
+  /** Seconds remaining. */
+  timeLeft: number
+  timeLimit: number
+  /** Goal count when the decree was issued (for counting goals). */
+  baseline: number
 }
 
 export interface CornerstoneDef {
@@ -443,10 +504,64 @@ export interface GladeEventOptionDef {
   villagerGain?: number
   /** Requires this much of each resource to be selectable. */
   requires?: ResourceBag
+  /**
+   * Units of food of any kind, paid from the largest stacks the way villagers
+   * eat. Required to be selectable, like `requires`.
+   */
+  foodCost?: number
   /** Unleashes a timed threat that strikes until it is appeased. */
   threat?: ThreatSpec
   /** Grants a permanent run-long effect (a pact, a curse, a blessing). */
   ongoing?: OngoingEffectSpec
+  /** Leaves a lingering condition that lifts only when its goal is met. */
+  condition?: ConditionSpec
+}
+
+/**
+ * A lingering glade condition: weighs on the settlement (or promises a
+ * reward) until a build-loop goal is met, optionally against a deadline.
+ * Declarative like threats — goals reuse the order vocabulary and effects the
+ * cornerstone vocabulary, so the whole thing serialises inside `RunState`.
+ */
+export interface ConditionSpec {
+  name: string
+  icon: string
+  description: string
+  /**
+   * Met when this goal reaches 100%. Counting goals (produced, built, glades
+   * cleared) count only progress made after the condition began.
+   */
+  resolveBy: OrderGoal
+  /** Stock goals only: the goods are handed over when the goal is met. */
+  consume?: boolean
+  /** Modifiers active while the condition lingers. */
+  whileActive?: CornerstoneEffect[]
+  /** Seconds to meet the goal; when it runs out `onFail` applies. */
+  deadline?: number
+  /** Paid out when the goal is met. */
+  onResolve?: ConditionOutcome
+  /** Applied if the deadline passes first. */
+  onFail?: ConditionOutcome
+}
+
+export interface ConditionOutcome {
+  reputation?: number
+  hostility?: number
+  impatience?: number
+  villagerLoss?: number
+  gain?: ResourceBag
+}
+
+export interface ActiveCondition extends ConditionSpec {
+  id: string
+  /** Glade whose event left it behind. */
+  gladeId: string
+  /** Goal count when the condition began (for counting goals). */
+  baseline: number
+  /** 0..1 toward lifting it. */
+  progress: number
+  /** Seconds left before `onFail`; absent for open-ended conditions. */
+  timeLeft?: number
 }
 
 /**
@@ -536,11 +651,33 @@ export interface CaravanState {
 export type RunPhase = 'playing' | 'won' | 'lost'
 
 export interface PendingChoice {
-  kind: 'cornerstone' | 'blueprint' | 'gladeEvent'
-  /** Cornerstone/building ids offered, or `[eventId]` for glade events. */
+  kind: 'cornerstone' | 'blueprint' | 'gladeEvent' | 'charter'
+  /** Cornerstone/building/charter ids offered, or `[eventId]` for glade events. */
   options: string[]
   /** For glade events: which glade triggered it. */
   gladeId?: string
+  /** For charters: the blueprint the architect's warrant would grant. */
+  blueprintId?: string
+}
+
+/**
+ * The Queen's charter: a one-time, run-shaping pick granted mid-run. Each
+ * offer draws one per family, so the choice is between kinds of help.
+ */
+export interface CharterDef {
+  id: string
+  name: string
+  icon: string
+  family: 'perk' | 'patience' | 'blueprint'
+  description: string
+  /** Run-long effects, recorded as an ongoing effect. */
+  effects?: CornerstoneEffect[]
+  /** Added to the Queen's patience ceiling. */
+  maxImpatience?: number
+  /** Impatience forgiven on the spot. */
+  impatienceRelief?: number
+  /** Unlocks the offer's `blueprintId` and delivers its building materials. */
+  grantsBlueprint?: boolean
 }
 
 export interface LogEntry {
@@ -607,6 +744,17 @@ export interface RunState {
   /** Permanent run-long effects granted by event choices. */
   ongoing: OngoingEffect[]
 
+  /** Lingering glade conditions, lifted by meeting their goal. */
+  conditions: ActiveCondition[]
+  conditionCounter: number
+  /** The live timed decree, if the Queen has issued one. */
+  decree: RoyalDecree | null
+  /** Seconds until the next decree while none is live. */
+  decreeTimer: number
+  /** Whether the mid-run charter has been offered, and which was chosen. */
+  charterOffered: boolean
+  charter: string | null
+
   caravan: CaravanState
 
   /** Amber sinks scale with use, so these count uses. */
@@ -631,8 +779,8 @@ export interface RunState {
   /** Lifetime production totals, used by "produce N of X" orders. */
   producedTotals: ResourceBag
 
-  /** Queen's Decree difficulty level this run was founded under (0 = none). */
-  decree: number
+  /** Queen's Edict difficulty level this run was founded under (0 = none). */
+  edict: number
   /** Citadel upgrades that keep acting during the run (drafts, events). */
   citadel: CitadelPerks
 
@@ -679,8 +827,8 @@ export interface MetaHistoryEntry {
   at: number
   /** Species drawn for the run (absent on pre-v2 entries). */
   species?: SpeciesId[]
-  /** Queen's Decree level (absent on pre-v2 entries, meaning 0). */
-  decree?: number
+  /** Queen's Edict level (absent on pre-v2 entries, meaning 0). */
+  edict?: number
   /** Supplies the run paid out (absent on pre-v2 entries). */
   supplies?: number
 }
@@ -695,8 +843,8 @@ export interface MetaState {
   unlockedSpecies: SpeciesId[]
   /** Permanent perks bought in the Citadel. */
   upgrades: string[]
-  /** Highest Queen's Decree that may be chosen; winning at it unlocks the next. */
-  decreeUnlocked: number
+  /** Highest Queen's Edict that may be chosen; winning at it unlocks the next. */
+  edictUnlocked: number
   /** Newest first, capped. */
   history: MetaHistoryEntry[]
 }

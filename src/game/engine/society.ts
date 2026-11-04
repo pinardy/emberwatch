@@ -1,15 +1,22 @@
+import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
 import { SPECIES } from '../content/species'
-import type { ResourceId, RunState, SpeciesId } from '../types'
+import type { ResourceId, RunState, SpeciesId, Villager } from '../types'
 import {
   COMPLEX_FOOD_MULTIPLIER,
+  DEPARTURE_GRACE,
   FOOD_VARIETY_CAP,
   HEARTH_WARMTH_RADIUS,
   IMPATIENCE_BASE,
   IMPATIENCE_HOSTILITY_THRESHOLD,
+  IMPATIENCE_OVERTIME_BASE,
+  IMPATIENCE_OVERTIME_RAMP,
   IMPATIENCE_PER_HOSTILITY_OVER,
   IMPATIENCE_PER_VILLAGER_LOST,
+  IMPATIENCE_YEAR_SCALING,
+  QUEEN_DEADLINE_YEAR,
   REPUTATION_PER_RESOLVE_POINT,
+  REPUTATION_UNSERVED_SHARE,
   RESOLVE_COLD_HEARTH,
   RESOLVE_COLD_HOME,
   RESOLVE_COMFORT,
@@ -23,8 +30,11 @@ import {
   RESOLVE_UNHOUSED,
   SECONDS_PER_MEAL,
   SECONDS_TO_LEAVE,
+  STARVING_MIN_SEVERITY,
+  YEAR_SECONDS,
 } from './balance'
 import type { Modifiers } from './modifiers'
+import { makeRng } from './rng'
 import { needsReductionFor, resolveBonusFor } from './modifiers'
 import {
   SERVICE_COVERAGE_RATIO,
@@ -105,6 +115,46 @@ export function stepHearth(s: RunState, dt: number, fuelPerSecond: number): bool
   return true
 }
 
+/**
+ * Braziers burn wood only while the Storm rages, after the hearth has taken
+ * its share. One that finds the woodpile empty goes cold, and the homes that
+ * relied on it chill. Returns how many went cold this step (for the log).
+ */
+export function stepBraziers(s: RunState, dt: number, fuelMultiplier = 1): number {
+  const storm = s.season.season === 'storm'
+  let wentCold = 0
+  for (const b of Object.values(s.buildings)) {
+    const warmth = BUILDINGS[b.defId]?.warmth
+    if (!warmth || !b.built) continue
+    if (!storm) {
+      // Out of the Storm a brazier idles, and is relit for the next one.
+      if (b.unlit) b.unlit = false
+      continue
+    }
+    const need = warmth.fuelPerSecond * fuelMultiplier * dt
+    const wood = s.stock.wood ?? 0
+    if (wood >= need && wood > 0) {
+      s.stock.wood = wood - need
+      if ((s.stock.wood ?? 0) <= 0.0001) delete s.stock.wood
+      b.unlit = false
+    } else {
+      if (!b.unlit) wentCold++
+      b.unlit = true
+    }
+  }
+  return wentCold
+}
+
+/** Wood per second the hearth and every brazier burn during the Storm. */
+export function stormFuelPerSecond(s: RunState, hearthFuelPerSecond: number, fuelMultiplier = 1): number {
+  let rate = hearthFuelPerSecond * fuelMultiplier
+  for (const b of Object.values(s.buildings)) {
+    const warmth = BUILDINGS[b.defId]?.warmth
+    if (warmth && b.built) rate += warmth.fuelPerSecond * fuelMultiplier
+  }
+  return rate
+}
+
 export interface ResolveBreakdown {
   species: SpeciesId
   base: number
@@ -123,6 +173,8 @@ export interface ResolveBreakdown {
   needRatio: Record<string, number>
   /** Resolve at which this species starts generating reputation. */
   threshold: number
+  /** 0..1 share of this species' needs that are met (partial coverage counts). */
+  needsMet: number
 }
 
 /**
@@ -142,13 +194,14 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
   const comfortTerm = pop > 0 && comfort >= pop * 0.6 ? RESOLVE_COMFORT : 0
   const unhousedTerm =
     pop > 0 && housing < pop ? RESOLVE_UNHOUSED * Math.min(1, (pop - housing) / pop) : 0
-  const starvingTerm = s.starving ? RESOLVE_STARVING : 0
+  const starvingTerm = s.starving ? RESOLVE_STARVING * hungerSeverity(s, pop) : 0
   const coldTerm = s.coldHearth ? RESOLVE_COLD_HEARTH : 0
 
   /*
-   * Homes beyond the hearth's warmth are cold in the Storm. The penalty scales
-   * with the share of the housed population sleeping out there, so one distant
-   * shelter is a nuisance and a whole cold suburb is a crisis.
+   * Homes beyond every warmth source — the hearth's radius or a lit brazier's —
+   * are cold in the Storm. The penalty scales with the share of the housed
+   * population sleeping out there, so one distant shelter is a nuisance and a
+   * whole cold suburb is a crisis.
    */
   let chillTerm = 0
   if (storm && pop > 0 && housing > 0) {
@@ -213,8 +266,18 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
       needDetail,
       needRatio,
       threshold: def.resolveTarget,
+      needsMet: def.needs.length > 0 ? satisfied / def.needs.length : 1,
     }
   })
+}
+
+/**
+ * 0..1 — how hard hunger bites. The first missed meal stings; the full penalty
+ * arrives once the unpaid debt reaches a meal per villager.
+ */
+export function hungerSeverity(s: RunState, pop = population(s)): number {
+  if (!s.starving || pop <= 0) return 0
+  return Math.min(1, Math.max(STARVING_MIN_SEVERITY, s.foodDebt / pop))
 }
 
 /** Drifts resolve toward its target and returns the fresh breakdowns. */
@@ -235,7 +298,8 @@ export function stepResolve(
 
 /**
  * Reputation ticks up while species sit above their resolve threshold, weighted
- * by how much of the population they make up.
+ * by how much of the population they make up and by how well their needs are
+ * served — see `REPUTATION_UNSERVED_SHARE`.
  */
 export function stepReputation(
   s: RunState,
@@ -251,7 +315,8 @@ export function stepReputation(
     const share = counts[b.species] / pop
     if (share <= 0) continue
     const over = Math.max(0, s.resolve[b.species] - b.threshold)
-    gain += share * over * REPUTATION_PER_RESOLVE_POINT * dt * mods.reputationRate
+    const served = REPUTATION_UNSERVED_SHARE + (1 - REPUTATION_UNSERVED_SHARE) * b.needsMet
+    gain += share * over * served * REPUTATION_PER_RESOLVE_POINT * dt * mods.reputationRate
   }
   s.reputationProgress += gain
   while (s.reputationProgress >= 1 && s.reputation < s.maxReputation) {
@@ -263,12 +328,24 @@ export function stepReputation(
 }
 
 export function stepImpatience(s: RunState, dt: number, mods: Modifiers): void {
-  const yearScale = 1 + (s.season.year - 1) * 0.18
+  const yearScale = 1 + (s.season.year - 1) * IMPATIENCE_YEAR_SCALING
   let rate = IMPATIENCE_BASE * yearScale
   if (s.hostility > IMPATIENCE_HOSTILITY_THRESHOLD) {
     rate += (s.hostility - IMPATIENCE_HOSTILITY_THRESHOLD) * IMPATIENCE_PER_HOSTILITY_OVER
   }
-  addImpatience(s, rate * mods.impatienceRate * dt)
+  // The deadline is not softened by cornerstones: it is what ends every run.
+  const overtime = secondsPastDeadline(s)
+  const overtimeRate =
+    overtime > 0 ? IMPATIENCE_OVERTIME_BASE + overtime * IMPATIENCE_OVERTIME_RAMP : 0
+  addImpatience(s, (rate * mods.impatienceRate + overtimeRate) * dt)
+}
+
+/** Game-clock second at which the Queen's deadline year begins. */
+export const QUEEN_DEADLINE_SECONDS = (QUEEN_DEADLINE_YEAR - 1) * YEAR_SECONDS
+
+/** Seconds since the Queen's deadline passed (0 before it). */
+export function secondsPastDeadline(s: RunState): number {
+  return Math.max(0, s.clock - QUEEN_DEADLINE_SECONDS)
 }
 
 export function addImpatience(s: RunState, amount: number): void {
@@ -298,10 +375,11 @@ export function stepDepartures(s: RunState, dt: number): string[] {
     }
     if (s.resolve[sp] <= RESOLVE_LEAVE_THRESHOLD) {
       s.despair[sp] += dt * despairRate(sp)
-      while (s.despair[sp] >= SECONDS_TO_LEAVE) {
-        s.despair[sp] -= SECONDS_TO_LEAVE
-        const victim = Object.values(s.villagers).find((v) => v.species === sp)
-        if (!victim) break
+      if (s.despair[sp] >= SECONDS_TO_LEAVE) {
+        // One at a time, then a grace period before the next considers it.
+        s.despair[sp] = -DEPARTURE_GRACE
+        const victim = pickVictim(s, sp)
+        if (!victim) continue
         removeVillager(s, victim.id)
         departed.push(`${victim.name} the ${SPECIES[sp].name.slice(0, -1)} left the settlement.`)
         s.stats.villagersLost++
@@ -312,6 +390,19 @@ export function stepDepartures(s: RunState, dt: number): string[] {
     }
   }
   return departed
+}
+
+/**
+ * Picks a villager at random with the run RNG (advancing the cursor, so a save
+ * replays the same choice). `species` narrows the pool.
+ */
+export function pickVictim(s: RunState, species?: SpeciesId): Villager | null {
+  const pool = Object.values(s.villagers).filter((v) => !species || v.species === species)
+  if (pool.length === 0) return null
+  const rng = makeRng(s.seed, s.rngCursor)
+  const victim = rng.pick(pool)
+  s.rngCursor = rng.cursor()
+  return victim
 }
 
 export function removeVillager(s: RunState, id: string): void {

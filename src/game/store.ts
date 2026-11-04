@@ -77,8 +77,8 @@ interface GameStore {
 
   // --- lifecycle -----------------------------------------------------------
   boot: () => void
-  /** `decree` is clamped to the highest Queen's Decree the Citadel has earned. */
-  startRun: (seed?: number, species?: SpeciesId[], decree?: number) => void
+  /** `edict` is clamped to the highest Queen's Edict the Citadel has earned. */
+  startRun: (seed?: number, species?: SpeciesId[], edict?: number) => void
   abandonRun: () => void
   finishRun: () => void
   goToScreen: (screen: Screen) => void
@@ -151,13 +151,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ meta: loadMeta(), settings: loadSettings() })
   },
 
-  startRun: (seed, species, decree) => {
+  startRun: (seed, species, edict) => {
     const meta = get().meta
     const run = createRun({
       seed: seed ?? randomSeed(),
       meta,
       species,
-      decree: Math.min(decree ?? 0, meta.decreeUnlocked),
+      edict: Math.min(edict ?? 0, meta.edictUnlocked),
     })
     saveRun(run)
     set({
@@ -194,7 +194,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!run || run.phase === 'playing') return
     const reward = supplyReward(run)
     const next = bankRun(meta, run)
-    const unlockedDecree = next.decreeUnlocked > meta.decreeUnlocked
+    const unlockedEdict = next.edictUnlocked > meta.edictUnlocked
     saveMeta(next)
     saveRun(null)
     set({
@@ -203,8 +203,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       screen: 'citadel',
       speed: 0,
       version: get().version + 1,
-      notice: unlockedDecree
-        ? `Run banked: +${reward} Citadel supplies. A harsher Queen's Decree is unlocked.`
+      notice: unlockedEdict
+        ? `Run banked: +${reward} Citadel supplies. A harsher Queen's Edict is unlocked.`
         : `Run banked: +${reward} Citadel supplies.`,
     })
   },

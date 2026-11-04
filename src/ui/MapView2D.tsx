@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { BUILDINGS } from '../game/content/buildings'
-import { footprintOf, isReachable } from '../game/engine/actions'
-import { HEARTH_WARMTH_RADIUS } from '../game/engine/balance'
+import { canPlaceBuilding, footprintOf, isReachable } from '../game/engine/actions'
 import { DEPOSIT_INFO, TERRAIN_COLORS } from '../game/engine/mapgen'
+import { describePlacement } from '../game/engine/placement'
+import { isWarmAt, warmthSources } from '../game/engine/queries'
 import { useGameStore, useRun } from '../game/store'
 import type { Glade } from '../game/types'
 import { panDirectionOf } from './usePanKeys'
@@ -40,6 +41,17 @@ export function MapView2D() {
   const pinchDistance = useRef(0)
   /** Set when a pointer-up ends a pan, so the trailing click is ignored. */
   const suppressClick = useRef(false)
+  /** Build-mode ghost under the mouse: world position, screen anchor, verdict. */
+  const [ghost, setGhost] = useState<{
+    pos: { x: number; y: number }
+    screen: { x: number; y: number }
+    ok: boolean
+    hint: string | null
+  } | null>(null)
+
+  useEffect(() => {
+    if (!buildMode) setGhost(null)
+  }, [buildMode])
 
   // Centre the camera whenever a new run is shown.
   useEffect(() => {
@@ -112,6 +124,21 @@ export function MapView2D() {
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
+    // Mouse hover aims the build ghost; touch keeps tap-to-place.
+    if (buildMode && run && e.pointerType !== 'touch' && !drag.current) {
+      const pos = toWorld(e)
+      const wrap = svgRef.current?.parentElement?.getBoundingClientRect()
+      if (pos && wrap) {
+        const reason = canPlaceBuilding(run, buildMode, pos)
+        const parts = describePlacement(run, buildMode, pos).parts
+        setGhost({
+          pos,
+          screen: { x: e.clientX - wrap.left, y: e.clientY - wrap.top },
+          ok: reason === null,
+          hint: reason ?? (parts.length > 0 ? parts.join(' · ') : null),
+        })
+      }
+    }
     if (!pinch.current.has(e.pointerId)) return
     const prev = pinch.current.get(e.pointerId)!
     pinch.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -178,6 +205,14 @@ export function MapView2D() {
   const h = run.world.height * S
   const viewBox = `${-w / 2 - PAD} ${-h / 2 - PAD} ${w + PAD * 2} ${h + PAD * 2}`
   const glades = Object.values(run.glades)
+  const storm = run.season.season === 'storm'
+  const selectedDef = selectedBuilding ? BUILDINGS[run.buildings[selectedBuilding]?.defId ?? ''] : undefined
+  const buildDef = buildMode ? BUILDINGS[buildMode] : undefined
+  const showWarmth =
+    (buildDef && ((buildDef.housing ?? 0) > 0 || !!buildDef.warmth)) ||
+    selectedDef?.category === 'hearth' ||
+    selectedDef?.category === 'housing' ||
+    !!selectedDef?.warmth
 
   return (
     <div className="map-wrap">
@@ -189,6 +224,7 @@ export function MapView2D() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerLeave={() => setGhost(null)}
         onClick={onMapClick}
         role="application"
         aria-label="Settlement map"
@@ -228,10 +264,17 @@ export function MapView2D() {
               )
             })}
 
-            {/* Warmth radius while placing housing. */}
-            {buildMode && (BUILDINGS[buildMode]?.housing ?? 0) > 0 && (
-              <circle cx={0} cy={0} r={HEARTH_WARMTH_RADIUS * S} className="warmth-ring" />
-            )}
+            {/* Every fire's reach while placing housing or a brazier, or inspecting one. */}
+            {showWarmth &&
+              warmthSources(run).map((w) => (
+                <circle
+                  key={`warmth-${w.id}`}
+                  cx={w.pos.x * S}
+                  cy={w.pos.y * S}
+                  r={w.radius * S}
+                  className="warmth-ring"
+                />
+              ))}
 
             {/* Obstacles on cleared ground. */}
             {run.obstacles.map((o) =>
@@ -327,9 +370,49 @@ export function MapView2D() {
                       ⏸
                     </text>
                   )}
+                  {/* A cold brazier, or a home beyond every fire in the Storm. */}
+                  {b.built &&
+                    ((def.warmth && b.unlit) ||
+                      (storm && def.category === 'housing' && !isWarmAt(run, b.pos))) && (
+                      <text className="hex-flag" x={cx - r} y={cy - r}>
+                        ❄
+                      </text>
+                    )}
                 </g>
               )
             })}
+
+            {/* The build ghost: footprint, plus a camp's reach or a brazier's warmth. */}
+            {buildDef && ghost && (
+              <g className="ghost-2d" pointerEvents="none">
+                {buildDef.gatherRadius && (
+                  <circle
+                    cx={ghost.pos.x * S}
+                    cy={ghost.pos.y * S}
+                    r={buildDef.gatherRadius * S}
+                    fill="none"
+                    stroke="#9fc9a3"
+                    strokeOpacity={0.5}
+                    strokeDasharray="4 4"
+                  />
+                )}
+                {buildDef.warmth && (
+                  <circle
+                    cx={ghost.pos.x * S}
+                    cy={ghost.pos.y * S}
+                    r={buildDef.warmth.radius * S}
+                    className="warmth-ring"
+                  />
+                )}
+                <circle
+                  cx={ghost.pos.x * S}
+                  cy={ghost.pos.y * S}
+                  r={footprintOf(buildDef.id) * S}
+                  fill={ghost.ok ? 'rgba(111, 191, 114, 0.45)' : 'rgba(192, 80, 80, 0.45)'}
+                  stroke={ghost.ok ? '#6fbf72' : '#c05050'}
+                />
+              </g>
+            )}
 
             {/* Labels over undiscovered-but-known glades. */}
             {glades.map((glade) => {
@@ -407,6 +490,20 @@ export function MapView2D() {
           ⌖
         </button>
       </div>
+
+      {buildMode && ghost?.hint && (
+        <div
+          className={`ghost-hint ${ghost.ok ? 'is-ok' : 'is-bad'}`}
+          style={{
+            position: 'absolute',
+            left: ghost.screen.x,
+            top: ghost.screen.y - 44,
+            transform: 'translateX(-50%)',
+          }}
+        >
+          {ghost.hint}
+        </div>
+      )}
 
       {buildMode && <BuildBanner buildMode={buildMode} />}
     </div>

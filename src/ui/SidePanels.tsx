@@ -5,6 +5,7 @@ import { sootheCost } from '../game/engine/actions'
 import { TRADE_LOT } from '../game/engine/balance'
 import { hasTradingPost, offerPrice, sellPrice } from '../game/engine/trade'
 import { useGameStore, useRun } from '../game/store'
+import { DecreeCard } from './DecreeCard'
 import type { ResourceId } from '../game/types'
 
 export function OrdersPanel() {
@@ -18,6 +19,7 @@ export function OrdersPanel() {
         <p className="panel-hint">
           Completing an order grants reputation immediately and draws a replacement.
         </p>
+        <DecreeCard />
         {run.orders.map((order) => {
           const def = ORDERS[order.defId]
           if (!def) return null

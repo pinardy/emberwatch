@@ -1,4 +1,5 @@
 import { defaultMeta, emptyCitadelPerks, migrateMeta } from './content/meta'
+import { defaultDecreeState } from './engine/structure'
 import { defaultCaravan } from './engine/trade'
 import type { MetaState, RunState } from './types'
 
@@ -51,8 +52,20 @@ export function loadRun(): RunState | null {
   run.caravan ??= defaultCaravan()
   run.rerollsUsed ??= 0
   run.soothesUsed ??= 0
-  // Saves from before the Citadel tree and the Queen's Decrees.
-  run.decree ??= 0
+  // Saves from before braziers were a starting blueprint still get one.
+  if (Array.isArray(run.unlockedBuildings) && !run.unlockedBuildings.includes('brazier')) {
+    run.unlockedBuildings.push('brazier')
+  }
+  // Saves from before decrees, charters and lingering conditions.
+  run.conditions ??= []
+  run.conditionCounter ??= 0
+  const decreeDefaults = defaultDecreeState()
+  run.decree ??= decreeDefaults.decree
+  run.decreeTimer ??= decreeDefaults.decreeTimer
+  run.charterOffered ??= false
+  run.charter ??= null
+  // Saves from before the Citadel tree and the Queen's Edicts.
+  run.edict ??= 0
   run.citadel = { ...emptyCitadelPerks(), ...(run.citadel ?? {}) }
   return run
 }

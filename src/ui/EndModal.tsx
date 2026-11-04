@@ -1,7 +1,7 @@
 import {
-  DECREE_REWARD_STEP,
-  MAX_DECREE,
-  decreeLabel,
+  EDICT_REWARD_STEP,
+  MAX_EDICT,
+  edictLabel,
   supplyBreakdown,
 } from '../game/content/meta'
 import { useGameStore, useRun } from '../game/store'
@@ -10,16 +10,16 @@ import { Overlay } from './ChoiceModal'
 export function EndModal() {
   const run = useRun()
   const finishRun = useGameStore((s) => s.finishRun)
-  const decreeUnlocked = useGameStore((s) => s.meta.decreeUnlocked)
+  const edictUnlocked = useGameStore((s) => s.meta.edictUnlocked)
   if (!run || run.phase === 'playing') return null
 
   const won = run.phase === 'won'
   const breakdown = supplyBreakdown(run)
   const reward = breakdown.total
-  // Winning at the highest decree earned so far opens the next rung.
-  const opensDecree =
-    won && breakdown.decree >= decreeUnlocked && breakdown.decree < MAX_DECREE
-      ? breakdown.decree + 1
+  // Winning at the highest edict earned so far opens the next rung.
+  const opensEdict =
+    won && breakdown.edict >= edictUnlocked && breakdown.edict < MAX_EDICT
+      ? breakdown.edict + 1
       : null
 
   return (
@@ -83,13 +83,13 @@ export function EndModal() {
                 <span>+{line.amount}</span>
               </li>
             ))}
-            {breakdown.decree > 0 && (
+            {breakdown.edict > 0 && (
               <li className="is-good">
                 <span>
-                  Queen's {decreeLabel(breakdown.decree)} (+
-                  {Math.round(breakdown.decree * DECREE_REWARD_STEP * 100)}%)
+                  Queen's {edictLabel(breakdown.edict)} (+
+                  {Math.round(breakdown.edict * EDICT_REWARD_STEP * 100)}%)
                 </span>
-                <span>+{breakdown.decreeBonus}</span>
+                <span>+{breakdown.edictBonus}</span>
               </li>
             )}
             <li className="reward-total">
@@ -97,9 +97,9 @@ export function EndModal() {
               <span>📦 {reward}</span>
             </li>
           </ul>
-          {opensDecree !== null && (
+          {opensEdict !== null && (
             <p className="is-good">
-              📜 Victory under these terms unlocks {decreeLabel(opensDecree)}.
+              📜 Victory under these terms unlocks {edictLabel(opensEdict)}.
             </p>
           )}
         </section>

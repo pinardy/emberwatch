@@ -2,13 +2,13 @@ import {
   META_BRANCHES,
   META_UPGRADES,
   META_UPGRADE_LIST,
-  decreeNumeral,
+  edictNumeral,
   missingPrerequisites,
   upgradeStatus,
 } from '../game/content/meta'
 import { SPECIES } from '../game/content/species'
 import { useGameStore } from '../game/store'
-import { DecreePicker } from './DecreePicker'
+import { EdictPicker } from './EdictPicker'
 
 /** Runs shown in the ledger; older ones stay in the save but off screen. */
 const LEDGER_ROWS = 10
@@ -41,9 +41,9 @@ export function CitadelScreen() {
           <span className="chip">🌫️ {meta.runsLost} lost</span>
           <span className="chip">
             📜{' '}
-            {meta.decreeUnlocked > 0
-              ? `Up to Decree ${decreeNumeral(meta.decreeUnlocked)}`
-              : 'No decrees earned yet'}
+            {meta.edictUnlocked > 0
+              ? `Up to Edict ${edictNumeral(meta.edictUnlocked)}`
+              : 'No edicts earned yet'}
           </span>
         </div>
 
@@ -94,13 +94,13 @@ export function CitadelScreen() {
         </div>
 
         <section className="setup-section">
-          <h3>Queen's Decrees</h3>
+          <h3>Queen's Edicts</h3>
           <p className="muted">
             The Queen sets harsher terms for viceroys who have proven themselves — and pays
-            more for them. Win under your hardest decree to unlock the next; choose one
+            more for them. Win under your hardest edict to unlock the next; choose one
             when you found a settlement.
           </p>
-          <DecreePicker unlocked={meta.decreeUnlocked} value={meta.decreeUnlocked} />
+          <EdictPicker unlocked={meta.edictUnlocked} value={meta.edictUnlocked} />
         </section>
 
         {meta.history.length > 0 && (
@@ -112,7 +112,7 @@ export function CitadelScreen() {
                   <tr>
                     <th>Result</th>
                     <th>Settlers</th>
-                    <th>Decree</th>
+                    <th>Edict</th>
                     <th>Years</th>
                     <th>Reputation</th>
                     <th>Supplies</th>
@@ -130,7 +130,7 @@ export function CitadelScreen() {
                           ? entry.species.map((id) => SPECIES[id]?.icon ?? id).join(' ')
                           : '—'}
                       </td>
-                      <td>{decreeNumeral(entry.decree ?? 0)}</td>
+                      <td>{edictNumeral(entry.edict ?? 0)}</td>
                       <td>{entry.years}</td>
                       <td>{entry.reputation}</td>
                       <td>{entry.supplies !== undefined ? `+${entry.supplies}` : '—'}</td>

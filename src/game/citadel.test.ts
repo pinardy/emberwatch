@@ -3,8 +3,8 @@ import { CORNERSTONES, CORNERSTONE_LIST } from './content/cornerstones'
 import { GLADE_EVENT_LIST } from './content/gladeEvents'
 import {
   CITADEL_EVENT_OPTIONS,
-  DECREES,
-  MAX_DECREE,
+  EDICTS,
+  MAX_EDICT,
   META_UPGRADES,
   META_UPGRADE_LIST,
   META_VERSION,
@@ -29,6 +29,7 @@ import { BASE_DRAFT_OPTIONS, cornerstonePool, gladeEventOptions } from './engine
 import { createRun } from './engine/createRun'
 import {
   offerBlueprint,
+  optionAffordable,
   offerCornerstone,
   rerollChoice,
   rerollCost,
@@ -59,12 +60,12 @@ function withPrereqs(...ids: string[]): string[] {
   return [...out]
 }
 
-function run(opts: { upgrades?: string[]; decree?: number } = {}): RunState {
+function run(opts: { upgrades?: string[]; edict?: number } = {}): RunState {
   return createRun({
     seed: SEED,
     species: [...SPECIES],
     meta: opts.upgrades ? metaWith(opts.upgrades) : undefined,
-    decree: opts.decree,
+    edict: opts.edict,
   })
 }
 
@@ -143,9 +144,9 @@ describe('meta migration', () => {
     expect(meta.history[0]).toMatchObject({ seed: 11, won: true, years: 4, reputation: 20 })
   })
 
-  it('credits v1 wins with the first decree', () => {
-    expect(migrateMeta(structuredClone(v1)).decreeUnlocked).toBe(1)
-    expect(migrateMeta({ ...v1, runsWon: 0, history: [] }).decreeUnlocked).toBe(0)
+  it('credits v1 wins with the first edict', () => {
+    expect(migrateMeta(structuredClone(v1)).edictUnlocked).toBe(1)
+    expect(migrateMeta({ ...v1, runsWon: 0, history: [] }).edictUnlocked).toBe(0)
   })
 
   it('re-derives charter species and tolerates corrupt fields', () => {
@@ -190,14 +191,14 @@ describe('meta migration', () => {
       expect(loadMeta()).toEqual(meta)
     })
 
-    it('loads a run saved before decrees and Citadel perks existed', () => {
+    it('loads a run saved before edicts and Citadel perks existed', () => {
       const old = run() as Partial<RunState>
-      delete old.decree
+      delete old.edict
       delete old.citadel
       saveRun(old as RunState)
       const loaded = loadRun()
       expect(loaded).not.toBeNull()
-      expect(loaded!.decree).toBe(0)
+      expect(loaded!.edict).toBe(0)
       expect(loaded!.citadel).toEqual({
         blueprintOptions: 0,
         cornerstoneOptions: 0,
@@ -254,21 +255,21 @@ describe('buying upgrades', () => {
   })
 })
 
-describe('Queen’s Decrees in createRun', () => {
-  it('records the decree on the run and changes nothing at level 0', () => {
+describe('Queen’s Edicts in createRun', () => {
+  it('records the edict on the run and changes nothing at level 0', () => {
     const base = run()
-    expect(base.decree).toBe(0)
+    expect(base.edict).toBe(0)
     expect(base.stock).toEqual(STARTING_STOCK)
     expect(base.maxImpatience).toBe(MAX_IMPATIENCE)
     expect(base.maxReputation).toBe(MAX_REPUTATION)
     expect(base.ongoing).toEqual([])
-    expect(run({ decree: 0 })).toEqual(base)
+    expect(run({ edict: 0 })).toEqual(base)
   })
 
-  it('stacks every decree up to the chosen level', () => {
+  it('stacks every edict up to the chosen level', () => {
     const base = run()
-    const top = run({ decree: MAX_DECREE })
-    expect(top.decree).toBe(MAX_DECREE)
+    const top = run({ edict: MAX_EDICT })
+    expect(top.edict).toBe(MAX_EDICT)
     expect(top.stock.wood).toBeLessThan(base.stock.wood!)
     expect(top.maxImpatience).toBeLessThan(base.maxImpatience)
     expect(top.maxReputation).toBeGreaterThan(base.maxReputation)
@@ -280,29 +281,29 @@ describe('Queen’s Decrees in createRun', () => {
     expect(mods.hostilityRate).toBeGreaterThan(baseMods.hostilityRate)
     expect(mods.hearthFuel).toBeGreaterThan(baseMods.hearthFuel)
     expect(mods.stormResolve).toBeLessThan(baseMods.stormResolve)
-    expect(top.ongoing.find((o) => o.id === 'decree')).toBeDefined()
+    expect(top.ongoing.find((o) => o.id === 'edict')).toBeDefined()
   })
 
-  it('applies only the decrees at or below the level', () => {
-    const first = run({ decree: 1 })
+  it('applies only the edicts at or below the level', () => {
+    const first = run({ edict: 1 })
     expect(computeModifiers(first).impatienceRate).toBeCloseTo(1.15)
-    // Lean Provisions is decree II, so decree I keeps the full stockpile.
+    // Lean Provisions is edict II, so edict I keeps the full stockpile.
     expect(first.stock).toEqual(STARTING_STOCK)
-    expect(run({ decree: 2 }).stock.wood).toBe(Math.round(STARTING_STOCK.wood * 0.7))
-    expect(DECREES.map((d) => d.level)).toEqual(DECREES.map((_, i) => i + 1))
+    expect(run({ edict: 2 }).stock.wood).toBe(Math.round(STARTING_STOCK.wood * 0.7))
+    expect(EDICTS.map((d) => d.level)).toEqual(EDICTS.map((_, i) => i + 1))
   })
 
   it('clamps out-of-range levels', () => {
-    expect(run({ decree: 99 }).decree).toBe(MAX_DECREE)
-    expect(run({ decree: -3 }).decree).toBe(0)
+    expect(run({ edict: 99 }).edict).toBe(MAX_EDICT)
+    expect(run({ edict: -3 }).edict).toBe(0)
   })
 
-  it('cannot start above the decree the Citadel has earned', () => {
+  it('cannot start above the edict the Citadel has earned', () => {
     stubStorage()
     try {
-      useGameStore.setState({ meta: { ...defaultMeta(), decreeUnlocked: 2 } })
+      useGameStore.setState({ meta: { ...defaultMeta(), edictUnlocked: 2 } })
       useGameStore.getState().startRun(SEED, [...SPECIES], 5)
-      expect(useGameStore.getState().run?.decree).toBe(2)
+      expect(useGameStore.getState().run?.edict).toBe(2)
     } finally {
       useGameStore.setState({ run: null, screen: 'menu' })
       vi.unstubAllGlobals()
@@ -399,6 +400,27 @@ describe('Citadel glade-event options', () => {
     expect(s.pendingChoices).toHaveLength(0)
   })
 
+  it('gates the paid wardens option on amber like any other option', () => {
+    const s = run({ upgrades: ['wardensWrit'] })
+    const def = GLADE_EVENT_LIST[0]
+    const index = gladeEventOptions(s, def).length - 1
+    expect(gladeEventOptions(s, def)[index]).toBe(CITADEL_EVENT_OPTIONS.callWardens)
+
+    s.stock.amber = 10
+    expect(optionAffordable(s.stock, CITADEL_EVENT_OPTIONS.callWardens)).toBe(false)
+    s.pendingChoices = [{ kind: 'gladeEvent', options: [def.id], gladeId: 'glade0' }]
+    resolveGladeEvent(s, index)
+    expect(s.pendingChoices).toHaveLength(1)
+
+    s.stock.amber = 30
+    s.hostility = 10
+    expect(optionAffordable(s.stock, CITADEL_EVENT_OPTIONS.callWardens)).toBe(true)
+    resolveGladeEvent(s, index)
+    expect(s.pendingChoices).toHaveLength(0)
+    expect(s.stock.amber).toBe(5)
+    expect(s.hostility).toBe(6)
+  })
+
   it('ignores an extra option the run does not have', () => {
     const s = run()
     const def = GLADE_EVENT_LIST[0]
@@ -410,15 +432,15 @@ describe('Citadel glade-event options', () => {
 
 // ---------------------------------------------------------------------------
 
-function finished(phase: 'won' | 'lost', decree: number, patch: Partial<RunState> = {}) {
-  const s = run({ decree })
+function finished(phase: 'won' | 'lost', edict: number, patch: Partial<RunState> = {}) {
+  const s = run({ edict })
   s.phase = phase
   Object.assign(s, patch)
   return s
 }
 
-function wonRun(decree: number): RunState {
-  const s = finished('won', decree, { reputation: 20 })
+function wonRun(edict: number): RunState {
+  const s = finished('won', edict, { reputation: 20 })
   s.season.year = 4
   s.stats.gladesCleared = 10
   s.stats.ordersCompleted = 6
@@ -438,34 +460,34 @@ describe('supply rewards', () => {
     expect(supplyReward(finished('lost', 0))).toBeGreaterThan(0)
   })
 
-  it('itemises the payout and scales it with the decree', () => {
+  it('itemises the payout and scales it with the edict', () => {
     const plain = supplyBreakdown(wonRun(0))
     const hard = supplyBreakdown(wonRun(4))
     expect(plain.lines.reduce((n, l) => n + l.amount, 0)).toBe(plain.subtotal)
-    expect(plain.decreeBonus).toBe(0)
+    expect(plain.edictBonus).toBe(0)
     expect(hard.subtotal).toBe(plain.subtotal)
-    expect(hard.decreeBonus).toBe(Math.round(plain.subtotal * 0.25 * 4))
-    expect(hard.total).toBe(hard.subtotal + hard.decreeBonus)
+    expect(hard.edictBonus).toBe(Math.round(plain.subtotal * 0.25 * 4))
+    expect(hard.total).toBe(hard.subtotal + hard.edictBonus)
   })
 
-  it('banks the run, records its decree and species, and unlocks the next rung on a win', () => {
-    const meta = { ...defaultMeta(), decreeUnlocked: 2 }
+  it('banks the run, records its edict and species, and unlocks the next rung on a win', () => {
+    const meta = { ...defaultMeta(), edictUnlocked: 2 }
     const won = bankRun(meta, wonRun(2), 1234)
-    expect(won.decreeUnlocked).toBe(3)
+    expect(won.edictUnlocked).toBe(3)
     expect(won.runsWon).toBe(1)
     expect(won.citadelSupplies).toBe(supplyReward(wonRun(2)))
     expect(won.history[0]).toMatchObject({
       seed: SEED,
       won: true,
-      decree: 2,
+      edict: 2,
       species: [...SPECIES],
       at: 1234,
     })
     // Winning below the top rung, or losing at it, unlocks nothing.
-    expect(bankRun(meta, wonRun(1)).decreeUnlocked).toBe(2)
-    expect(bankRun(meta, finished('lost', 2)).decreeUnlocked).toBe(2)
-    expect(bankRun({ ...meta, decreeUnlocked: MAX_DECREE }, wonRun(MAX_DECREE)).decreeUnlocked).toBe(
-      MAX_DECREE,
+    expect(bankRun(meta, wonRun(1)).edictUnlocked).toBe(2)
+    expect(bankRun(meta, finished('lost', 2)).edictUnlocked).toBe(2)
+    expect(bankRun({ ...meta, edictUnlocked: MAX_EDICT }, wonRun(MAX_EDICT)).edictUnlocked).toBe(
+      MAX_EDICT,
     )
   })
 })
