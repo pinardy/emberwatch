@@ -43,7 +43,7 @@ export function UpgradeSection({ run, building }: { run: RunState; building: Bui
           {idle > 0
             ? `${idle} idle villager${idle === 1 ? ' is' : 's are'} building it.`
             : 'No idle villagers are free to build it.'}{' '}
-          It keeps working at its current tier meanwhile.
+          Its current tier stays in effect meanwhile.
         </p>
         <div
           className="bar"

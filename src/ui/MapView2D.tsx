@@ -409,7 +409,6 @@ export function MapView2D() {
                       className="tier-mark"
                       x={cx + r * 0.85}
                       y={cy + r * 0.85 + 3}
-                      aria-label={`${displayName(b)}, tier ${mark.length}`}
                     >
                       <title>{`${displayName(b)} — tier ${mark.length}`}</title>
                       {mark}
