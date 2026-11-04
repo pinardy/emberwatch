@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { BUILDINGS } from '../content/buildings'
+import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
+import { CHARTERS } from '../content/charters'
+import { DECREES, DECREE_LIST } from '../content/decrees'
 import { GLADE_EVENTS, GLADE_EVENT_LIST } from '../content/gladeEvents'
 import { ORDER_LIST, evaluateGoal } from '../content/orders'
 import { RESOURCES } from '../content/resources'
@@ -18,8 +20,13 @@ import {
 import {
   ADJACENCY_RANGE,
   CARAVAN_OFFERS,
+  CHARTER_REPUTATION,
+  DECREE_FIRST_DELAY,
+  DECREE_INTERVAL,
+  DECREE_MISS_IMPATIENCE,
   HEARTH_WARMTH_RADIUS,
   OPENING_BLUEPRINT_PICKS,
+  REWARD_MILESTONES,
   SEASON_LENGTH,
   STARTING_VILLAGERS,
   TRADE_LOT,
@@ -50,7 +57,16 @@ import {
 } from './queries'
 import { makeRng } from './rng'
 import { resolveBreakdowns } from './society'
+import {
+  checkCharter,
+  goalFeasible,
+  goalProgress,
+  issueDecree,
+  stepConditions,
+  stepDecree,
+} from './structure'
 import { tick } from './tick'
+import { loadRun } from '../persistence'
 import {
   buyOffer,
   hasTradingPost,
@@ -776,6 +792,345 @@ describe('glade event content invariants', () => {
         expect(option.threat.interval).toBeGreaterThan(0)
         expect(Object.keys(option.threat.appease).length).toBeGreaterThan(0)
       }
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Mid-run structure
+// ---------------------------------------------------------------------------
+
+/** Total impatience including the fractional accumulator. */
+function impatienceOf(state: RunState): number {
+  return state.impatience + state.impatienceProgress
+}
+
+/** Drops a finished building of `defId` into the run (no placement rules). */
+function standBuilding(state: RunState, defId: string): void {
+  const id = `test_${defId}_${Object.keys(state.buildings).length}`
+  state.buildings[id] = {
+    id,
+    defId,
+    pos: { x: 99, y: 99 },
+    gladeId: 'glade0',
+    built: true,
+    buildProgress: 0,
+    workers: [],
+    activeRecipeId: BUILDINGS[defId].recipes[0]?.id ?? '',
+    recipeProgress: 0,
+    paused: false,
+    depositsInRange: {},
+  }
+}
+
+/** Opens a glade event and picks the option with the given label. */
+function chooseEvent(state: RunState, eventId: string, label: string): void {
+  state.pendingChoices.unshift({ kind: 'gladeEvent', options: [eventId], gladeId: 'glade1' })
+  const index = GLADE_EVENTS[eventId].options.findIndex((o) => o.label === label)
+  expect(index, `${eventId} has an option "${label}"`).toBeGreaterThanOrEqual(0)
+  resolveGladeEvent(state, index)
+}
+
+describe("royal decrees (timed Queen's orders)", () => {
+  it('issues the first decree after the opening delay, with a countdown', () => {
+    const state = newRun()
+    expect(state.decree).toBeNull()
+    expect(state.decreeTimer).toBe(DECREE_FIRST_DELAY)
+    state.decreeTimer = 0.1
+    stepDecree(state, 0.125)
+    expect(state.decree).not.toBeNull()
+    const def = DECREES[state.decree!.defId]
+    expect(state.decree!.timeLeft).toBe(def.timeLimit)
+    expect(state.log[0].text).toContain('Royal decree')
+  })
+
+  it('counts produce/build/clear goals from the moment it is issued', () => {
+    const state = newRun()
+    state.producedTotals.plank = 500
+    // Only the lumber mill is unlocked, so plank and wood levies are on offer.
+    state.unlockedBuildings = ['lumberMill', 'woodcuttersCamp']
+    for (let i = 0; i < 40 && state.decree?.defId !== 'decree_planks'; i++) {
+      state.decree = null
+      issueDecree(state)
+    }
+    expect(state.decree?.defId).toBe('decree_planks')
+    expect(state.decree!.baseline).toBe(500)
+    expect(state.decree!.progress).toBe(0)
+  })
+
+  it('pays more when met in time, then schedules the next', () => {
+    const state = newRun()
+    state.storageCap = 999
+    state.decree = {
+      id: 'dtest',
+      defId: 'decree_planks',
+      progress: 0,
+      complete: false,
+      timeLeft: 100,
+      timeLimit: 240,
+      baseline: state.producedTotals.plank ?? 0,
+    }
+    const reputation = state.reputation
+    const amber = state.stock.amber ?? 0
+    const completed = state.stats.ordersCompleted
+    state.producedTotals.plank = (state.producedTotals.plank ?? 0) + 30
+    stepDecree(state, 0.125)
+    expect(state.reputation).toBe(reputation + DECREES.decree_planks.reputationReward)
+    expect(state.stock.amber ?? 0).toBe(amber + (DECREES.decree_planks.reward?.amber ?? 0))
+    expect(state.stats.ordersCompleted).toBe(completed + 1)
+    expect(state.decree).toBeNull()
+    expect(state.decreeTimer).toBe(DECREE_INTERVAL)
+    expect(state.log[0].tone).toBe('good')
+  })
+
+  it('costs impatience when the deadline passes, and is replaced later', () => {
+    const state = newRun()
+    state.decree = {
+      id: 'dtest',
+      defId: 'decree_glade',
+      progress: 0,
+      complete: false,
+      timeLeft: 0.1,
+      timeLimit: 270,
+      baseline: state.stats.gladesCleared,
+    }
+    const before = impatienceOf(state)
+    stepDecree(state, 0.125)
+    expect(state.decree).toBeNull()
+    expect(impatienceOf(state)).toBeCloseTo(before + DECREE_MISS_IMPATIENCE)
+    expect(state.log[0].text).toContain('lapsed')
+    expect(state.log[0].tone).toBe('bad')
+    // After the interval, a fresh decree takes its place.
+    stepDecree(state, DECREE_INTERVAL + 0.1)
+    expect(state.decree).not.toBeNull()
+  })
+
+  it('only decrees goals the settlement can actually pursue', () => {
+    const state = newRun()
+    state.unlockedBuildings = [...STARTING_BLUEPRINTS]
+    for (let i = 0; i < 40; i++) {
+      state.decree = null
+      issueDecree(state)
+      const def = DECREES[state.decree!.defId]
+      expect(goalFeasible(def.goal, state), def.id).toBe(true)
+      expect(['decree_ale', 'decree_fabric', 'decree_service']).not.toContain(def.id)
+    }
+  })
+
+  it('every decree has a positive time limit and a reward', () => {
+    for (const def of DECREE_LIST) {
+      expect(def.timeLimit).toBeGreaterThan(0)
+      expect(def.reputationReward).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe("the Queen's charter (mid-run milestone)", () => {
+  /** A run sitting at the charter milestone with the regular milestones taken. */
+  function atCharter(): RunState {
+    const state = newRun()
+    state.reputation = CHARTER_REPUTATION
+    state.cornerstonesTaken = REWARD_MILESTONES.filter((m) => m <= CHARTER_REPUTATION).length
+    return state
+  }
+
+  it('is offered exactly once, at the reputation milestone', () => {
+    const below = newRun()
+    below.reputation = CHARTER_REPUTATION - 1
+    below.cornerstonesTaken = REWARD_MILESTONES.length
+    checkCharter(below)
+    expect(below.pendingChoices).toHaveLength(0)
+
+    const state = atCharter()
+    tick(state, 0.125)
+    const choice = state.pendingChoices.find((c) => c.kind === 'charter')
+    expect(choice).toBeDefined()
+    expect(choice!.options).toHaveLength(3)
+    const families = choice!.options.map((id) => CHARTERS[id].family)
+    expect(families).toEqual(['perk', 'patience', 'blueprint'])
+    expect(choice!.blueprintId).toBeDefined()
+    expect(state.unlockedBuildings).not.toContain(choice!.blueprintId)
+
+    state.pendingChoices = []
+    checkCharter(state)
+    expect(state.pendingChoices).toHaveLength(0)
+  })
+
+  it('draws the same offer from the same seed', () => {
+    const a = atCharter()
+    const b = atCharter()
+    checkCharter(a)
+    checkCharter(b)
+    expect(b.pendingChoices).toEqual(a.pendingChoices)
+  })
+
+  it('a patience charter raises the ceiling and is recorded', () => {
+    const state = atCharter()
+    checkCharter(state)
+    state.pendingChoices[0].options[1] = 'royalIndulgence'
+    const max = state.maxImpatience
+    takeChoice(state, 'royalIndulgence')
+    expect(state.maxImpatience).toBe(max + 4)
+    expect(state.charter).toBe('royalIndulgence')
+    expect(state.ongoing.some((o) => o.id === 'charter_royalIndulgence')).toBe(true)
+    expect(state.pendingChoices).toHaveLength(0)
+  })
+
+  it('a perk charter folds into the modifiers', () => {
+    const state = atCharter()
+    checkCharter(state)
+    state.pendingChoices[0].options[0] = 'guildCharter'
+    takeChoice(state, 'guildCharter')
+    const mods = computeModifiers(state)
+    expect(mods.productionSpeed.all).toBeCloseTo(0.15)
+    expect(mods.buildSpeed).toBeCloseTo(1.2)
+  })
+
+  it("the architect's warrant unlocks a blueprint and delivers its materials", () => {
+    const state = atCharter()
+    state.storageCap = 999
+    checkCharter(state)
+    const blueprint = state.pendingChoices[0].blueprintId!
+    const cost = BUILDINGS[blueprint].cost
+    const before = { ...state.stock }
+    takeChoice(state, 'architectsWarrant')
+    expect(state.unlockedBuildings).toContain(blueprint)
+    for (const [id, amount] of Object.entries(cost)) {
+      const key = id as keyof typeof before
+      expect(state.stock[key] ?? 0).toBe((before[key] ?? 0) + (amount ?? 0))
+    }
+  })
+
+  it('cannot be rerolled, and ignores ids that are not on offer', () => {
+    const state = atCharter()
+    state.stock.amber = 999
+    checkCharter(state)
+    expect(rerollChoice(state)).not.toBeNull()
+    takeChoice(state, 'notACharter')
+    expect(state.pendingChoices).toHaveLength(1)
+    expect(state.charter).toBeNull()
+  })
+})
+
+describe('lingering glade conditions', () => {
+  const conditionOptions = GLADE_EVENT_LIST.flatMap((def) =>
+    def.options.filter((o) => o.condition).map((o) => ({ event: def.id, option: o })),
+  )
+
+  it('content offers at least five, each with a well-formed goal', () => {
+    expect(conditionOptions.length).toBeGreaterThanOrEqual(5)
+    const state = newRun()
+    for (const { event, option } of conditionOptions) {
+      const c = option.condition!
+      expect(c.deadline === undefined || c.deadline > 0, event).toBe(true)
+      if (c.consume) expect(c.resolveBy.kind, `${event} consumes a stock goal`).toBe('stock')
+      // A condition with neither an ongoing cost nor a deadline would be inert.
+      expect(Boolean(c.whileActive?.length) || c.deadline !== undefined, event).toBe(true)
+      const progress = goalProgress(c.resolveBy, state, 0)
+      expect(progress).toBeGreaterThanOrEqual(0)
+      expect(progress).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('a chosen option leaves a condition whose effects weigh on the sim', () => {
+    const state = newRun()
+    state.stock.plank = 0
+    chooseEvent(state, 'sunkenGranary', 'Breach the dyke')
+    expect(state.conditions).toHaveLength(1)
+    expect(state.conditions[0].name).toBe('Flooded Paths')
+    expect(computeModifiers(state).buildSpeed).toBeCloseTo(0.75)
+    tick(state, 0.125)
+    expect(state.conditions).toHaveLength(1)
+  })
+
+  it('lifts when the goal is met, consuming tribute goods', () => {
+    const state = newRun()
+    state.storageCap = 999
+    state.stock.incense = 0
+    state.hostility = 30
+    chooseEvent(state, 'drownedShrine', 'Bargain with the spirit')
+    expect(state.conditions[0].timeLeft).toBe(180)
+    state.stock.incense = 12
+    stepConditions(state, 0.125)
+    expect(state.conditions).toHaveLength(0)
+    expect(state.stock.incense).toBe(2)
+    expect(state.hostility).toBe(25)
+    expect(state.log[0].tone).toBe('good')
+  })
+
+  it('fails when its deadline passes, applying the penalty', () => {
+    const state = newRun()
+    state.stock.incense = 0
+    state.hostility = 30
+    chooseEvent(state, 'drownedShrine', 'Bargain with the spirit')
+    for (let t = 0; t < 179; t += 1) stepConditions(state, 1)
+    expect(state.conditions).toHaveLength(1)
+    stepConditions(state, 2)
+    expect(state.conditions).toHaveLength(0)
+    expect(state.hostility).toBe(45)
+    expect(state.log[0].tone).toBe('bad')
+  })
+
+  it('counting goals ignore what already stood, and rewards pay out', () => {
+    const state = newRun()
+    standBuilding(state, 'tavern')
+    chooseEvent(state, 'blightTouchedGrove', 'Let it run its course')
+    expect(computeModifiers(state).resolveFlat.all).toBe(-3)
+    stepConditions(state, 0.125)
+    expect(state.conditions).toHaveLength(1)
+    standBuilding(state, 'temple')
+    stepConditions(state, 0.125)
+    expect(state.conditions).toHaveLength(0)
+    expect(computeModifiers(state).resolveFlat.all).toBe(0)
+
+    const wager = newRun()
+    chooseEvent(wager, 'queensSurveyors', 'Promise them a frontier to map')
+    const reputation = wager.reputation
+    wager.stats.gladesCleared += 2
+    stepConditions(wager, 0.125)
+    expect(wager.conditions).toHaveLength(0)
+    expect(wager.reputation).toBe(reputation + 2)
+  })
+
+  it('survives a save/load round trip, and old saves gain defaults', () => {
+    const state = newRun()
+    state.stock.plank = 0
+    chooseEvent(state, 'sunkenGranary', 'Breach the dyke')
+    state.decreeTimer = 5
+    const restored = JSON.parse(JSON.stringify(state)) as RunState
+    run(state, 30)
+    run(restored, 30)
+    expect(restored.conditions).toEqual(state.conditions)
+    expect(restored.decree).toEqual(state.decree)
+    expect(restored.rngCursor).toBe(state.rngCursor)
+
+    // A save from before these features loads with safe defaults.
+    const legacy = JSON.parse(JSON.stringify(newRun())) as Partial<RunState>
+    delete legacy.conditions
+    delete legacy.conditionCounter
+    delete legacy.decree
+    delete legacy.decreeTimer
+    delete legacy.charterOffered
+    delete legacy.charter
+    const store = new Map<string, string>([['emberwatch.run.v1', JSON.stringify(legacy)]])
+    const original = globalThis.localStorage
+    globalThis.localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    } as unknown as Storage
+    try {
+      const loaded = loadRun()!
+      expect(loaded.conditions).toEqual([])
+      expect(loaded.conditionCounter).toBe(0)
+      expect(loaded.decree).toBeNull()
+      expect(loaded.decreeTimer).toBe(DECREE_FIRST_DELAY)
+      expect(loaded.charterOffered).toBe(false)
+      expect(loaded.charter).toBeNull()
+      tick(loaded, 0.125)
+      expect(loaded.phase).toBe('playing')
+    } finally {
+      globalThis.localStorage = original
     }
   })
 })
