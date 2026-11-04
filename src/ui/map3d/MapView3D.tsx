@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Html, MapControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
 import { BUILDINGS } from '../../game/content/buildings'
-import { canPlaceBuilding, footprintOf, isReachable } from '../../game/engine/actions'
+import { canPlaceBuilding, footprintOf } from '../../game/engine/actions'
 import { ADJACENCY_RANGE, HEARTH_WARMTH_RADIUS } from '../../game/engine/balance'
 import { dist } from '../../game/engine/geometry'
 import { depositsInRangeOf } from '../../game/engine/production'
-import { useGameStore, useRun } from '../../game/store'
-import type { DepositId, Glade, RunState, TerrainId, Vec2 } from '../../game/types'
+import { useGameStore } from '../../game/store'
+import type { DepositId, Glade, RunState, Vec2 } from '../../game/types'
 import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
 import { FellingForest, ForestCover } from './ForestCover'
@@ -18,15 +18,40 @@ import { MiniMap } from './MiniMap'
 import { Paths } from './Paths'
 import { Smoke } from './Smoke'
 import { Villagers } from './Villagers'
-import { BuildBanner } from '../MapView2D'
+import { BuildBanner, WarmthToggle } from '../MapView2D'
+import {
+  GLADE_KIND_STYLE,
+  MAP_KEYS,
+  gladeAccessText,
+  gladeFill,
+  gladeKindLabel,
+  gladeLook,
+  gladePlateInfo,
+  useCameraFocus,
+  useMapKey,
+  useMapOverlays,
+  useWarmthRingVisible,
+  type GladeAccess,
+  type GladeLook,
+} from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import {
   BuildingNode,
-  PulseRing,
   ThreatMarker,
   type ZoomBucket,
   DepositNode,
 } from './entities'
+import {
+  buildingKey,
+  buildingViews,
+  clearedKey,
+  depositKey,
+  forestKey,
+  gladePlateKey,
+  gladeSurfaceKey,
+  threatKey,
+  useRunKey,
+} from './layerKeys'
 import {
   GHOST_BAD_MAT,
   GHOST_OK_MAT,
@@ -35,48 +60,84 @@ import {
   NO_RAYCAST,
   ObstacleProp,
 } from './models'
+import { gladeEdgeGeometry, gladeFillGeometry, useStaticGeometry } from './staticGeometry'
 
 const CAMERA_HOME: [number, number, number] = [0, 15, 12]
 const MIN_DISTANCE = 4
 const MAX_DISTANCE = 40
 
-/** Cleared-glade ground colours, a touch brighter than the 2D palette. */
-const TERRAIN_3D: Record<TerrainId, string> = {
-  clearing: '#5d7050',
-  forest: '#47654a',
-  marsh: '#4c6055',
-  rock: '#62666c',
-  fertile: '#7d8749',
-}
+/** Width of a fogged glade's kind border, in world units. */
+const EDGE_WIDTH = 0.16
 
-/** Flat mesh of a glade polygon, sitting just above the forest floor. */
-function GladeSurface({ glade, onFoggedClick }: { glade: Glade; onFoggedClick?: () => void }) {
-  const shape = new THREE.Shape(glade.polygon.map((p) => new THREE.Vector2(p.x, -p.y)))
-  const cleared = glade.cleared
-  const color = cleared
-    ? TERRAIN_3D[glade.terrain]
-    : glade.discovered
-      ? '#18211d'
-      : '#10171a'
+/**
+ * Flat mesh of a glade polygon, sitting just above the forest floor.
+ * Memoised on its look: the polygon never changes, so its geometry is built
+ * once per mount and a sim tick never touches it.
+ */
+const GladeSurface = memo(function GladeSurface({
+  glade,
+  look,
+  access,
+}: {
+  glade: Glade
+  look: GladeLook
+  access: GladeAccess
+}) {
+  const geometry = useStaticGeometry(() => gladeFillGeometry(glade.polygon), [glade.polygon])
+  const cleared = look === 'visible'
   return (
-    <mesh
-      rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, cleared ? 0.02 : 0.01, 0]}
-      receiveShadow
-      // Cleared ground lets clicks fall through to the placement plane.
-      raycast={cleared ? NO_RAYCAST : undefined}
-      onClick={
-        cleared
-          ? undefined
-          : (e) => {
-              if (e.delta > 6) return
-              e.stopPropagation()
-              onFoggedClick?.()
-            }
-      }
-    >
-      <shapeGeometry args={[shape]} />
-      <meshStandardMaterial color={color} roughness={1} />
+    <>
+      <mesh
+        geometry={geometry}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, cleared ? 0.02 : 0.01, 0]}
+        receiveShadow
+        // Cleared ground lets clicks fall through to the placement plane.
+        raycast={cleared ? NO_RAYCAST : undefined}
+        onClick={
+          cleared
+            ? undefined
+            : (e) => {
+                if (e.delta > 6) return
+                e.stopPropagation()
+                if (look === 'fogged') useGameStore.getState().selectGlade(glade.id)
+              }
+        }
+      >
+        <meshStandardMaterial color={gladeFill(glade, '3d')} roughness={1} />
+      </mesh>
+      {look === 'fogged' && <GladeEdge glade={glade} access={access} />}
+    </>
+  )
+})
+
+/**
+ * The kind border of a fogged glade: solid for small, long dashes for
+ * dangerous, tight dots for forbidden. Bright when reachable, dim when out
+ * of reach, breathing while a crew is clearing it.
+ */
+function GladeEdge({ glade, access }: { glade: Glade; access: GladeAccess }) {
+  const style = GLADE_KIND_STYLE[glade.kind]
+  const geometry = useStaticGeometry(
+    () => gladeEdgeGeometry(glade.polygon, style.dash, EDGE_WIDTH),
+    [glade.polygon, style.dash],
+  )
+  const material = useRef<THREE.MeshBasicMaterial>(null)
+  const base = access === 'locked' ? 0.3 : 0.9
+  useFrame(({ clock }) => {
+    if (access !== 'clearing' || REDUCED_MOTION || !material.current) return
+    material.current.opacity = 0.55 + Math.sin(clock.elapsedTime * 4) * 0.35
+  })
+  return (
+    <mesh geometry={geometry} position={[0, 0.03, 0]} raycast={NO_RAYCAST}>
+      <meshBasicMaterial
+        ref={material}
+        color={access === 'clearing' ? '#9fe09a' : style.edge}
+        transparent
+        opacity={base}
+        depthWrite={false}
+        side={THREE.DoubleSide}
+      />
     </mesh>
   )
 }
@@ -318,7 +379,7 @@ function FlightAnimator({
   return null
 }
 
-/** The hearth's reach, shown while placing housing or inspecting the hearth. */
+/** The hearth's reach: toggled on (R / 🔥), placing housing, or inspecting the hearth. */
 function WarmthRing() {
   const material = useRef<THREE.MeshBasicMaterial>(null)
   useFrame(({ clock }) => {
@@ -341,13 +402,201 @@ function WarmthRing() {
   )
 }
 
+/*
+ * Scene layers. The run is mutated in place and the store bumps `version`
+ * on every tick, so nothing here subscribes to `version` directly: each
+ * layer subscribes to a key of exactly what it draws (see layerKeys.ts) and
+ * re-renders only when that changes. Leaf nodes are memoised on primitive
+ * props, so even a layer re-render touches only the nodes that moved.
+ */
+
+function SeasonAtmosphere() {
+  const season = useGameStore((s) => s.run?.season.season ?? 'drizzle')
+  return <Atmosphere season={season} />
+}
+
+const GladeLayer = memo(function GladeLayer({ run }: { run: RunState }) {
+  useRunKey(gladeSurfaceKey)
+  return (
+    <>
+      {Object.values(run.glades).map((glade) => {
+        const look = gladeLook(glade)
+        return (
+          <GladeSurface
+            key={glade.id}
+            glade={glade}
+            look={look}
+            access={look === 'fogged' ? gladePlateInfo(run, glade).access : 'locked'}
+          />
+        )
+      })}
+    </>
+  )
+})
+
+const ForestLayer = memo(function ForestLayer({ run }: { run: RunState }) {
+  useRunKey(forestKey)
+  return (
+    <>
+      <ForestCover glades={Object.values(run.glades)} />
+      <FellingForest glades={run.glades} />
+    </>
+  )
+})
+
+const ObstacleLayer = memo(function ObstacleLayer({ run }: { run: RunState }) {
+  useRunKey(clearedKey)
+  return (
+    <>
+      {run.obstacles.map((obstacle) =>
+        run.glades[obstacle.gladeId]?.cleared ? (
+          <ObstacleAt key={obstacle.id} id={obstacle.id} kind={obstacle.kind} radius={obstacle.radius} pos={obstacle.pos} />
+        ) : null,
+      )}
+    </>
+  )
+})
+
+const DepositLayer = memo(function DepositLayer({ run, bucket }: { run: RunState; bucket: ZoomBucket }) {
+  useRunKey(depositKey)
+  const selectedDeposit = useGameStore((s) => s.selectedDeposit)
+  return (
+    <>
+      {Object.values(run.deposits).map((deposit) =>
+        run.glades[deposit.gladeId]?.cleared ? (
+          <DepositNode
+            key={deposit.id}
+            deposit={deposit}
+            amount={deposit.amount}
+            selected={selectedDeposit === deposit.id}
+            bucket={bucket}
+          />
+        ) : null,
+      )}
+    </>
+  )
+})
+
+const BuildingLayer = memo(function BuildingLayer({
+  run,
+  bucket,
+  buildMode,
+}: {
+  run: RunState
+  bucket: ZoomBucket
+  buildMode: string | null
+}) {
+  useRunKey(buildingKey)
+  const selectedBuilding = useGameStore((s) => s.selectedBuilding)
+  const ghostDef = buildMode ? BUILDINGS[buildMode] : undefined
+  return (
+    <>
+      {buildingViews(run).map(({ building, progress, workers, status, cold }) => {
+        // Buildings that pair with the blueprint in hand, in either direction.
+        const partnerHint =
+          !!ghostDef &&
+          building.built &&
+          (ghostDef.adjacency?.nearId === building.defId ||
+            BUILDINGS[building.defId]?.adjacency?.nearId === buildMode)
+        return (
+          <BuildingNode
+            key={building.id}
+            building={building}
+            selected={selectedBuilding === building.id}
+            bucket={bucket}
+            cold={cold}
+            partnerHint={partnerHint}
+            progress={progress}
+            workers={workers}
+            status={status}
+          />
+        )
+      })}
+    </>
+  )
+})
+
+const ThreatLayer = memo(function ThreatLayer({ run }: { run: RunState }) {
+  useRunKey(threatKey)
+  return (
+    <>
+      {run.threats.map((threat) => {
+        const glade = run.glades[threat.gladeId]
+        return glade ? <ThreatMarker key={threat.id} pos={glade.center} /> : null
+      })}
+    </>
+  )
+})
+
+/** Name plates over discovered, uncleared glades. */
+const GladePlates = memo(function GladePlates({ run }: { run: RunState }) {
+  useRunKey(gladePlateKey)
+  return (
+    <>
+      {Object.values(run.glades).map((glade) => {
+        if (gladeLook(glade) !== 'fogged') return null
+        const info = gladePlateInfo(run, glade)
+        return (
+          <GladePlate
+            key={glade.id}
+            glade={glade}
+            access={info.access}
+            percent={Math.floor(info.pct * 100)}
+            clearers={info.clearers}
+          />
+        )
+      })}
+    </>
+  )
+})
+
+const GladePlate = memo(function GladePlate({
+  glade,
+  access,
+  percent,
+  clearers,
+}: {
+  glade: Glade
+  access: GladeAccess
+  percent: number
+  clearers: number
+}) {
+  const locked = access === 'locked'
+  return (
+    <Html
+      position={[glade.center.x, 1.7, glade.center.y]}
+      center
+      distanceFactor={14}
+      zIndexRange={[20, 0]}
+    >
+      <button
+        type="button"
+        className={`glade-plate-3d is-${glade.kind} is-${access} ${locked ? 'is-locked' : ''}`}
+        style={{ '--kind-color': GLADE_KIND_STYLE[glade.kind].edge } as React.CSSProperties}
+        onClick={() => useGameStore.getState().selectGlade(glade.id)}
+      >
+        <small>{gladeKindLabel(glade.kind)}</small>
+        <strong>{glade.name}</strong>
+        {percent > 0 && (
+          <span className="glade-plate-3d-bar">
+            <span style={{ width: `${Math.min(100, percent)}%` }} />
+          </span>
+        )}
+        <em>
+          {gladeAccessText({ access, reachable: !locked, pct: percent / 100, clearers })}
+        </em>
+      </button>
+    </Html>
+  )
+})
+
 export function MapView3D() {
-  const run = useRun()
+  // The run object is stable for a whole run: subscribing to it (not to the
+  // per-tick `version`) keeps this shell from re-rendering every tick.
+  const run = useGameStore((s) => s.run)
   const buildMode = useGameStore((s) => s.buildMode)
   const selectedBuilding = useGameStore((s) => s.selectedBuilding)
-  const selectedDeposit = useGameStore((s) => s.selectedDeposit)
-  const selectGlade = useGameStore((s) => s.selectGlade)
-  const cameraFocus = useGameStore((s) => s.cameraFocus)
+  const showWarmth = useWarmthRingVisible()
 
   const shadowsEnabled = useGameStore((s) => s.settings.shadows)
   const controls = useRef<MapControlsImpl | null>(null)
@@ -421,29 +670,14 @@ export function MapView3D() {
   )
 
   // Fly-to requests from elsewhere in the UI (threat cards, the minimap).
-  useEffect(() => {
-    if (!cameraFocus) return
-    focusOn(cameraFocus)
-    useGameStore.setState({ cameraFocus: null })
-  }, [cameraFocus, focusOn])
+  useCameraFocus(focusOn)
+  // R toggles the warmth radius (H → home lives in the CameraRig).
+  useMapKey(MAP_KEYS.warmth, () => useMapOverlays.getState().toggleWarmth())
 
   if (!run) return null
 
-  const glades = Object.values(run.glades)
-  const storm = run.season.season === 'storm'
-  const ghostDef = buildMode ? BUILDINGS[buildMode] : undefined
   const selectedCamp = selectedBuilding ? run.buildings[selectedBuilding] : undefined
   const selectedCampDef = selectedCamp ? BUILDINGS[selectedCamp.defId] : undefined
-  const hearthSelected = selectedCamp?.defId === 'ancientHearth'
-
-  // Buildings that pair with the blueprint in hand, in either direction.
-  const adjacencyPartners = ghostDef
-    ? Object.values(run.buildings).filter((b) => {
-        if (!b.built) return false
-        const bDef = BUILDINGS[b.defId]
-        return ghostDef.adjacency?.nearId === b.defId || bDef?.adjacency?.nearId === buildMode
-      })
-    : []
 
   return (
     <div
@@ -470,7 +704,7 @@ export function MapView3D() {
         dpr={[1, 1.75]}
         camera={{ position: CAMERA_HOME, fov: 42, near: 0.5, far: 150 }}
       >
-        <Atmosphere season={run.season.season} />
+        <SeasonAtmosphere />
 
         <MapControls
           ref={controls}
@@ -496,20 +730,10 @@ export function MapView3D() {
         <GroundPlane run={run} buildMode={buildMode} />
         <Paths run={run} />
 
-        {glades.map((glade) => (
-          <GladeSurface
-            key={glade.id}
-            glade={glade}
-            onFoggedClick={glade.discovered ? () => selectGlade(glade.id) : undefined}
-          />
-        ))}
+        <GladeLayer run={run} />
+        <ForestLayer run={run} />
 
-        <ForestCover glades={glades} />
-        <FellingForest glades={run.glades} />
-
-        {((buildMode && (BUILDINGS[buildMode]?.housing ?? 0) > 0) || hearthSelected) && (
-          <WarmthRing />
-        )}
+        {showWarmth && <WarmthRing />}
 
         {/* Gather reach of the selected camp. */}
         {selectedCamp && selectedCampDef?.gatherRadius && (
@@ -523,93 +747,16 @@ export function MapView3D() {
           </group>
         )}
 
-        {/* Buildings that would pair with the blueprint in hand. */}
-        {adjacencyPartners.map((b) => (
-          <group key={`adj-${b.id}`} position={[b.pos.x, 0, b.pos.y]} raycast={NO_RAYCAST}>
-            <PulseRing radius={footprintOf(b.defId) + 0.35} />
-          </group>
-        ))}
-
-        {run.obstacles.map((obstacle) =>
-          run.glades[obstacle.gladeId]?.cleared ? (
-            <ObstacleAt key={obstacle.id} id={obstacle.id} kind={obstacle.kind} radius={obstacle.radius} pos={obstacle.pos} />
-          ) : null,
-        )}
-
-        {Object.values(run.deposits).map((deposit) =>
-          run.glades[deposit.gladeId]?.cleared ? (
-            <DepositNode
-              key={deposit.id}
-              deposit={deposit}
-              selected={selectedDeposit === deposit.id}
-              bucket={bucket}
-            />
-          ) : null,
-        )}
-
-        {Object.values(run.buildings).map((building) => {
-          const def = BUILDINGS[building.defId]
-          const cold =
-            storm &&
-            building.built &&
-            (def?.housing ?? 0) > 0 &&
-            Math.hypot(building.pos.x, building.pos.y) > HEARTH_WARMTH_RADIUS
-          return (
-            <BuildingNode
-              key={building.id}
-              building={building}
-              selected={selectedBuilding === building.id}
-              bucket={bucket}
-              cold={cold}
-              partnerHint={adjacencyPartners.some((b) => b.id === building.id)}
-            />
-          )
-        })}
+        <ObstacleLayer run={run} />
+        <DepositLayer run={run} bucket={bucket} />
+        {/* Adjacency partners pulse inside their BuildingNode (partnerHint). */}
+        <BuildingLayer run={run} bucket={bucket} buildMode={buildMode} />
 
         {bucket !== 'far' && <Villagers run={run} />}
         <Smoke run={run} />
 
-        {run.threats.map((threat) => {
-          const glade = run.glades[threat.gladeId]
-          return glade ? <ThreatMarker key={threat.id} pos={glade.center} /> : null
-        })}
-
-        {/* Name plates over discovered, uncleared glades. */}
-        {glades.map((glade) => {
-          if (!glade.discovered || glade.cleared) return null
-          const reachable = isReachable(run, glade.id)
-          const pct = glade.clearWork > 0 ? glade.clearProgress / glade.clearWork : 0
-          return (
-            <Html
-              key={glade.id}
-              position={[glade.center.x, 1.7, glade.center.y]}
-              center
-              distanceFactor={14}
-              zIndexRange={[20, 0]}
-            >
-              <button
-                type="button"
-                className={`glade-plate-3d ${reachable ? '' : 'is-locked'}`}
-                onClick={() => selectGlade(glade.id)}
-              >
-                <small>
-                  {glade.kind === 'small'
-                    ? '🌿 Small'
-                    : glade.kind === 'dangerous'
-                      ? '⚠ Dangerous'
-                      : '☠ Forbidden'}
-                </small>
-                <strong>{glade.name}</strong>
-                {pct > 0 && (
-                  <span className="glade-plate-3d-bar">
-                    <span style={{ width: `${Math.min(100, pct * 100)}%` }} />
-                  </span>
-                )}
-                {glade.clearers > 0 && <em>⛏ {glade.clearers}</em>}
-              </button>
-            </Html>
-          )
-        })}
+        <ThreatLayer run={run} />
+        <GladePlates run={run} />
       </Canvas>
 
       <MiniMap run={run} controls={controls} />
@@ -627,6 +774,7 @@ export function MapView3D() {
         <button type="button" aria-label="Recentre" title="Recentre (H)" onClick={recenter}>
           ⌖
         </button>
+        <WarmthToggle />
         <button
           type="button"
           aria-label="Controls help"
@@ -646,6 +794,7 @@ export function MapView3D() {
             <li><em>Rotate</em> — right-drag · Q / E</li>
             <li><em>Zoom</em> — wheel toward cursor · pinch</li>
             <li><em>Home</em> — H or ⌖ · <em>North</em> — 🧭</li>
+            <li><em>Warmth radius</em> — R or 🔥</li>
             <li><em>Select</em> — click · <em>Deselect / cancel</em> — right-click or Esc</li>
             <li><em>Jump</em> — click the minimap</li>
             <li><em>Pause</em> — Space · <em>Speed</em> — 1 / 2 / 3</li>

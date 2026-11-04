@@ -1,17 +1,19 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
-import { TERRAIN_COLORS } from '../../game/engine/mapgen'
 import { useGameStore } from '../../game/store'
 import type { RunState } from '../../game/types'
+import { gladeFill } from '../mapShared'
+import { miniMapKey, useRunKey } from './layerKeys'
 
 const WIDTH_PX = 168
 
 /**
  * Corner minimap: the whole world at a glance, with the camera's focus and
- * facing. Clicking jumps the camera there. Redraws with the sim tick; the
- * camera indicator polls the controls a few times a second.
+ * facing. Clicking jumps the camera there. Redraws only when a glade's look,
+ * the building list or the threats change (polygon strings are built once
+ * per run); the camera indicator polls the controls a few times a second.
  */
-export function MiniMap({
+export const MiniMap = memo(function MiniMap({
   run,
   controls,
 }: {
@@ -19,6 +21,15 @@ export function MiniMap({
   controls: React.MutableRefObject<MapControlsImpl | null>
 }) {
   const [cam, setCam] = useState({ x: 0, z: 0, deg: 0 })
+  useRunKey(miniMapKey)
+  // Glade polygons never change shape: stringify them once per run.
+  const points = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.values(run.glades).map((g) => [g.id, g.polygon.map((p) => `${p.x},${p.y}`).join(' ')]),
+      ),
+    [run],
+  )
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -67,14 +78,8 @@ export function MiniMap({
       {Object.values(run.glades).map((glade) => (
         <polygon
           key={glade.id}
-          points={glade.polygon.map((p) => `${p.x},${p.y}`).join(' ')}
-          fill={
-            glade.cleared
-              ? TERRAIN_COLORS[glade.terrain]
-              : glade.discovered
-                ? '#1a2320'
-                : '#0e1418'
-          }
+          points={points[glade.id]}
+          fill={gladeFill(glade, '3d')}
           stroke="rgba(0, 0, 0, 0.5)"
           strokeWidth={0.15}
         />
@@ -114,4 +119,4 @@ export function MiniMap({
       </g>
     </svg>
   )
-}
+})

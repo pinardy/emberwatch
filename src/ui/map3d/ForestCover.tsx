@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { distToPolygonEdge, pointInPolygon, polygonBounds } from '../../game/engine/geometry'
-import type { Glade } from '../../game/types'
+import type { Glade, GladeKind } from '../../game/types'
+import { GLADE_KIND_STYLE } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import { NO_RAYCAST, hash01 } from './models'
 
@@ -17,6 +18,8 @@ export interface TreeInstance {
   z: number
   s: number
   discovered: boolean
+  /** Glade kind: discovered canopies are tinted by it. */
+  kind: GladeKind
 }
 
 export function treesFor(glades: Glade[]): TreeInstance[] {
@@ -41,6 +44,7 @@ export function treesFor(glades: Glade[]): TreeInstance[] {
           z: jy,
           s: 0.75 + hash01(glade.id, salt + 3) * 0.75,
           discovered: glade.discovered,
+          kind: glade.kind,
         })
       }
     }
@@ -57,7 +61,10 @@ export function ForestCover({ glades }: { glades: Glade[] }) {
   return <ForestInstances key={signature} trees={trees} />
 }
 
-const DISCOVERED_CANOPY = new THREE.Color('#2e4f36')
+/** Discovered canopies wear their glade kind: green, olive-amber, bruised violet. */
+const DISCOVERED_CANOPY = Object.fromEntries(
+  Object.entries(GLADE_KIND_STYLE).map(([kind, style]) => [kind, new THREE.Color(style.canopy)]),
+) as Record<GladeKind, THREE.Color>
 const HIDDEN_CANOPY = new THREE.Color('#1b2b22')
 
 function ForestInstances({ trees }: { trees: TreeInstance[] }) {
@@ -73,7 +80,7 @@ function ForestInstances({ trees }: { trees: TreeInstance[] }) {
       helper.rotation.y = tree.s * 7 // pseudo-random facing, stable per tree
       helper.updateMatrix()
       instanced.setMatrixAt(i, helper.matrix)
-      instanced.setColorAt(i, tree.discovered ? DISCOVERED_CANOPY : HIDDEN_CANOPY)
+      instanced.setColorAt(i, tree.discovered ? DISCOVERED_CANOPY[tree.kind] : HIDDEN_CANOPY)
     })
     instanced.instanceMatrix.needsUpdate = true
     if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true

@@ -53,3 +53,21 @@ export function labelTexture(text: string): THREE.CanvasTexture {
     ctx.fillText(text, size / 2, size / 2 + size * 0.01)
   })
 }
+
+/** A round status badge: a coloured disc with a dark rim and a glyph. */
+export function badgeTexture(icon: string, color: string): THREE.CanvasTexture {
+  return bake(`b:${icon}:${color}`, (ctx, size) => {
+    ctx.beginPath()
+    ctx.arc(size / 2, size / 2, size * 0.44, 0, Math.PI * 2)
+    ctx.fillStyle = color
+    ctx.fill()
+    ctx.lineWidth = size * 0.07
+    ctx.strokeStyle = 'rgba(9, 13, 16, 0.9)'
+    ctx.stroke()
+    ctx.font = `${Math.floor(size * 0.5)}px "Segoe UI Emoji", "Noto Color Emoji", sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(icon, size / 2, size / 2 + size * 0.03)
+  })
+}

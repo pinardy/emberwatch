@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, memo } from 'react'
 import { useGameStore } from '../game/store'
 import { MapView2D } from './MapView2D'
 
@@ -26,8 +26,12 @@ function hasWebGL(): boolean {
   return webglSupport
 }
 
-/** Picks the 3D map when the setting asks for it and the device can run it. */
-export function MapView() {
+/**
+ * Picks the 3D map when the setting asks for it and the device can run it.
+ * Memoised (it takes no props): the game screen re-renders on every sim
+ * tick, and the 3D scene subscribes to exactly what it draws instead.
+ */
+export const MapView = memo(function MapView() {
   const renderer = useGameStore((s) => s.settings.renderer)
   if (renderer === '2d' || !hasWebGL()) return <MapView2D />
   return (
@@ -35,4 +39,4 @@ export function MapView() {
       <MapView3D />
     </Suspense>
   )
-}
+})

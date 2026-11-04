@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import type { BuildingCategory, DepositId } from '../../game/types'
-import { emojiTexture, labelTexture } from './sprites'
+import { badgeTexture, emojiTexture, labelTexture } from './sprites'
 
 /**
  * Low-poly props shared across the 3D scene: geometries and materials are
@@ -25,6 +25,7 @@ const FIRE_GEO = new THREE.ConeGeometry(0.22, 0.5, 6)
 const RING_GEO = new THREE.TorusGeometry(0.42, 0.09, 6, 12)
 const BUSH_GEO = new THREE.IcosahedronGeometry(0.22, 0)
 const MOUND_GEO = new THREE.SphereGeometry(0.4, 10, 6)
+const BERRY_GEO = new THREE.SphereGeometry(0.055, 6, 4)
 
 // --- materials ---------------------------------------------------------------
 export const TRUNK_MAT = new THREE.MeshStandardMaterial({ color: '#4c3a28', roughness: 1 })
@@ -39,6 +40,10 @@ const BUSH_MAT = new THREE.MeshStandardMaterial({ color: '#3d6a3c', roughness: 1
 const CLAY_MAT = new THREE.MeshStandardMaterial({ color: '#7a5a43', roughness: 1 })
 const SOIL_MAT = new THREE.MeshStandardMaterial({ color: '#6d6a35', roughness: 1 })
 const MIRE_MAT = new THREE.MeshStandardMaterial({ color: '#26332e', roughness: 0.4 })
+const BERRY_MAT = new THREE.MeshStandardMaterial({ color: '#c8324a', roughness: 0.6 })
+const HIDE_MAT = new THREE.MeshStandardMaterial({ color: '#5a3b26', roughness: 1 })
+const TUSK_MAT = new THREE.MeshStandardMaterial({ color: '#efe3c4', roughness: 0.8 })
+const TRAMPLED_MAT = new THREE.MeshStandardMaterial({ color: '#4f4030', roughness: 1 })
 const FIRE_MAT = new THREE.MeshStandardMaterial({
   color: '#ff9a3c',
   emissive: '#ff6a1a',
@@ -80,6 +85,35 @@ export function IconSprite({ icon, y, size }: { icon: string; y: number; size: n
   const map = useMemo(() => emojiTexture(icon), [icon])
   return (
     <sprite position={[0, y, 0]} scale={[size, size, 1]} raycast={NO_RAYCAST}>
+      <spriteMaterial map={map} transparent depthWrite={false} />
+    </sprite>
+  )
+}
+
+/** Round coloured status badge (building states). */
+export function BadgeSprite({
+  icon,
+  color,
+  x = 0,
+  y,
+  size,
+}: {
+  icon: string
+  color: string
+  x?: number
+  y: number
+  size: number
+}) {
+  const map = useMemo(() => badgeTexture(icon, color), [icon, color])
+  // `x` shifts the badge sideways in screen space (via the sprite's anchor),
+  // so it stays beside the icon whichever way the camera faces.
+  return (
+    <sprite
+      position={[0, y, 0]}
+      center={new THREE.Vector2(0.5 - x / size, 0.5)}
+      scale={[size, size, 1]}
+      raycast={NO_RAYCAST}
+    >
       <spriteMaterial map={map} transparent depthWrite={false} />
     </sprite>
   )
@@ -184,25 +218,78 @@ export function DepositProp({ id, kind, radius }: { id: string; kind: DepositId;
         </group>
       )
     case 'vegetation':
-    case 'game':
+      // Berry bushes: green mounds dotted with red, never mistaken for game.
       return (
         <>
           {items.map((p, i) => (
-            <mesh
-              key={i}
-              geometry={BUSH_GEO}
-              material={BUSH_MAT}
-              position={[p.x, 0.16 * p.s, p.z]}
-              scale={[p.s, p.s * 0.8, p.s]}
-              rotation={[0, p.rot, 0]}
-              castShadow
-              raycast={NO_RAYCAST}
-            />
+            <group key={i} position={[p.x, 0, p.z]} rotation={[0, p.rot, 0]}>
+              <mesh
+                geometry={BUSH_GEO}
+                material={BUSH_MAT}
+                position={[0, 0.16 * p.s, 0]}
+                scale={[p.s, p.s * 0.8, p.s]}
+                castShadow
+                raycast={NO_RAYCAST}
+              />
+              {BERRY_SPOTS.map(([bx, by, bz], j) => (
+                <mesh
+                  key={j}
+                  geometry={BERRY_GEO}
+                  material={BERRY_MAT}
+                  position={[bx * p.s, by * p.s, bz * p.s]}
+                  raycast={NO_RAYCAST}
+                />
+              ))}
+            </group>
+          ))}
+        </>
+      )
+    case 'game':
+      // Game trails: a trampled clearing with a couple of grazing boars.
+      return (
+        <>
+          <mesh
+            geometry={MOUND_GEO}
+            material={TRAMPLED_MAT}
+            position={[0, 0.005, 0]}
+            scale={[radius * 1.2, 0.04, radius * 1.2]}
+            receiveShadow
+            raycast={NO_RAYCAST}
+          />
+          {items.slice(0, 2).map((p, i) => (
+            <Boar key={i} x={p.x} z={p.z} s={0.85 + p.s * 0.35} rot={p.rot * 2} />
           ))}
         </>
       )
   }
 }
+
+const BERRY_SPOTS: [number, number, number][] = [
+  [0.13, 0.22, 0.05],
+  [-0.1, 0.25, 0.1],
+  [0.02, 0.3, -0.12],
+]
+
+/** A low-poly boar: body, snout and a pale tusk. */
+function Boar({ x, z, s, rot }: { x: number; z: number; s: number; rot: number }) {
+  return (
+    <group position={[x, 0, z]} rotation={[0, rot, 0]} scale={[s, s, s]}>
+      <mesh geometry={BOX_GEO} material={HIDE_MAT} position={[0, 0.17, 0]} scale={[0.38, 0.2, 0.2]} castShadow raycast={NO_RAYCAST} />
+      <mesh geometry={BOX_GEO} material={HIDE_MAT} position={[0.24, 0.17, 0]} scale={[0.13, 0.13, 0.14]} castShadow raycast={NO_RAYCAST} />
+      <mesh geometry={BOX_GEO} material={TUSK_MAT} position={[0.31, 0.13, 0.05]} scale={[0.05, 0.03, 0.03]} raycast={NO_RAYCAST} />
+      {LEG_SPOTS.map(([lx, lz], i) => (
+        <mesh key={i} geometry={BOX_GEO} material={HIDE_MAT} position={[lx, 0.04, lz]} scale={[0.05, 0.09, 0.05]} raycast={NO_RAYCAST} />
+      ))}
+    </group>
+  )
+}
+
+const LEG_SPOTS: [number, number][] = [
+  [0.13, 0.07],
+  [0.13, -0.07],
+  [-0.13, 0.07],
+  [-0.13, -0.07],
+]
 
 export function ObstacleProp({ id, kind, radius }: { id: string; kind: 'crag' | 'mire'; radius: number }) {
   const rocks = useMemo(
