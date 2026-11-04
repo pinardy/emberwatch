@@ -9,6 +9,7 @@ import {
 import { parseSeed, randomSeed } from '../game/engine/rng'
 import { useGameStore } from '../game/store'
 import type { SpeciesId } from '../game/types'
+import { EdictPicker } from './EdictPicker'
 
 /** Settlements bring exactly this many species at most. */
 const MAX_SPECIES = 3
@@ -20,6 +21,8 @@ export function SetupScreen() {
   const goToScreen = useGameStore((s) => s.goToScreen)
 
   const [seedText, setSeedText] = useState('')
+  // Queen's Edict: defaults to the hardest rung earned so far.
+  const [edict, setEdict] = useState(meta.edictUnlocked)
   const available = useMemo(
     () => [...new Set([...STARTING_SPECIES, ...meta.unlockedSpecies])],
     [meta.unlockedSpecies],
@@ -50,7 +53,7 @@ export function SetupScreen() {
 
   const start = () => {
     const seed = seedText.trim() ? parseSeed(seedText) : randomSeed()
-    startRun(seed, chosen)
+    startRun(seed, chosen, edict)
   }
 
   return (
@@ -136,6 +139,15 @@ export function SetupScreen() {
               🎲
             </button>
           </div>
+        </section>
+
+        <section className="setup-section edict-section">
+          <h3>Queen's Edict</h3>
+          <p className="muted">
+            Harsher terms for richer supplies. Each edict stacks on the ones below it; win
+            under the hardest you have earned to unlock the next.
+          </p>
+          <EdictPicker unlocked={meta.edictUnlocked} value={edict} onPick={setEdict} />
         </section>
 
         <footer className="modal-foot setup-foot">

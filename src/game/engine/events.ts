@@ -1,5 +1,5 @@
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
-import { CORNERSTONE_LIST, CORNERSTONES, RARITY_WEIGHTS } from '../content/cornerstones'
+import { CORNERSTONES, RARITY_WEIGHTS } from '../content/cornerstones'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS, describeGoal, evaluateGoal } from '../content/orders'
 import { SPECIES, VILLAGER_TRAIT_LIST, villagerName } from '../content/species'
@@ -21,6 +21,13 @@ import {
   REWARD_MILESTONES,
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
+import {
+  blueprintDraftSize,
+  cornerstoneDraftSize,
+  cornerstonePool,
+  freeRerollsLeft,
+  gladeEventOptions,
+} from './citadel'
 import { drawOrder, pushLog } from './createRun'
 import type { Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
@@ -153,7 +160,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
   const choice = s.pendingChoices[0]
   if (!choice || choice.kind !== 'gladeEvent') return
   const def = GLADE_EVENTS[choice.options[0]]
-  const option = def?.options[optionIndex]
+  const option = def ? gladeEventOptions(s, def)[optionIndex] : undefined
   if (!def || !option) return
   if (!optionAffordable(s.stock, option)) return
 
@@ -301,10 +308,11 @@ export function checkMilestones(s: RunState): void {
 
 export function offerCornerstone(s: RunState): void {
   const rng = makeRng(s.seed, s.rngCursor)
-  const pool = CORNERSTONE_LIST.filter((c) => !s.cornerstones.includes(c.id))
+  const pool = cornerstonePool(s).filter((c) => !s.cornerstones.includes(c.id))
   const options: string[] = []
   const remaining = [...pool]
-  for (let i = 0; i < 3 && remaining.length > 0; i++) {
+  const size = cornerstoneDraftSize(s)
+  for (let i = 0; i < size && remaining.length > 0; i++) {
     const pickDef = rng.weighted(remaining, (c) => RARITY_WEIGHTS[c.rarity])
     options.push(pickDef.id)
     remaining.splice(remaining.indexOf(pickDef), 1)
@@ -382,8 +390,9 @@ function buildBlueprintOptions(s: RunState): string[] {
   const relevant = relevantBlueprints(s)
   const options: string[] = []
   if (relevant.length > 0) options.push(relevant[0])
+  const size = blueprintDraftSize(s)
   for (const id of rng.shuffle(pool)) {
-    if (options.length >= 3) break
+    if (options.length >= size) break
     if (!options.includes(id)) options.push(id)
   }
   s.rngCursor = rng.cursor()
@@ -457,6 +466,7 @@ function refreshQueuedChoices(s: RunState): void {
 
 /** Amber cost of the next draft reroll — it steepens with use. */
 export function rerollCost(s: RunState): number {
+  if (freeRerollsLeft(s) > 0) return 0
   return REROLL_BASE_COST + s.rerollsUsed * REROLL_COST_GROWTH
 }
 
@@ -477,18 +487,19 @@ export function rerollChoice(s: RunState): string | null {
     const pool = BLUEPRINT_POOL.filter(
       (id) => !s.unlockedBuildings.includes(id) && !choice.options.includes(id),
     )
-    const fresh = rng.shuffle(pool).slice(0, 3)
+    const fresh = rng.shuffle(pool).slice(0, blueprintDraftSize(s))
     s.rngCursor = rng.cursor()
     if (fresh.length === 0) return 'There is nothing else to offer.'
     choice.options = fresh
   } else {
     const rng = makeRng(s.seed, s.rngCursor)
-    const pool = CORNERSTONE_LIST.filter(
+    const pool = cornerstonePool(s).filter(
       (c) => !s.cornerstones.includes(c.id) && !choice.options.includes(c.id),
     )
     const options: string[] = []
     const remaining = [...pool]
-    for (let i = 0; i < 3 && remaining.length > 0; i++) {
+    const size = cornerstoneDraftSize(s)
+    for (let i = 0; i < size && remaining.length > 0; i++) {
       const pick = rng.weighted(remaining, (c) => RARITY_WEIGHTS[c.rarity])
       options.push(pick.id)
       remaining.splice(remaining.indexOf(pick), 1)
@@ -498,6 +509,12 @@ export function rerollChoice(s: RunState): string | null {
     choice.options = options
   }
 
+  if (cost === 0 && s.citadel && freeRerollsLeft(s) > 0) {
+    // A Citadel favour: free, and it does not steepen the amber price.
+    s.citadel.freeRerolls--
+    pushLog(s, 'The offer is redrawn — a favour from the Citadel.', 'info')
+    return null
+  }
   spend(s.stock, { amber: cost })
   s.rerollsUsed++
   pushLog(s, `The offer is redrawn for ${cost} amber.`, 'info')

@@ -1,5 +1,11 @@
 import { create } from 'zustand'
-import { META_UPGRADES, defaultMeta, supplyReward } from './content/meta'
+import {
+  META_UPGRADES,
+  bankRun,
+  defaultMeta,
+  purchaseUpgrade,
+  supplyReward,
+} from './content/meta'
 import {
   addClearer,
   assignWorker,
@@ -72,7 +78,8 @@ interface GameStore {
 
   // --- lifecycle -----------------------------------------------------------
   boot: () => void
-  startRun: (seed?: number, species?: SpeciesId[]) => void
+  /** `edict` is clamped to the highest Queen's Edict the Citadel has earned. */
+  startRun: (seed?: number, species?: SpeciesId[], edict?: number) => void
   abandonRun: () => void
   finishRun: () => void
   goToScreen: (screen: Screen) => void
@@ -147,8 +154,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ meta: loadMeta(), settings: loadSettings() })
   },
 
-  startRun: (seed, species) => {
-    const run = createRun({ seed: seed ?? randomSeed(), meta: get().meta, species })
+  startRun: (seed, species, edict) => {
+    const meta = get().meta
+    const run = createRun({
+      seed: seed ?? randomSeed(),
+      meta,
+      species,
+      edict: Math.min(edict ?? 0, meta.edictUnlocked),
+    })
     saveRun(run)
     set({
       run,
@@ -183,22 +196,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { run, meta } = get()
     if (!run || run.phase === 'playing') return
     const reward = supplyReward(run)
-    const next: MetaState = {
-      ...meta,
-      citadelSupplies: meta.citadelSupplies + reward,
-      runsWon: meta.runsWon + (run.phase === 'won' ? 1 : 0),
-      runsLost: meta.runsLost + (run.phase === 'lost' ? 1 : 0),
-      history: [
-        {
-          seed: run.seed,
-          won: run.phase === 'won',
-          years: run.season.year,
-          reputation: run.reputation,
-          at: Date.now(),
-        },
-        ...meta.history,
-      ].slice(0, 20),
-    }
+    const next = bankRun(meta, run)
+    const unlockedEdict = next.edictUnlocked > meta.edictUnlocked
     saveMeta(next)
     saveRun(null)
     set({
@@ -207,7 +206,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       screen: 'citadel',
       speed: 0,
       version: get().version + 1,
-      notice: `Run banked: +${reward} Citadel supplies.`,
+      notice: unlockedEdict
+        ? `Run banked: +${reward} Citadel supplies. A harsher Queen's Edict is unlocked.`
+        : `Run banked: +${reward} Citadel supplies.`,
     })
   },
 
@@ -320,27 +321,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   dismissNotice: () => set({ notice: null }),
 
   buyUpgrade: (id) => {
-    const { meta } = get()
     const def = META_UPGRADES[id]
     if (!def) return
-    if (meta.upgrades.includes(id)) {
-      set({ notice: 'Already unlocked.' })
+    const result = purchaseUpgrade(get().meta, id)
+    if (!result.meta) {
+      set({ notice: result.error })
       return
     }
-    if (meta.citadelSupplies < def.cost) {
-      set({ notice: 'Not enough Citadel supplies.' })
-      return
-    }
-    const next: MetaState = {
-      ...meta,
-      citadelSupplies: meta.citadelSupplies - def.cost,
-      upgrades: [...meta.upgrades, id],
-      unlockedSpecies: def.unlocksSpecies
-        ? [...new Set([...meta.unlockedSpecies, def.unlocksSpecies])]
-        : meta.unlockedSpecies,
-    }
-    saveMeta(next)
-    set({ meta: next, notice: `${def.name} unlocked.` })
+    saveMeta(result.meta)
+    set({ meta: result.meta, notice: `${def.name} unlocked.` })
   },
 
   updateSettings: (patch) => {

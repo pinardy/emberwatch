@@ -272,6 +272,57 @@ const defs: CornerstoneDef[] = [
       { kind: 'globalStorage', amount: 100 },
     ],
   },
+
+  // ---- Citadel-locked -------------------------------------------------------
+  // Never drafted until a Citadel upgrade admits them (see content/meta.ts).
+  {
+    id: 'citadelMasons',
+    name: 'Citadel Masons',
+    icon: '🧱',
+    rarity: 'rare',
+    citadelLocked: true,
+    description: 'Construction is 20% faster and the stockpile holds 80 more.',
+    effects: [
+      { kind: 'buildSpeed', percent: 20 },
+      { kind: 'globalStorage', amount: 80 },
+    ],
+  },
+  {
+    id: 'wayfarersLedger',
+    name: 'Wayfarer’s Ledger',
+    icon: '📒',
+    rarity: 'rare',
+    citadelLocked: true,
+    description: 'Glades yield 40% more loot and caravans charge 10% less.',
+    effects: [
+      { kind: 'gladeLoot', percent: 40 },
+      { kind: 'tradePrices', percent: -10 },
+    ],
+  },
+  {
+    id: 'royalMandate',
+    name: 'Royal Mandate',
+    icon: '🪪',
+    rarity: 'epic',
+    citadelLocked: true,
+    description: "The Queen's impatience grows 30% slower and reputation accrues 10% faster.",
+    effects: [
+      { kind: 'impatienceRate', percent: -30 },
+      { kind: 'reputationRate', percent: 10 },
+    ],
+  },
+  {
+    id: 'stormwardens',
+    name: 'Stormwardens',
+    icon: '🌀',
+    rarity: 'epic',
+    citadelLocked: true,
+    description: 'Farms work at half speed through the Storm and every species gains +2 resolve in it.',
+    effects: [
+      { kind: 'farmsInStorm', percent: 50 },
+      { kind: 'stormResolve', amount: 2 },
+    ],
+  },
 ]
 
 export const CORNERSTONES: Record<string, CornerstoneDef> = Object.fromEntries(
