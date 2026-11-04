@@ -10,6 +10,7 @@ import type {
 } from '../types'
 import {
   BUILDING_GAP,
+  DEMOLISH_REFUND_BUILT,
   FOOTPRINT_RADIUS,
   RUSH_COST_PER_SECOND,
   SOOTHE_BASE_COST,
@@ -179,14 +180,100 @@ export function findPlacement(s: RunState, defId: string, near?: Vec2): Vec2 | n
   return null
 }
 
-/** Materials handed back when a building is torn down: half, rounded down. */
-export function demolishRefund(defId: string): ResourceBag {
+type RefundSubject = Pick<BuildingInstance, 'defId' | 'built' | 'buildProgress'> &
+  Partial<Pick<BuildingInstance, 'tier' | 'upgradeProgress'>>
+
+/**
+ * Share of the cost a building returns when it comes down: all of it while
+ * nobody has worked on the site, sliding to `DEMOLISH_REFUND_BUILT` as
+ * construction progresses, and that share once it stands.
+ */
+export function demolishRefundShare(building: RefundSubject): number {
+  if (building.built) return DEMOLISH_REFUND_BUILT
+  const seconds = BUILDINGS[building.defId]?.buildSeconds ?? 0
+  if (seconds <= 0 || building.buildProgress <= 0) return 1
+  const done = Math.min(1, building.buildProgress / seconds)
+  return 1 - (1 - DEMOLISH_REFUND_BUILT) * done
+}
+
+/** True while nobody has done any work on the site: removing it is a cancel. */
+export function isUnstartedSite(building: Pick<BuildingInstance, 'built' | 'buildProgress'>): boolean {
+  return !building.built && building.buildProgress <= 0
+}
+
+/**
+ * Materials handed back when a building is torn down, rounded down. A bare
+ * definition id means a finished building.
+ */
+/** Adds `share` of each cost entry to `into`, rounding down per resource. */
+function addShare(into: Record<string, number>, cost: ResourceBag, share: number): void {
+  for (const [id, amount] of Object.entries(cost)) {
+    into[id] = (into[id] ?? 0) + (amount ?? 0) * share
+  }
+}
+
+/**
+ * Materials a building has cost so far: its base cost, every finished upgrade
+ * tier, and the tier currently under way (paid in full when it was started).
+ */
+export function demolishSpent(building: RefundSubject): ResourceBag {
+  const def = BUILDINGS[building.defId]
+  const tiers = def?.upgrades ?? []
+  const done = Math.min(building.tier ?? 0, tiers.length)
+  const total: Record<string, number> = {}
+  addShare(total, def?.cost ?? {}, 1)
+  for (let i = 0; i < done; i++) addShare(total, tiers[i].cost, 1)
+  if (building.built && building.upgradeProgress !== undefined && tiers[done]) {
+    addShare(total, tiers[done].cost, 1)
+  }
+  return total as ResourceBag
+}
+
+/**
+ * What tearing a building down returns. The base cost follows
+ * `demolishRefundShare`; every finished upgrade tier returns
+ * `DEMOLISH_REFUND_BUILT` like a finished building; and an upgrade still in
+ * progress slides from a full refund (no work done) down to that share, the
+ * same rule a construction site follows.
+ */
+export function demolishRefund(building: string | RefundSubject): ResourceBag {
+  const raw = refundBeforeRounding(building)
   const refund: ResourceBag = {}
-  for (const [id, amount] of Object.entries(BUILDINGS[defId]?.cost ?? {}) as [ResourceId, number][]) {
-    const qty = Math.floor((amount ?? 0) / 2)
-    if (qty > 0) refund[id] = qty
+  for (const [id, amount] of Object.entries(raw)) {
+    // The epsilon keeps a share like 0.7 × 10 from flooring to 6.
+    const qty = Math.floor(amount + 1e-9)
+    if (qty > 0) refund[id as ResourceId] = qty
   }
   return refund
+}
+
+/**
+ * The refund as a share of everything spent on the building (0..1), before
+ * per-resource rounding — the rule's share, which is what the UI states.
+ */
+export function demolishRefundPercent(building: RefundSubject): number {
+  const total = (bag: Record<string, number | undefined>) =>
+    Object.values(bag).reduce<number>((a, n) => a + (n ?? 0), 0)
+  const spent = total(demolishSpent(building))
+  return spent > 0 ? total(refundBeforeRounding(building)) / spent : 0
+}
+
+function refundBeforeRounding(building: string | RefundSubject): Record<string, number> {
+  const subject: RefundSubject =
+    typeof building === 'string' ? { defId: building, built: true, buildProgress: 0 } : building
+  const def = BUILDINGS[subject.defId]
+  const tiers = def?.upgrades ?? []
+  const done = Math.min(subject.tier ?? 0, tiers.length)
+  const raw: Record<string, number> = {}
+  addShare(raw, def?.cost ?? {}, demolishRefundShare(subject))
+  for (let i = 0; i < done; i++) addShare(raw, tiers[i].cost, DEMOLISH_REFUND_BUILT)
+  const pending = tiers[done]
+  if (subject.built && subject.upgradeProgress !== undefined && pending) {
+    const progress =
+      pending.buildSeconds > 0 ? Math.min(1, subject.upgradeProgress / pending.buildSeconds) : 1
+    addShare(raw, pending.cost, 1 - (1 - DEMOLISH_REFUND_BUILT) * progress)
+  }
+  return raw
 }
 
 export function demolishBuilding(s: RunState, buildingId: string): ActionError {
@@ -197,7 +284,7 @@ export function demolishBuilding(s: RunState, buildingId: string): ActionError {
 
   for (const workerId of [...building.workers]) unassign(s, workerId)
 
-  grant(s.stock, demolishRefund(building.defId), s.storageCap, storageUsed(s))
+  grant(s.stock, demolishRefund(building), s.storageCap, storageUsed(s))
 
   delete s.buildings[buildingId]
   return null

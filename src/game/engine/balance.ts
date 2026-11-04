@@ -291,6 +291,12 @@ export const SOOTHE_BASE_COST = 40
 export const SOOTHE_COST_GROWTH = 15
 /** Rush construction: amber per work-second remaining (min 5). */
 export const RUSH_COST_PER_SECOND = 0.5
+/**
+ * Share of a building's cost handed back when it comes down. A site nobody has
+ * worked on yet returns everything, so a misplaced building costs nothing; the
+ * share slides down to this while it goes up, and a finished building keeps it.
+ */
+export const DEMOLISH_REFUND_BUILT = 0.5
 
 // ---------------------------------------------------------------------------
 // Villager traits
@@ -341,8 +347,14 @@ export const BRAZIER_FOOTPRINT = 0.4
 // (new features — kept apart from the core pacing numbers above)
 // ---------------------------------------------------------------------------
 
-/** Seconds into the run before the Queen issues her first timed decree. */
-export const DECREE_FIRST_DELAY = 240
+/**
+ * Seconds into the run before the Queen issues her first timed decree: one
+ * full year, so it lands as Year 2 opens. Earlier, it arrived on the eve of
+ * the first Storm and asked a settlement still learning to feed itself for a
+ * levy it had no camp to produce. The decree timer and the season clock
+ * advance on the same tick, so this is the start of Year 2 exactly.
+ */
+export const DECREE_FIRST_DELAY = YEAR_SECONDS
 /** Seconds between one decree ending (met or missed) and the next. */
 export const DECREE_INTERVAL = 200
 /** Impatience when a decree's deadline passes unmet. */

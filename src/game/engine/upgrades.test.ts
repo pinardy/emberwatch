@@ -8,12 +8,16 @@ import { serviceCapacity } from './adjacency'
 import {
   assignWorker,
   canUpgradeBuilding,
+  demolishBuilding,
+  demolishRefund,
+  demolishRefundPercent,
+  demolishSpent,
   rushConstruction,
   rushCost,
   setRecipe,
   upgradeBuilding,
 } from './actions'
-import { RUSH_COST_PER_SECOND } from './balance'
+import { DEMOLISH_REFUND_BUILT, RUSH_COST_PER_SECOND } from './balance'
 import { createRun } from './createRun'
 import { takeChoice } from './events'
 import { buildingStatus } from './forecast'
@@ -422,6 +426,57 @@ describe('upgrades and saves', () => {
       expect(loaded.phase).toBe('playing')
     } finally {
       globalThis.localStorage = original
+    }
+  })
+})
+
+describe('demolishing upgraded buildings', () => {
+  const shelter = BUILDINGS.shelter
+  const tier1 = shelter.upgrades![0]
+  const half = (bag: Partial<Record<string, number>>, share: number) =>
+    Object.fromEntries(Object.entries(bag).map(([k, v]) => [k, (v ?? 0) * share]))
+  const sum = (...bags: Record<string, number>[]) => {
+    const out: Record<string, number> = {}
+    for (const bag of bags) for (const [k, v] of Object.entries(bag)) out[k] = (out[k] ?? 0) + v
+    for (const k of Object.keys(out)) out[k] = Math.floor(out[k] + 1e-9)
+    for (const k of Object.keys(out)) if (out[k] === 0) delete out[k]
+    return out
+  }
+
+  it('returns half of the base cost and of every finished tier', () => {
+    const s = newRun()
+    const b = stand(s, 'shelter', { x: 40, y: 40 }, 1)
+    expect(demolishRefund(b)).toEqual(
+      sum(half(shelter.cost, DEMOLISH_REFUND_BUILT), half(tier1.cost, DEMOLISH_REFUND_BUILT)),
+    )
+    expect(demolishSpent(b)).toEqual(sum(half(shelter.cost, 1), half(tier1.cost, 1)))
+    // The share the Inspector states is the rule's, before per-resource rounding.
+    expect(demolishRefundPercent(b)).toBeCloseTo(DEMOLISH_REFUND_BUILT)
+  })
+
+  it('refunds an upgrade in full before work starts, sliding to half as it progresses', () => {
+    const s = newRun()
+    const b = stand(s, 'shelter')
+    b.upgradeProgress = 0
+    expect(demolishRefund(b)).toEqual(
+      sum(half(shelter.cost, DEMOLISH_REFUND_BUILT), half(tier1.cost, 1)),
+    )
+    b.upgradeProgress = tier1.buildSeconds / 2
+    const midShare = 1 - (1 - DEMOLISH_REFUND_BUILT) / 2
+    expect(demolishRefund(b)).toEqual(
+      sum(half(shelter.cost, DEMOLISH_REFUND_BUILT), half(tier1.cost, midShare)),
+    )
+  })
+
+  it('pays the tier refund back into the stockpile on demolition', () => {
+    const s = newRun()
+    s.storageCap = 999
+    s.stock = {}
+    const b = stand(s, 'shelter', { x: 40, y: 40 }, 1)
+    const expected = demolishRefund(b)
+    expect(demolishBuilding(s, b.id)).toBeNull()
+    for (const [id, amount] of Object.entries(expected)) {
+      expect(s.stock[id as keyof typeof s.stock]).toBe(amount)
     }
   })
 })

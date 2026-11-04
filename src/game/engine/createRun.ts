@@ -30,6 +30,7 @@ import {
 } from './balance'
 import { offerBlueprint, offerCornerstone } from './events'
 import { defaultDecreeState } from './structure'
+import { emptyTimeline } from './timeline'
 import { defaultCaravan } from './trade'
 import { generateMap } from './mapgen'
 import { makeRng } from './rng'
@@ -180,6 +181,7 @@ export function createRun({ seed, meta, species, edict }: NewRunOptions): RunSta
     pendingChoices: [],
     log: [],
     logCounter: 0,
+    timeline: emptyTimeline(speciesPool),
     speciesPool,
     newcomerTimer: 0,
     unlockedBuildings: [...new Set([...STARTING_BLUEPRINTS, ...loadout.startBlueprints])],

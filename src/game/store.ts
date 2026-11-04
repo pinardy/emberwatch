@@ -1,5 +1,12 @@
 import { create } from 'zustand'
 import {
+  autoPauseHits,
+  autoPauseNotice,
+  watchRun,
+  type AutoPauseHit,
+  type RunWatch,
+} from './autoPause'
+import {
   META_UPGRADES,
   bankRun,
   defaultMeta,
@@ -52,6 +59,12 @@ const MAX_STEPS_PER_FRAME = 64
  * store because it changes every frame and nothing renders from it.
  */
 let simCarry = 0
+
+/**
+ * What the auto-pause triggers last saw of the run, to compare against after
+ * the next step. Keyed by the run object, so a new or resumed run starts fresh.
+ */
+let watched: { run: RunState; snapshot: RunWatch } | null = null
 
 export type Screen = 'menu' | 'setup' | 'game' | 'citadel'
 export type SidePanel = 'build' | 'villagers' | 'orders' | 'log' | 'trade' | null
@@ -221,11 +234,39 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // Simulation loop
   // -------------------------------------------------------------------------
   advance: (realSeconds) => {
-    const { run, speed } = get()
+    const { run, speed, settings } = get()
+    const watching = Object.values(settings.autoPause).some(Boolean)
+    const autoPause = (hits: AutoPauseHit[]) => {
+      simCarry = 0
+      set({ speed: 0, notice: autoPauseNotice(hits), version: get().version + 1 })
+    }
     if (!run || speed === 0 || run.phase !== 'playing' || run.pendingChoices.length > 0) {
       // Nothing is running, so nothing may carry into the next frame.
       simCarry = 0
+      // Whatever happens while the player has paused (a choice answered, a
+      // trigger switched on) is not news when they resume. A choice that
+      // halts a running game is different: if answering it unleashes a
+      // threat, that should still pause once the world moves again.
+      if (run && watching && (speed === 0 || run.phase !== 'playing')) {
+        watched = { run, snapshot: watchRun(run) }
+      }
       return
+    }
+
+    let before: RunWatch | null = null
+    if (watching) {
+      before = watched?.run === run ? watched.snapshot : watchRun(run)
+      // Transitions since the last frame — e.g. a threat from a choice.
+      const now = watchRun(run)
+      const hits = autoPauseHits(before, now, run, settings.autoPause)
+      watched = { run, snapshot: now }
+      if (hits.length > 0) {
+        autoPause(hits)
+        return
+      }
+      before = now
+    } else {
+      watched = null
     }
 
     /*
@@ -241,6 +282,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       tick(run, TICK_SECONDS)
       simCarry -= TICK_SECONDS
       steps++
+      if (before) {
+        // Checked every tick, so a pause lands on the moment, not a frame late.
+        const now = watchRun(run)
+        const hits = autoPauseHits(before, now, run, settings.autoPause)
+        before = now
+        watched = { run, snapshot: now }
+        if (hits.length > 0) {
+          autoPause(hits)
+          return
+        }
+      }
       if (run.phase !== 'playing' || run.pendingChoices.length > 0) {
         simCarry = 0
         break
