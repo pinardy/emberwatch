@@ -91,6 +91,21 @@ export const SPECIES_LIST = defs
 
 export const STARTING_SPECIES: SpeciesId[] = ['human', 'beaver', 'lizard']
 
+/** Player-facing names for the building tags species work bonuses apply to. */
+export const WORK_TAG_LABELS: Record<string, string> = {
+  gathering: 'Gathering camps',
+  farming: 'Farming',
+  woodworking: 'Woodworking',
+  masonry: 'Masonry',
+  smithing: 'Smithing',
+  crafting: 'Crafting',
+  alchemy: 'Alchemy',
+  cooking: 'Cooking',
+  brewing: 'Brewing',
+  scholar: 'Scholarship',
+  hunting: 'Hunting',
+}
+
 export const NEED_LABELS: Record<string, { name: string; icon: string }> = {
   rest: { name: 'Rest', icon: '🛌' },
   luxury: { name: 'Luxury', icon: '🍺' },
