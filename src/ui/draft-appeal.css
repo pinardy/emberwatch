@@ -1,0 +1,11 @@
+/* --------------------------------------------------------------------------
+   Blueprint draft: which of this run's species want what a card offers.
+   -------------------------------------------------------------------------- */
+
+.draft-need.is-wanted {
+  color: var(--gold);
+}
+
+.draft-need.is-unwanted {
+  color: var(--muted);
+}

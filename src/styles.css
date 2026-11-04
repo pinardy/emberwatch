@@ -367,20 +367,46 @@ code {
 }
 
 .topbar {
+  /* Above the map's HUD so its popovers can drop over it; under modals. */
+  position: relative;
+  z-index: 40;
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 16px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: 'left meters tools status';
+  gap: 12px;
   align-items: center;
   padding: 8px 12px;
   background: linear-gradient(180deg, #18222a, #121a20);
   border-bottom: 1px solid var(--line);
 }
 
+.topbar-left {
+  grid-area: left;
+}
+
+.topbar-tools {
+  grid-area: tools;
+}
+
+.topbar-status-wrap {
+  grid-area: status;
+}
+
 .topbar-left,
-.topbar-right {
+.topbar-tools,
+.topbar-status {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* Icon buttons carry their own padding. */
+.topbar-tools {
+  gap: 2px;
+}
+
+.topbar-tools .icon-btn {
+  padding: 4px 6px;
 }
 
 .season {
@@ -456,6 +482,7 @@ code {
 }
 
 .topbar-meters {
+  grid-area: meters;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -538,6 +565,345 @@ code {
   border: 1px solid var(--line);
   border-radius: 20px;
   font-size: 12px;
+}
+
+/* --- Impatience close to the brim reads as urgent at a glance ------------ */
+
+.meter.is-critical .meter-head strong {
+  color: var(--bad);
+}
+
+.meter.is-critical .meter-track {
+  border-color: var(--bad);
+  animation: meter-critical 1.4s ease-in-out infinite;
+}
+
+@keyframes meter-critical {
+  50% {
+    box-shadow: 0 0 0 2px rgba(217, 105, 95, 0.45);
+  }
+}
+
+/* --- Status toggle: the chips folded away on narrow screens -------------- */
+
+/* Desktop shows the chips inline; the toggle and drawer extras are phone-only. */
+.status-toggle,
+.status-season,
+.status-alerts {
+  display: none;
+}
+
+.status-toggle {
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 4px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.status-toggle.is-caution {
+  border-color: #7a6636;
+}
+
+.status-toggle.is-danger {
+  border-color: #8a4a44;
+  background: rgba(58, 26, 24, 0.75);
+}
+
+.status-toggle-idle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.status-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--warn);
+  color: #1a1207;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.status-toggle.is-danger .status-badge {
+  background: var(--bad);
+  color: #fff;
+}
+
+.status-chevron {
+  color: var(--muted);
+  font-size: 10px;
+  transition: transform 150ms ease;
+}
+
+.status-toggle.is-open .status-chevron {
+  transform: rotate(180deg);
+}
+
+/* --- Popovers hanging off the top bar ------------------------------------ */
+
+.topbar-anchor {
+  position: relative;
+  display: flex;
+}
+
+.topbar-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(340px, calc(100vw - 16px));
+  padding: 10px 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  animation: fade-in 120ms ease;
+}
+
+.settings-popover {
+  display: grid;
+  font-size: 13px;
+}
+
+.settings-popover label,
+.auto-pause-fields label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+  cursor: pointer;
+  clear: both;
+}
+
+.settings-popover input[type='checkbox'] {
+  accent-color: var(--gold);
+  flex-shrink: 0;
+}
+
+.auto-pause-fields {
+  margin: 6px 0 0;
+  padding: 6px 0 0;
+  border: none;
+  border-top: 1px solid var(--line-soft);
+  min-width: 0;
+}
+
+.auto-pause-fields legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* --- Narrow desktops and tablets: the meters get a row of their own ----- */
+
+@media (max-width: 1280px) and (min-width: 861px) {
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'left tools status'
+      'meters meters meters';
+    row-gap: 6px;
+  }
+
+  .topbar-tools {
+    justify-self: end;
+  }
+
+  .topbar .topbar-meters {
+    max-width: none;
+    column-gap: 16px;
+  }
+}
+
+/* --- Phones and small tablets: two compact rows -------------------------- *
+ * Row 1: menu, season, speed, map/sound/settings. Row 2: the three meters and
+ * the status toggle, which folds population, hearth, idle and resolve into a
+ * drawer but still shows any danger (icon, red badge and count) while closed.
+ */
+
+@media (max-width: 860px) {
+  /* Flex, not grid: the two rows must not share column widths, or a wide
+     status toggle would squeeze the speed buttons above it. */
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    padding: 6px 8px;
+  }
+
+  .topbar-left {
+    flex: 1 0 auto;
+  }
+
+  /* The basis forces the meters onto row 2, beside the status toggle. */
+  .topbar .topbar-meters {
+    order: 3;
+    flex: 1 1 calc(100% - 170px);
+    min-width: 0;
+    max-width: none;
+    gap: 8px;
+  }
+
+  .topbar-status-wrap {
+    order: 4;
+    flex: 0 0 auto;
+  }
+
+  .topbar-left {
+    gap: 6px;
+  }
+
+  .status-toggle {
+    display: inline-flex;
+  }
+
+  .topbar-status {
+    display: none;
+  }
+
+  /* The drawer hangs from the top bar's right edge, over the map. */
+  .topbar-status.is-open {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 8px;
+    width: min(360px, calc(100vw - 16px));
+    padding: 10px 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    animation: fade-in 120ms ease;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .topbar-status.is-open .status-alerts {
+    display: block;
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  .status-season {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .status-season .is-warn {
+    color: var(--warn);
+    font-weight: 600;
+  }
+
+  .status-alerts {
+    padding: 0;
+    list-style: none;
+    font-size: 12px;
+  }
+
+  .status-alerts li {
+    padding: 2px 0;
+  }
+
+  .status-alerts li.is-danger {
+    color: var(--bad);
+    font-weight: 600;
+  }
+
+  .status-alerts li.is-caution {
+    color: var(--warn);
+  }
+
+  .topbar-status .resolve-chips {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar-left {
+    gap: 4px;
+  }
+
+  /* The ring carries the season; its words move into the status drawer.
+     Still read out by screen readers. */
+  .topbar .season-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .season-ring {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+
+  /* ...and back here, in the status drawer. */
+  .topbar-status.is-open .status-season {
+    display: block;
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  /* Sound lives in the settings popover here. */
+  .topbar .sound-btn {
+    display: none;
+  }
+
+  .topbar .topbar-meters {
+    gap: 6px;
+  }
+
+  /* Slim meters: icon, number and bar. The name stays on the bar for
+     assistive tech and in the tooltip. */
+  .topbar .meter-label {
+    display: none;
+  }
+
+  .topbar .meter-head {
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+
+  .topbar .meter-head strong {
+    font-size: 11px;
+  }
+
+  .topbar .meter-track {
+    height: 6px;
+  }
+
+  .status-toggle {
+    padding: 4px 8px;
+    gap: 3px;
+  }
+}
+
+@media (pointer: coarse) {
+  .status-toggle {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .settings-popover label,
+  .auto-pause-fields label {
+    min-height: 44px;
+    padding: 2px 0;
+  }
 }
 
 /* ==========================================================================
@@ -1692,19 +2058,6 @@ code {
 }
 
 @media (max-width: 860px) {
-  .topbar {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .topbar-meters {
-    max-width: none;
-  }
-
-  .topbar-right {
-    flex-wrap: wrap;
-  }
-
   .game-main {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(220px, 1fr) auto;
@@ -2584,6 +2937,8 @@ button.is-armed {
     width: auto;
     max-height: 56px;
     overflow: hidden;
+    /* Clip whole rows: auto rows would shrink every pill to a sliver. */
+    grid-auto-rows: max-content;
   }
 
   .hud-stack > .warnings > .warning.is-danger {

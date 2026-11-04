@@ -1,10 +1,10 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
-import type { BuildingInstance, ResourceId, RunState } from '../types'
+import type { BuildingInstance, ResourceBag, ResourceId, RunState, Season } from '../types'
 import { COMPLEX_FOOD_MULTIPLIER, HEARTH_FUEL_PER_SECOND, SEASON_LENGTH } from './balance'
 import type { Modifiers } from './modifiers'
 import { countOutputs, seasonMultiplier, workRate } from './production'
-import { activeRecipe, storageUsed } from './queries'
+import { activeRecipe, canAfford, storageUsed } from './queries'
 import { hearthFuelRate, impatienceRate, mealsPerSecond, stormFuelPerSecond } from './society'
 import { hostilityRate } from './tick'
 
@@ -18,6 +18,13 @@ import { hostilityRate } from './tick'
 
 /** Runways shorter than this earn a warning in the diagnostics strip. */
 export const RUNWAY_WARNING_SECONDS = 60
+
+/**
+ * How long before the Storm the larder forecast speaks up: the back half of
+ * Drizzle and all of Clearance — late enough that the first camps are up,
+ * early enough to raise and staff another before the Storm halves gathering.
+ */
+export const STORM_FOOD_WARNING_LEAD = 70 + SEASON_LENGTH.clearance
 
 /** Seconds until the next Storm begins, or null while it rages. */
 export function secondsUntilStorm(s: RunState): number | null {
@@ -84,6 +91,106 @@ export function foodForecast(s: RunState, mods: Modifiers): FoodForecast {
   meals = Math.max(0, meals - Math.max(0, s.foodDebt))
   const rate = mealsPerSecond(s, mods)
   return { meals, rate, runway: rate > 0 ? meals / rate : Infinity }
+}
+
+/** Meals a bag of food is worth: raw food one each, cooked food double. */
+function mealValue(bag: ResourceBag): number {
+  let meals = 0
+  for (const [id, amount] of Object.entries(bag) as [ResourceId, number][]) {
+    if (!EDIBLE.includes(id)) continue
+    meals += COMPLEX_FOOD.includes(id) ? amount * COMPLEX_FOOD_MULTIPLIER : amount
+  }
+  return meals
+}
+
+/**
+ * Net meals per second the settlement's staffed food producers add in
+ * `season`, at that season's multipliers: farms stop in the Storm (unless a
+ * cornerstone keeps them turning) and gathering halves. A kitchen counts only
+ * what cooking adds over the raw food it uses, and only while it has that raw
+ * food in stock. An estimate — it ignores deposits running dry and the odd
+ * bonus batch — but it never counts a farm's harvest during the Storm.
+ */
+export function foodProductionRate(s: RunState, mods: Modifiers, season: Season): number {
+  // Some quirks work differently in the Storm, so rate workers in that season.
+  const inSeason: RunState =
+    s.season.season === season ? s : { ...s, season: { ...s.season, season } }
+  let rate = 0
+  for (const b of Object.values(s.buildings)) {
+    if (!b.built || b.paused || b.workers.length === 0) continue
+    const recipe = activeRecipe(b)
+    if (!recipe || recipe.seconds <= 0) continue
+    const net = mealValue(recipe.outputs) - mealValue(recipe.inputs)
+    if (net <= 0) continue
+    if (recipe.requiresDeposit) {
+      const live = (b.depositsInRange[recipe.requiresDeposit] ?? []).some((id) => {
+        const d = s.deposits[id]
+        return d && (d.amount === null || d.amount > 0)
+      })
+      if (!live) continue
+    }
+    if (!canAfford(s.stock, recipe.inputs)) continue
+    const multiplier = seasonMultiplier(b.defId, season, mods)
+    if (multiplier <= 0) continue
+    rate += (workRate(inSeason, b, mods) * multiplier * net) / recipe.seconds
+  }
+  return rate
+}
+
+export interface StormFoodForecast {
+  /** Seconds from now until the coming (or current) Storm ends. */
+  horizon: number
+  /** Meals eaten over that horizon at the current population. */
+  needed: number
+  /** Meals in store now, net of meals already owed. */
+  meals: number
+  /** Meals the staffed food producers should add over the horizon. */
+  produced: number
+  /**
+   * Meals missing at the leanest moment before the Storm ends: how much more
+   * food (or production) it takes never to go hungry. Zero when covered.
+   */
+  shortfall: number
+}
+
+/**
+ * Will the larder last until the Storm is over? Walks the seasons between
+ * now and the end of the Storm, each at its own production rate, against what
+ * the settlement eats. Food that would not fit in the stockpile is not
+ * counted, so a camp idling at the brim cannot paper over a lean Storm.
+ */
+export function stormFoodForecast(s: RunState, mods: Modifiers): StormFoodForecast {
+  const left = Math.max(0, s.season.length - s.season.elapsed)
+  const segments: [Season, number][] =
+    s.season.season === 'storm'
+      ? [['storm', left]]
+      : s.season.season === 'clearance'
+        ? [
+            ['clearance', left],
+            ['storm', SEASON_LENGTH.storm],
+          ]
+        : [
+            ['drizzle', left],
+            ['clearance', SEASON_LENGTH.clearance],
+            ['storm', SEASON_LENGTH.storm],
+          ]
+
+  const eat = mealsPerSecond(s, mods)
+  const { meals } = foodForecast(s, mods)
+  // Raw food is one meal per stockpile slot; the larder cannot outgrow the room.
+  const ceiling = meals + Math.max(0, s.storageCap - storageUsed(s))
+  let running = meals
+  let lowest = meals
+  let horizon = 0
+  let produced = 0
+  for (const [season, seconds] of segments) {
+    const make = foodProductionRate(s, mods, season)
+    produced += make * seconds
+    horizon += seconds
+    running = Math.min(ceiling, running + (make - eat) * seconds)
+    lowest = Math.min(lowest, running)
+  }
+  return { horizon, needed: eat * horizon, meals, produced, shortfall: Math.max(0, -lowest) }
 }
 
 /** Passive impatience and hostility gained per minute right now. */

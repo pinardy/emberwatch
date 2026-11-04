@@ -5,11 +5,13 @@ import { ORDERS, describeGoal, evaluateGoal } from '../content/orders'
 import { SPECIES, VILLAGER_TRAIT_LIST, villagerName } from '../content/species'
 import { EDIBLE, resourceName } from '../content/resources'
 import type {
+  BuildingDef,
   GladeEventOptionDef,
   ResourceBag,
   ResourceId,
   RunState,
   ServiceNeed,
+  SpeciesId,
 } from '../types'
 import {
   CLEAR_RATE_PER_VILLAGER,
@@ -341,14 +343,11 @@ export function relevantBlueprints(s: RunState): string[] {
 
   // How many residents care about each need — a venue that serves two species
   // is worth more than one that serves a single villager.
-  const demand = new Map<ServiceNeed, number>()
-  for (const sp of present) {
-    for (const need of SPECIES[sp].needs) {
-      demand.set(need, (demand.get(need) ?? 0) + 1)
-    }
-  }
+  const demand = serviceDemand(present)
 
-  const ordered = [...demand.entries()].sort((a, b) => b[1] - a[1]).map(([need]) => need)
+  const ordered = [...demand.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([need]) => need)
 
   const missingVenue: string[] = []
   const missingSupply: string[] = []
@@ -361,10 +360,8 @@ export function relevantBlueprints(s: RunState): string[] {
       continue
     }
     // Venue is available; make sure something can supply the goods it hands out.
-    for (const good of Object.keys(unlockedVenue.recipes[0]?.inputs ?? {})) {
-      const producers = BUILDING_LIST.filter((b) =>
-        b.recipes.some((r) => ((r.outputs as Record<string, number>)[good] ?? 0) > 0),
-      )
+    for (const good of serviceGoods(unlockedVenue.id)) {
+      const producers = producersOf(good)
       if (producers.some((p) => s.unlockedBuildings.includes(p.id))) continue
       for (const p of producers) missingSupply.push(p.id)
     }
@@ -378,6 +375,62 @@ export function relevantBlueprints(s: RunState): string[] {
   return [...missingSupply, ...missingVenue].filter(
     (id) => !s.unlockedBuildings.includes(id) && BLUEPRINT_POOL.includes(id),
   )
+}
+
+/** Which of these species want each service need, in need order of first appearance. */
+export function serviceDemand(species: SpeciesId[]): Map<ServiceNeed, SpeciesId[]> {
+  const demand = new Map<ServiceNeed, SpeciesId[]>()
+  for (const sp of species) {
+    for (const need of SPECIES[sp].needs) {
+      demand.set(need, [...(demand.get(need) ?? []), sp])
+    }
+  }
+  return demand
+}
+
+/** The goods a service venue hands out (its first recipe's inputs). */
+function serviceGoods(venueId: string): ResourceId[] {
+  return Object.keys(BUILDINGS[venueId]?.recipes[0]?.inputs ?? {}) as ResourceId[]
+}
+
+/** Buildings with a recipe that yields `good`. */
+function producersOf(good: ResourceId): BuildingDef[] {
+  return BUILDING_LIST.filter((b) =>
+    b.recipes.some((r) => ((r.outputs as Record<string, number>)[good] ?? 0) > 0),
+  )
+}
+
+export interface DraftAppeal {
+  /** The need this building serves as a venue, and who in this run wants it. */
+  serves?: { need: ServiceNeed; species: SpeciesId[] }
+  /** Wanted needs whose venues hand out goods this building produces. */
+  supplies: { need: ServiceNeed; species: SpeciesId[] }[]
+}
+
+/**
+ * Why a blueprint matters to *this* settlement: which of its species want the
+ * service it provides, and which wanted services it would supply. Uses the
+ * same need → venue → goods → producer chain as `relevantBlueprints`, over the
+ * species drawn for the run (residents and those still to arrive).
+ */
+export function draftAppeal(s: RunState, defId: string): DraftAppeal {
+  const def = BUILDINGS[defId]
+  const species = [...new Set([...s.speciesPool, ...Object.values(s.villagers).map((v) => v.species)])]
+  const demand = serviceDemand(species)
+  const appeal: DraftAppeal = { supplies: [] }
+  if (!def) return appeal
+
+  if (def.service) {
+    appeal.serves = { need: def.service.need, species: demand.get(def.service.need) ?? [] }
+  }
+  for (const [need, wanting] of demand) {
+    const venues = BUILDING_LIST.filter((b) => b.service?.need === need)
+    const supplied = venues.some((v) =>
+      serviceGoods(v.id).some((good) => producersOf(good).some((p) => p.id === defId)),
+    )
+    if (supplied) appeal.supplies.push({ need, species: wanting })
+  }
+  return appeal
 }
 
 /**

@@ -8,3 +8,8 @@ dev-dist
 
 # TypeScript incremental build output
 *.tsbuildinfo
+
+# Playwright output
+playwright-report
+test-results
+blob-report
