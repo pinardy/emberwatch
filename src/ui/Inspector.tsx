@@ -15,12 +15,9 @@ import {
 import { terrainHint } from '../game/engine/placement'
 import { homesWithin, isWarmAt } from '../game/engine/queries'
 import { TERRAIN } from '../game/content/terrain'
-import {
-  seasonMultiplier,
-  terrainOf,
-  workRate,
-} from '../game/engine/production'
+import { terrainOf } from '../game/engine/production'
 import { useGameStore, useRun } from '../game/store'
+import { BuildingStatusLine } from './BuildingStatusLine'
 import type { BuildingInstance, Recipe, RunState } from '../game/types'
 
 /**
@@ -100,9 +97,6 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
   const mods = computeModifiers(run)
   const recipes = availableRecipes(building)
   const active = def.recipes.find((r) => r.id === building.activeRecipeId)
-  const rate =
-    workRate(run, building, mods) *
-    seasonMultiplier(building.defId, run.season.season, mods)
   const idle = idleVillagers(run).length
   const adjacency = adjacencyStatus(run, building)
   const terrain = terrainOf(run, building)
@@ -219,17 +213,14 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
                       }}
                     />
                   </div>
-                  <small className="muted">
-                    {rate <= 0
-                      ? seasonMultiplier(building.defId, run.season.season, mods) === 0
-                        ? 'Idle — this building produces nothing during the Storm.'
-                        : 'Idle — assign a worker.'
-                      : `${rate.toFixed(2)} work/s → one batch every ${(
-                          active.seconds / rate
-                        ).toFixed(1)}s`}
-                  </small>
                 </>
               )}
+              <BuildingStatusLine run={run} building={building} mods={mods} />
+            </section>
+          )}
+          {recipes.length === 0 && def.recipes.length > 0 && (
+            <section className="inspector-section">
+              <BuildingStatusLine run={run} building={building} mods={mods} />
             </section>
           )}
 

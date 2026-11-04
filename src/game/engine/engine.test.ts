@@ -43,6 +43,7 @@ import {
   TRADE_LOT,
 } from './balance'
 import { collectWarnings } from './diagnostics'
+import { hearthForecast } from './forecast'
 import { describePlacement } from './placement'
 import { createRun } from './createRun'
 import {
@@ -1526,9 +1527,15 @@ describe('brazier warmth', () => {
     expect(stormFuelPerSecond(state, HEARTH_FUEL_PER_SECOND, mods.hearthFuel)).toBeCloseTo(
       hearthOnly + BRAZIER_FUEL_PER_SECOND * mods.hearthFuel,
     )
-    // A thin woodpile mid-Storm raises the fuel caution.
+    // The HUD's hearth forecast counts the brazier's burn too.
+    expect(hearthForecast(state, mods).stormRate).toBeCloseTo(
+      hearthOnly + BRAZIER_FUEL_PER_SECOND * mods.hearthFuel,
+    )
+    // A thin woodpile mid-Storm raises the hearth fuel warning.
     state.stock.wood = 1
-    expect(collectWarnings(state).some((w) => w.id === 'fuel')).toBe(true)
+    expect(
+      collectWarnings(state).some((w) => w.id === 'hearth-low' || w.id === 'hearth-storm'),
+    ).toBe(true)
   })
 
   it('hints how many homes a brazier ghost would warm, and whether a home is warm', () => {
