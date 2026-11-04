@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { idleVillagers } from '../game/engine/queries'
 import { useGameStore, useRun } from '../game/store'
 import type { RunState } from '../game/types'
+import { FirstSteps, useFirstStepsOpen } from './FirstSteps'
 import { useEscapeLayer } from './useGameLoop'
 
 /**
@@ -17,15 +18,35 @@ interface Tip {
   when: (run: RunState) => boolean
   /** Shown inside a dialog (via `DialogTip`) rather than in the corner. */
   inDialog?: boolean
+  /**
+   * Once this holds the tip has done its job: it is put away (and counted as
+   * seen) without waiting for "Got it", or skipped if it never showed.
+   */
+  doneWhen?: (run: RunState) => boolean
+  /**
+   * Urgent tips may interrupt the First steps checklist; the rest wait until
+   * it is finished or dismissed, so the two never fight for the corner.
+   */
+  urgent?: boolean
+}
+
+/** The player has done something on purpose: placed a building or put someone to work. */
+function hasActed(run: RunState): boolean {
+  return (
+    Object.values(run.buildings).some((b) => b.defId !== 'ancientHearth') ||
+    Object.values(run.villagers).some((v) => v.assignment !== null)
+  )
 }
 
 const TIPS: Tip[] = [
   {
     id: 'welcome',
     title: 'Welcome, Viceroy',
-    text: 'Fill the crown meter to win before the hourglass fills and the Queen recalls you. Resolve above each species’ threshold is what earns reputation.',
+    text: 'Fill the 👑 Reputation meter to win before the Queen’s ⏳ Impatience fills and she recalls you. Resolve above each species’ threshold is what earns reputation.',
     // The run opens on the blueprint draft; welcome the player once it closes.
+    // While the First steps checklist is up, it carries this welcome instead.
     when: (run) => run.clock < 30 && run.pendingChoices.length === 0,
+    doneWhen: hasActed,
   },
   {
     id: 'first-draft',
@@ -51,18 +72,21 @@ const TIPS: Tip[] = [
     title: 'The Blightstorm',
     text: 'Farms stop, gathering halves, and the hearth burns wood fast. Stockpile food and fuel during Clearance, and keep homes near the hearth’s warmth — or raise a brazier beside distant ones.',
     when: (run) => run.season.season === 'storm' && run.season.year === 1,
+    urgent: true,
   },
   {
     id: 'low-resolve',
     title: 'Somebody is miserable',
     text: 'A species below zero resolve will start leaving, and each departure feeds the Queen’s impatience. Check housing, food variety, and their service needs.',
     when: (run) => Object.values(run.resolve).some((r) => r < 0),
+    urgent: true,
   },
   {
     id: 'first-threat',
     title: 'A threat is loose',
     text: 'It will strike again and again until you pay it off from the red banner. Weigh the appeasement cost against what each strike is costing you.',
     when: (run) => run.threats.length > 0,
+    urgent: true,
   },
   {
     id: 'first-caravan',
@@ -91,7 +115,7 @@ function saveSeen(seen: string[]): void {
 }
 
 /** Seen tip ids, shared by the corner coach and tips shown inside dialogs. */
-const useSeenTips = create<{ seen: string[]; markSeen: (id: string) => void }>((set, get) => ({
+export const useSeenTips = create<{ seen: string[]; markSeen: (id: string) => void }>((set, get) => ({
   seen: loadSeen(),
   markSeen: (id) => {
     if (get().seen.includes(id)) return
@@ -110,6 +134,9 @@ function dialogOpen(run: RunState): boolean {
  * The corner coach. It never shows while a dialog is up — it would sit under
  * the overlay where it cannot be read or dismissed — so tips that belong to a
  * dialog render inside it through `DialogTip` instead.
+ *
+ * It also owns the slot for the First steps checklist: while the checklist is
+ * open only urgent tips interrupt it, and the welcome tip is folded into it.
  */
 export function TipsCoach() {
   const run = useRun()
@@ -117,12 +144,35 @@ export function TipsCoach() {
   const markSeen = useSeenTips((s) => s.markSeen)
   const [active, setActive] = useState<Tip | null>(null)
   const blocked = run ? dialogOpen(run) : true
+  const checklist = useFirstStepsOpen(run)
+  // The run is mutated in place; the version is what says it moved on.
+  const version = useGameStore((s) => s.version)
 
   useEffect(() => {
-    if (!run || active || blocked) return
-    const next = TIPS.find((tip) => !tip.inDialog && !seen.includes(tip.id) && tip.when(run))
+    if (!run || blocked) return
+    // A tip whose job is done goes away by itself.
+    if (active?.doneWhen?.(run)) {
+      markSeen(active.id)
+      setActive(null)
+      return
+    }
+    if (active) return
+    const next = TIPS.find(
+      (tip) =>
+        !tip.inDialog &&
+        !seen.includes(tip.id) &&
+        (!checklist || tip.urgent) &&
+        tip.when(run) &&
+        !tip.doneWhen?.(run),
+    )
     if (next) setActive(next)
-  }, [run, seen, active, blocked])
+  }, [run, version, seen, active, blocked, checklist, markSeen])
+
+  // The checklist opens with the welcome, so it need not be said twice.
+  const showChecklist = checklist && !active && !blocked
+  useEffect(() => {
+    if (showChecklist) markSeen('welcome')
+  }, [showChecklist, markSeen])
 
   const dismiss = () => {
     if (active) markSeen(active.id)
@@ -130,7 +180,9 @@ export function TipsCoach() {
   }
   useEscapeLayer(active !== null && !blocked, dismiss, 'low')
 
-  if (!run || !active || blocked) return null
+  if (!run || blocked) return null
+  if (showChecklist) return <FirstSteps run={run} />
+  if (!active) return null
 
   return (
     <div className="tip-coach" role="status" aria-label="Tip">
