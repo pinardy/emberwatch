@@ -1,11 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 import { BUILDINGS } from '../game/content/buildings'
-import { canPlaceBuilding, footprintOf, isReachable } from '../game/engine/actions'
-import { DEPOSIT_INFO, TERRAIN_COLORS } from '../game/engine/mapgen'
+import { canPlaceBuilding, footprintOf } from '../game/engine/actions'
+import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { describePlacement } from '../game/engine/placement'
-import { isWarmAt, warmthSources } from '../game/engine/queries'
+import { warmthSources } from '../game/engine/queries'
 import { useGameStore, useRun } from '../game/store'
-import type { Glade } from '../game/types'
+import type { GladeKind } from '../game/types'
+import {
+  DEPOSIT_TINT,
+  GLADE_KIND_STYLE,
+  MAP_KEYS,
+  STATUS_BADGE,
+  buildingStatusKind,
+  gladeAccessText,
+  gladeFill,
+  gladeKindLabel,
+  gladeLook,
+  gladePlateInfo,
+  isColdHousing,
+  isUnlitWarmthSource,
+  useCameraFocus,
+  useMapKey,
+  useMapOverlays,
+  useWarmthRingVisible,
+  type GladeAccess,
+  type StatusContext,
+} from './mapShared'
 import { panDirectionOf } from './usePanKeys'
 
 /** Pixels per world unit inside the SVG coordinate system. */
@@ -14,14 +34,6 @@ const PAD = 2 * S
 const MIN_SCALE = 0.45
 const MAX_SCALE = 2.4
 
-type GladeLook = 'hidden' | 'fogged' | 'visible'
-
-function lookOf(glade: Glade): GladeLook {
-  if (glade.cleared) return 'visible'
-  if (glade.discovered) return 'fogged'
-  return 'hidden'
-}
-
 /**
  * 2D fallback renderer: the same continuous world as the 3D view, drawn as
  * SVG polygons and circles. Used where WebGL is missing and in tests.
@@ -29,6 +41,7 @@ function lookOf(glade: Glade): GladeLook {
 export function MapView2D() {
   const run = useRun()
   const buildMode = useGameStore((s) => s.buildMode)
+  const showWarmth = useWarmthRingVisible()
   const selectedBuilding = useGameStore((s) => s.selectedBuilding)
   const selectedDeposit = useGameStore((s) => s.selectedDeposit)
   const selectedGlade = useGameStore((s) => s.selectedGlade)
@@ -82,18 +95,13 @@ export function MapView2D() {
   /*
    * WASD / arrow panning. Each keydown nudges the view; holding the key pans
    * via the OS key-repeat. Pressing "right" moves the camera right, so the
-   * world slides left. H jumps back home to the hearth.
+   * world slides left. H jumps back home to the hearth; R toggles warmth.
    */
+  useMapKey(MAP_KEYS.home, () => setView({ x: 0, y: 0, scale: 1 }))
+  useMapKey(MAP_KEYS.warmth, () => useMapOverlays.getState().toggleWarmth())
   useEffect(() => {
     const STEP = 46
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag && ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
-      if (e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.code === 'KeyH') {
-        setView({ x: 0, y: 0, scale: 1 })
-        return
-      }
       const direction = panDirectionOf(e)
       if (!direction || direction === 'rotateLeft' || direction === 'rotateRight') return
       if (e.code.startsWith('Arrow')) e.preventDefault()
@@ -108,12 +116,7 @@ export function MapView2D() {
   }, [])
 
   // Fly-to requests from elsewhere in the UI (threat cards, the minimap).
-  const cameraFocus = useGameStore((s) => s.cameraFocus)
-  useEffect(() => {
-    if (!cameraFocus) return
-    setView((v) => ({ ...v, x: -cameraFocus.x * S * v.scale, y: -cameraFocus.y * S * v.scale }))
-    useGameStore.setState({ cameraFocus: null })
-  }, [cameraFocus])
+  useCameraFocus((p) => setView((v) => ({ ...v, x: -p.x * S * v.scale, y: -p.y * S * v.scale })))
 
   const onPointerDown = (e: React.PointerEvent) => {
     pinch.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -205,14 +208,9 @@ export function MapView2D() {
   const h = run.world.height * S
   const viewBox = `${-w / 2 - PAD} ${-h / 2 - PAD} ${w + PAD * 2} ${h + PAD * 2}`
   const glades = Object.values(run.glades)
-  const storm = run.season.season === 'storm'
-  const selectedDef = selectedBuilding ? BUILDINGS[run.buildings[selectedBuilding]?.defId ?? ''] : undefined
+  const statusContext: StatusContext = {}
+  const sources = warmthSources(run)
   const buildDef = buildMode ? BUILDINGS[buildMode] : undefined
-  const showWarmth =
-    (buildDef && ((buildDef.housing ?? 0) > 0 || !!buildDef.warmth)) ||
-    selectedDef?.category === 'hearth' ||
-    selectedDef?.category === 'housing' ||
-    !!selectedDef?.warmth
 
   return (
     <div className="map-wrap">
@@ -241,14 +239,14 @@ export function MapView2D() {
             />
 
             {glades.map((glade) => {
-              const look = lookOf(glade)
+              const look = gladeLook(glade)
               const points = glade.polygon.map((p) => `${p.x * S},${p.y * S}`).join(' ')
               return (
                 <polygon
                   key={glade.id}
                   points={points}
                   className={`glade-poly is-${look} ${selectedGlade === glade.id ? 'is-selected' : ''}`}
-                  fill={look === 'visible' ? TERRAIN_COLORS[glade.terrain] : look === 'fogged' ? '#131a1a' : '#0c1013'}
+                  fill={gladeFill(glade, '2d')}
                   onClick={(e) => {
                     if (look === 'fogged') {
                       e.stopPropagation()
@@ -264,7 +262,21 @@ export function MapView2D() {
               )
             })}
 
-            {/* Every fire's reach while placing housing or a brazier, or inspecting one. */}
+            {/* Kind borders on fogged glades: solid, dashed or dotted. */}
+            {glades.map((glade) =>
+              gladeLook(glade) === 'fogged' ? (
+                <GladeEdge2D
+                  key={`edge-${glade.id}`}
+                  id={glade.id}
+                  points={glade.polygon.map((p) => `${p.x * S},${p.y * S}`).join(' ')}
+                  kind={glade.kind}
+                  access={gladePlateInfo(run, glade).access}
+                />
+              ) : null,
+            )}
+
+            {/* Every fire's reach: toggled on (R / 🔥), placing housing or a
+                brazier, or inspecting a fire or a home. */}
             {showWarmth &&
               warmthSources(run).map((w) => (
                 <circle
@@ -307,7 +319,13 @@ export function MapView2D() {
                     useGameStore.getState().selectDeposit(d.id)
                   }}
                 >
-                  <circle cx={cx} cy={cy} r={d.radius * S} className="deposit-disc" />
+                  <circle
+                    cx={cx}
+                    cy={cy}
+                    r={d.radius * S}
+                    className="deposit-disc"
+                    style={{ stroke: DEPOSIT_TINT[d.kind], strokeOpacity: 0.7 }}
+                  />
                   <text className="hex-icon" x={cx} y={cy + 6}>
                     {DEPOSIT_INFO[d.kind].icon}
                   </text>
@@ -330,6 +348,10 @@ export function MapView2D() {
               const progress = b.built
                 ? 1
                 : b.buildProgress / Math.max(1, def.buildSeconds)
+              const status = buildingStatusKind(run, b, statusContext)
+              const badge = status === 'none' ? null : STATUS_BADGE[status]
+              // A home beyond every fire in the Storm, or a brazier gone out.
+              const cold = isColdHousing(run, b, sources) || isUnlitWarmthSource(b)
               return (
                 <g
                   key={b.id}
@@ -344,6 +366,17 @@ export function MapView2D() {
                   }}
                 >
                   <circle cx={cx} cy={cy} r={r} className="building-disc" />
+                  {cold && (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r={r + 4}
+                      fill="rgba(95, 143, 212, 0.18)"
+                      stroke="#5f8fd4"
+                      strokeWidth={1.5}
+                      pointerEvents="none"
+                    />
+                  )}
                   <text className="hex-icon" x={cx} y={cy + 6}>
                     {def.icon}
                   </text>
@@ -365,19 +398,29 @@ export function MapView2D() {
                       {b.workers.length}/{def.workerSlots}
                     </text>
                   )}
-                  {b.paused && (
-                    <text className="hex-flag" x={cx + r} y={cy - r}>
-                      ⏸
+                  {badge && (
+                    <g className={`status-badge is-${status}`} pointerEvents="none">
+                      <title>{badge.label}</title>
+                      <circle
+                        cx={cx + r * 0.8}
+                        cy={cy - r * 0.8}
+                        r={status === 'working' ? 3.5 : 7.5}
+                        fill={badge.color}
+                        stroke="rgba(9, 13, 16, 0.85)"
+                        strokeWidth={1.5}
+                      />
+                      {status !== 'working' && (
+                        <text className="hex-flag" x={cx + r * 0.8} y={cy - r * 0.8 + 3.5}>
+                          {badge.icon}
+                        </text>
+                      )}
+                    </g>
+                  )}
+                  {cold && (
+                    <text className="hex-flag" x={cx - r * 0.8} y={cy - r * 0.8 + 3.5}>
+                      ❄
                     </text>
                   )}
-                  {/* A cold brazier, or a home beyond every fire in the Storm. */}
-                  {b.built &&
-                    ((def.warmth && b.unlit) ||
-                      (storm && def.category === 'housing' && !isWarmAt(run, b.pos))) && (
-                      <text className="hex-flag" x={cx - r} y={cy - r}>
-                        ❄
-                      </text>
-                    )}
                 </g>
               )
             })}
@@ -417,14 +460,15 @@ export function MapView2D() {
             {/* Labels over undiscovered-but-known glades. */}
             {glades.map((glade) => {
               if (!glade.discovered || glade.cleared) return null
-              const reachable = isReachable(run, glade.id)
-              const pct = glade.clearWork > 0 ? glade.clearProgress / glade.clearWork : 0
+              const info = gladePlateInfo(run, glade)
+              const { reachable, pct } = info
+              const kindStyle = GLADE_KIND_STYLE[glade.kind]
               const cx = glade.center.x * S
               const cy = glade.center.y * S
               return (
                 <g
                   key={glade.id}
-                  className={`glade-label ${reachable ? '' : 'is-locked'}`}
+                  className={`glade-label is-${glade.kind} is-${info.access} ${reachable ? '' : 'is-locked'}`}
                   transform={`translate(${cx} ${cy})`}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -435,9 +479,17 @@ export function MapView2D() {
                     useGameStore.getState().selectGlade(glade.id)
                   }}
                 >
-                  <rect x={-52} y={-26} width={104} height={52} rx={8} className="glade-plate" />
-                  <text y={-8} className="glade-kind">
-                    {glade.kind === 'small' ? '🌿 Small' : glade.kind === 'dangerous' ? '⚠ Dangerous' : '☠ Forbidden'}
+                  <rect
+                    x={-52}
+                    y={-26}
+                    width={104}
+                    height={60}
+                    rx={8}
+                    className="glade-plate"
+                    style={reachable ? { stroke: kindStyle.edge, strokeOpacity: 0.85 } : undefined}
+                  />
+                  <text y={-8} className="glade-kind" style={reachable ? { fill: kindStyle.edge } : undefined}>
+                    {gladeKindLabel(glade.kind)}
                   </text>
                   <text y={7} className="glade-name">
                     {glade.name}
@@ -455,11 +507,9 @@ export function MapView2D() {
                       />
                     </>
                   )}
-                  {glade.clearers > 0 && (
-                    <text y={24} className="glade-crew">
-                      ⛏ {glade.clearers}
-                    </text>
-                  )}
+                  <text y={28} className="glade-crew" style={reachable ? undefined : { fill: '#6d7a7a' }}>
+                    {gladeAccessText(info)}
+                  </text>
                 </g>
               )
             })}
@@ -489,6 +539,7 @@ export function MapView2D() {
         >
           ⌖
         </button>
+        <WarmthToggle />
       </div>
 
       {buildMode && ghost?.hint && (
@@ -524,6 +575,64 @@ export function BuildBanner({ buildMode }: { buildMode: string }) {
         Cancel
       </button>
     </div>
+  )
+}
+
+/** Map-control button (and R hotkey) for the hearth warmth overlay. */
+export function WarmthToggle() {
+  const on = useMapOverlays((s) => s.showWarmth)
+  return (
+    <button
+      type="button"
+      aria-label="Show warmth radius"
+      aria-pressed={on}
+      title="Warmth radius (R)"
+      className={on ? 'is-active' : ''}
+      onClick={() => useMapOverlays.getState().toggleWarmth()}
+    >
+      🔥
+    </button>
+  )
+}
+
+/**
+ * A fogged glade's border, drawn inside its own polygon (the stroke is
+ * clipped to the cell) so neighbouring borders never overlap. Pattern and
+ * colour carry the kind; brightness carries reachability.
+ */
+function GladeEdge2D({
+  id,
+  points,
+  kind,
+  access,
+}: {
+  id: string
+  points: string
+  kind: GladeKind
+  access: GladeAccess
+}) {
+  const style = GLADE_KIND_STYLE[kind]
+  const clipId = `glade-clip-${id}`
+  return (
+    <g pointerEvents="none" className={`glade-edge is-${kind} is-${access}`}>
+      <clipPath id={clipId}>
+        <polygon points={points} />
+      </clipPath>
+      <polygon
+        points={points}
+        clipPath={`url(#${clipId})`}
+        fill="none"
+        stroke={style.edge}
+        strokeWidth={access === 'locked' ? 4 : 7}
+        strokeOpacity={access === 'locked' ? 0.35 : 0.9}
+        strokeDasharray={style.dash ? style.dash.map((d) => d * S).join(' ') : undefined}
+        style={
+          access === 'clearing'
+            ? { animation: 'warmth-breathe 1.2s ease-in-out infinite' }
+            : undefined
+        }
+      />
+    </g>
   )
 }
 

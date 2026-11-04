@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
 import type { WorldInfo } from '../../game/types'
+import { MAP_KEYS, useMapKey } from '../mapShared'
 import { usePanKeys } from '../usePanKeys'
 
 /**
@@ -43,18 +44,31 @@ export function CameraRig({ controls, world, minDistance, maxDistance, home }: C
   const gl = useThree((s) => s.gl)
   const mouse = useRef<{ x: number; y: number } | null>(null)
   const dragging = useRef(false)
+  /**
+   * The canvas rect, cached: reading layout every frame while the mouse is
+   * over the map forces style recalculation. Refreshed on resize and scroll.
+   */
+  const rect = useRef<DOMRect | null>(null)
 
-  // H → home. Same input guards as the pan keys.
+  // H → home, shared with the 2D view (same input guards as the pan keys).
+  useMapKey(MAP_KEYS.home, home)
+
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag && ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
-      if (e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.code === 'KeyH') home()
+    const el = gl.domElement
+    const refresh = () => {
+      rect.current = el.getBoundingClientRect()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [home])
+    refresh()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refresh) : null
+    observer?.observe(el)
+    window.addEventListener('resize', refresh)
+    window.addEventListener('scroll', refresh, true)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', refresh)
+      window.removeEventListener('scroll', refresh, true)
+    }
+  }, [gl])
 
   // Track the mouse for edge scrolling; suspend it while any drag is down.
   useEffect(() => {
@@ -96,10 +110,10 @@ export function CameraRig({ controls, world, minDistance, maxDistance, home }: C
       if (!c) return
       e.preventDefault()
       e.stopPropagation()
-      const rect = gl.domElement.getBoundingClientRect()
+      const box = rect.current ?? gl.domElement.getBoundingClientRect()
       NDC.set(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+        ((e.clientX - box.left) / box.width) * 2 - 1,
+        -((e.clientY - box.top) / box.height) * 2 + 1,
       )
       RAYCASTER.setFromCamera(NDC, c.object)
       if (!RAYCASTER.ray.intersectPlane(GROUND, HIT)) return
@@ -141,15 +155,15 @@ export function CameraRig({ controls, world, minDistance, maxDistance, home }: C
     if (keys.has('rotateRight')) spin -= 1
 
     // Mouse against the canvas edge pans too, unless a drag is in progress.
-    if (!dragging.current && mouse.current) {
-      const rect = gl.domElement.getBoundingClientRect()
+    const box = rect.current
+    if (!dragging.current && mouse.current && box) {
       const mx = mouse.current.x
       const my = mouse.current.y
-      if (mx >= rect.left && mx <= rect.right && my >= rect.top && my <= rect.bottom) {
-        if (mx - rect.left < EDGE_PX) x -= 1
-        if (rect.right - mx < EDGE_PX) x += 1
-        if (my - rect.top < EDGE_PX) z += 1
-        if (rect.bottom - my < EDGE_PX) z -= 1
+      if (mx >= box.left && mx <= box.right && my >= box.top && my <= box.bottom) {
+        if (mx - box.left < EDGE_PX) x -= 1
+        if (box.right - mx < EDGE_PX) x += 1
+        if (my - box.top < EDGE_PX) z += 1
+        if (box.bottom - my < EDGE_PX) z -= 1
       }
     }
 

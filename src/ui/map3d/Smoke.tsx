@@ -1,10 +1,12 @@
-import { useMemo, useRef } from 'react'
+import { memo, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BUILDINGS } from '../../game/content/buildings'
 import { footprintOf } from '../../game/engine/actions'
 import type { RunState } from '../../game/types'
+import { buildingStatusKind, type StatusContext } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
+import { smokeKey, useRunKey } from './layerKeys'
 import { NO_RAYCAST } from './models'
 
 /**
@@ -54,14 +56,18 @@ function SmokeColumn({ position }: { position: [number, number, number] }) {
   )
 }
 
-export function Smoke({ run }: { run: RunState }) {
+export const Smoke = memo(function Smoke({ run }: { run: RunState }) {
+  // Re-render only when the set of smoking chimneys changes.
+  useRunKey(smokeKey)
   if (REDUCED_MOTION) return null
 
   const emitters: { id: string; position: [number, number, number] }[] = []
   if (!run.coldHearth) emitters.push({ id: 'hearth', position: [0, 0.75, 0] })
+  const ctx: StatusContext = {}
   for (const b of Object.values(run.buildings)) {
     const def = BUILDINGS[b.defId]
-    if (def?.category !== 'production' || !b.built || b.paused || b.workers.length === 0) continue
+    // Only chimneys that are really producing: staffed, supplied, with room.
+    if (def?.category !== 'production' || buildingStatusKind(run, b, ctx) !== 'working') continue
     const scale = footprintOf(b.defId) / 0.6
     // The chimney block sits at (0.32, 0.9, -0.18) in the model's local space.
     emitters.push({
@@ -78,4 +84,4 @@ export function Smoke({ run }: { run: RunState }) {
       ))}
     </>
   )
-}
+})

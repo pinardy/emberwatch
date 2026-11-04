@@ -1,6 +1,8 @@
+import { memo } from 'react'
 import * as THREE from 'three'
 import { footprintOf } from '../../game/engine/actions'
 import type { RunState } from '../../game/types'
+import { pathKey, useRunKey } from './layerKeys'
 import { NO_RAYCAST } from './models'
 
 /**
@@ -15,7 +17,9 @@ const PATH_MAT = new THREE.MeshBasicMaterial({
   depthWrite: false,
 })
 
-export function Paths({ run }: { run: RunState }) {
+export const Paths = memo(function Paths({ run }: { run: RunState }) {
+  // Re-render only when the set of finished buildings changes.
+  useRunKey(pathKey)
   return (
     <>
       {Object.values(run.buildings).map((b) => {
@@ -42,4 +46,4 @@ export function Paths({ run }: { run: RunState }) {
       })}
     </>
   )
-}
+})
