@@ -49,6 +49,7 @@ import {
   warmHousing,
 } from './queries'
 import { despairRate, ignoresColdHearth, mealMultiplier } from './traits'
+import { recordEvent } from './timeline'
 
 /**
  * Villagers eat once every `SECONDS_PER_MEAL`. Cooked food covers two meals,
@@ -406,6 +407,7 @@ export function stepDepartures(s: RunState, dt: number): string[] {
         removeVillager(s, victim.id)
         departed.push(`${victim.name} the ${SPECIES[sp].name.slice(0, -1)} left the settlement.`)
         s.stats.villagersLost++
+        recordEvent(s, 'left', sp)
         addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
       }
     } else {

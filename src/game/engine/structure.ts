@@ -24,6 +24,7 @@ import { relevantBlueprints } from './events'
 import { grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { addImpatience, addReputation, removeVillager } from './society'
+import { recordEvent } from './timeline'
 
 /**
  * Mid-run structure: the beats that give the middle of a run its shape.
@@ -149,6 +150,7 @@ export function stepDecree(s: RunState, dt: number): void {
     if (def.reward) {
       s.stats.resourcesProduced += grant(s.stock, def.reward, s.storageCap, storageUsed(s))
     }
+    recordEvent(s, 'decreeMet', def.name)
     pushLog(
       s,
       `📯 Decree fulfilled with ${Math.ceil(decree.timeLeft)}s to spare — ${def.name}. +${def.reputationReward} reputation.`,
@@ -162,6 +164,7 @@ export function stepDecree(s: RunState, dt: number): void {
   decree.timeLeft -= dt
   if (decree.timeLeft <= 0) {
     addImpatience(s, DECREE_MISS_IMPATIENCE)
+    recordEvent(s, 'decreeMissed', def.name)
     pushLog(s, `📯 The decree lapsed unmet — ${def.name}. The Queen is displeased.`, 'bad')
     s.decree = null
     s.decreeTimer = DECREE_INTERVAL
@@ -293,6 +296,7 @@ export function takeCharter(s: RunState, choice: PendingChoice, charterId: strin
   }
 
   s.charter = def.id
+  recordEvent(s, 'charter', def.name)
   s.ongoing.push({
     id: `charter_${def.id}`,
     name: def.name,
@@ -351,6 +355,7 @@ function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined): strin
       if (!victim) break
       removeVillager(s, victim.id)
       s.stats.villagersLost++
+      recordEvent(s, 'lost', victim.species)
       addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
       parts.push(`${victim.name} leaves`)
     }

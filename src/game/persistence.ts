@@ -1,5 +1,6 @@
 import { defaultMeta, emptyCitadelPerks, migrateMeta } from './content/meta'
 import { defaultDecreeState } from './engine/structure'
+import { createTimeline } from './engine/timeline'
 import { defaultCaravan } from './engine/trade'
 import type { MetaState, RunState } from './types'
 
@@ -67,6 +68,8 @@ export function loadRun(): RunState | null {
   // Saves from before the Citadel tree and the Queen's Edicts.
   run.edict ??= 0
   run.citadel = { ...emptyCitadelPerks(), ...(run.citadel ?? {}) }
+  // Saves from before the run timeline start an empty one where they resume.
+  run.timeline ??= createTimeline(run)
   return run
 }
 
