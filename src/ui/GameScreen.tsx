@@ -5,6 +5,7 @@ import { canAfford } from '../game/engine/queries'
 import { useGameStore, useRun, type SidePanel } from '../game/store'
 import { BuildPanel } from './BuildPanel'
 import { ChoiceModal } from './ChoiceModal'
+import { ConditionsBar } from './ConditionsBar'
 import { EndModal } from './EndModal'
 import { Inspector } from './Inspector'
 import { MapView } from './MapView'
@@ -90,7 +91,10 @@ export function GameScreen() {
 
       <ChoiceModal />
       <EndModal />
-      <ThreatBar />
+      <div className="bottom-stack">
+        <ConditionsBar />
+        <ThreatBar />
+      </div>
       <Warnings />
       <TipsCoach />
     </div>

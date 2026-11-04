@@ -1,4 +1,5 @@
 import { META_VERSION, defaultMeta } from './content/meta'
+import { defaultDecreeState } from './engine/structure'
 import { defaultCaravan } from './engine/trade'
 import type { MetaState, RunState } from './types'
 
@@ -55,6 +56,14 @@ export function loadRun(): RunState | null {
   if (Array.isArray(run.unlockedBuildings) && !run.unlockedBuildings.includes('brazier')) {
     run.unlockedBuildings.push('brazier')
   }
+  // Saves from before decrees, charters and lingering conditions.
+  run.conditions ??= []
+  run.conditionCounter ??= 0
+  const decreeDefaults = defaultDecreeState()
+  run.decree ??= decreeDefaults.decree
+  run.decreeTimer ??= decreeDefaults.decreeTimer
+  run.charterOffered ??= false
+  run.charter ??= null
   return run
 }
 

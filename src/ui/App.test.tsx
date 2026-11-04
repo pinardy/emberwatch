@@ -2,7 +2,11 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
+import { DECREES } from '../game/content/decrees'
+import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { findPlacement } from '../game/engine/actions'
+import { CHARTER_REPUTATION, REWARD_MILESTONES } from '../game/engine/balance'
+import { addCondition, issueDecree } from '../game/engine/structure'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 
@@ -318,5 +322,46 @@ describe('app shell', () => {
     })
     expect(screen.getByText(/The settlement holds/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: /Return to the Citadel/i })).toBeTruthy()
+  })
+})
+
+describe('mid-run structure UI', () => {
+  it('shows decrees and lingering conditions, and takes the charter', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+
+    act(() => {
+      const run = currentRun()
+      run.decreeTimer = 0
+      issueDecree(run)
+      const option = GLADE_EVENTS.sunkenGranary.options.find((o) => o.condition)!
+      addCondition(run, option.condition!, 'glade1')
+      useGameStore.setState({ version: useGameStore.getState().version + 1 })
+    })
+    const decreeName = DECREES[currentRun().decree!.defId].name
+    const bar = screen.getByLabelText(/Conditions and decrees/i)
+    expect(within(bar).getByText(/Flooded Paths/)).toBeTruthy()
+    expect(within(bar).getByText(decreeName)).toBeTruthy()
+
+    // Clicking the decree card opens the Orders panel, where the countdown sits.
+    fireEvent.click(within(bar).getByText(decreeName))
+    expect(useGameStore.getState().panel).toBe('orders')
+    expect(screen.getByText(/left · miss it/)).toBeTruthy()
+
+    act(() => {
+      const run = currentRun()
+      run.reputation = CHARTER_REPUTATION
+      run.cornerstonesTaken = REWARD_MILESTONES.length
+      useGameStore.getState().setSpeed(1)
+      useGameStore.getState().advance(0.5)
+    })
+    expect(screen.getByRole('heading', { name: /The Queen's Charter/i })).toBeTruthy()
+    const options = screen.getAllByRole('button').filter((b) => b.className.includes('charter-'))
+    expect(options).toHaveLength(3)
+    fireEvent.click(options[1])
+    expect(currentRun().charter).not.toBeNull()
+    expect(currentRun().pendingChoices).toHaveLength(0)
   })
 })

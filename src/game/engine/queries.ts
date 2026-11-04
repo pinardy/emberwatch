@@ -1,8 +1,9 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE, RESOURCES } from '../content/resources'
 import { serviceCapacity } from './adjacency'
-import { HEARTH_WARMTH_RADIUS } from './balance'
+import { HEARTH_WARMTH_RADIUS, RESOLVE_LEAVE_THRESHOLD, SECONDS_TO_LEAVE } from './balance'
 import { dist } from './geometry'
+import { despairRate } from './traits'
 import type {
   BuildingInstance,
   ResourceBag,
@@ -144,6 +145,23 @@ export function speciesCounts(s: RunState): Record<SpeciesId, number> {
 export function presentSpecies(s: RunState): SpeciesId[] {
   const counts = speciesCounts(s)
   return (Object.keys(counts) as SpeciesId[]).filter((sp) => counts[sp] > 0)
+}
+
+/**
+ * Seconds until the next villager of each species walks out, for every present
+ * species whose resolve is at or below the leaving threshold. Species that are
+ * not in despair are absent. Mirrors `stepDepartures`.
+ */
+export function secondsUntilDeparture(s: RunState): Partial<Record<SpeciesId, number>> {
+  const out: Partial<Record<SpeciesId, number>> = {}
+  const counts = speciesCounts(s)
+  for (const sp of s.speciesPool) {
+    if (counts[sp] === 0 || s.resolve[sp] > RESOLVE_LEAVE_THRESHOLD) continue
+    const rate = despairRate(sp)
+    if (rate <= 0) continue
+    out[sp] = Math.max(0, (SECONDS_TO_LEAVE - s.despair[sp]) / rate)
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------

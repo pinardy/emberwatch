@@ -1,10 +1,16 @@
 import { BUILDINGS } from '../content/buildings'
-import { NEED_LABELS } from '../content/species'
+import { NEED_LABELS, SPECIES } from '../content/species'
 import { RESOURCES } from '../content/resources'
-import type { ResourceId, RunState } from '../types'
+import type { ResourceId, RunState, SpeciesId } from '../types'
 import { HEARTH_FUEL_PER_SECOND } from './balance'
 import { computeModifiers } from './modifiers'
-import { canAfford, idleVillagers, population, totalHousing } from './queries'
+import {
+  canAfford,
+  idleVillagers,
+  population,
+  secondsUntilDeparture,
+  totalHousing,
+} from './queries'
 import { stormFuelPerSecond } from './society'
 
 /**
@@ -67,6 +73,15 @@ export function collectWarnings(s: RunState): Warning[] {
         text: `🪵 Wood for ${lasts}s of fire, ${Math.ceil(remaining)}s of Storm left — ${fires} burn ${burn.toFixed(2)}/s.`,
       })
     }
+  }
+
+  // A species in despair is on a visible countdown, not a silent one.
+  for (const [sp, seconds] of Object.entries(secondsUntilDeparture(s))) {
+    out.push({
+      id: `leaving-${sp}`,
+      severity: 'danger',
+      text: `🚪 ${SPECIES[sp as SpeciesId].name} will start leaving in ${Math.ceil(seconds ?? 0)}s.`,
+    })
   }
 
   const pop = population(s)

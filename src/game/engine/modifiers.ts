@@ -134,6 +134,10 @@ export function computeModifiers(s: RunState): Modifiers {
   for (const threat of s.threats) {
     for (const e of threat.whileActive ?? []) foldEffect(m, e)
   }
+  // So can lingering glade conditions, until their goal is met.
+  for (const condition of s.conditions ?? []) {
+    for (const e of condition.whileActive ?? []) foldEffect(m, e)
+  }
   return m
 }
 

@@ -427,6 +427,20 @@ export interface Order {
   complete: boolean
 }
 
+/** A Queen's order with a deadline: richer reward, and a price for missing it. */
+export interface DecreeDef extends OrderDef {
+  /** Seconds allowed to meet the goal. */
+  timeLimit: number
+}
+
+export interface RoyalDecree extends Order {
+  /** Seconds remaining. */
+  timeLeft: number
+  timeLimit: number
+  /** Goal count when the decree was issued (for counting goals). */
+  baseline: number
+}
+
 export interface CornerstoneDef {
   id: string
   name: string
@@ -485,10 +499,64 @@ export interface GladeEventOptionDef {
   villagerGain?: number
   /** Requires this much of each resource to be selectable. */
   requires?: ResourceBag
+  /**
+   * Units of food of any kind, paid from the largest stacks the way villagers
+   * eat. Required to be selectable, like `requires`.
+   */
+  foodCost?: number
   /** Unleashes a timed threat that strikes until it is appeased. */
   threat?: ThreatSpec
   /** Grants a permanent run-long effect (a pact, a curse, a blessing). */
   ongoing?: OngoingEffectSpec
+  /** Leaves a lingering condition that lifts only when its goal is met. */
+  condition?: ConditionSpec
+}
+
+/**
+ * A lingering glade condition: weighs on the settlement (or promises a
+ * reward) until a build-loop goal is met, optionally against a deadline.
+ * Declarative like threats — goals reuse the order vocabulary and effects the
+ * cornerstone vocabulary, so the whole thing serialises inside `RunState`.
+ */
+export interface ConditionSpec {
+  name: string
+  icon: string
+  description: string
+  /**
+   * Met when this goal reaches 100%. Counting goals (produced, built, glades
+   * cleared) count only progress made after the condition began.
+   */
+  resolveBy: OrderGoal
+  /** Stock goals only: the goods are handed over when the goal is met. */
+  consume?: boolean
+  /** Modifiers active while the condition lingers. */
+  whileActive?: CornerstoneEffect[]
+  /** Seconds to meet the goal; when it runs out `onFail` applies. */
+  deadline?: number
+  /** Paid out when the goal is met. */
+  onResolve?: ConditionOutcome
+  /** Applied if the deadline passes first. */
+  onFail?: ConditionOutcome
+}
+
+export interface ConditionOutcome {
+  reputation?: number
+  hostility?: number
+  impatience?: number
+  villagerLoss?: number
+  gain?: ResourceBag
+}
+
+export interface ActiveCondition extends ConditionSpec {
+  id: string
+  /** Glade whose event left it behind. */
+  gladeId: string
+  /** Goal count when the condition began (for counting goals). */
+  baseline: number
+  /** 0..1 toward lifting it. */
+  progress: number
+  /** Seconds left before `onFail`; absent for open-ended conditions. */
+  timeLeft?: number
 }
 
 /**
@@ -578,11 +646,33 @@ export interface CaravanState {
 export type RunPhase = 'playing' | 'won' | 'lost'
 
 export interface PendingChoice {
-  kind: 'cornerstone' | 'blueprint' | 'gladeEvent'
-  /** Cornerstone/building ids offered, or `[eventId]` for glade events. */
+  kind: 'cornerstone' | 'blueprint' | 'gladeEvent' | 'charter'
+  /** Cornerstone/building/charter ids offered, or `[eventId]` for glade events. */
   options: string[]
   /** For glade events: which glade triggered it. */
   gladeId?: string
+  /** For charters: the blueprint the architect's warrant would grant. */
+  blueprintId?: string
+}
+
+/**
+ * The Queen's charter: a one-time, run-shaping pick granted mid-run. Each
+ * offer draws one per family, so the choice is between kinds of help.
+ */
+export interface CharterDef {
+  id: string
+  name: string
+  icon: string
+  family: 'perk' | 'patience' | 'blueprint'
+  description: string
+  /** Run-long effects, recorded as an ongoing effect. */
+  effects?: CornerstoneEffect[]
+  /** Added to the Queen's patience ceiling. */
+  maxImpatience?: number
+  /** Impatience forgiven on the spot. */
+  impatienceRelief?: number
+  /** Unlocks the offer's `blueprintId` and delivers its building materials. */
+  grantsBlueprint?: boolean
 }
 
 export interface LogEntry {
@@ -648,6 +738,17 @@ export interface RunState {
   threatCounter: number
   /** Permanent run-long effects granted by event choices. */
   ongoing: OngoingEffect[]
+
+  /** Lingering glade conditions, lifted by meeting their goal. */
+  conditions: ActiveCondition[]
+  conditionCounter: number
+  /** The live timed decree, if the Queen has issued one. */
+  decree: RoyalDecree | null
+  /** Seconds until the next decree while none is live. */
+  decreeTimer: number
+  /** Whether the mid-run charter has been offered, and which was chosen. */
+  charterOffered: boolean
+  charter: string | null
 
   caravan: CaravanState
 
