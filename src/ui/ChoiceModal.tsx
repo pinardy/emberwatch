@@ -3,8 +3,7 @@ import { CORNERSTONES } from '../game/content/cornerstones'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
 import { NEED_LABELS } from '../game/content/species'
-import { rerollCost } from '../game/engine/events'
-import { canAfford } from '../game/engine/queries'
+import { optionAffordable, rerollCost } from '../game/engine/events'
 import { useGameStore, useRun } from '../game/store'
 import type { ResourceBag } from '../game/types'
 import { Cost } from './BuildPanel'
@@ -38,7 +37,7 @@ export function ChoiceModal() {
           <p className="modal-flavour">{def.description}</p>
           <div className="option-list">
             {def.options.map((option, index) => {
-              const affordable = !option.requires || canAfford(run.stock, option.requires)
+              const affordable = optionAffordable(run.stock, option)
               return (
                 <button
                   key={option.label}

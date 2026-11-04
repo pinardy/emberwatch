@@ -3,7 +3,14 @@ import { CORNERSTONE_LIST, CORNERSTONES, RARITY_WEIGHTS } from '../content/corne
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS, describeGoal, evaluateGoal } from '../content/orders'
 import { SPECIES, VILLAGER_TRAIT_LIST, villagerName } from '../content/species'
-import type { ResourceBag, ResourceId, RunState, ServiceNeed } from '../types'
+import { EDIBLE, resourceName } from '../content/resources'
+import type {
+  GladeEventOptionDef,
+  ResourceBag,
+  ResourceId,
+  RunState,
+  ServiceNeed,
+} from '../types'
 import {
   CLEAR_RATE_PER_VILLAGER,
   GLADES_PER_REPUTATION,
@@ -19,7 +26,7 @@ import type { Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
 import { canAfford, grant, population, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
-import { addImpatience, addReputation, removeVillager, unassign } from './society'
+import { addImpatience, addReputation, pickVictim, removeVillager, unassign } from './society'
 import { clearMultiplier } from './traits'
 
 /** Scales a resource bag, rounding to whole units. */
@@ -92,6 +99,54 @@ export function stepClearing(s: RunState, dt: number, mods: Modifiers): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Option prices
+// ---------------------------------------------------------------------------
+
+/** True when the stockpile can pay everything a glade-event option asks for. */
+export function optionAffordable(stock: ResourceBag, option: GladeEventOptionDef): boolean {
+  if (option.requires && !canAfford(stock, option.requires)) return false
+  if (option.foodCost && edibleTotal(stock) < option.foodCost) return false
+  return true
+}
+
+function edibleTotal(stock: ResourceBag): number {
+  let sum = 0
+  for (const id of EDIBLE) sum += stock[id] ?? 0
+  return sum
+}
+
+/**
+ * Plain-text price of an option, e.g. "10 food, 5 Ale". Pure, so the UI can
+ * show `foodCost` alongside the resource bag without knowing the rule.
+ */
+export function describeOptionCost(option: GladeEventOptionDef): string {
+  const parts: string[] = []
+  if (option.foodCost) parts.push(`${option.foodCost} food`)
+  for (const [id, amount] of Object.entries(option.cost ?? {})) {
+    if ((amount ?? 0) > 0) parts.push(`${amount} ${resourceName(id as ResourceId)}`)
+  }
+  return parts.join(', ')
+}
+
+/**
+ * Pays `amount` food from whatever is edible, one unit at a time from the
+ * largest stack — the same order villagers eat in, so a price never wipes out
+ * a whole food type (and its variety bonus) while another stack sits full.
+ */
+export function spendFood(stock: ResourceBag, amount: number): void {
+  for (let paid = 0; paid < amount; paid++) {
+    let best: ResourceId | null = null
+    for (const id of EDIBLE) {
+      if ((stock[id] ?? 0) <= 0) continue
+      if (!best || (stock[id] ?? 0) > (stock[best] ?? 0)) best = id
+    }
+    if (!best) return
+    stock[best] = (stock[best] ?? 0) - 1
+    if ((stock[best] ?? 0) <= 0) delete stock[best]
+  }
+}
+
 /** Applies the chosen option of the front-of-queue glade event. */
 export function resolveGladeEvent(s: RunState, optionIndex: number): void {
   const choice = s.pendingChoices[0]
@@ -99,9 +154,10 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
   const def = GLADE_EVENTS[choice.options[0]]
   const option = def?.options[optionIndex]
   if (!def || !option) return
-  if (option.requires && !canAfford(s.stock, option.requires)) return
+  if (!optionAffordable(s.stock, option)) return
 
   if (option.cost) spend(s.stock, option.cost)
+  if (option.foodCost) spendFood(s.stock, option.foodCost)
   if (option.gain) {
     const added = grant(s.stock, option.gain, s.storageCap, storageUsed(s))
     s.stats.resourcesProduced += added
@@ -111,10 +167,11 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
   if (option.reputation) addReputation(s, option.reputation)
   if (option.villagerLoss) {
     for (let i = 0; i < option.villagerLoss; i++) {
-      const victim = Object.values(s.villagers)[0]
+      const victim = pickVictim(s)
       if (!victim) break
       removeVillager(s, victim.id)
       s.stats.villagersLost++
+      pushLog(s, `${victim.name} the ${SPECIES[victim.species].name.slice(0, -1)} is lost.`, 'bad')
     }
   }
   if (option.villagerGain) {
@@ -177,7 +234,7 @@ export function stepThreats(s: RunState, dt: number): void {
     }
     if (strike.villagerLoss) {
       for (let i = 0; i < strike.villagerLoss; i++) {
-        const victim = Object.values(s.villagers)[0]
+        const victim = pickVictim(s)
         if (!victim) break
         removeVillager(s, victim.id)
         s.stats.villagersLost++
