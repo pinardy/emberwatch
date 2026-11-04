@@ -8,6 +8,7 @@ import { canAfford } from '../game/engine/queries'
 import { useGameStore, useRun } from '../game/store'
 import type { ResourceBag } from '../game/types'
 import { Cost } from './BuildPanel'
+import { CharterChoice } from './CharterChoice'
 
 /**
  * Blocking modal for the three things that interrupt play: cornerstone picks,
@@ -80,6 +81,11 @@ export function ChoiceModal() {
                         {option.ongoing.icon} Lasting: {option.ongoing.name}
                       </span>
                     ) : null}
+                    {option.condition ? (
+                      <span className="is-bad" title={option.condition.description}>
+                        {option.condition.icon} Lingering: {option.condition.name}
+                      </span>
+                    ) : null}
                   </div>
                   {!affordable && option.requires && (
                     <small className="is-bad">
@@ -91,6 +97,14 @@ export function ChoiceModal() {
             })}
           </div>
         </div>
+      </Overlay>
+    )
+  }
+
+  if (choice.kind === 'charter') {
+    return (
+      <Overlay>
+        <CharterChoice choice={choice} />
       </Overlay>
     )
   }
