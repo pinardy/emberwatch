@@ -26,6 +26,7 @@ import {
 import { computeModifiers } from './modifiers'
 import { stepProduction } from './production'
 import { computeStorageCap, population, totalHousing } from './queries'
+import { checkCharter, stepConditions, stepDecree } from './structure'
 import { stepCaravan } from './trade'
 import {
   stepDepartures,
@@ -58,6 +59,7 @@ export function tick(s: RunState, dt: number): void {
   stepProduction(s, dt, mods)
   stepClearing(s, dt, mods)
   stepThreats(s, dt)
+  stepConditions(s, dt)
   stepCaravan(s, dt)
 
   const fuelRate =
@@ -84,8 +86,10 @@ export function tick(s: RunState, dt: number): void {
     )
   }
 
+  stepDecree(s, dt)
   stepOrders(s)
   checkMilestones(s)
+  checkCharter(s)
   checkEndConditions(s)
 }
 

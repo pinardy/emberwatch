@@ -26,6 +26,7 @@ import type { Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
 import { canAfford, grant, population, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
+import { addCondition, refreshCharterOffer, takeCharter } from './structure'
 import { addImpatience, addReputation, pickVictim, removeVillager, unassign } from './society'
 import { clearMultiplier } from './traits'
 
@@ -193,6 +194,8 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
     s.ongoing.push({ ...option.ongoing, id: `g${s.ongoing.length}_${def.id}` })
     pushLog(s, `${option.ongoing.name}: ${option.ongoing.description}`, 'info')
   }
+
+  if (option.condition) addCondition(s, option.condition, choice.gladeId ?? '')
 
   pushLog(s, `${def.name}: ${option.label}.`, option.hostility && option.hostility > 0 ? 'bad' : 'info')
   s.pendingChoices.shift()
@@ -409,6 +412,8 @@ export function takeChoice(s: RunState, optionId: string): void {
     if (!choice.options.includes(optionId)) return
     if (!s.unlockedBuildings.includes(optionId)) s.unlockedBuildings.push(optionId)
     pushLog(s, `Blueprint acquired: ${BUILDINGS[optionId]?.name ?? optionId}.`, 'good')
+  } else if (choice.kind === 'charter') {
+    if (!takeCharter(s, choice, optionId)) return
   } else {
     return
   }
@@ -444,6 +449,8 @@ function refreshQueuedChoices(s: RunState): void {
         stale.splice(i, 1)
         i--
       }
+    } else if (choice.kind === 'charter') {
+      refreshCharterOffer(s, choice)
     }
   }
 }
@@ -461,6 +468,7 @@ export function rerollChoice(s: RunState): string | null {
   const choice = s.pendingChoices[0]
   if (!choice) return 'Nothing to reroll.'
   if (choice.kind === 'gladeEvent') return 'The forest does not renegotiate.'
+  if (choice.kind === 'charter') return 'A royal charter is not up for negotiation.'
   const cost = rerollCost(s)
   if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
 

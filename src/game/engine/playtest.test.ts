@@ -502,13 +502,15 @@ function answerChoices(s: RunState): void {
     if (choice.kind === 'gladeEvent') {
       const def = GLADE_EVENTS[choice.options[0]]
       // Prefer an affordable option that does not cost villagers or patience —
-      // and never one that unleashes a threat the bot would have to pay off.
+      // and never one that unleashes a threat the bot would have to pay off, or
+      // leaves a lingering condition it has no plan to lift.
       let index = def.options.findIndex(
         (o) =>
           optionAffordable(s.stock, o) &&
           !o.villagerLoss &&
           !o.impatience &&
           !o.threat &&
+          !o.condition &&
           (o.hostility ?? 0) <= 0,
       )
       if (index < 0) {
@@ -633,12 +635,17 @@ const ALL_SEEDS = [
 
 /**
  * Env knobs for local balance sweeps, e.g.
- *   PLAYTEST_SEEDS=24 PLAYTEST_VERBOSE=1 npx vitest run playtest --reporter=verbose
+ *   PLAYTEST_SEEDS=8 PLAYTEST_VERBOSE=1 npx vitest run playtest --reporter=verbose --silent=false
  * PLAYTEST_SEED=<n> replays a single seed across every trio.
  */
 const ENV: Record<string, string | undefined> =
   (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {}
-const SEED_COUNT = Number(ENV.PLAYTEST_SEEDS ?? 16)
+/*
+ * Every seed by default. The trio-parity check compares win rates across
+ * three groups, and at 16 seeds a single lucky or unlucky map moves a trio by
+ * six points — enough to trip a 25-point band on noise alone.
+ */
+const SEED_COUNT = Number(ENV.PLAYTEST_SEEDS ?? ALL_SEEDS.length)
 const SEEDS = ENV.PLAYTEST_SEED ? [Number(ENV.PLAYTEST_SEED)] : ALL_SEEDS.slice(0, SEED_COUNT)
 /** The economy-only bot is a control group; half the seeds are enough. */
 const ECON_SEEDS = SEEDS.slice(0, Math.max(1, Math.ceil(SEEDS.length / 2)))

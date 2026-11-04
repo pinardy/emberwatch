@@ -1,4 +1,5 @@
 import { META_VERSION, defaultMeta } from './content/meta'
+import { defaultDecreeState } from './engine/structure'
 import { defaultCaravan } from './engine/trade'
 import type { MetaState, RunState } from './types'
 
@@ -51,6 +52,14 @@ export function loadRun(): RunState | null {
   run.caravan ??= defaultCaravan()
   run.rerollsUsed ??= 0
   run.soothesUsed ??= 0
+  // Saves from before decrees, charters and lingering conditions.
+  run.conditions ??= []
+  run.conditionCounter ??= 0
+  const decreeDefaults = defaultDecreeState()
+  run.decree ??= decreeDefaults.decree
+  run.decreeTimer ??= decreeDefaults.decreeTimer
+  run.charterOffered ??= false
+  run.charter ??= null
   return run
 }
 
