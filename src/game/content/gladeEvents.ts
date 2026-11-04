@@ -6,11 +6,15 @@ import type { GladeEventDef } from '../types'
  * cannot afford is shown but disabled.
  *
  * Design invariants the engine and the balance bot rely on:
- *  - The last option of every event never has a `requires`, so an event can
- *    always be resolved.
+ *  - The last option of every event never has a `requires` or `foodCost`, so
+ *    an event can always be resolved.
+ *  - "Food" prices use `foodCost`, which accepts any edible stock, never a
+ *    specific resource such as `berry`.
  *  - `threat` options are the greedy path: better loot now, a menace that
  *    strikes on a timer until it is appeased.
  *  - `ongoing` options trade an immediate cost for a run-long effect.
+ *  - `condition` options take a gain now and leave a lingering aftermath that
+ *    lifts only when a build-loop goal is met (sometimes against a deadline).
  */
 const defs: GladeEventDef[] = [
   // ---- dangerous glades ----------------------------------------------------
@@ -52,8 +56,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Make an offering',
         description: 'Give 10 food. The settlement takes heart.',
-        requires: { berry: 10 },
-        cost: { berry: 10 },
+        foodCost: 10,
         reputation: 1,
       },
       {
@@ -61,6 +64,21 @@ const defs: GladeEventDef[] = [
         description: 'Good stone, angry forest.',
         gain: { stone: 24, incense: 6 },
         hostility: 10,
+      },
+      {
+        label: 'Bargain with the spirit',
+        description: 'It lets you take the offering bowl, if you promise incense in return.',
+        gain: { amber: 30, stone: 10 },
+        condition: {
+          name: "The Spirit's Tribute",
+          icon: '🕯️',
+          description: 'Deliver 10 incense within 3 minutes, or hostility +15.',
+          resolveBy: { kind: 'stock', resource: 'incense', amount: 10 },
+          consume: true,
+          deadline: 180,
+          onResolve: { hostility: -5 },
+          onFail: { hostility: 15 },
+        },
       },
       { label: 'Board it up', description: 'Nothing gained, nothing lost.' },
     ],
@@ -87,6 +105,18 @@ const defs: GladeEventDef[] = [
         hostility: 14,
       },
       {
+        label: 'Let it run its course',
+        description: 'Take the dead wood. The blight follows you home, until villagers have somewhere to gather.',
+        gain: { wood: 18, resin: 6 },
+        condition: {
+          name: 'Spreading Blight',
+          icon: '🌫️',
+          description: '−3 resolve for every species until a new service building stands.',
+          resolveBy: { kind: 'buildingsOfCategory', category: 'service', amount: 1 },
+          whileActive: [{ kind: 'resolveFlat', species: 'all', amount: -3 }],
+        },
+      },
+      {
         label: 'Wall it off and move on',
         description: 'The Queen dislikes half-measures.',
         impatience: 1,
@@ -104,8 +134,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Feed and welcome them',
         description: 'Spend 12 food; three villagers join you.',
-        requires: { berry: 12 },
-        cost: { berry: 12 },
+        foodCost: 12,
         gain: { amber: 5 },
         reputation: 1,
         villagerGain: 3,
@@ -299,6 +328,19 @@ const defs: GladeEventDef[] = [
         gain: { grain: 10, mushroom: 6 },
       },
       {
+        label: 'Breach the dyke',
+        description: 'The whole store floats free — and so does the marsh, right up the settlement paths.',
+        gain: { grain: 28, vegetable: 10, root: 8 },
+        condition: {
+          name: 'Flooded Paths',
+          icon: '🌊',
+          description: 'Construction is 25% slower until 20 planks are laid as duckboards.',
+          resolveBy: { kind: 'stock', resource: 'plank', amount: 20 },
+          consume: true,
+          whileActive: [{ kind: 'buildSpeed', percent: -25 }],
+        },
+      },
+      {
         label: 'Let the marsh keep it',
         description: 'The forest notes your restraint.',
         hostility: -5,
@@ -328,8 +370,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Trade rations for a ballad',
         description: 'Spend 6 food; the settlement talks about it for a season.',
-        requires: { berry: 6 },
-        cost: { berry: 6 },
+        foodCost: 6,
         reputation: 1,
       },
       { label: 'Wish her a dry road', description: 'She bows, and is gone.' },
@@ -346,16 +387,29 @@ const defs: GladeEventDef[] = [
       {
         label: 'Host them properly',
         description: 'Spend 10 food and 5 ale. Their report glows.',
-        requires: { berry: 10, ale: 5 },
-        cost: { berry: 10, ale: 5 },
+        foodCost: 10,
+        requires: { ale: 5 },
+        cost: { ale: 5 },
         impatience: -2,
       },
       {
         label: 'Feed them and send them on',
         description: 'Spend 8 food. A fair report.',
-        requires: { berry: 8 },
-        cost: { berry: 8 },
+        foodCost: 8,
         impatience: -1,
+      },
+      {
+        label: 'Promise them a frontier to map',
+        description: 'Their report could make your name — if there is new land to report.',
+        condition: {
+          name: "The Surveyors' Wager",
+          icon: '🗺️',
+          description: 'Clear 2 more glades within 5 minutes: +2 reputation. Fail: +1 impatience.',
+          resolveBy: { kind: 'gladesCleared', amount: 2 },
+          deadline: 300,
+          onResolve: { reputation: 2 },
+          onFail: { impatience: 1 },
+        },
       },
       {
         label: 'Claim you never saw them',
@@ -375,8 +429,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Take them in',
         description: 'Spend 8 food. Two more mouths — and two more pairs of hands, in time.',
-        requires: { berry: 8 },
-        cost: { berry: 8 },
+        foodCost: 8,
         villagerGain: 2,
         reputation: 1,
       },
@@ -465,6 +518,20 @@ const defs: GladeEventDef[] = [
         gain: { fabric: 5, amber: 15 },
       },
       {
+        label: 'Sign for the cargo on credit',
+        description: 'The guild’s factor will want paying — promptly.',
+        gain: { fabric: 10, tool: 2, plank: 10 },
+        condition: {
+          name: "Merchant's Debt",
+          icon: '📜',
+          description: 'Hold 60 amber within 4 minutes to settle the debt, or the Queen hears of it (+2 impatience).',
+          resolveBy: { kind: 'stock', resource: 'amber', amount: 60 },
+          consume: true,
+          deadline: 240,
+          onFail: { impatience: 2 },
+        },
+      },
+      {
         label: 'Report the loss to the Citadel',
         description: 'Honest, and the Queen appreciates honesty. Slightly.',
         impatience: -1,
@@ -498,6 +565,18 @@ const defs: GladeEventDef[] = [
           icon: '🐀',
           description: 'Villagers eat 8% less — the rats no longer skim the stores.',
           effects: [{ kind: 'foodUpkeep', percent: -8 }],
+        },
+      },
+      {
+        label: 'Raid the hoard while they sleep',
+        description: 'The court wakes up hungry, and follows you home.',
+        gain: { grain: 15, amber: 20 },
+        condition: {
+          name: 'Rats in the Stores',
+          icon: '🐀',
+          description: 'Villagers eat 15% more until a new Warehouse is built to seal the grain.',
+          resolveBy: { kind: 'buildingId', buildingId: 'warehouse', amount: 1 },
+          whileActive: [{ kind: 'foodUpkeep', percent: 15 }],
         },
       },
       { label: 'Pretend you saw nothing', description: 'The crowns watch you go.' },
@@ -583,8 +662,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Feed it',
         description: 'Buys peace with 30 food. It will be back.',
-        requires: { skewer: 10, meat: 20 },
-        cost: { skewer: 10, meat: 20 },
+        foodCost: 30,
         hostility: -8,
       },
       {

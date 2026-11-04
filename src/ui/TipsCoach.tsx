@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { idleVillagers } from '../game/engine/queries'
-import { useRun } from '../game/store'
+import { useGameStore, useRun } from '../game/store'
 import type { RunState } from '../game/types'
 import { useEscapeLayer } from './useGameLoop'
 
@@ -49,7 +49,7 @@ const TIPS: Tip[] = [
   {
     id: 'first-storm',
     title: 'The Blightstorm',
-    text: 'Farms stop, gathering halves, and the hearth burns wood fast. Stockpile food and fuel during Clearance, and keep homes near the hearth’s warmth.',
+    text: 'Farms stop, gathering halves, and the hearth burns wood fast. Stockpile food and fuel during Clearance, and keep homes near the hearth’s warmth — or raise a brazier beside distant ones.',
     when: (run) => run.season.season === 'storm' && run.season.year === 1,
   },
   {
@@ -147,10 +147,16 @@ export function DialogTip({ id }: { id: string }) {
   const tip = TIPS.find((t) => t.id === id)
   const visible = !!run && !!tip && !seen.includes(tip.id) && tip.when(run)
   // Once shown in a dialog it has done its job, even if the player picked
-  // without pressing "Got it" — do not repeat it at the next draft.
+  // without pressing "Got it" — do not repeat it at the next draft. Only
+  // count it once the dialog has really moved on: StrictMode's rehearsal
+  // unmount happens while the draft is still open.
   useEffect(() => {
-    if (visible) return () => markSeen(id)
-  }, [visible, id, markSeen])
+    if (!visible || !tip) return
+    return () => {
+      const now = useGameStore.getState().run
+      if (!now || !tip.when(now)) markSeen(id)
+    }
+  }, [visible, id, tip, markSeen])
   if (!visible || !tip) return null
   return (
     <div className="tip-coach is-inline" role="note" aria-label="Tip">

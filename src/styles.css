@@ -1542,13 +1542,8 @@ code {
   }
 }
 
-/* Desktop: pinned to the top of the map, below the build banner. Phones put
-   it back into the bottom stack (see the 860px breakpoint). */
+/* Placed by .hud-stack: top centre on desktop, in the bottom column on phones. */
 .warnings {
-  position: absolute;
-  top: 40px;
-  left: 50%;
-  transform: translateX(-50%);
   display: grid;
   gap: 5px;
   width: max-content;
@@ -1686,7 +1681,7 @@ code {
   .sidebar {
     border-left: none;
     border-top: 1px solid var(--line);
-    max-height: 40vh;
+    max-height: 36vh;
   }
 }
 
@@ -2403,15 +2398,17 @@ button.is-armed {
   padding: 2px 4px;
   font-size: 12px;
 }
-
 /* ---------------------------------------------------------------------------
- * The HUD stack: warnings, notices, threats, the tip coach and the inspector
- * are laid out together over the map so they never overlap. The right edge
- * leaves the map's zoom/compass buttons clear.
+ * The HUD stack: warnings, the notice, event toasts, conditions/decree and
+ * threats (.bottom-stack), the tip coach and the inspector are laid out
+ * together over the map so they never overlap. The right edge leaves the
+ * map's zoom/compass buttons clear.
  *
- * Desktop: a grid — tip above inspector on the left, notice above threats
- * at the bottom centre, warnings pinned to the top. Phones (below): one
- * bottom-aligned column in which the warnings and inspector give way.
+ * Desktop: a grid — tip above inspector on the left, notice above
+ * conditions + threats at the bottom centre, toasts bottom-right, warnings
+ * pinned to the top. Narrow desktops move the toasts above the notice.
+ * Phones (below): one bottom-aligned column in which the inspector and the
+ * conditions/threats block give way (shrink and scroll).
  * ------------------------------------------------------------------------- */
 
 .hud-stack {
@@ -2420,12 +2417,13 @@ button.is-armed {
   /* Under the 3D touch-placement ✓/✕ (25) and the minimap; above glade plates. */
   z-index: 20;
   display: grid;
-  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto minmax(0, auto);
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr) minmax(0, 300px);
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(0, auto);
   grid-template-areas:
-    '. .'
-    'tip notice'
-    'inspector threats';
+    'warn warn warn'
+    '. . toasts'
+    'tip notice toasts'
+    'inspector threats toasts';
   column-gap: 16px;
   row-gap: 8px;
   pointer-events: none;
@@ -2435,8 +2433,19 @@ button.is-armed {
   pointer-events: auto;
 }
 
-.hud-stack > .warnings {
+.hud-stack > .warnings,
+.hud-stack > .event-toasts,
+.hud-stack > .bottom-stack {
   pointer-events: none;
+}
+
+/* Warnings head the stack, centred, clear of the build banner. */
+.hud-stack > .warnings {
+  grid-area: warn;
+  position: static;
+  transform: none;
+  justify-self: center;
+  margin-top: 36px;
 }
 
 .hud-stack > .tip-coach {
@@ -2450,16 +2459,48 @@ button.is-armed {
   justify-self: center;
 }
 
-.hud-stack > .threat-bar {
+/* Conditions and the decree above the threat cards (run-structure). */
+.hud-stack > .bottom-stack {
   grid-area: threats;
   align-self: end;
   justify-self: center;
+  position: static;
+  transform: none;
+  width: auto;
+  max-width: min(560px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.hud-stack > .event-toasts {
+  grid-area: toasts;
+  align-self: end;
+  justify-self: end;
+  position: static;
+  width: 100%;
 }
 
 .hud-stack > .inspector {
   grid-area: inspector;
   align-self: end;
   max-height: 100%;
+}
+
+@media (max-width: 1180px) and (min-width: 861px) {
+  .hud-stack {
+    grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, auto);
+    grid-template-areas:
+      'warn warn'
+      '. .'
+      '. toasts'
+      'tip notice'
+      'inspector threats';
+  }
+
+  .hud-stack > .event-toasts {
+    width: min(300px, 100%);
+  }
 }
 
 @media (max-width: 860px) {
@@ -2470,6 +2511,9 @@ button.is-armed {
     justify-content: flex-end;
     align-items: stretch;
     gap: 6px;
+    /* If it ever over-fills, clip the top (warnings) rather than spill over
+       the resource bar. */
+    overflow: hidden;
   }
 
   .hud-stack > * {
@@ -2480,8 +2524,7 @@ button.is-armed {
   /* Warnings join the column, one line each, at most two rows, dangers
      first; the rest is clipped rather than crowding the inspector. */
   .hud-stack > .warnings {
-    position: static;
-    transform: none;
+    margin-top: 0;
     width: auto;
     max-height: 56px;
     overflow: hidden;
@@ -2503,16 +2546,57 @@ button.is-armed {
     align-self: center;
   }
 
-  .hud-stack > .threat-bar {
-    align-self: stretch;
-    grid-template-columns: minmax(0, 1fr);
+  /* Only the newest toast; the rest is in the Log (and its badge). */
+  .hud-stack > .event-toasts {
+    width: auto;
   }
 
-  .threat-text small {
+  .hud-stack .event-toast:not(:last-child) {
+    display: none;
+  }
+
+  .hud-stack .event-toast {
+    white-space: nowrap;
+  }
+
+  .hud-stack .event-toast-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The tip may shrink to a few lines and scroll. */
+  .hud-stack > .tip-coach {
+    flex-shrink: 1;
+    min-height: min(72px, 100%);
+    overflow-y: auto;
+  }
+
+  /* Conditions + threats: compact cards, and the block scrolls if it must. */
+  .hud-stack > .bottom-stack {
+    align-self: stretch;
+    max-width: 100%;
+    flex-shrink: 1;
+    min-height: min(64px, 100%);
+    max-height: 45%;
+  }
+
+  /* Threats first: they are the cards with a button to press. */
+  .hud-stack .threat-bar {
+    grid-template-columns: minmax(0, 1fr);
+    order: -1;
+  }
+
+  .threat-text small,
+  .condition-text small {
     display: block;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .threat-text small.threat-standing,
+  .condition-text small.condition-goal {
+    display: none;
   }
 
   /* The inspector shrinks and scrolls, but never below a usable height. */
@@ -2526,9 +2610,15 @@ button.is-armed {
     max-height: 100%;
   }
 
-  /* While the player inspects something, the tip waits its turn. */
-  .hud-stack:has(.inspector) > .tip-coach {
+  /* While the player inspects something, the tip and toasts wait (toasts
+     stay in the Log, with its badge) and warnings keep to one row. */
+  .hud-stack:has(.inspector) > .tip-coach,
+  .hud-stack:has(.inspector) > .event-toasts {
     display: none;
+  }
+
+  .hud-stack:has(.inspector) > .warnings {
+    max-height: 26px;
   }
 }
 
@@ -2798,4 +2888,137 @@ button.is-armed {
     margin: 12px -20px -20px;
     padding: 12px 20px 14px;
   }
+}
+
+/* ==========================================================================
+   Mid-run structure — royal decrees, lingering conditions, the charter.
+   The bottom stack holds conditions above the threat bar; where it sits
+   over the map is decided by .hud-stack (see the HUD stack section).
+   ========================================================================== */
+
+.bottom-stack {
+  display: grid;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.bottom-stack > * {
+  pointer-events: auto;
+}
+
+.bottom-stack .threat-bar {
+  position: static;
+  transform: none;
+  max-width: none;
+}
+
+.conditions-bar {
+  display: grid;
+  gap: 6px;
+}
+
+.condition-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: rgba(38, 32, 18, 0.96);
+  border: 1px solid #7d6738;
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  animation: rise 180ms ease;
+}
+
+.condition-card.is-decree {
+  background: rgba(24, 30, 44, 0.96);
+  border-color: #6f86b4;
+}
+
+.condition-card.is-urgent {
+  border-color: var(--bad);
+}
+
+.condition-icon {
+  font-size: 20px;
+}
+
+.condition-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.condition-text strong {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--gold);
+  font-family: var(--font);
+}
+
+.condition-text small {
+  color: #cdbf9c;
+  font-size: 12px;
+}
+
+.condition-card.is-decree .condition-text small {
+  color: #b9c5dc;
+}
+
+.condition-goal {
+  color: var(--muted);
+}
+
+.condition-clock {
+  font-style: normal;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.condition-card.is-urgent .condition-clock {
+  color: var(--bad);
+}
+
+.condition-progress {
+  display: block;
+  margin-top: 2px;
+}
+
+.decree-card {
+  border-left: 3px solid #6f86b4;
+}
+
+.decree-card.is-urgent {
+  border-left-color: var(--bad);
+}
+
+.decree-next {
+  margin: 0 0 8px;
+}
+
+.option.charter-perk {
+  border-left: 3px solid #b98ac4;
+}
+
+.option.charter-patience {
+  border-left: 3px solid var(--gold);
+}
+
+.option.charter-blueprint {
+  border-left: 3px solid #6f92c4;
+}
+
+@media (max-width: 560px) {
+  .condition-text small:not(.condition-goal) {
+    display: none;
+  }
+}
+
+.condition-progress .bar-fill {
+  display: block;
 }

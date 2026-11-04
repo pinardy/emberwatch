@@ -1,6 +1,7 @@
 import { BUILDINGS, CATEGORY_LABELS } from '../game/content/buildings'
 import { RESOURCES } from '../game/content/resources'
 import { NEED_LABELS } from '../game/content/species'
+import { describeBonus, partnerIcon } from '../game/engine/adjacency'
 import { canAfford } from '../game/engine/queries'
 import { useGameStore, useRun } from '../game/store'
 import type { BuildingCategory, ResourceBag } from '../game/types'
@@ -64,9 +65,15 @@ export function BuildPanel() {
                         {def.housing ? <em>🛏 {def.housing}</em> : null}
                         {def.storage ? <em>📦 {def.storage}</em> : null}
                         {def.gatherRadius ? <em>◎ {def.gatherRadius}</em> : null}
-                        {def.adjacency ? (
-                          <em title={`+${def.adjacency.percent}% work speed next to a ${BUILDINGS[def.adjacency.nearId]?.name}`}>
-                            🔗 {BUILDINGS[def.adjacency.nearId]?.icon} +{def.adjacency.percent}%
+                        {(def.adjacency ?? []).map((bonus, i) => (
+                          <em key={`adj-${i}`} title={describeBonus(bonus)}>
+                            🔗 {partnerIcon(bonus)} +{bonus.percent}%
+                            {bonus.effect === 'capacity' ? ' cap' : ''}
+                          </em>
+                        ))}
+                        {def.warmth ? (
+                          <em title={`Keeps homes within ${def.warmth.radius} warm during the Storm`}>
+                            🔥 ◎ {def.warmth.radius}
                           </em>
                         ) : null}
                         {def.service ? (

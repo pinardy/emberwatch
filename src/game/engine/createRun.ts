@@ -26,6 +26,7 @@ import {
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { offerBlueprint } from './events'
+import { defaultDecreeState } from './structure'
 import { defaultCaravan } from './trade'
 import { generateMap } from './mapgen'
 import { makeRng } from './rng'
@@ -121,6 +122,11 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
     threats: [],
     threatCounter: 0,
     ongoing: [],
+    conditions: [],
+    conditionCounter: 0,
+    ...defaultDecreeState(),
+    charterOffered: false,
+    charter: null,
     caravan: defaultCaravan(),
     rerollsUsed: 0,
     soothesUsed: 0,

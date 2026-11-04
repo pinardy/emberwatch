@@ -4,12 +4,12 @@ import { CORNERSTONES } from '../game/content/cornerstones'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
 import { NEED_LABELS } from '../game/content/species'
-import { rerollCost } from '../game/engine/events'
-import { canAfford } from '../game/engine/queries'
+import { optionAffordable, rerollCost } from '../game/engine/events'
 import { useGameStore, useRun } from '../game/store'
 import type { ResourceBag } from '../game/types'
 import { Cost } from './BuildPanel'
 import { DialogTip } from './TipsCoach'
+import { CharterChoice } from './CharterChoice'
 
 /**
  * Blocking modal for the three things that interrupt play: cornerstone picks,
@@ -40,7 +40,7 @@ export function ChoiceModal() {
           <p className="modal-flavour">{def.description}</p>
           <div className="option-list">
             {def.options.map((option, index) => {
-              const affordable = !option.requires || canAfford(run.stock, option.requires)
+              const affordable = optionAffordable(run.stock, option)
               return (
                 <button
                   key={option.label}
@@ -82,6 +82,11 @@ export function ChoiceModal() {
                         {option.ongoing.icon} Lasting: {option.ongoing.name}
                       </span>
                     ) : null}
+                    {option.condition ? (
+                      <span className="is-bad" title={option.condition.description}>
+                        {option.condition.icon} Lingering: {option.condition.name}
+                      </span>
+                    ) : null}
                   </div>
                   {!affordable && option.requires && (
                     <small className="is-bad">
@@ -93,6 +98,14 @@ export function ChoiceModal() {
             })}
           </div>
         </div>
+      </Overlay>
+    )
+  }
+
+  if (choice.kind === 'charter') {
+    return (
+      <Overlay>
+        <CharterChoice choice={choice} />
       </Overlay>
     )
   }

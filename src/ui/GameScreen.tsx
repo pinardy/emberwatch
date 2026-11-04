@@ -1,20 +1,24 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { RESOURCES } from '../game/content/resources'
 import { collectWarnings } from '../game/engine/diagnostics'
 import { canAfford } from '../game/engine/queries'
 import { useGameStore, useRun, type SidePanel } from '../game/store'
 import { BuildPanel } from './BuildPanel'
 import { ChoiceModal } from './ChoiceModal'
+import { ConditionsBar } from './ConditionsBar'
+import { EventToasts, useLogUnread } from './EventToasts'
 import { EndModal } from './EndModal'
 import { Inspector } from './Inspector'
 import { MapView } from './MapView'
 import { ResourceBar } from './ResourceBar'
 import { LogPanel, OrdersPanel, TradePanel } from './SidePanels'
 import { TipsCoach } from './TipsCoach'
+import { describeStrike, describeWhileActive } from './threatText'
 import { TopBar } from './TopBar'
 import { useAudioCues } from './useAudioCues'
 import { PANEL_KEY_LABEL, useGameLoop, useHotkeys } from './useGameLoop'
 import { VillagerPanel } from './VillagerPanel'
+import './hud-feedback.css'
 
 const TABS: { id: Exclude<SidePanel, null>; label: string; icon: string }[] = [
   { id: 'build', label: 'Build', icon: '🔨' },
@@ -34,6 +38,7 @@ export function GameScreen() {
   useGameLoop(run !== null)
   useHotkeys(run !== null)
   useAudioCues(run)
+  const unreadLog = useLogUnread(run, panel === 'log')
 
   // Notices are transient; clear them after a beat.
   useEffect(() => {
@@ -77,7 +82,11 @@ export function GameScreen() {
                 {notice}
               </div>
             )}
-            <ThreatBar />
+            <EventToasts />
+            <div className="bottom-stack">
+              <ConditionsBar />
+              <ThreatBar />
+            </div>
             <TipsCoach />
             <Inspector />
           </div>
@@ -101,6 +110,11 @@ export function GameScreen() {
               >
                 <span aria-hidden>{tab.icon}</span>
                 <em>{tab.label}</em>
+                {tab.id === 'log' && unreadLog > 0 && (
+                  <span className="tab-badge" aria-label={`${unreadLog} unread`}>
+                    {unreadLog > 9 ? '9+' : unreadLog}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -137,22 +151,31 @@ function ThreatBar() {
       {run.threats.map((threat) => {
         const affordable = canAfford(run.stock, threat.appease)
         const glade = run.glades[threat.gladeId]
+        const standing = describeWhileActive(threat.whileActive)
         return (
           <div key={threat.id} className="threat-card">
             <button
               type="button"
               className="threat-focus"
               onClick={() => glade && focusCamera(glade.center)}
-              title={glade ? `Show ${glade.name} on the map` : undefined}
+              title={`${threat.description}${glade ? ` Show ${glade.name} on the map.` : ''}`}
             >
               <span className="threat-icon" aria-hidden>
                 {threat.icon}
               </span>
               <span className="threat-text">
-                <strong>{threat.name}</strong>
-                <small>
-                  strikes in {Math.max(0, Math.ceil(threat.timer))}s · {threat.description}
+                <strong>
+                  {threat.name}{' '}
+                  <span className="threat-timer">
+                    strikes in {Math.max(0, Math.ceil(threat.timer))}s
+                  </span>
+                </strong>
+                <small className="threat-strike">
+                  Every {threat.interval}s: {describeStrike(threat)}
                 </small>
+                {standing && (
+                  <small className="threat-standing">While loose: {standing}</small>
+                )}
               </span>
             </button>
             <button
@@ -180,8 +203,19 @@ function ThreatBar() {
 /** Persistent nudges for the things that quietly ruin a settlement. */
 function Warnings() {
   const run = useRun()
+  const version = useGameStore((s) => s.version)
+  // Diagnostics walk every building; do it once per sim step, not per render.
+  const warnings = useMemo(() => {
+    if (!run) return []
+    const all = collectWarnings(run)
+    // Dangers first, so the cap below never hides the worst news.
+    return [
+      ...all.filter((w) => w.severity === 'danger'),
+      ...all.filter((w) => w.severity !== 'danger'),
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run, version])
   if (!run) return null
-  const warnings = collectWarnings(run)
   // The live region stays mounted even when empty so new warnings are announced.
   return (
     <div className="warnings" role="status" aria-live="polite">

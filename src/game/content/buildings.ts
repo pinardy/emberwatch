@@ -1,4 +1,9 @@
-import type { BuildingDef } from '../types'
+import {
+  BRAZIER_FOOTPRINT,
+  BRAZIER_FUEL_PER_SECOND,
+  BRAZIER_WARMTH_RADIUS,
+} from '../engine/balance'
+import type { AdjacencyBonus, BuildingDef } from '../types'
 
 /**
  * Building catalogue. Recipes are declarative so the sim never needs a switch
@@ -10,6 +15,18 @@ import type { BuildingDef } from '../types'
  *  - Gathering recipes name a deposit; the camp only offers them if that
  *    deposit sits within `gatherRadius` world units of the camp.
  */
+/**
+ * Every service venue serves its neighbours best: each home within reach adds
+ * capacity (up to three homes), and its supplier next door adds a little more.
+ * Where homes go relative to services is therefore a real decision.
+ */
+function neighbourhood(supplierId: string): AdjacencyBonus[] {
+  return [
+    { nearCategory: 'housing', percent: 10, effect: 'capacity', maxPartners: 3 },
+    { nearId: supplierId, percent: 10, effect: 'capacity' },
+  ]
+}
+
 const defs: BuildingDef[] = [
   // -------------------------------------------------------------------------
   // Hearth
@@ -80,6 +97,21 @@ const defs: BuildingDef[] = [
     recipes: [],
     storage: 120,
     description: 'Raises the settlement stockpile limit.',
+  },
+  {
+    id: 'brazier',
+    name: 'Brazier',
+    icon: '🏮',
+    category: 'logistics',
+    tags: ['special'],
+    cost: { wood: 10 },
+    buildSeconds: 10,
+    workerSlots: 0,
+    recipes: [],
+    warmth: { radius: BRAZIER_WARMTH_RADIUS, fuelPerSecond: BRAZIER_FUEL_PER_SECOND },
+    footprint: BRAZIER_FOOTPRINT,
+    description:
+      'A fire bowl on a stone plinth. During the Storm it keeps homes within its small reach warm, burning a little wood — and goes cold when the woodpile runs out.',
   },
   {
     id: 'tradingPost',
@@ -345,7 +377,7 @@ const defs: BuildingDef[] = [
       { id: 'plank', inputs: { wood: 2 }, outputs: { plank: 2 }, seconds: 16 },
       { id: 'part', inputs: { wood: 2, resin: 1 }, outputs: { part: 2 }, seconds: 24 },
     ],
-    adjacency: { nearId: 'woodcuttersCamp', percent: 20 },
+    adjacency: [{ nearId: 'woodcuttersCamp', percent: 20 }],
     description: 'Saws wood into planks, or glues up mechanical parts. Works faster beside a Woodcutters’ Camp.',
   },
   {
@@ -361,8 +393,11 @@ const defs: BuildingDef[] = [
       { id: 'brick', inputs: { clay: 2 }, outputs: { brick: 2 }, seconds: 17 },
       { id: 'brickStone', inputs: { clay: 1, stone: 2 }, outputs: { brick: 3 }, seconds: 22 },
     ],
-    adjacency: { nearId: 'clayPit', percent: 20 },
-    description: 'Fires clay into bricks. Works faster beside a Clay Pit.',
+    adjacency: [
+      { nearId: 'clayPit', percent: 20 },
+      { nearId: 'stonecuttersCamp', percent: 10 },
+    ],
+    description: 'Fires clay into bricks. Works faster beside a Clay Pit, and a little faster beside a Stonecutters’ Camp.',
   },
   {
     id: 'weaver',
@@ -377,7 +412,7 @@ const defs: BuildingDef[] = [
       { id: 'fabric', inputs: { plantFiber: 3 }, outputs: { fabric: 3 }, seconds: 18 },
       { id: 'gear', inputs: { fabric: 1, plank: 1 }, outputs: { trainingGear: 3 }, seconds: 22 },
     ],
-    adjacency: { nearId: 'herbalistsCamp', percent: 15 },
+    adjacency: [{ nearId: 'herbalistsCamp', percent: 15 }],
     description: 'Spins plant fibre into fabric and stitches training gear. Works faster beside an Herbalists’ Camp.',
   },
   {
@@ -392,8 +427,11 @@ const defs: BuildingDef[] = [
     recipes: [
       { id: 'bar', inputs: { copperOre: 2, wood: 1 }, outputs: { copperBar: 2 }, seconds: 22 },
     ],
-    adjacency: { nearId: 'copperMine', percent: 20 },
-    description: 'Burns wood to render copper ore into bars. Works faster beside a Copper Mine.',
+    adjacency: [
+      { nearId: 'copperMine', percent: 20 },
+      { nearId: 'woodcuttersCamp', percent: 10 },
+    ],
+    description: 'Burns wood to render copper ore into bars. Works faster beside a Copper Mine, and a little faster beside a Woodcutters’ Camp.',
   },
   {
     id: 'toolshop',
@@ -408,8 +446,11 @@ const defs: BuildingDef[] = [
       { id: 'tool', inputs: { copperBar: 1, plank: 1 }, outputs: { tool: 2 }, seconds: 24 },
       { id: 'part', inputs: { copperBar: 1, fabric: 1 }, outputs: { part: 3 }, seconds: 26 },
     ],
-    adjacency: { nearId: 'smelter', percent: 20 },
-    description: 'Turns bars and planks into tools and parts. Works faster beside a Smelter.',
+    adjacency: [
+      { nearId: 'smelter', percent: 20 },
+      { nearId: 'lumberMill', percent: 10 },
+    ],
+    description: 'Turns bars and planks into tools and parts. Works faster beside a Smelter, and a little faster beside a Lumber Mill.',
   },
   {
     id: 'cookhouse',
@@ -425,8 +466,11 @@ const defs: BuildingDef[] = [
       { id: 'skewer', inputs: { meat: 2 }, outputs: { skewer: 3 }, seconds: 18 },
       { id: 'porridge', inputs: { root: 2, grain: 1 }, outputs: { porridge: 4 }, seconds: 22 },
     ],
-    adjacency: { nearId: 'smallFarm', percent: 20 },
-    description: 'Cooked food feeds villagers twice as far and lifts resolve. Works faster beside a Small Farm.',
+    adjacency: [
+      { nearId: 'smallFarm', percent: 20 },
+      { nearId: 'trappersCamp', percent: 10 },
+    ],
+    description: 'Cooked food feeds villagers twice as far and lifts resolve. Works faster beside a Small Farm, and a little faster beside a Trappers’ Camp.',
   },
   {
     id: 'smokehouse',
@@ -441,7 +485,7 @@ const defs: BuildingDef[] = [
       { id: 'jerky', inputs: { meat: 2, wood: 1 }, outputs: { jerky: 4 }, seconds: 20 },
       { id: 'eggJerky', inputs: { egg: 2, herb: 1 }, outputs: { jerky: 3 }, seconds: 20 },
     ],
-    adjacency: { nearId: 'trappersCamp', percent: 20 },
+    adjacency: [{ nearId: 'trappersCamp', percent: 20 }],
     description: 'Preserves meat over a slow fire. Works faster beside a Trappers’ Camp.',
   },
   {
@@ -457,7 +501,8 @@ const defs: BuildingDef[] = [
       { id: 'pickles', inputs: { vegetable: 2, herb: 1 }, outputs: { pickles: 4 }, seconds: 20 },
       { id: 'mushPickles', inputs: { mushroom: 3 }, outputs: { pickles: 3 }, seconds: 20 },
     ],
-    description: 'Jars vegetables and mushrooms so they last the Storm.',
+    adjacency: [{ nearId: 'smallFarm', percent: 15 }],
+    description: 'Jars vegetables and mushrooms so they last the Storm. Works faster beside a Small Farm.',
   },
   {
     id: 'brewery',
@@ -472,8 +517,11 @@ const defs: BuildingDef[] = [
       { id: 'aleGrain', inputs: { grain: 2 }, outputs: { ale: 3 }, seconds: 18 },
       { id: 'aleBerry', inputs: { berry: 3 }, outputs: { ale: 3 }, seconds: 18 },
     ],
-    adjacency: { nearId: 'smallFarm', percent: 15 },
-    description: 'Ale keeps the tavern open and the villagers agreeable. Works faster beside a Small Farm.',
+    adjacency: [
+      { nearId: 'smallFarm', percent: 15 },
+      { nearId: 'foragersCamp', percent: 10 },
+    ],
+    description: 'Ale keeps the tavern open and the villagers agreeable. Works faster beside a Small Farm, and a little faster beside a Foragers’ Camp.',
   },
   {
     id: 'scribesOffice',
@@ -487,7 +535,8 @@ const defs: BuildingDef[] = [
     recipes: [
       { id: 'scroll', inputs: { plantFiber: 2, resin: 1 }, outputs: { scroll: 3 }, seconds: 20 },
     ],
-    description: 'Copies out scrolls for the Guild House.',
+    adjacency: [{ nearId: 'herbalistsCamp', percent: 15 }],
+    description: 'Copies out scrolls for the Guild House. Works faster beside an Herbalists’ Camp.',
   },
   {
     id: 'apothecaryWorkshop',
@@ -502,7 +551,7 @@ const defs: BuildingDef[] = [
       { id: 'tea', inputs: { herb: 2 }, outputs: { tea: 3 }, seconds: 18 },
       { id: 'incense', inputs: { herb: 2, resin: 1 }, outputs: { incense: 3 }, seconds: 20 },
     ],
-    adjacency: { nearId: 'herbalistsCamp', percent: 15 },
+    adjacency: [{ nearId: 'herbalistsCamp', percent: 15 }],
     description: 'Brews tea and rolls incense from gathered herbs. Works faster beside an Herbalists’ Camp.',
   },
 
@@ -520,7 +569,8 @@ const defs: BuildingDef[] = [
     workerSlots: 1,
     service: { need: 'luxury', capacity: 25 },
     recipes: [{ id: 'serve', inputs: { ale: 1 }, outputs: {}, seconds: 20 }],
-    description: 'Satisfies Luxury for up to 25 villagers while ale keeps flowing.',
+    adjacency: neighbourhood('brewery'),
+    description: 'Satisfies Luxury for up to 25 villagers while ale keeps flowing. Serves more of the settlement with homes close by.',
   },
   {
     id: 'temple',
@@ -533,7 +583,8 @@ const defs: BuildingDef[] = [
     workerSlots: 1,
     service: { need: 'religion', capacity: 25 },
     recipes: [{ id: 'serve', inputs: { incense: 1 }, outputs: {}, seconds: 20 }],
-    description: 'Satisfies Religion for up to 25 villagers while incense burns.',
+    adjacency: neighbourhood('apothecaryWorkshop'),
+    description: 'Satisfies Religion for up to 25 villagers while incense burns. Serves more of the settlement with homes close by.',
   },
   {
     id: 'guildHouse',
@@ -546,7 +597,8 @@ const defs: BuildingDef[] = [
     workerSlots: 1,
     service: { need: 'education', capacity: 25 },
     recipes: [{ id: 'serve', inputs: { scroll: 1 }, outputs: {}, seconds: 20 }],
-    description: 'Satisfies Education for up to 25 villagers.',
+    adjacency: neighbourhood('scribesOffice'),
+    description: 'Satisfies Education for up to 25 villagers. Serves more of the settlement with homes close by.',
   },
   {
     id: 'bathHouse',
@@ -559,7 +611,8 @@ const defs: BuildingDef[] = [
     workerSlots: 1,
     service: { need: 'rest', capacity: 25 },
     recipes: [{ id: 'serve', inputs: { fabric: 1 }, outputs: {}, seconds: 22 }],
-    description: 'Satisfies Rest for up to 25 villagers.',
+    adjacency: neighbourhood('weaver'),
+    description: 'Satisfies Rest for up to 25 villagers. Serves more of the settlement with homes close by.',
   },
   {
     id: 'apothecary',
@@ -572,7 +625,8 @@ const defs: BuildingDef[] = [
     workerSlots: 1,
     service: { need: 'treatment', capacity: 25 },
     recipes: [{ id: 'serve', inputs: { tea: 1 }, outputs: {}, seconds: 20 }],
-    description: 'Satisfies Treatment for up to 25 villagers.',
+    adjacency: neighbourhood('apothecaryWorkshop'),
+    description: 'Satisfies Treatment for up to 25 villagers. Serves more of the settlement with homes close by.',
   },
   {
     id: 'arena',
@@ -585,7 +639,8 @@ const defs: BuildingDef[] = [
     workerSlots: 1,
     service: { need: 'brawling', capacity: 25 },
     recipes: [{ id: 'serve', inputs: { trainingGear: 1 }, outputs: {}, seconds: 20 }],
-    description: 'Satisfies Brawling for up to 25 villagers.',
+    adjacency: neighbourhood('weaver'),
+    description: 'Satisfies Brawling for up to 25 villagers. Serves more of the settlement with homes close by.',
   },
 ]
 
@@ -607,6 +662,9 @@ export const STARTING_BLUEPRINTS = [
   'shelter',
   'cabin',
   'warehouse',
+  // Warmth is survival, like a roof: drafting it would make sprawl a matter of
+  // luck. It costs wood every Storm instead, so it is a trade-off, not a fix.
+  'brazier',
   'woodcuttersCamp',
   'stonecuttersCamp',
   'clayPit',

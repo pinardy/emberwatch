@@ -8,12 +8,18 @@ import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { computeModifiers } from '../game/engine/modifiers'
 import { availableRecipes, idleVillagers } from '../game/engine/queries'
 import {
-  adjacencyMultiplier,
-  seasonMultiplier,
-  workRate,
-} from '../game/engine/production'
+  adjacencyStatus,
+  describeBonus,
+  partnerIcon,
+  serviceCapacity,
+} from '../game/engine/adjacency'
+import { terrainHint } from '../game/engine/placement'
+import { homesWithin, isWarmAt } from '../game/engine/queries'
+import { TERRAIN } from '../game/content/terrain'
+import { terrainOf } from '../game/engine/production'
 import { workerMultiplier } from '../game/engine/traits'
 import { useGameStore, useRun } from '../game/store'
+import { BuildingStatusLine } from './BuildingStatusLine'
 import type {
   BuildingDef,
   BuildingInstance,
@@ -103,11 +109,10 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
   const mods = computeModifiers(run)
   const recipes = availableRecipes(building)
   const active = def.recipes.find((r) => r.id === building.activeRecipeId)
-  const rate =
-    workRate(run, building, mods) *
-    seasonMultiplier(building.defId, run.season.season, mods)
   const idle = idleVillagers(run).length
-  const adjacent = adjacencyMultiplier(run, building) > 1
+  const adjacency = adjacencyStatus(run, building)
+  const terrain = terrainOf(run, building)
+  const ground = terrainHint(building.defId, terrain)
 
   return (
     <div className="inspector-body">
@@ -176,17 +181,14 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
                       }}
                     />
                   </div>
-                  <small className="muted">
-                    {rate <= 0
-                      ? seasonMultiplier(building.defId, run.season.season, mods) === 0
-                        ? 'Idle — this building produces nothing during the Storm.'
-                        : 'Idle — assign a worker.'
-                      : `${rate.toFixed(2)} work/s → one batch every ${(
-                          active.seconds / rate
-                        ).toFixed(1)}s`}
-                  </small>
                 </>
               )}
+              <BuildingStatusLine run={run} building={building} mods={mods} />
+            </section>
+          )}
+          {recipes.length === 0 && def.recipes.length > 0 && (
+            <section className="inspector-section">
+              <BuildingStatusLine run={run} building={building} mods={mods} />
             </section>
           )}
 
@@ -195,8 +197,12 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
               <h4>Service</h4>
               <p className="muted">
                 {NEED_LABELS[def.service.need].icon} Satisfies{' '}
-                {NEED_LABELS[def.service.need].name} for up to {def.service.capacity}{' '}
-                villagers. Needs a worker and a steady supply of{' '}
+                {NEED_LABELS[def.service.need].name} for up to{' '}
+                {serviceCapacity(run, building)} villagers
+                {serviceCapacity(run, building) > def.service.capacity
+                  ? ` (base ${def.service.capacity}, raised by its neighbours)`
+                  : ''}
+                . Needs a worker and a steady supply of{' '}
                 {Object.keys(def.recipes[0]?.inputs ?? {})
                   .map((id) => RESOURCES[id as keyof typeof RESOURCES]?.name)
                   .join(', ')}
@@ -205,13 +211,48 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             </section>
           )}
 
-          {def.adjacency && (
+          {adjacency.length > 0 && (
             <section className="inspector-section">
               <h4>Adjacency</h4>
+              {adjacency.map((status, i) => (
+                <p key={i} className="muted">
+                  {status.percent > 0 ? '✅' : '▫'} {partnerIcon(status.bonus)}{' '}
+                  {describeBonus(status.bonus)}
+                  {status.percent > 0 ? ` — active, +${status.percent}%.` : ' — not adjacent.'}
+                </p>
+              ))}
+            </section>
+          )}
+
+          {def.warmth && (
+            <section className="inspector-section">
+              <h4>Warmth</h4>
               <p className="muted">
-                {adjacent ? '✅' : '▫'} +{def.adjacency.percent}% work speed next to a{' '}
-                {BUILDINGS[def.adjacency.nearId]?.name}
-                {adjacent ? ' — active.' : ' — not adjacent.'}
+                {building.unlit ? '❄ Cold — no wood to burn.' : '🔥 Lit.'} Keeps{' '}
+                {homesWithin(run, building.pos, def.warmth.radius).length} home
+                {homesWithin(run, building.pos, def.warmth.radius).length === 1 ? '' : 's'} within{' '}
+                {def.warmth.radius} warm during the Storm, burning{' '}
+                {def.warmth.fuelPerSecond.toFixed(3)} wood/s while it rages.
+              </p>
+            </section>
+          )}
+
+          {def.category === 'housing' && (
+            <section className="inspector-section">
+              <h4>Warmth</h4>
+              <p className="muted">
+                {isWarmAt(run, building.pos)
+                  ? '🔥 Warm — inside the reach of the hearth or a lit brazier.'
+                  : '❄ Cold in the Storm — beyond every fire. A brazier nearby would warm it.'}
+              </p>
+            </section>
+          )}
+
+          {terrain && def.category !== 'hearth' && (
+            <section className="inspector-section">
+              <h4>Ground</h4>
+              <p className="muted">
+                {ground ?? `${TERRAIN[terrain].icon} ${TERRAIN[terrain].name}: no effect on this building.`}
               </p>
             </section>
           )}

@@ -37,17 +37,17 @@ export type ActionError = string | null
 // Building placement
 // ---------------------------------------------------------------------------
 
-/** Footprint radius for a building def, from its category. */
+/** Footprint radius for a building def: its own override, else its category's. */
 export function footprintOf(defId: string): number {
   const def = BUILDINGS[defId]
-  return def ? FOOTPRINT_RADIUS[def.category] : 0.6
+  return def ? (def.footprint ?? FOOTPRINT_RADIUS[def.category]) : 0.6
 }
 
 export function canPlaceBuilding(s: RunState, defId: string, pos: Vec2): ActionError {
   const def = BUILDINGS[defId]
   if (!def) return 'Unknown building.'
   if (!s.unlockedBuildings.includes(defId)) return 'You do not have this blueprint.'
-  const radius = FOOTPRINT_RADIUS[def.category]
+  const radius = footprintOf(defId)
   if (!insideWorld(s.world, pos, radius)) return 'Beyond the forest edge.'
   const glade = gladeAt(s.glades, pos)
   if (!glade?.cleared) return 'That ground has not been cleared.'

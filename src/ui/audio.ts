@@ -18,7 +18,11 @@ export type Cue =
   | 'villagerLeft'
   | 'villagerArrived'
   | 'threat'
+  | 'threatStrike'
+  | 'gladeCleared'
+  | 'storageFull'
   | 'caravan'
+  | 'caravanLeaving'
   | 'won'
   | 'lost'
 
@@ -176,6 +180,39 @@ export function cue(name: Cue): void {
       play([
         { f: 466, at: 0, d: 0.4, g: 0.1, type: 'square' },
         { f: 440, at: 0.02, d: 0.45, g: 0.1, type: 'square' },
+      ])
+      break
+    case 'threatStrike':
+      // The threat's dissonant pair, lower and with a crash behind it.
+      noiseBurst(0.35, 260, 0.13)
+      play([
+        { f: 233, at: 0, d: 0.45, g: 0.09, type: 'square' },
+        { f: 220, at: 0.02, d: 0.5, g: 0.09, type: 'square' },
+      ])
+      break
+    case 'gladeCleared':
+      // Branches giving way, then an open, rising triad.
+      noiseBurst(0.22, 1600, 0.07)
+      play([
+        { f: 392, at: 0.05, d: 0.25, g: 0.06, type: 'triangle' },
+        { f: 494, at: 0.15, d: 0.25, g: 0.06, type: 'triangle' },
+        { f: 587, at: 0.25, d: 0.45, g: 0.07, type: 'triangle' },
+      ])
+      break
+    case 'storageFull':
+      // Two dull knocks on a crate that will not take any more.
+      noiseBurst(0.08, 380, 0.1)
+      play([
+        { f: 147, at: 0, d: 0.16, g: 0.05, type: 'square' },
+        { f: 147, at: 0.2, d: 0.2, g: 0.05, type: 'square' },
+      ])
+      break
+    case 'caravanLeaving':
+      // The arrival bells, falling away.
+      play([
+        { f: 880, at: 0, d: 0.2, g: 0.06, type: 'triangle' },
+        { f: 587, at: 0.2, d: 0.15, g: 0.05, type: 'triangle' },
+        { f: 440, at: 0.38, d: 0.35, g: 0.04, type: 'triangle' },
       ])
       break
     case 'caravan':

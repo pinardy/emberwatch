@@ -1,30 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
 import { GLADE_EVENTS } from '../content/gladeEvents'
+import { ORDERS } from '../content/orders'
 import { SPECIES } from '../content/species'
-import type { RunState, ServiceNeed, SpeciesId } from '../types'
+import { EDIBLE } from '../content/resources'
+import type { BuildingInstance, ResourceId, RunState, ServiceNeed, SpeciesId } from '../types'
 import {
   addClearer,
   assignWorker,
   findPlacement,
   isReachable,
   placeBuilding,
+  removeWorker,
   setRecipe,
 } from './actions'
+import { GLADES_PER_REPUTATION } from './balance'
 import { createRun } from './createRun'
 import { computeModifiers } from './modifiers'
 import { resolveBreakdowns } from './society'
-import { appeaseThreat, resolveGladeEvent, takeChoice } from './events'
+import { appeaseThreat, optionAffordable, resolveGladeEvent, takeChoice } from './events'
 import {
   SERVICE_COVERAGE_RATIO,
+  activeRecipe,
   canAfford,
   foodStock,
   idleVillagers,
   population,
+  isWarmAt,
   serviceCoverage,
   storageUsed,
   totalHousing,
 } from './queries'
+import { dist } from './geometry'
 import { tick } from './tick'
 
 /**
@@ -72,6 +79,11 @@ interface BotReport {
   coldHearth: boolean
   services: string
   drafted: string
+  exactMinutes: number
+  sources: ReputationSources
+  lost: number
+  /** Braziers raised to warm homes beyond the hearth. */
+  braziers: number
 }
 
 /** Snapshot of resolve versus the threshold each species must beat. */
@@ -138,10 +150,24 @@ function tryPlace(s: RunState, defId: string): boolean {
   if (!s.unlockedBuildings.includes(defId)) return false
   const def = BUILDINGS[defId]
   if (!def || !canAfford(s.stock, def.cost)) return false
+  /*
+   * A failed placement search scans every ring around its anchors, which is
+   * the harness's dominant cost on crowded maps. Space only opens up when a
+   * glade is cleared, so a failure is remembered until then.
+   */
+  const memo = noRoom.get(s)
+  const key = `${defId}:${s.stats.gladesCleared}`
+  if (memo?.has(key)) return false
   const pos = findPlacement(s, defId)
-  if (!pos) return false
+  if (!pos) {
+    if (memo) memo.add(key)
+    else noRoom.set(s, new Set([key]))
+    return false
+  }
   return placeBuilding(s, defId, pos) === null
 }
+
+const noRoom = new WeakMap<RunState, Set<string>>()
 
 /** Needs demanded by the species actually living here. */
 function neededServices(s: RunState): ServiceNeed[] {
@@ -165,7 +191,7 @@ function slotPressure(s: RunState): number {
 }
 
 /** Build order. First entry whose condition holds and which can be placed wins. */
-function build(s: RunState): void {
+function build(s: RunState, economyOnly = false): void {
   // Keep at most two sites open so construction actually finishes.
   if (openSites(s) >= 2) return
   const pop = population(s)
@@ -173,6 +199,8 @@ function build(s: RunState): void {
   // Housing and storage need no workers, so they are never gated.
   if (totalHousing(s) < pop + 4 && (tryPlace(s, 'cabin') || tryPlace(s, 'shelter'))) return
   if (storageUsed(s) > s.storageCap * 0.8 && tryPlace(s, 'warehouse')) return
+  // Homes that sprawled past the hearth's reach get a brazier before the Storm.
+  if (warmSprawl(s)) return
 
   // 1. Wood first — it is the input to nearly everything.
   if (countPlanned(s, 'woodcuttersCamp') < 2 && tryPlace(s, 'woodcuttersCamp')) return
@@ -200,7 +228,7 @@ function build(s: RunState): void {
    *    when we cannot afford one yet this falls through to the material chain
    *    below and comes back to it later.
    */
-  if (slotPressure(s) < 1.6 && buildServices(s)) return
+  if (!economyOnly && slotPressure(s) < 1.6 && buildServices(s)) return
 
   // 4. The material chain that pays for those venues.
   if (slotPressure(s) > 1.25) return
@@ -214,6 +242,30 @@ function build(s: RunState): void {
 
   // 6. A cookhouse doubles what every one of those camps is worth.
   if (countPlanned(s, 'cookhouse') < 2 && pop > 18 && tryPlace(s, 'cookhouse')) return
+}
+
+/**
+ * Housing packed around the hearth eventually spills past its warmth radius,
+ * and those homes chill in the Storm. A competent player plants a brazier
+ * among them rather than eating the resolve penalty.
+ */
+function warmSprawl(s: RunState): boolean {
+  if (!s.unlockedBuildings.includes('brazier')) return false
+  const braziers = Object.values(s.buildings).filter((b) => BUILDINGS[b.defId]?.warmth)
+  const reach = BUILDINGS.brazier?.warmth?.radius ?? 0
+  const cold = Object.values(s.buildings).filter(
+    (b) =>
+      b.built &&
+      BUILDINGS[b.defId]?.category === 'housing' &&
+      !isWarmAt(s, b.pos) &&
+      // A planned (or guttering) brazier already covers it.
+      !braziers.some((w) => dist(w.pos, b.pos) <= reach),
+  )
+  const target = cold[0]
+  if (!target || !canAfford(s.stock, BUILDINGS.brazier.cost)) return false
+  const pos = findPlacement(s, 'brazier', target.pos)
+  if (!pos || dist(pos, target.pos) > reach) return false
+  return placeBuilding(s, 'brazier', pos) === null
 }
 
 /** Stands up service venues and the chains that supply them. */
@@ -284,6 +336,13 @@ function wantsResin(s: RunState): boolean {
   )
 }
 
+/** True when any needed service good is made from plant fiber. */
+function wantsFiber(s: RunState): boolean {
+  return [...wantedRecipes(s).values()].some(
+    (set) => set.has('fabric') || set.has('gear') || set.has('scroll'),
+  )
+}
+
 /** Spreads the needed recipes across the producer instances we have. */
 function tuneRecipes(s: RunState): void {
   const wanted = wantedRecipes(s)
@@ -296,6 +355,23 @@ function tuneRecipes(s: RunState): void {
     if (camps.length > 1 && !camps.some((b) => b.activeRecipeId === 'resin')) {
       setRecipe(s, camps[0].id, 'resin')
     }
+  }
+
+  /*
+   * Herbalists default to herbs, but fabric, scrolls and training gear all
+   * start from plant fiber. Without a fiber camp, rest, education and brawling
+   * can never be supplied, which silently handicaps every species that wants
+   * them (harpies want both of theirs from fiber).
+   */
+  if (wantsFiber(s)) {
+    const camps = Object.values(s.buildings).filter(
+      (b) => b.defId === 'herbalistsCamp' && b.built,
+    )
+    const wantsHerb = [...wanted.values()].some((set) => set.has('tea') || set.has('incense'))
+    camps.forEach((camp, index) => {
+      const target = wantsHerb && index % 2 === 0 ? 'herb' : 'fiber'
+      if (camp.activeRecipeId !== target) setRecipe(s, camp.id, target)
+    })
   }
 
   for (const [producer, recipes] of wanted) {
@@ -326,32 +402,92 @@ function builderReserve(s: RunState): number {
   return openSites(s) > 0 ? Math.max(3, Math.round(population(s) * 0.2)) : 2
 }
 
+/** Material producers that venues are priced in. */
+const MATERIAL_CHAIN = new Set(['lumberMill', 'brickyard', 'clayPit', 'stonecuttersCamp'])
+
+/** How much of a good is "enough" — past this, its producers can spare a hand. */
+function stockTarget(s: RunState, id: ResourceId): number {
+  const pop = population(s)
+  if (EDIBLE.includes(id)) {
+    // Keep a Storm's worth of food in hand before the Storm arrives.
+    return s.season.season === 'drizzle' ? pop * 7 + 40 : pop * 11 + 40
+  }
+  if (id === 'wood') return 120
+  return 60
+}
+
+/** True when everything a building's current recipe makes is already in surplus. */
+function saturated(s: RunState, b: BuildingInstance): boolean {
+  const recipe = activeRecipe(b)
+  const outputs = Object.keys(recipe?.outputs ?? {}) as ResourceId[]
+  if (outputs.length === 0) return false
+  if (EDIBLE.some((id) => outputs.includes(id))) {
+    return foodStock(s) >= stockTarget(s, outputs[0])
+  }
+  return outputs.every((id) => (s.stock[id] ?? 0) >= stockTarget(s, id))
+}
+
+/**
+ * Pulls one worker off a building whose output is piling up. Staffing is
+ * otherwise first-come and permanent, so the camps built in the first minutes
+ * would hold their crews forever while the deeper chains — where service goods
+ * come from — sit empty and the stockpile fills with wood nobody needs.
+ */
+function releaseSurplus(s: RunState): void {
+  for (const b of Object.values(s.buildings)) {
+    if (!b.built || b.workers.length === 0) continue
+    if (BUILDINGS[b.defId]?.category === 'service') continue
+    if (saturated(s, b)) {
+      removeWorker(s, b.id)
+      return
+    }
+  }
+}
+
 /** Fills worker slots, keeping a few villagers free to build and clear. */
 function staff(s: RunState): void {
+  releaseSurplus(s)
   const reserve = builderReserve(s)
+  const pop = population(s)
+  const hungry = s.starving || foodStock(s) < pop * 4
+  const cold = (s.stock.wood ?? 0) < 30
 
   // Producers that feed a wanted service — a venue without goods is worthless,
   // so these outrank the raw economy.
   const serviceProducers = new Set(wantedRecipes(s).keys())
+  if (wantsFiber(s) || serviceProducers.has('apothecaryWorkshop')) {
+    serviceProducers.add('herbalistsCamp')
+  }
 
-  // Services and their supply chains first — they are what keeps resolve up.
-  const priority = (defId: string): number => {
-    const def = BUILDINGS[defId]
+  const priority = (b: BuildingInstance): number => {
+    const def = BUILDINGS[b.defId]
     if (!def) return 0
+    const outputs = Object.keys(activeRecipe(b)?.outputs ?? {}) as ResourceId[]
+    // Emergencies first: an empty larder or a dying hearth ends runs.
+    if (hungry && outputs.some((id) => EDIBLE.includes(id))) return 7
+    if (cold && outputs.includes('wood')) return 7
+    if (saturated(s, b)) return -1
+    // Then services and their supply chains — they are what keeps resolve up.
     if (def.category === 'service') return 5
-    if (serviceProducers.has(defId)) return 4
+    if (serviceProducers.has(b.defId)) return 4
     if (def.tags.includes('cooking')) return 3
+    if (MATERIAL_CHAIN.has(b.defId)) return 3
     if (def.tags.includes('gathering') || def.tags.includes('farming')) return 2
     return 1
   }
 
   const targets = Object.values(s.buildings)
     .filter((b) => b.built && (BUILDINGS[b.defId]?.workerSlots ?? 0) > b.workers.length)
-    .sort((a, c) => priority(c.defId) - priority(a.defId))
+    .map((b) => ({ b, p: priority(b) }))
+    .filter((t) => t.p >= 0)
+    .sort((a, c) => c.p - a.p)
 
-  for (const building of targets) {
+  for (const { b: building, p } of targets) {
+    // In an emergency, dig into the builder reserve — but never the last
+    // builder while a site is open, or a stalled warehouse starves everyone.
+    const keep = p >= 7 ? (openSites(s) > 0 ? 1 : 0) : reserve
     while (
-      idleVillagers(s).length > reserve &&
+      idleVillagers(s).length > keep &&
       building.workers.length < (BUILDINGS[building.defId]?.workerSlots ?? 0)
     ) {
       if (assignWorker(s, building.id) !== null) break
@@ -366,7 +502,8 @@ function staff(s: RunState): void {
  */
 function explore(s: RunState): void {
   const pop = population(s)
-  if (pop < 6) return
+  // A hungry settlement needs its hands at home, not in the woods.
+  if (pop < 6 || s.starving) return
 
   const inProgress = Object.values(s.glades).find((g) => !g.cleared && g.clearers > 0)
   const crew = Math.min(4, Math.max(2, Math.floor(pop / 8)))
@@ -395,21 +532,21 @@ function answerChoices(s: RunState): void {
     if (choice.kind === 'gladeEvent') {
       const def = GLADE_EVENTS[choice.options[0]]
       // Prefer an affordable option that does not cost villagers or patience —
-      // and never one that unleashes a threat the bot would have to pay off.
+      // and never one that unleashes a threat the bot would have to pay off, or
+      // leaves a lingering condition it has no plan to lift.
       let index = def.options.findIndex(
         (o) =>
-          (!o.requires || canAfford(s.stock, o.requires)) &&
+          optionAffordable(s.stock, o) &&
           !o.villagerLoss &&
           !o.impatience &&
           !o.threat &&
+          !o.condition &&
           (o.hostility ?? 0) <= 0,
       )
       if (index < 0) {
         index = def.options.findIndex(
           (o) =>
-            (!o.requires || canAfford(s.stock, o.requires)) &&
-            !o.villagerLoss &&
-            !o.threat,
+            optionAffordable(s.stock, o) && !o.villagerLoss && !o.threat,
         )
       }
       resolveGladeEvent(s, index >= 0 ? index : def.options.length - 1)
@@ -429,29 +566,65 @@ function answerChoices(s: RunState): void {
   }
 }
 
+interface PlayOptions {
+  /** Never builds service venues or their supply chains — the idle economy. */
+  economyOnly?: boolean
+  maxMinutes?: number
+}
+
+/** Where a run's reputation came from. */
+interface ReputationSources {
+  orders: number
+  glades: number
+  events: number
+  resolve: number
+}
+
 /** Plays one run to its conclusion (or `maxMinutes` of game time). */
-function playRun(seed: number, species: SpeciesId[], maxMinutes = 45): BotReport {
+function playRun(
+  seed: number,
+  species: SpeciesId[],
+  options: PlayOptions = {},
+): BotReport {
+  const { economyOnly = false, maxMinutes = 45 } = options
   const s = createRun({ seed, species })
   let sinceDecision = Infinity
   const maxSeconds = maxMinutes * 60
+  const sources: ReputationSources = { orders: 0, glades: 0, events: 0, resolve: 0 }
 
   while (s.phase === 'playing' && s.clock < maxSeconds) {
+    const beforeChoices = s.reputation
     answerChoices(s)
+    sources.events += s.reputation - beforeChoices
     if (s.phase !== 'playing') break
 
     if (sinceDecision >= DECISION_INTERVAL) {
       sinceDecision = 0
       // Threats compound; a competent player pays them off when they can.
       for (const threat of [...s.threats]) appeaseThreat(s, threat.id)
-      build(s)
+      build(s, economyOnly)
       explore(s)
       tuneRecipes(s)
       staff(s)
     }
 
+    const openOrders = s.orders.map((o) => o.defId)
+    const gladesBefore = s.stats.gladesCleared
     tick(s, STEP)
     sinceDecision += STEP
+    const stillOpen = new Set(s.orders.map((o) => o.defId))
+    for (const id of openOrders) {
+      if (!stillOpen.has(id)) sources.orders += ORDERS[id]?.reputationReward ?? 0
+    }
+    sources.glades +=
+      Math.floor(s.stats.gladesCleared / GLADES_PER_REPUTATION) -
+      Math.floor(gladesBefore / GLADES_PER_REPUTATION)
   }
+  // Resolve is whatever the discrete sources do not explain.
+  sources.resolve = Math.max(
+    0,
+    s.reputation + s.reputationProgress - sources.orders - sources.glades - sources.events,
+  )
 
   return {
     phase: s.phase,
@@ -463,6 +636,7 @@ function playRun(seed: number, species: SpeciesId[], maxMinutes = 45): BotReport
     ordersCompleted: s.stats.ordersCompleted,
     buildings: Object.values(s.buildings).filter((b) => b.built).length,
     minutes: Math.round(s.clock / 60),
+    exactMinutes: s.clock / 60,
     hostility: Math.round(s.hostility),
     resolve: describeResolve(s),
     unmetNeeds: describeUnmet(s),
@@ -472,52 +646,129 @@ function playRun(seed: number, species: SpeciesId[], maxMinutes = 45): BotReport
     drafted: s.unlockedBuildings
       .filter((b) => !STARTING_BLUEPRINTS.includes(b))
       .join(','),
+    sources,
+    lost: s.stats.villagersLost,
+    braziers: countPlanned(s, 'brazier'),
   }
 }
 
-const SEEDS = [1, 20260726, 777, 424242, 99, 31337, 8080, 555000]
+/** One trio from the starting species and two that need a charter. */
+const TRIOS: SpeciesId[][] = [
+  ['human', 'beaver', 'lizard'],
+  ['human', 'fox', 'harpy'],
+  ['beaver', 'lizard', 'harpy'],
+]
+
+const ALL_SEEDS = [
+  1, 20260726, 777, 424242, 99, 31337, 8080, 555000, 2024, 13, 4242, 90210, 1234567,
+  271828, 314159, 8675309, 42, 1001, 65535, 7, 123, 5150, 60606, 98765,
+]
+
+/**
+ * Env knobs for local balance sweeps, e.g.
+ *   PLAYTEST_SEEDS=8 PLAYTEST_VERBOSE=1 npx vitest run playtest --reporter=verbose --silent=false
+ * PLAYTEST_SEED=<n> replays a single seed across every trio.
+ */
+const ENV: Record<string, string | undefined> =
+  (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {}
+/*
+ * Every seed by default. The trio-parity check compares win rates across
+ * three groups, and at 16 seeds a single lucky or unlucky map moves a trio by
+ * six points — enough to trip a 25-point band on noise alone.
+ */
+const SEED_COUNT = Number(ENV.PLAYTEST_SEEDS ?? ALL_SEEDS.length)
+const SEEDS = ENV.PLAYTEST_SEED ? [Number(ENV.PLAYTEST_SEED)] : ALL_SEEDS.slice(0, SEED_COUNT)
+/** The economy-only bot is a control group; half the seeds are enough. */
+const ECON_SEEDS = SEEDS.slice(0, Math.max(1, Math.ceil(SEEDS.length / 2)))
+
+/** The Queen's deadline must end every run by about this point. */
+const VERDICT_BY_MINUTES = 40
+
+const isEarlyCollapse = (r: BotReport) => r.phase === 'lost' && r.population === 0 && r.exactMinutes < 12
+const winShare = (rs: BotReport[]) => rs.filter((r) => r.phase === 'won').length / rs.length
+const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0)
+
+function summarise(label: string, reports: BotReport[]): string {
+  const wins = reports.filter((r) => r.phase === 'won')
+  const losses = reports.filter((r) => r.phase === 'lost')
+  const stalls = reports.filter((r) => r.phase === 'playing')
+  const src = (k: keyof ReputationSources) => mean(wins.map((r) => r.sources[k])).toFixed(1)
+  return (
+    `${label.padEnd(20)} won ${wins.length}/${reports.length} lost ${losses.length} stall ${stalls.length} early-collapse ${reports.filter(isEarlyCollapse).length}` +
+    ` · avg win ${mean(wins.map((r) => r.exactMinutes)).toFixed(1)}min · longest ${Math.max(...reports.map((r) => r.exactMinutes)).toFixed(1)}min` +
+    ` · rep in wins: orders ${src('orders')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')}`
+  )
+}
+
+function logRun(seed: number, r: BotReport): void {
+  console.log(
+    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
+      `\n    services: ${r.services}\n    drafted: ${r.drafted}`,
+  )
+}
 
 describe('balance harness', () => {
   it('a competent player can win, and the run has a real shape', () => {
-    const reports = SEEDS.map((seed) => playRun(seed, ['human', 'beaver', 'lizard']))
+    const lines: string[] = []
+    const byTrio = TRIOS.map((trio) => {
+      const reports = SEEDS.map((seed) => playRun(seed, trio))
+      if (ENV.PLAYTEST_VERBOSE) reports.forEach((r, i) => logRun(SEEDS[i], r))
+      lines.push(summarise(trio.join('/'), reports))
+      return reports
+    })
+    const competent = byTrio.flat()
+    const econ = TRIOS.flatMap((trio) => {
+      const reports = ECON_SEEDS.map((seed) => playRun(seed, trio, { economyOnly: true }))
+      if (ENV.PLAYTEST_VERBOSE) reports.forEach((r, i) => logRun(ECON_SEEDS[i], r))
+      return reports
+    })
+    lines.push(summarise('all trios', competent))
+    lines.push(summarise('economy-only', econ))
+    console.log(lines.join('\n'))
 
-    for (const [i, r] of reports.entries()) {
-      console.log(
-        `seed ${SEEDS[i]}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
-          `\n    services: ${r.services}\n    drafted: ${r.drafted}`,
-      )
+    // A roguelite that can stalemate is broken: every run must reach a verdict,
+    // and the Queen's deadline must deliver it in reasonable time.
+    for (const r of [...competent, ...econ]) {
+      expect(r.phase).not.toBe('playing')
+      expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
     }
 
-    const wins = reports.filter((r) => r.phase === 'won').length
-    const stalls = reports.filter((r) => r.phase === 'playing').length
-
-    // A roguelite that can stalemate is broken: every run must reach a verdict.
-    expect(stalls).toBe(0)
+    // A settlement that slips should have time to notice and respond: emptying
+    // out inside the first twelve minutes must be rare.
+    expect(competent.filter(isEarlyCollapse).length).toBeLessThanOrEqual(
+      Math.ceil(competent.length * 0.05),
+    )
 
     /*
-     * The bot plays competently but not well — it never trades, never rebalances
-     * a recipe under pressure, and over-expands. Somewhere around half to most
-     * maps is the shape we want: a real player should comfortably beat this, and
-     * a careless one should still lose sometimes.
+     * The bot plays competently but not well — it never trades, never soothes
+     * the Queen, and takes whatever the draft hands it. Most maps but not all
+     * is the shape we want: a real player should comfortably beat this, and a
+     * careless one should still lose sometimes.
      */
-    expect(wins).toBeGreaterThanOrEqual(3)
-    expect(wins).toBeLessThan(SEEDS.length)
+    const competentShare = winShare(competent)
+    expect(competentShare).toBeGreaterThanOrEqual(0.4)
+    expect(competentShare).toBeLessThan(0.95)
+
+    // Services are the game. Idling above threshold with none must not win.
+    const econShare = winShare(econ)
+    expect(econShare).toBeLessThanOrEqual(0.1)
+    expect(econShare).toBeLessThanOrEqual(competentShare / 4)
+
+    // Buying a charter must not make the game harder (or much easier).
+    const shares = byTrio.map(winShare)
+    expect(Math.max(...shares) - Math.min(...shares)).toBeLessThanOrEqual(0.25)
+
+    const wins = competent.filter((x) => x.phase === 'won')
+    // Reputation must come mostly from what the player did, not from idling.
+    expect(mean(wins.map((r) => r.sources.resolve))).toBeLessThan(10)
 
     // A win should take a real settlement, not a lucky opening.
-    for (const r of reports.filter((x) => x.phase === 'won')) {
+    for (const r of wins) {
       expect(r.buildings).toBeGreaterThan(8)
       expect(r.population).toBeGreaterThan(10)
       expect(r.minutes).toBeGreaterThan(8)
-      /*
-       * And it should not drag: the target is a 15-35 minute run. The bound
-       * leaves room for outlier maps whose species draw fights the draft —
-       * the bot also never touches the amber levers (rerolls, soothing the
-       * Queen, caravan trading) that a real player would reach for on
-       * exactly those maps.
-       */
-      expect(r.minutes).toBeLessThan(45)
     }
-  }, 180_000)
+  }, 300_000)
 
   it('grows a settlement past its starting six villagers', () => {
     const s = createRun({ seed: 4242, species: ['human', 'fox', 'harpy'] })
