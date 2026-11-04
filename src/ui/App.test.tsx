@@ -230,6 +230,29 @@ describe('app shell', () => {
     expect(currentRun().clock).toBeGreaterThan(clockBefore)
   })
 
+  it('keeps real time at display frame rates, where one frame is shorter than a tick', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+
+    for (const [fps, speed] of [
+      [60, 1],
+      [144, 1],
+      [60, 3],
+    ] as const) {
+      const clockBefore = currentRun().clock
+      act(() => {
+        useGameStore.getState().setSpeed(speed)
+        // Ten real seconds of frames, exactly as requestAnimationFrame delivers them.
+        for (let i = 0; i < fps * 10; i++) useGameStore.getState().advance(1 / fps)
+      })
+      const simulated = currentRun().clock - clockBefore
+      expect(simulated).toBeGreaterThanOrEqual(10 * speed - 0.125 - 1e-9)
+      expect(simulated).toBeLessThanOrEqual(10 * speed + 0.125 + 1e-9)
+    }
+  })
+
   it('switches side panels without crashing', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
