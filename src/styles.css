@@ -2340,3 +2340,142 @@ code {
     width: auto;
   }
 }
+
+/* ==========================================================================
+   Mid-run structure — royal decrees, lingering conditions, the charter.
+   The bottom stack holds conditions above the threat bar.
+   ========================================================================== */
+
+.bottom-stack {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  z-index: 24;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.bottom-stack > * {
+  pointer-events: auto;
+}
+
+.bottom-stack .threat-bar {
+  position: static;
+  transform: none;
+  max-width: none;
+}
+
+.conditions-bar {
+  display: grid;
+  gap: 6px;
+}
+
+.condition-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: rgba(38, 32, 18, 0.96);
+  border: 1px solid #7d6738;
+  border-radius: var(--radius);
+  padding: 7px 12px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  animation: rise 180ms ease;
+}
+
+.condition-card.is-decree {
+  background: rgba(24, 30, 44, 0.96);
+  border-color: #6f86b4;
+}
+
+.condition-card.is-urgent {
+  border-color: var(--bad);
+}
+
+.condition-icon {
+  font-size: 20px;
+}
+
+.condition-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.condition-text strong {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--gold);
+  font-family: var(--font);
+}
+
+.condition-text small {
+  color: #cdbf9c;
+  font-size: 12px;
+}
+
+.condition-card.is-decree .condition-text small {
+  color: #b9c5dc;
+}
+
+.condition-goal {
+  color: var(--muted);
+}
+
+.condition-clock {
+  font-style: normal;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.condition-card.is-urgent .condition-clock {
+  color: var(--bad);
+}
+
+.condition-progress {
+  display: block;
+  margin-top: 2px;
+}
+
+.decree-card {
+  border-left: 3px solid #6f86b4;
+}
+
+.decree-card.is-urgent {
+  border-left-color: var(--bad);
+}
+
+.decree-next {
+  margin: 0 0 8px;
+}
+
+.option.charter-perk {
+  border-left: 3px solid #b98ac4;
+}
+
+.option.charter-patience {
+  border-left: 3px solid var(--gold);
+}
+
+.option.charter-blueprint {
+  border-left: 3px solid #6f92c4;
+}
+
+@media (max-width: 560px) {
+  .condition-text small:not(.condition-goal) {
+    display: none;
+  }
+}
+
+.condition-progress .bar-fill {
+  display: block;
+}

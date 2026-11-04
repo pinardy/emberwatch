@@ -19,10 +19,12 @@ npm run preview    # serve the built PWA (installable, works offline)
 | **Seasons** | Drizzle → Clearance → Storm, ~7 minutes a year. Farms fail in the Storm, gathering halves, and the hearth burns wood. |
 | **Glades** | The world is a continuous forest partitioned into fogged glades. Assign villagers to clear those bordering your territory for resources; dangerous and forbidden glades force a decision when opened. |
 | **Threats** | The greedy option in a glade event can unleash a timed menace that strikes on a repeating countdown — stealing stock, raising hostility, fraying the Queen's patience — until you pay it off. Other options grant run-long pacts instead. |
+| **Lingering conditions** | Some glade choices leave an aftermath tied to the build loop — flooded paths slow construction until you lay planks, a spirit wants incense before its deadline, a blight saps resolve until a new service hall stands. The bar above the threats tracks each one's progress. |
 | **Resolve** | Each species has a resolve score driven by housing, food variety, satisfied service needs, and hostility (hunger ramps in over about a meal). Above its threshold, a species earns **reputation**; at −5 or below it despairs, and after 70 s one villager leaves, then the rest hold on 30 s longer before the next follows — the warning strip counts it down. Every species also bends one rule — lizards shrug off a cold hearth, idle beavers build faster, harpies clear glades from the air — and most villagers arrive with a personal quirk. |
 | **Warmth** | Housing within the hearth's warmth radius is safe; homes beyond it chill their residents during the Storm. A few production buildings also work faster placed beside their supplier. |
 | **Caravans** | Once a Trading Post stands, caravans call on a cycle with rotating lots to buy — and pay double for one good they want that visit. Amber also rerolls drafts, rushes construction, and soothes the Queen. |
 | **Reputation** | Fills from completed orders, glade events, reclaimed land, and high resolve — which only pays in full for species whose service needs are met. Fill it and you win. |
+| **Decrees & charter** | Every few minutes the Queen issues a timed decree: meet it before the countdown ends for extra reputation and amber, or miss it and her patience frays. At 10 reputation she grants a one-time charter — a run-shaping perk, more patience, or a guaranteed blueprint. |
 | **Impatience** | The Queen's patience. Grows over time, when villagers leave, and sharply once hostility is high. From Year 5 her deadline has passed and it climbs steeper every day, so every run ends by ~40 minutes. Fill it and you lose. |
 | **Hostility** | Rises with time, population and cleared glades. Drags resolve down for everyone. |
 | **Drafts** | The run opens on a blueprint draft, and reputation milestones alternate blueprints and cornerstones. You can never unlock everything, so which needs you *can* satisfy is the run's central decision. |
@@ -50,6 +52,8 @@ src/
       production.ts     #   construction, recipes, deposits, adjacency
       society.ts        #   food, resolve, reputation, impatience, departures
       events.ts         #   glade clearing, drafts, threats, orders, newcomers
+      structure.ts      #   mid-run beats: timed decrees, the charter,
+                        #   lingering glade conditions
       traits.ts         #   species quirks & villager quirks as multipliers
       trade.ts          #   caravan visits, offers, buying and selling
       actions.ts        #   player commands, each returning a reason on failure
@@ -79,7 +83,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 `npm test` runs three suites:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
-- **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), and clears glades. It plays 16 seeds for each of three species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
+- **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), and clears glades. It plays 24 seeds for each of three species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
 
   ```
   human/fox/harpy      won 11/16 lost 5 stall 0 early-collapse 0 · avg win 28.0min · longest 34.7min · rep in wins: orders 8.6 glades 2.0 events 3.6 resolve 5.8

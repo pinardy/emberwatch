@@ -315,3 +315,23 @@ export type GameSpeed = (typeof SPEED_OPTIONS)[number]
 
 /** Base stockpile capacity before any warehouses. */
 export const BASE_STORAGE = 40
+
+// ---------------------------------------------------------------------------
+// Mid-run structure: royal decrees, the Queen's charter, lingering conditions
+// (new features — kept apart from the core pacing numbers above)
+// ---------------------------------------------------------------------------
+
+/** Seconds into the run before the Queen issues her first timed decree. */
+export const DECREE_FIRST_DELAY = 240
+/** Seconds between one decree ending (met or missed) and the next. */
+export const DECREE_INTERVAL = 200
+/** Impatience when a decree's deadline passes unmet. */
+export const DECREE_MISS_IMPATIENCE = 1.5
+/**
+ * Decrees are only drawn from goals the settlement has not already mostly
+ * met, so a deadline is a real push rather than a free payout.
+ */
+export const DECREE_MAX_START_PROGRESS = 0.6
+
+/** Reputation at which the Queen grants her one-time charter. */
+export const CHARTER_REPUTATION = 10
