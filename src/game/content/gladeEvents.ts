@@ -6,8 +6,10 @@ import type { GladeEventDef } from '../types'
  * cannot afford is shown but disabled.
  *
  * Design invariants the engine and the balance bot rely on:
- *  - The last option of every event never has a `requires`, so an event can
- *    always be resolved.
+ *  - The last option of every event never has a `requires` or `foodCost`, so
+ *    an event can always be resolved.
+ *  - "Food" prices use `foodCost`, which accepts any edible stock, never a
+ *    specific resource such as `berry`.
  *  - `threat` options are the greedy path: better loot now, a menace that
  *    strikes on a timer until it is appeased.
  *  - `ongoing` options trade an immediate cost for a run-long effect.
@@ -52,8 +54,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Make an offering',
         description: 'Give 10 food. The settlement takes heart.',
-        requires: { berry: 10 },
-        cost: { berry: 10 },
+        foodCost: 10,
         reputation: 1,
       },
       {
@@ -104,8 +105,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Feed and welcome them',
         description: 'Spend 12 food; three villagers join you.',
-        requires: { berry: 12 },
-        cost: { berry: 12 },
+        foodCost: 12,
         gain: { amber: 5 },
         reputation: 1,
         villagerGain: 3,
@@ -328,8 +328,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Trade rations for a ballad',
         description: 'Spend 6 food; the settlement talks about it for a season.',
-        requires: { berry: 6 },
-        cost: { berry: 6 },
+        foodCost: 6,
         reputation: 1,
       },
       { label: 'Wish her a dry road', description: 'She bows, and is gone.' },
@@ -346,15 +345,15 @@ const defs: GladeEventDef[] = [
       {
         label: 'Host them properly',
         description: 'Spend 10 food and 5 ale. Their report glows.',
-        requires: { berry: 10, ale: 5 },
-        cost: { berry: 10, ale: 5 },
+        foodCost: 10,
+        requires: { ale: 5 },
+        cost: { ale: 5 },
         impatience: -2,
       },
       {
         label: 'Feed them and send them on',
         description: 'Spend 8 food. A fair report.',
-        requires: { berry: 8 },
-        cost: { berry: 8 },
+        foodCost: 8,
         impatience: -1,
       },
       {
@@ -375,8 +374,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Take them in',
         description: 'Spend 8 food. Two more mouths — and two more pairs of hands, in time.',
-        requires: { berry: 8 },
-        cost: { berry: 8 },
+        foodCost: 8,
         villagerGain: 2,
         reputation: 1,
       },
@@ -583,8 +581,7 @@ const defs: GladeEventDef[] = [
       {
         label: 'Feed it',
         description: 'Buys peace with 30 food. It will be back.',
-        requires: { skewer: 10, meat: 20 },
-        cost: { skewer: 10, meat: 20 },
+        foodCost: 30,
         hostility: -8,
       },
       {

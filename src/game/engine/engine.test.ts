@@ -28,10 +28,13 @@ import { createRun } from './createRun'
 import {
   addVillager,
   appeaseThreat,
+  describeOptionCost,
+  optionAffordable,
   relevantBlueprints,
   rerollChoice,
   rerollCost,
   resolveGladeEvent,
+  spendFood,
   stepThreats,
   takeChoice,
 } from './events'
@@ -40,7 +43,6 @@ import { gladeAt } from './mapgen'
 import { computeModifiers } from './modifiers'
 import { adjacencyMultiplier, seasonMultiplier } from './production'
 import {
-  canAfford,
   foodStock,
   idleVillagers,
   population,
@@ -110,9 +112,7 @@ function drainChoices(state: RunState): void {
 function chooseAffordable(state: RunState): number {
   const choice = state.pendingChoices[0]
   const def = GLADE_EVENTS[choice.options[0]]
-  const index = def.options.findIndex(
-    (o) => !o.requires || canAfford(state.stock, o.requires),
-  )
+  const index = def.options.findIndex((o) => optionAffordable(state.stock, o))
   return index >= 0 ? index : def.options.length - 1
 }
 
@@ -576,6 +576,61 @@ describe('threats', () => {
     expect(state.threats).toHaveLength(0)
     expect(state.stock.wood ?? 0).toBe(wood - 5)
   })
+
+  it('takes a villager chosen by the run RNG, not always the first', () => {
+    const victims = new Set<string>()
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const state = createRun({ seed, species: ['human', 'beaver', 'lizard'] })
+      drainChoices(state)
+      const first = Object.keys(state.villagers)[0]
+      armThreat(state)
+      state.threats[0].strike = { villagerLoss: 1 }
+      const cursor = state.rngCursor
+      stepThreats(state, 2)
+      expect(state.rngCursor).toBeGreaterThan(cursor)
+      victims.add(state.villagers[first] ? 'other' : 'first')
+    }
+    expect(victims.has('other')).toBe(true)
+
+    // Deterministic: the same state loses the same villager.
+    const a = newRun()
+    armThreat(a)
+    a.threats[0].strike = { villagerLoss: 1 }
+    const b = JSON.parse(JSON.stringify(a)) as RunState
+    stepThreats(a, 2)
+    stepThreats(b, 2)
+    expect(Object.keys(b.villagers)).toEqual(Object.keys(a.villagers))
+  })
+})
+
+describe('food costs', () => {
+  const option = { label: 'Feed', description: 'Spend 10 food.', foodCost: 10 }
+
+  it('accepts any edible stock, not just berries', () => {
+    expect(optionAffordable({ meat: 6, root: 4 }, option)).toBe(true)
+    expect(optionAffordable({ berry: 9 }, option)).toBe(false)
+    expect(optionAffordable({ wood: 50 }, option)).toBe(false)
+  })
+
+  it('draws from the largest stacks first', () => {
+    const stock = { berry: 3, meat: 12, root: 8, wood: 20 }
+    spendFood(stock, 10)
+    expect(stock).toEqual({ berry: 3, meat: 5, root: 5, wood: 20 })
+  })
+
+  it('describes the price including food', () => {
+    expect(describeOptionCost({ ...option, cost: { ale: 5 } })).toBe('10 food, 5 Ale')
+  })
+
+  it('lets a food-priced glade option be paid with meat', () => {
+    const state = newRun()
+    state.stock = { meat: 20 }
+    state.pendingChoices.unshift({ kind: 'gladeEvent', options: ['drownedShrine'] })
+    const reputation = state.reputation
+    resolveGladeEvent(state, 0)
+    expect(state.reputation).toBe(reputation + 1)
+    expect(state.stock.meat).toBe(10)
+  })
 })
 
 describe('ongoing effects & rule-bending cornerstones', () => {
@@ -766,6 +821,7 @@ describe('glade event content invariants', () => {
     for (const def of GLADE_EVENT_LIST) {
       const last = def.options[def.options.length - 1]
       expect(last.requires, `${def.id} last option must be requires-free`).toBeUndefined()
+      expect(last.foodCost, `${def.id} last option must be free`).toBeUndefined()
     }
   })
 
@@ -779,3 +835,4 @@ describe('glade event content invariants', () => {
     }
   })
 })
+

@@ -14,7 +14,7 @@ import {
 import { createRun } from './createRun'
 import { computeModifiers } from './modifiers'
 import { resolveBreakdowns } from './society'
-import { appeaseThreat, resolveGladeEvent, takeChoice } from './events'
+import { appeaseThreat, optionAffordable, resolveGladeEvent, takeChoice } from './events'
 import {
   SERVICE_COVERAGE_RATIO,
   canAfford,
@@ -398,7 +398,7 @@ function answerChoices(s: RunState): void {
       // and never one that unleashes a threat the bot would have to pay off.
       let index = def.options.findIndex(
         (o) =>
-          (!o.requires || canAfford(s.stock, o.requires)) &&
+          optionAffordable(s.stock, o) &&
           !o.villagerLoss &&
           !o.impatience &&
           !o.threat &&
@@ -407,9 +407,7 @@ function answerChoices(s: RunState): void {
       if (index < 0) {
         index = def.options.findIndex(
           (o) =>
-            (!o.requires || canAfford(s.stock, o.requires)) &&
-            !o.villagerLoss &&
-            !o.threat,
+            optionAffordable(s.stock, o) && !o.villagerLoss && !o.threat,
         )
       }
       resolveGladeEvent(s, index >= 0 ? index : def.options.length - 1)

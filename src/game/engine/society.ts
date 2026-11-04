@@ -1,6 +1,6 @@
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
 import { SPECIES } from '../content/species'
-import type { ResourceId, RunState, SpeciesId } from '../types'
+import type { ResourceId, RunState, SpeciesId, Villager } from '../types'
 import {
   COMPLEX_FOOD_MULTIPLIER,
   FOOD_VARIETY_CAP,
@@ -25,6 +25,7 @@ import {
   SECONDS_TO_LEAVE,
 } from './balance'
 import type { Modifiers } from './modifiers'
+import { makeRng } from './rng'
 import { needsReductionFor, resolveBonusFor } from './modifiers'
 import {
   SERVICE_COVERAGE_RATIO,
@@ -300,7 +301,7 @@ export function stepDepartures(s: RunState, dt: number): string[] {
       s.despair[sp] += dt * despairRate(sp)
       while (s.despair[sp] >= SECONDS_TO_LEAVE) {
         s.despair[sp] -= SECONDS_TO_LEAVE
-        const victim = Object.values(s.villagers).find((v) => v.species === sp)
+        const victim = pickVictim(s, sp)
         if (!victim) break
         removeVillager(s, victim.id)
         departed.push(`${victim.name} the ${SPECIES[sp].name.slice(0, -1)} left the settlement.`)
@@ -312,6 +313,19 @@ export function stepDepartures(s: RunState, dt: number): string[] {
     }
   }
   return departed
+}
+
+/**
+ * Picks a villager at random with the run RNG (advancing the cursor, so a save
+ * replays the same choice). `species` narrows the pool.
+ */
+export function pickVictim(s: RunState, species?: SpeciesId): Villager | null {
+  const pool = Object.values(s.villagers).filter((v) => !species || v.species === species)
+  if (pool.length === 0) return null
+  const rng = makeRng(s.seed, s.rngCursor)
+  const victim = rng.pick(pool)
+  s.rngCursor = rng.cursor()
+  return victim
 }
 
 export function removeVillager(s: RunState, id: string): void {
