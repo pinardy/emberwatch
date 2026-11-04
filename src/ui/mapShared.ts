@@ -10,6 +10,7 @@ import { dist } from '../game/engine/geometry'
 import { TERRAIN_COLORS } from '../game/engine/mapgen'
 import { computeModifiers, type Modifiers } from '../game/engine/modifiers'
 import { isWarmAt, storageUsed, type WarmthSource } from '../game/engine/queries'
+import { housingOf, isInsulated, isUpgrading, nextUpgrade, tierOf } from '../game/engine/upgrades'
 import { useGameStore } from '../game/store'
 import type {
   BuildingInstance,
@@ -248,9 +249,25 @@ export function isColdHousing(
   sources?: WarmthSource[],
 ): boolean {
   if (run.season.season !== 'storm' || !b.built) return false
-  if ((BUILDINGS[b.defId]?.housing ?? 0) <= 0) return false
+  if (housingOf(b) <= 0 || isInsulated(b)) return false
   if (!sources) return !isWarmAt(run, b.pos)
   return !sources.some((w) => dist(w.pos, b.pos) <= w.radius)
+}
+
+/**
+ * The tier mark both maps draw beside an upgraded building: "★", "★★".
+ * Empty at tier 0, so a fresh building carries no mark.
+ */
+export function tierMark(b: BuildingInstance): string {
+  return '★'.repeat(tierOf(b))
+}
+
+/** Progress 0..1 of an upgrade under way, or null when none is. */
+export function upgradeFraction(b: BuildingInstance): number | null {
+  if (!isUpgrading(b)) return null
+  const next = nextUpgrade(b)
+  if (!next) return null
+  return Math.min(1, (b.upgradeProgress ?? 0) / Math.max(1, next.buildSeconds))
 }
 
 /** A built warmth source (brazier) whose fire has gone out. */

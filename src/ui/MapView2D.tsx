@@ -4,6 +4,7 @@ import { canPlaceBuilding, footprintOf } from '../game/engine/actions'
 import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { describePlacement } from '../game/engine/placement'
 import { warmthSources } from '../game/engine/queries'
+import { displayName, workerSlotsOf } from '../game/engine/upgrades'
 import { useGameStore, useRun } from '../game/store'
 import type { GladeKind } from '../game/types'
 import {
@@ -19,6 +20,8 @@ import {
   gladePlateInfo,
   isColdHousing,
   isUnlitWarmthSource,
+  tierMark,
+  upgradeFraction,
   useCameraFocus,
   useMapKey,
   useMapOverlays,
@@ -352,6 +355,9 @@ export function MapView2D() {
               const badge = status === 'none' ? null : STATUS_BADGE[status]
               // A home beyond every fire in the Storm, or a brazier gone out.
               const cold = isColdHousing(run, b, sources) || isUnlitWarmthSource(b)
+              const mark = tierMark(b)
+              const upgrade = upgradeFraction(b)
+              const slots = workerSlotsOf(b)
               return (
                 <g
                   key={b.id}
@@ -393,10 +399,38 @@ export function MapView2D() {
                       />
                     </>
                   )}
-                  {b.built && def.workerSlots > 0 && (
+                  {b.built && slots > 0 && (
                     <text className="hex-sub" x={cx} y={cy + r + 12}>
-                      {b.workers.length}/{def.workerSlots}
+                      {b.workers.length}/{slots}
                     </text>
+                  )}
+                  {mark && (
+                    <text
+                      className="tier-mark"
+                      x={cx + r * 0.85}
+                      y={cy + r * 0.85 + 3}
+                      aria-label={`${displayName(b)}, tier ${mark.length}`}
+                    >
+                      <title>{`${displayName(b)} — tier ${mark.length}`}</title>
+                      {mark}
+                    </text>
+                  )}
+                  {upgrade !== null && (
+                    <g className="upgrade-bar-2d" pointerEvents="none">
+                      <title>{`Upgrading — ${Math.floor(upgrade * 100)}%`}</title>
+                      <rect x={cx - 16} y={cy - r - 8} width={32} height={4} rx={2} className="build-bar-bg" />
+                      <rect
+                        x={cx - 16}
+                        y={cy - r - 8}
+                        width={32 * upgrade}
+                        height={4}
+                        rx={2}
+                        className="upgrade-bar"
+                      />
+                      <text className="hex-flag" x={cx - 22} y={cy - r - 4}>
+                        ⬆
+                      </text>
+                    </g>
                   )}
                   {badge && (
                     <g className={`status-badge is-${status}`} pointerEvents="none">

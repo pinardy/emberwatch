@@ -477,3 +477,65 @@ export function ConstructionSite({ progress, scale = 1 }: { progress: number; sc
     </group>
   )
 }
+
+// --- upgrade tiers -------------------------------------------------------------
+const BANNER_POLE_MAT = new THREE.MeshStandardMaterial({ color: '#4c3a28', roughness: 1 })
+const BANNER_MAT = new THREE.MeshStandardMaterial({
+  color: GOLD,
+  roughness: 0.6,
+  metalness: 0.25,
+  side: THREE.DoubleSide,
+})
+const TRIM_GEO = new THREE.TorusGeometry(0.66, 0.03, 4, 28)
+
+/** One pennant on a pole at a footprint corner (x, z in model units). */
+function Banner({ x, z }: { x: number; z: number }) {
+  const side = Math.sign(x) || 1
+  return (
+    <>
+      <mesh geometry={BOX_GEO} material={BANNER_POLE_MAT} position={[x, 0.62, z]} scale={[0.04, 1.24, 0.04]} castShadow raycast={NO_RAYCAST} />
+      <mesh geometry={BOX_GEO} material={BANNER_MAT} position={[x + side * 0.15, 1.12, z]} scale={[0.28, 0.18, 0.02]} castShadow raycast={NO_RAYCAST} />
+    </>
+  )
+}
+
+/**
+ * The subtle model change an upgrade brings, the same for every silhouette:
+ * a gold pennant at tier 1; a second pennant and a gilded trim round the
+ * footing at tier 2. Authored in model units and scaled like the model.
+ */
+export function TierTrim({ tier, scale = 1 }: { tier: number; scale?: number }) {
+  if (tier <= 0) return null
+  return (
+    <group scale={[scale, scale, scale]}>
+      <Banner x={0.52} z={0.48} />
+      {tier >= 2 && (
+        <>
+          <Banner x={-0.52} z={0.48} />
+          <mesh geometry={TRIM_GEO} material={BANNER_MAT} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]} raycast={NO_RAYCAST} />
+        </>
+      )}
+    </group>
+  )
+}
+
+/** Scaffolding raised around a finished building while it is upgraded. */
+export function UpgradeScaffold({ scale = 1 }: { scale?: number }) {
+  return (
+    <group scale={[scale * 1.15, scale, scale * 1.15]}>
+      {SCAFFOLD_POLES.map(([px, pz], i) => (
+        <mesh
+          key={i}
+          geometry={BOX_GEO}
+          material={SCAFFOLD_MAT}
+          position={[px, 0.5, pz]}
+          scale={[0.05, 1, 0.05]}
+          castShadow
+          raycast={NO_RAYCAST}
+        />
+      ))}
+      <mesh geometry={BOX_GEO} material={SCAFFOLD_MAT} position={[0, 0.97, -0.48]} scale={[1.02, 0.04, 0.04]} raycast={NO_RAYCAST} />
+      <mesh geometry={BOX_GEO} material={SCAFFOLD_MAT} position={[0, 0.97, 0.48]} scale={[1.02, 0.04, 0.04]} raycast={NO_RAYCAST} />
+    </group>
+  )
+}

@@ -19,7 +19,10 @@ import {
   IconSprite,
   LabelSprite,
   NO_RAYCAST,
+  TierTrim,
+  UpgradeScaffold,
 } from './models'
+import { workerSlotsOf } from '../../game/engine/upgrades'
 
 /**
  * Camera-distance buckets for label level-of-detail: everything up close,
@@ -166,6 +169,8 @@ export const BuildingNode = memo(function BuildingNode({
   workers: workersProp,
   status = 'none',
   lit: litProp,
+  tier = 0,
+  upgrade = -1,
 }: {
   building: BuildingInstance
   selected: boolean
@@ -182,6 +187,10 @@ export const BuildingNode = memo(function BuildingNode({
   status?: MapBuildingStatus
   /** Warmth sources: whether the fire burns. A prop so going out re-renders. */
   lit?: boolean
+  /** Upgrade tier: a prop so a new tier re-renders this node alone. */
+  tier?: number
+  /** Upgrade progress 0..1 while one is under way (quantised), else -1. */
+  upgrade?: number
 }) {
   const def = BUILDINGS[building.defId]
   const [hovered, setHovered] = useState(false)
@@ -244,7 +253,11 @@ export const BuildingNode = memo(function BuildingNode({
       </mesh>
       <group ref={body}>
         {building.built ? (
-          <BuildingModel category={def.category} scale={scale} defId={building.defId} lit={litProp ?? !building.unlit} />
+          <>
+            <BuildingModel category={def.category} scale={scale} defId={building.defId} lit={litProp ?? !building.unlit} />
+            <TierTrim tier={tier} scale={scale} />
+            {upgrade >= 0 && <UpgradeScaffold scale={scale} />}
+          </>
         ) : (
           <ConstructionSite progress={progress} scale={scale} />
         )}
@@ -253,8 +266,14 @@ export const BuildingNode = memo(function BuildingNode({
       {!building.built && bucket !== 'far' && (
         <LabelSprite text={`${Math.round(progress * 10) * 10}%`} y={0.85} size={0.6} />
       )}
-      {building.built && def.workerSlots > 0 && bucket === 'near' && (
-        <LabelSprite text={`${workers}/${def.workerSlots}`} y={1.15 * scale} size={0.65} />
+      {building.built && workerSlotsOf(building) > 0 && bucket === 'near' && (
+        <LabelSprite text={`${workers}/${workerSlotsOf(building)}`} y={1.15 * scale} size={0.65} />
+      )}
+      {tier > 0 && bucket !== 'far' && (
+        <LabelSprite text={'★'.repeat(tier)} y={iconY + 0.48} size={0.5} />
+      )}
+      {upgrade >= 0 && bucket !== 'far' && (
+        <LabelSprite text={`⬆ ${Math.round(upgrade * 10) * 10}%`} y={0.85} size={0.6} />
       )}
       {showBadge && badge && (
         <BadgeSprite icon={badge.icon} color={badge.color} x={badgeX} y={badgeY} size={badgeSize} />
