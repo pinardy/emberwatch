@@ -13,7 +13,7 @@ import { LogPanel, OrdersPanel, TradePanel } from './SidePanels'
 import { TipsCoach } from './TipsCoach'
 import { TopBar } from './TopBar'
 import { useAudioCues } from './useAudioCues'
-import { useGameLoop, useHotkeys } from './useGameLoop'
+import { PANEL_KEY_LABEL, useGameLoop, useHotkeys } from './useGameLoop'
 import { VillagerPanel } from './VillagerPanel'
 
 const TABS: { id: Exclude<SidePanel, null>; label: string; icon: string }[] = [
@@ -44,6 +44,22 @@ export function GameScreen() {
 
   if (!run) return null
 
+  /** Arrow keys move between tabs, as in any tablist. */
+  const onTabKey = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
+    e.preventDefault()
+    e.stopPropagation() // not a camera pan
+    const current = TABS.findIndex((t) => t.id === panel)
+    const next =
+      e.key === 'Home'
+        ? 0
+        : e.key === 'End'
+          ? TABS.length - 1
+          : (Math.max(0, current) + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length
+    setPanel(TABS[next].id)
+    document.getElementById(`tab-${TABS[next].id}`)?.focus()
+  }
+
   return (
     <div className="game" data-season={run.season.season}>
       <div className="season-tint" aria-hidden />
@@ -53,26 +69,48 @@ export function GameScreen() {
       <main className="game-main">
         <div className="map-column">
           <MapView />
-          <Inspector />
+          {/* One coordinated stack over the map, so the overlays never pile up. */}
+          <div className="hud-stack">
+            <Warnings />
+            {notice && (
+              <div className="notice" role="status" onClick={dismissNotice}>
+                {notice}
+              </div>
+            )}
+            <ThreatBar />
+            <TipsCoach />
+            <Inspector />
+          </div>
         </div>
 
         <aside className="sidebar">
-          <nav className="tabs" role="tablist">
+          <nav className="tabs" role="tablist" aria-label="Side panels" onKeyDown={onTabKey}>
             {TABS.map((tab) => (
               <button
                 key={tab.id}
+                id={`tab-${tab.id}`}
                 type="button"
                 role="tab"
                 aria-selected={panel === tab.id}
+                aria-controls={panel === tab.id ? 'side-panel' : undefined}
+                aria-keyshortcuts={PANEL_KEY_LABEL[tab.id]}
+                tabIndex={panel === tab.id || (panel === null && tab.id === 'build') ? 0 : -1}
+                title={`${tab.label} (${PANEL_KEY_LABEL[tab.id]})`}
                 className={panel === tab.id ? 'is-active' : ''}
                 onClick={() => setPanel(panel === tab.id ? null : tab.id)}
               >
-                <span>{tab.icon}</span>
+                <span aria-hidden>{tab.icon}</span>
                 <em>{tab.label}</em>
               </button>
             ))}
           </nav>
-          <div className="panel-scroll">
+          <div
+            key={panel ?? 'none'}
+            className="panel-scroll"
+            id="side-panel"
+            role={panel ? 'tabpanel' : undefined}
+            aria-labelledby={panel ? `tab-${panel}` : undefined}
+          >
             {panel === 'build' && <BuildPanel />}
             {panel === 'villagers' && <VillagerPanel />}
             {panel === 'orders' && <OrdersPanel />}
@@ -82,17 +120,8 @@ export function GameScreen() {
         </aside>
       </main>
 
-      {notice && (
-        <div className="notice" role="status" onClick={dismissNotice}>
-          {notice}
-        </div>
-      )}
-
       <ChoiceModal />
       <EndModal />
-      <ThreatBar />
-      <Warnings />
-      <TipsCoach />
     </div>
   )
 }
@@ -109,26 +138,28 @@ function ThreatBar() {
         const affordable = canAfford(run.stock, threat.appease)
         const glade = run.glades[threat.gladeId]
         return (
-          <div
-            key={threat.id}
-            className="threat-card"
-            onClick={() => glade && focusCamera(glade.center)}
-            title={glade ? `Show ${glade.name} on the map` : undefined}
-          >
-            <span className="threat-icon">{threat.icon}</span>
-            <div className="threat-text">
-              <strong>{threat.name}</strong>
-              <small>
-                strikes in {Math.max(0, Math.ceil(threat.timer))}s · {threat.description}
-              </small>
-            </div>
+          <div key={threat.id} className="threat-card">
             <button
               type="button"
+              className="threat-focus"
+              onClick={() => glade && focusCamera(glade.center)}
+              title={glade ? `Show ${glade.name} on the map` : undefined}
+            >
+              <span className="threat-icon" aria-hidden>
+                {threat.icon}
+              </span>
+              <span className="threat-text">
+                <strong>{threat.name}</strong>
+                <small>
+                  strikes in {Math.max(0, Math.ceil(threat.timer))}s · {threat.description}
+                </small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="threat-appease"
               disabled={!affordable}
-              onClick={(e) => {
-                e.stopPropagation()
-                appease(threat.id)
-              }}
+              onClick={() => appease(threat.id)}
               title={affordable ? 'Pay it off' : 'You cannot afford this yet'}
             >
               Appease:{' '}
@@ -151,9 +182,9 @@ function Warnings() {
   const run = useRun()
   if (!run) return null
   const warnings = collectWarnings(run)
-  if (warnings.length === 0) return null
+  // The live region stays mounted even when empty so new warnings are announced.
   return (
-    <div className="warnings">
+    <div className="warnings" role="status" aria-live="polite">
       {warnings.slice(0, 4).map((warning) => (
         <div key={warning.id} className={`warning is-${warning.severity}`}>
           {warning.text}

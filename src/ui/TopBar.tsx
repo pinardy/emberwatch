@@ -98,7 +98,7 @@ export function TopBar() {
               type="button"
               className={speed === option ? 'is-active' : ''}
               onClick={() => setSpeed(option)}
-              title={option === 0 ? 'Pause (space)' : `${option}× speed`}
+              title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
             >
               {option === 0 ? '⏸' : `${option}×`}
             </button>
