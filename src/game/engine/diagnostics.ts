@@ -2,6 +2,8 @@ import { BUILDINGS } from '../content/buildings'
 import { NEED_LABELS, SPECIES } from '../content/species'
 import { RESOURCES } from '../content/resources'
 import type { ResourceId, RunState, SpeciesId } from '../types'
+import { HEARTH_FUEL_PER_SECOND } from './balance'
+import { computeModifiers } from './modifiers'
 import {
   canAfford,
   idleVillagers,
@@ -9,6 +11,7 @@ import {
   secondsUntilDeparture,
   totalHousing,
 } from './queries'
+import { stormFuelPerSecond } from './society'
 
 /**
  * Things that are quietly going wrong.
@@ -36,12 +39,40 @@ export function collectWarnings(s: RunState): Warning[] {
     })
   }
 
+  const braziers = Object.values(s.buildings).filter(
+    (b) => b.built && BUILDINGS[b.defId]?.warmth,
+  )
+  const unlit = braziers.filter((b) => b.unlit).length
   if (s.coldHearth) {
     out.push({
       id: 'cold',
       severity: 'danger',
-      text: '🔥 The hearth has gone out. It needs wood.',
+      text:
+        braziers.length > 0
+          ? '🔥 The hearth and its braziers have gone out. They need wood.'
+          : '🔥 The hearth has gone out. It needs wood.',
     })
+  } else if (unlit > 0) {
+    out.push({
+      id: 'cold-braziers',
+      severity: 'danger',
+      text: `🏮 ${unlit} brazier${unlit > 1 ? 's have' : ' has'} gone cold — the homes around ${unlit > 1 ? 'them' : 'it'} are freezing. Bring wood.`,
+    })
+  } else if (s.season.season === 'storm') {
+    // Will the woodpile last the rest of the Storm at the current burn?
+    const mods = computeModifiers(s)
+    const burn = stormFuelPerSecond(s, HEARTH_FUEL_PER_SECOND, mods.hearthFuel)
+    const remaining = Math.max(0, s.season.length - s.season.elapsed)
+    const wood = s.stock.wood ?? 0
+    if (burn > 0 && wood < burn * remaining) {
+      const lasts = Math.floor(wood / burn)
+      const fires = braziers.length > 0 ? `the hearth and ${braziers.length} brazier${braziers.length > 1 ? 's' : ''}` : 'the hearth'
+      out.push({
+        id: 'fuel',
+        severity: 'caution',
+        text: `🪵 Wood for ${lasts}s of fire, ${Math.ceil(remaining)}s of Storm left — ${fires} burn ${burn.toFixed(2)}/s.`,
+      })
+    }
   }
 
   // A species in despair is on a visible countdown, not a silent one.

@@ -29,6 +29,7 @@ import { computeStorageCap, population, totalHousing } from './queries'
 import { checkCharter, stepConditions, stepDecree } from './structure'
 import { stepCaravan } from './trade'
 import {
+  stepBraziers,
   stepDepartures,
   stepFood,
   stepHearth,
@@ -38,6 +39,8 @@ import {
 } from './society'
 
 export const MAX_HOSTILITY = 100
+
+const BRAZIER_COLD_LOG = 'A brazier has gone cold — the homes around it are freezing. It needs wood.'
 
 /**
  * Advances the whole simulation by `dt` seconds. Mutates `s` in place — the
@@ -66,6 +69,14 @@ export function tick(s: RunState, dt: number): void {
     (s.season.season === 'storm' ? HEARTH_FUEL_PER_SECOND : HEARTH_IDLE_FUEL_PER_SECOND) *
     mods.hearthFuel
   s.coldHearth = stepHearth(s, dt, fuelRate)
+  // Braziers draw on the same woodpile, after the hearth. Said once a Storm,
+  // however often a thin woodpile makes them gutter.
+  if (stepBraziers(s, dt, mods.hearthFuel) > 0) {
+    const said = s.log.some(
+      (e) => e.text === BRAZIER_COLD_LOG && e.year === s.season.year && e.season === 'storm',
+    )
+    if (!said) pushLog(s, BRAZIER_COLD_LOG, 'bad')
+  }
 
   stepFood(s, dt, mods)
   stepHostility(s, dt, mods.hostilityRate)

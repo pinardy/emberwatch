@@ -205,11 +205,36 @@ export interface BuildingDef {
   /** Only one may exist per settlement. */
   unique?: boolean
   /**
-   * Work-speed bonus when a built instance of `nearId` stands close by.
-   * Makes placement a puzzle instead of a canvas.
+   * Bonuses for standing close to built partners — several per building, each
+   * matched by def id or by category (e.g. any home). Makes placement a puzzle
+   * instead of a canvas. See `engine/adjacency.ts`.
    */
-  adjacency?: { nearId: string; percent: number }
+  adjacency?: AdjacencyBonus[]
+  /**
+   * A secondary warmth source: during the Storm it keeps housing within
+   * `radius` warm while it burns `fuelPerSecond` wood, and goes cold without.
+   */
+  warmth?: { radius: number; fuelPerSecond: number }
+  /** Footprint radius override; defaults to the category's footprint. */
+  footprint?: number
   description: string
+}
+
+/**
+ * One neighbourhood relationship. A partner is a *built* building within
+ * `ADJACENCY_RANGE`, matched by `nearId` or by `nearCategory`.
+ */
+export interface AdjacencyBonus {
+  /** A specific building def that counts as a partner. */
+  nearId?: string
+  /** Or any building of this category — e.g. any home for a service. */
+  nearCategory?: BuildingCategory
+  /** Percent per partner counted. */
+  percent: number
+  /** What improves: work speed (default) or a service's capacity. */
+  effect?: 'speed' | 'capacity'
+  /** Partners counted, each adding `percent` (default 1). */
+  maxPartners?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -217,6 +242,26 @@ export interface BuildingDef {
 // ---------------------------------------------------------------------------
 
 export type TerrainId = 'clearing' | 'forest' | 'marsh' | 'rock' | 'fertile'
+
+/**
+ * What the ground under a building does to it. Declarative like cornerstone
+ * effects; the table lives in `content/terrain.ts` and is read by production.
+ */
+export type TerrainEffect =
+  /** Buildings carrying this tag work faster (or slower) here. */
+  | { kind: 'workSpeed'; tag: BuildingTag; percent: number }
+  /** Buildings with a recipe that yields this resource work faster here. */
+  | { kind: 'yield'; resource: ResourceId; percent: number }
+  /** Every building raised here goes up faster (or slower). */
+  | { kind: 'buildSpeed'; percent: number }
+
+export interface TerrainDef {
+  id: TerrainId
+  name: string
+  icon: string
+  blurb: string
+  effects: TerrainEffect[]
+}
 
 export type DepositId =
   | 'trees'
@@ -329,6 +374,8 @@ export interface BuildingInstance {
    * and refreshed when a glade is cleared or a deposit runs dry.
    */
   depositsInRange: Partial<Record<DepositId, string[]>>
+  /** Warmth sources only: set while a Storm finds no wood to burn. */
+  unlit?: boolean
 }
 
 // ---------------------------------------------------------------------------

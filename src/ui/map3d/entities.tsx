@@ -175,7 +175,7 @@ export function BuildingNode({
       </mesh>
       <group ref={body}>
         {building.built ? (
-          <BuildingModel category={def.category} scale={scale} />
+          <BuildingModel category={def.category} scale={scale} defId={building.defId} lit={!building.unlit} />
         ) : (
           <ConstructionSite progress={progress} scale={scale} />
         )}
