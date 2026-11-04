@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadRun } from '../game/persistence'
 import { useGameStore } from '../game/store'
+import { AutoPauseFields, PauseOnBlurField } from './SettingsFields'
 
 export function MenuScreen() {
   const goToScreen = useGameStore((s) => s.goToScreen)
@@ -96,14 +97,7 @@ export function MenuScreen() {
             />
             Sound & rain ambience
           </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={settings.pauseOnBlur}
-              onChange={(e) => updateSettings({ pauseOnBlur: e.target.checked })}
-            />
-            Pause when you switch to another tab or app
-          </label>
+          <PauseOnBlurField />
           <label>
             <input
               type="checkbox"
@@ -120,6 +114,7 @@ export function MenuScreen() {
             />
             Shadows — turn off on slower devices
           </label>
+          <AutoPauseFields />
         </details>
 
         <p className="menu-foot muted">
