@@ -66,6 +66,53 @@ const SITE_MAT = new THREE.MeshStandardMaterial({
 })
 const SCAFFOLD_MAT = new THREE.MeshStandardMaterial({ color: '#a58a58', roughness: 1 })
 
+// --- brazier -----------------------------------------------------------------
+const PLINTH_GEO = new THREE.CylinderGeometry(0.26, 0.34, 0.5, 8)
+const BOWL_GEO = new THREE.CylinderGeometry(0.46, 0.24, 0.2, 10, 1, true)
+const ASH_GEO = new THREE.SphereGeometry(0.3, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2)
+const IRON_MAT = new THREE.MeshStandardMaterial({
+  color: '#3b3632',
+  roughness: 0.6,
+  metalness: 0.5,
+  side: THREE.DoubleSide,
+})
+const ASH_MAT = new THREE.MeshStandardMaterial({ color: '#4a4744', roughness: 1 })
+/** Ground glow instead of a point light: extra lights recompile every shader. */
+const GLOW_MAT = new THREE.MeshBasicMaterial({
+  color: '#ff9a3c',
+  transparent: true,
+  opacity: 0.22,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+})
+const GLOW_GEO = new THREE.CircleGeometry(1.1, 24)
+
+/**
+ * A fire bowl on a stone plinth. Lit, it carries a flame and a warm pool of
+ * light on the ground; cold, a heap of grey ash.
+ */
+export function BrazierModel({ lit = true }: { lit?: boolean }) {
+  return (
+    <>
+      <mesh geometry={PLINTH_GEO} material={STONE_MAT} position={[0, 0.25, 0]} castShadow raycast={NO_RAYCAST} />
+      <mesh geometry={BOWL_GEO} material={IRON_MAT} position={[0, 0.6, 0]} castShadow raycast={NO_RAYCAST} />
+      {lit ? (
+        <>
+          <mesh geometry={FIRE_GEO} material={FIRE_MAT} position={[0, 0.82, 0]} scale={[1.3, 1.1, 1.3]} raycast={NO_RAYCAST} />
+          <mesh geometry={GLOW_GEO} material={GLOW_MAT} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]} raycast={NO_RAYCAST} />
+        </>
+      ) : (
+        <mesh geometry={ASH_GEO} material={ASH_MAT} position={[0, 0.58, 0]} scale={[1, 0.45, 1]} raycast={NO_RAYCAST} />
+      )}
+    </>
+  )
+}
+
+/** Def-specific silhouettes that replace the category model. */
+const SPECIAL_MODELS: Record<string, (props: { lit?: boolean }) => React.JSX.Element> = {
+  brazier: BrazierModel,
+}
+
 /** Deterministic per-id jitter so prop layouts survive re-renders. */
 export function hash01(key: string, salt: number): number {
   let h = 2166136261 ^ (salt * 2654435761)
@@ -236,8 +283,22 @@ export function ObstacleProp({ id, kind, radius }: { id: string; kind: 'crag' | 
  * disambiguates the exact def. Models are authored around a ~0.6 footprint
  * and scaled to the def's actual radius.
  */
-export function BuildingModel({ category, scale = 1 }: { category: BuildingCategory; scale?: number }) {
+export function BuildingModel({
+  category,
+  scale = 1,
+  defId,
+  lit,
+}: {
+  category: BuildingCategory
+  scale?: number
+  /** Picks a def-specific model from `SPECIAL_MODELS` when there is one. */
+  defId?: string
+  /** Warmth sources: whether the fire is burning. */
+  lit?: boolean
+}) {
+  const Special = defId ? SPECIAL_MODELS[defId] : undefined
   const body = (() => {
+    if (Special) return <Special lit={lit} />
     switch (category) {
       case 'hearth':
         return (

@@ -1,5 +1,6 @@
 import { BUILDINGS } from '../content/buildings'
 import { SPECIES } from '../content/species'
+import { TERRAIN } from '../content/terrain'
 import type {
   BuildingInstance,
   DepositId,
@@ -7,9 +8,11 @@ import type {
   ResourceId,
   RunState,
   Season,
+  TerrainEffect,
+  TerrainId,
 } from '../types'
+import { adjacencyMultiplier } from './adjacency'
 import {
-  ADJACENCY_RANGE,
   BUILD_RATE_PER_VILLAGER,
   FARM_SEASON_MULTIPLIER,
   GATHER_SEASON_MULTIPLIER,
@@ -53,21 +56,56 @@ export function refreshDepositCaches(s: RunState): void {
   }
 }
 
-/**
- * Work-speed multiplier from a satisfied adjacency (a mill beside its felling
- * grounds, a cookhouse beside the farm). A linear scan over a few dozen
- * buildings, cheap enough to read every tick.
- */
-export function adjacencyMultiplier(s: RunState, b: BuildingInstance): number {
-  const def = BUILDINGS[b.defId]
-  if (!def?.adjacency) return 1
-  for (const other of Object.values(s.buildings)) {
-    if (!other.built || other.id === b.id || other.defId !== def.adjacency.nearId) continue
-    if (dist(b.pos, other.pos) <= ADJACENCY_RANGE) {
-      return 1 + def.adjacency.percent / 100
+// Adjacency moved to its own module (several partners per building); the
+// re-export keeps existing imports working.
+export { adjacencyMultiplier } from './adjacency'
+
+// ---------------------------------------------------------------------------
+// Terrain
+// ---------------------------------------------------------------------------
+
+/** The terrain effects from `content/terrain.ts` that apply to a building def. */
+export function terrainEffectsFor(defId: string, terrain: TerrainId | undefined): TerrainEffect[] {
+  const def = BUILDINGS[defId]
+  if (!def || !terrain) return []
+  return (TERRAIN[terrain]?.effects ?? []).filter((effect) => {
+    switch (effect.kind) {
+      case 'workSpeed':
+        return def.tags.includes(effect.tag)
+      case 'yield':
+        return def.recipes.some((r) => (r.outputs[effect.resource] ?? 0) > 0)
+      case 'buildSpeed':
+        return true
     }
+  })
+}
+
+/** Sum of a kind of matching terrain effect, as a multiplier (floored at 0.1). */
+function terrainMultiplier(
+  defId: string,
+  terrain: TerrainId | undefined,
+  kinds: TerrainEffect['kind'][],
+): number {
+  let percent = 0
+  for (const effect of terrainEffectsFor(defId, terrain)) {
+    if (kinds.includes(effect.kind)) percent += effect.percent
   }
-  return 1
+  return Math.max(0.1, 1 + percent / 100)
+}
+
+/** Work-speed multiplier from the ground a building of `defId` stands on. */
+export function terrainWorkMultiplier(defId: string, terrain: TerrainId | undefined): number {
+  return terrainMultiplier(defId, terrain, ['workSpeed', 'yield'])
+}
+
+/** Construction-speed multiplier from the ground. */
+export function terrainBuildMultiplier(defId: string, terrain: TerrainId | undefined): number {
+  return terrainMultiplier(defId, terrain, ['buildSpeed'])
+}
+
+/** The terrain under a placed building (fixed at placement). */
+export function terrainOf(s: RunState, b: BuildingInstance): TerrainId | undefined {
+  return s.glades[b.gladeId]?.terrain
 }
 
 /** Combined worker rate in work-seconds per real second. */
@@ -87,7 +125,12 @@ export function workRate(s: RunState, b: BuildingInstance, mods: Modifiers): num
       (1 + bonus) *
       workTraitMultiplier(villager, gathering, s.season.season)
   }
-  return rate * productionMultiplier(mods, def.tags) * adjacencyMultiplier(s, b)
+  return (
+    rate *
+    productionMultiplier(mods, def.tags) *
+    adjacencyMultiplier(s, b) *
+    terrainWorkMultiplier(b.defId, terrainOf(s, b))
+  )
 }
 
 /** Seasonal multiplier for a building's output. */
@@ -149,7 +192,7 @@ export function stepProduction(
     for (const b of underConstruction) {
       const def = BUILDINGS[b.defId]
       if (!def) continue
-      b.buildProgress += perSite * dt
+      b.buildProgress += perSite * terrainBuildMultiplier(b.defId, terrainOf(s, b)) * dt
       if (b.buildProgress >= def.buildSeconds) {
         b.built = true
         b.buildProgress = def.buildSeconds

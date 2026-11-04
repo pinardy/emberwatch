@@ -51,6 +51,10 @@ export function loadRun(): RunState | null {
   run.caravan ??= defaultCaravan()
   run.rerollsUsed ??= 0
   run.soothesUsed ??= 0
+  // Saves from before braziers were a starting blueprint still get one.
+  if (Array.isArray(run.unlockedBuildings) && !run.unlockedBuildings.includes('brazier')) {
+    run.unlockedBuildings.push('brazier')
+  }
   return run
 }
 

@@ -5,11 +5,12 @@ import * as THREE from 'three'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
 import { BUILDINGS } from '../../game/content/buildings'
 import { canPlaceBuilding, footprintOf, isReachable } from '../../game/engine/actions'
-import { ADJACENCY_RANGE, HEARTH_WARMTH_RADIUS } from '../../game/engine/balance'
-import { dist } from '../../game/engine/geometry'
-import { depositsInRangeOf } from '../../game/engine/production'
+import { pairsWith } from '../../game/engine/adjacency'
+import { HEARTH_WARMTH_RADIUS } from '../../game/engine/balance'
+import { describePlacement } from '../../game/engine/placement'
+import { isWarmAt, warmthSources } from '../../game/engine/queries'
 import { useGameStore, useRun } from '../../game/store'
-import type { DepositId, Glade, RunState, TerrainId, Vec2 } from '../../game/types'
+import type { Glade, RunState, TerrainId, Vec2 } from '../../game/types'
 import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
 import { FellingForest, ForestCover } from './ForestCover'
@@ -87,8 +88,8 @@ interface CursorState {
   reason: string | null
   /** Deposit ids a camp placed here could actually work. */
   reach: string[]
-  /** Adjacency bonus percent if the ghost sits beside its partner. */
-  bonus: number | null
+  /** Shared placement hint fragments (adjacency, terrain, warmth). */
+  parts: string[]
   /** Touch flow: the ghost is aimed and waiting for its ✓ to confirm. */
   pending: boolean
 }
@@ -100,7 +101,6 @@ interface CursorState {
 function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | null }) {
   const [cursor, setCursor] = useState<CursorState | null>(null)
   const def = buildMode ? BUILDINGS[buildMode] : undefined
-  const wantsDeposits = def?.recipes.some((r) => r.requiresDeposit) ?? false
 
   useEffect(() => {
     if (!buildMode) setCursor(null)
@@ -109,26 +109,8 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
   const evaluate = useCallback(
     (pos: Vec2): CursorState => {
       const reason = canPlaceBuilding(run, buildMode!, pos)
-      const ghostDef = BUILDINGS[buildMode!]
-      let reach: string[] = []
-      if (ghostDef?.gatherRadius) {
-        const needed = new Set(
-          ghostDef.recipes.map((r) => r.requiresDeposit).filter((d): d is DepositId => !!d),
-        )
-        const inRange = depositsInRangeOf(run, pos, ghostDef.gatherRadius)
-        reach = [...needed].flatMap((kind) => inRange[kind] ?? [])
-      }
-      let bonus: number | null = null
-      if (ghostDef?.adjacency) {
-        const near = Object.values(run.buildings).some(
-          (b) =>
-            b.built &&
-            b.defId === ghostDef.adjacency!.nearId &&
-            dist(b.pos, pos) <= ADJACENCY_RANGE,
-        )
-        if (near) bonus = ghostDef.adjacency.percent
-      }
-      return { pos, ok: reason === null, reason, reach, bonus, pending: false }
+      const { reach, parts } = describePlacement(run, buildMode!, pos)
+      return { pos, ok: reason === null, reason, reach, parts, pending: false }
     },
     [run, buildMode],
   )
@@ -176,16 +158,7 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
   let hint: string | null = null
   if (cursor && def) {
     if (!cursor.ok) hint = cursor.reason
-    else {
-      const parts: string[] = []
-      if (def.gatherRadius && wantsDeposits) {
-        parts.push(`${cursor.reach.length} deposit${cursor.reach.length === 1 ? '' : 's'} in reach`)
-      }
-      if (cursor.bonus && def.adjacency) {
-        parts.push(`+${cursor.bonus}% beside ${BUILDINGS[def.adjacency.nearId]?.name}`)
-      }
-      hint = parts.length > 0 ? parts.join(' · ') : null
-    }
+    else hint = cursor.parts.length > 0 ? cursor.parts.join(' · ') : null
   }
 
   return (
@@ -220,6 +193,13 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
                 side={THREE.DoubleSide}
               />
             </mesh>
+            {/* A brazier shows the homes it would keep warm. */}
+            {def.warmth && (
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]} raycast={NO_RAYCAST}>
+                <ringGeometry args={[def.warmth.radius - 0.08, def.warmth.radius, 64]} />
+                <meshBasicMaterial color={GOLD} transparent opacity={0.55} side={THREE.DoubleSide} />
+              </mesh>
+            )}
             {/* A camp shows how far it can reach while you aim it. */}
             {def.gatherRadius && (
               <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]} raycast={NO_RAYCAST}>
@@ -318,8 +298,17 @@ function FlightAnimator({
   return null
 }
 
-/** The hearth's reach, shown while placing housing or inspecting the hearth. */
-function WarmthRing() {
+/**
+ * A warmth source's reach — the hearth's or a brazier's — shown while placing
+ * housing or a brazier, or inspecting a fire or a home.
+ */
+function WarmthRing({
+  position = [0, 0.05, 0],
+  radius = HEARTH_WARMTH_RADIUS,
+}: {
+  position?: [number, number, number]
+  radius?: number
+}) {
   const material = useRef<THREE.MeshBasicMaterial>(null)
   useFrame(({ clock }) => {
     if (REDUCED_MOTION) return
@@ -328,13 +317,13 @@ function WarmthRing() {
     }
   })
   return (
-    <group position={[0, 0.05, 0]} raycast={NO_RAYCAST}>
+    <group position={position} raycast={NO_RAYCAST}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={NO_RAYCAST}>
-        <ringGeometry args={[HEARTH_WARMTH_RADIUS - 0.1, HEARTH_WARMTH_RADIUS, 96]} />
+        <ringGeometry args={[radius - 0.1, radius, 96]} />
         <meshBasicMaterial ref={material} color={GOLD} transparent side={THREE.DoubleSide} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={NO_RAYCAST}>
-        <circleGeometry args={[HEARTH_WARMTH_RADIUS, 96]} />
+        <circleGeometry args={[radius, 96]} />
         <meshBasicMaterial color={GOLD} transparent opacity={0.05} depthWrite={false} />
       </mesh>
     </group>
@@ -435,13 +424,19 @@ export function MapView3D() {
   const selectedCamp = selectedBuilding ? run.buildings[selectedBuilding] : undefined
   const selectedCampDef = selectedCamp ? BUILDINGS[selectedCamp.defId] : undefined
   const hearthSelected = selectedCamp?.defId === 'ancientHearth'
+  // Every fire's reach shows while warmth is the question being asked.
+  const showWarmth =
+    (buildMode && ((BUILDINGS[buildMode]?.housing ?? 0) > 0 || !!BUILDINGS[buildMode]?.warmth)) ||
+    hearthSelected ||
+    !!selectedCampDef?.warmth ||
+    selectedCampDef?.category === 'housing'
 
   // Buildings that pair with the blueprint in hand, in either direction.
   const adjacencyPartners = ghostDef
     ? Object.values(run.buildings).filter((b) => {
         if (!b.built) return false
         const bDef = BUILDINGS[b.defId]
-        return ghostDef.adjacency?.nearId === b.defId || bDef?.adjacency?.nearId === buildMode
+        return !!bDef && pairsWith(ghostDef.id, b.defId)
       })
     : []
 
@@ -507,9 +502,10 @@ export function MapView3D() {
         <ForestCover glades={glades} />
         <FellingForest glades={run.glades} />
 
-        {((buildMode && (BUILDINGS[buildMode]?.housing ?? 0) > 0) || hearthSelected) && (
-          <WarmthRing />
-        )}
+        {showWarmth &&
+          warmthSources(run).map((w) => (
+            <WarmthRing key={`warmth-${w.id}`} position={[w.pos.x, 0.05, w.pos.y]} radius={w.radius} />
+          ))}
 
         {/* Gather reach of the selected camp. */}
         {selectedCamp && selectedCampDef?.gatherRadius && (
@@ -553,7 +549,7 @@ export function MapView3D() {
             storm &&
             building.built &&
             (def?.housing ?? 0) > 0 &&
-            Math.hypot(building.pos.x, building.pos.y) > HEARTH_WARMTH_RADIUS
+            !isWarmAt(run, building.pos)
           return (
             <BuildingNode
               key={building.id}

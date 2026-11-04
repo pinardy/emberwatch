@@ -1,5 +1,7 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE, RESOURCES } from '../content/resources'
+import { serviceCapacity } from './adjacency'
+import { HEARTH_WARMTH_RADIUS } from './balance'
 import { dist } from './geometry'
 import type {
   BuildingInstance,
@@ -8,6 +10,7 @@ import type {
   RunState,
   ServiceNeed,
   SpeciesId,
+  Vec2,
   Villager,
 } from '../types'
 
@@ -47,21 +50,68 @@ export function comfortableHousing(s: RunState): number {
   return sum
 }
 
+/** A circle of warmth: the hearth's, or a lit brazier's. */
+export interface WarmthSource {
+  id: string
+  kind: 'hearth' | 'brazier'
+  pos: Vec2
+  radius: number
+}
+
 /**
- * Housing capacity within the hearth's warmth radius. Homes beyond it are
- * cold during the Storm — see `RESOLVE_COLD_HOME`.
+ * Every live warmth source: the hearth (always — a cold hearth has its own
+ * penalty) and each built brazier that has not run out of wood.
  */
-export function warmHousing(s: RunState, radius: number): number {
-  const hearth = Object.values(s.buildings).find(
-    (b) => BUILDINGS[b.defId]?.category === 'hearth',
+export function warmthSources(
+  s: RunState,
+  hearthRadius: number = HEARTH_WARMTH_RADIUS,
+): WarmthSource[] {
+  const out: WarmthSource[] = []
+  for (const b of Object.values(s.buildings)) {
+    const def = BUILDINGS[b.defId]
+    if (!def) continue
+    if (def.category === 'hearth') {
+      out.push({ id: b.id, kind: 'hearth', pos: b.pos, radius: hearthRadius })
+    } else if (def.warmth && b.built && !b.unlit) {
+      out.push({ id: b.id, kind: 'brazier', pos: b.pos, radius: def.warmth.radius })
+    }
+  }
+  return out
+}
+
+/** Whether a home at `pos` sits inside any live warmth source. */
+export function isWarmAt(
+  s: RunState,
+  pos: Vec2,
+  hearthRadius: number = HEARTH_WARMTH_RADIUS,
+): boolean {
+  return warmthSources(s, hearthRadius).some((w) => dist(w.pos, pos) <= w.radius)
+}
+
+/** Built homes standing within `radius` of `pos` (what a brazier would warm). */
+export function homesWithin(s: RunState, pos: Vec2, radius: number): BuildingInstance[] {
+  return Object.values(s.buildings).filter(
+    (b) =>
+      b.built &&
+      BUILDINGS[b.defId]?.category === 'housing' &&
+      dist(b.pos, pos) <= radius,
   )
-  if (!hearth) return 0
+}
+
+/**
+ * Housing capacity inside any warmth source — the hearth's radius or a lit
+ * brazier's. Homes beyond every source are cold during the Storm — see
+ * `RESOLVE_COLD_HOME`.
+ */
+export function warmHousing(s: RunState, radius: number = HEARTH_WARMTH_RADIUS): number {
+  const sources = warmthSources(s, radius)
+  if (sources.length === 0) return 0
   let sum = 0
   for (const b of Object.values(s.buildings)) {
     if (!b.built) continue
     const housing = BUILDINGS[b.defId]?.housing ?? 0
     if (housing <= 0) continue
-    if (dist(hearth.pos, b.pos) <= radius) sum += housing
+    if (sources.some((w) => dist(w.pos, b.pos) <= w.radius)) sum += housing
   }
   return sum
 }
@@ -148,7 +198,8 @@ export function serviceCoverage(s: RunState): Record<ServiceNeed, ServiceCoverag
     const supplied = !recipe || canAfford(s.stock, recipe.inputs)
     if (!supplied) continue
     const entry = out[def.service.need]
-    entry.capacity += def.service.capacity
+    // Homes nearby and a supplier next door stretch a venue's reach.
+    entry.capacity += serviceCapacity(s, b)
     entry.active = true
   }
   return out

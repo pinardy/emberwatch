@@ -274,3 +274,23 @@ export type GameSpeed = (typeof SPEED_OPTIONS)[number]
 
 /** Base stockpile capacity before any warehouses. */
 export const BASE_STORAGE = 40
+
+// ===========================================================================
+// Placement depth (new section — braziers, terrain, neighbourhoods)
+//
+// Added alongside the existing tuning rather than changing it. Terrain
+// percentages live with their terrain in `content/terrain.ts` and adjacency
+// percentages with their buildings in `content/buildings.ts`, the same way
+// recipes carry their own seconds.
+// ===========================================================================
+
+/**
+ * A brazier keeps housing within this many world units warm during the Storm.
+ * Smaller than the hearth's reach, so it extends a neighbourhood rather than
+ * replacing the hearth.
+ */
+export const BRAZIER_WARMTH_RADIUS = 3
+/** Wood a lit brazier burns per second, only while the Storm rages. */
+export const BRAZIER_FUEL_PER_SECOND = 0.035
+/** A brazier is a fire bowl, not a building: it squeezes between homes. */
+export const BRAZIER_FOOTPRINT = 0.4
