@@ -31,6 +31,7 @@ npm run preview    # serve the built PWA (installable, works offline)
 | **Drafts** | The run opens on a blueprint draft, and reputation milestones alternate blueprints and cornerstones. You can never unlock everything, so which needs you *can* satisfy is the run's central decision. |
 | **Citadel** | Won or lost, each settlement sends supplies home — itemised by reputation, land, orders and years, so a strong loss still pays. Spend them on an 18-upgrade tree in four branches (Provisions, Charters, Knowledge, Crown) with prerequisites; most upgrades widen options rather than add power: extra draft options, a free reroll, a starting cornerstone draft, extra glade-event choices, and Citadel-locked cornerstones admitted to the draft pool. The ledger shows your last ten runs. |
 | **Queen's Edicts** | A seven-rung difficulty ladder chosen on the setup screen. Each edict stacks on the ones below (faster impatience, a leaner stockpile, a restless forest, bitter storms, a shorter leash, thinner ranks, a stricter victory) and pays +25% supplies per rung. Winning under your hardest edict unlocks the next. |
+| **Run timeline** | The end screen charts how the run unfolded: reputation against impatience over time, with Storms shaded and villager losses, threats, cornerstones and missed decrees marked, plus resolve per species against its threshold and population. A one-line summary says why the run was won or lost, and a table carries every number. The Orders panel shows the live race as a sparkline. |
 
 Idle villagers are your builders and your clearing crews, so every worker you assign is a builder you gave up. That tension is deliberate — the top bar always shows the idle count.
 
@@ -62,6 +63,8 @@ src/
       trade.ts          #   caravan visits, offers, buying and selling
       actions.ts        #   player commands, each returning a reason on failure
       diagnostics.ts    #   "what is quietly going wrong" for the warning strip
+      timeline.ts       #   bounded run history & key moments for the end-screen
+                        #   chart; never touches the RNG
     store.ts            # zustand store + the game loop's entry point
   ui/                   # React components; read the sim, never contain rules
                         # (audio.ts synthesises all cues & rain — no assets)
@@ -84,7 +87,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs seven test files:
+`npm test` runs nine test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), and clears glades. It plays 24 seeds for each of three species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
@@ -99,6 +102,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`App.test.tsx`** — UI smoke tests that mount the real app in jsdom and click the path a player takes: menu → setup → blueprint draft → placing a building → switching panels → winning.
 - **`forecast.test.ts`** — the HUD's forward-looking numbers (Storm countdown, wood and food runways, meter rates, building status), checked against what a real tick applies.
 - **`citadel.test.ts`** — meta progression: save migration, upgrade prerequisites, Queen's Edicts, locked cornerstones, draft sizes and the reward breakdown.
+- **`timeline.test.ts`** and **`RunTimeline.test.tsx`** — the run timeline: sampling cadence, the size bound and downsampling, recorded events, save/load and old saves, the outcome sentence, and the end-screen chart's keyboard readout, views and table.
 - **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, building badges, warmth, and that static geometry is not rebuilt on every tick.
 
 ## PWA
