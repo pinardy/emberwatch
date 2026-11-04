@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { useGameStore } from '../game/store'
+import type { GameSpeed } from '../game/engine/balance'
+import { useGameStore, type SidePanel } from '../game/store'
 
 const AUTOSAVE_INTERVAL_MS = 8000
 
@@ -61,32 +62,109 @@ export function useGameLoop(active: boolean): void {
   }, [])
 }
 
-/** Keyboard shortcuts: space to pause, 1-3 for speed, Esc to cancel build. */
+/**
+ * Things Esc can close besides build mode and the selection. `high` layers
+ * (the controls help) close before build mode is cancelled; `low` layers (the
+ * tip coach) only once there is nothing else to cancel. The newest layer of a
+ * priority closes first.
+ */
+type EscapeLayer = { priority: 'high' | 'low'; close: () => void }
+const escapeLayers: EscapeLayer[] = []
+
+function closeTopLayer(priority: EscapeLayer['priority']): boolean {
+  for (let i = escapeLayers.length - 1; i >= 0; i--) {
+    if (escapeLayers[i].priority === priority) {
+      escapeLayers[i].close()
+      return true
+    }
+  }
+  return false
+}
+
+/** Registers something Esc should close while `open` is true. */
+export function useEscapeLayer(
+  open: boolean,
+  close: () => void,
+  priority: EscapeLayer['priority'] = 'high',
+): void {
+  const latest = useRef(close)
+  latest.current = close
+  useEffect(() => {
+    if (!open) return
+    const layer: EscapeLayer = { priority, close: () => latest.current() }
+    escapeLayers.push(layer)
+    return () => {
+      const index = escapeLayers.indexOf(layer)
+      if (index >= 0) escapeLayers.splice(index, 1)
+    }
+  }, [open, priority])
+}
+
+/** Side-panel shortcuts, by physical key so they survive non-QWERTY layouts. */
+export const PANEL_KEYS: Record<string, Exclude<SidePanel, null>> = {
+  KeyB: 'build',
+  KeyP: 'villagers',
+  KeyO: 'orders',
+  KeyT: 'trade',
+  KeyL: 'log',
+}
+
+/** The letter shown in tooltips and help for each panel. */
+export const PANEL_KEY_LABEL: Record<Exclude<SidePanel, null>, string> = {
+  build: 'B',
+  villagers: 'P',
+  orders: 'O',
+  trade: 'T',
+  log: 'L',
+}
+
+function isTextEntry(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el || !el.tagName) return false
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable
+}
+
+/**
+ * Keyboard shortcuts: Space pauses, 1–3 set speed, B/P/O/T/L open panels, Esc
+ * closes the topmost thing (help, placement, selection, then tips).
+ *
+ * Everything is ignored while a blocking dialog is up — the draft and glade
+ * events must be answered, and their buttons need Space and Enter themselves.
+ */
 export function useHotkeys(active: boolean): void {
   useEffect(() => {
     if (!active) return
     const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
-      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+      if (isTextEntry(e.target)) return
       const store = useGameStore.getState()
-      switch (e.key) {
-        case ' ':
-          e.preventDefault()
-          store.togglePlay()
-          break
-        case '1':
-          store.setSpeed(1)
-          break
-        case '2':
-          store.setSpeed(2)
-          break
-        case '3':
-          store.setSpeed(3)
-          break
-        case 'Escape':
-          if (store.buildMode) store.setBuildMode(null)
-          else store.clearSelection()
-          break
+      const run = store.run
+      if (!run || run.phase !== 'playing' || run.pendingChoices.length > 0) return
+
+      if (e.key === 'Escape') {
+        if (closeTopLayer('high')) return
+        if (store.buildMode) store.setBuildMode(null)
+        else if (store.selectedBuilding || store.selectedDeposit || store.selectedGlade) {
+          store.clearSelection()
+        } else closeTopLayer('low')
+        return
+      }
+
+      // Leave browser and OS shortcuts (Ctrl+1 switches tabs, Cmd+L...) alone.
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+
+      if (e.key === ' ') {
+        e.preventDefault()
+        // Holding Space would otherwise flicker between paused and running.
+        if (!e.repeat) store.togglePlay()
+        return
+      }
+      if (e.key === '1' || e.key === '2' || e.key === '3') {
+        store.setSpeed(Number(e.key) as GameSpeed)
+        return
+      }
+      const panel = PANEL_KEYS[e.code]
+      if (panel && !e.repeat) {
+        store.setPanel(store.panel === panel ? null : panel)
       }
     }
     window.addEventListener('keydown', onKey)

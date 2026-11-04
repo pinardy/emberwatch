@@ -1,3 +1,4 @@
+import { useId, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { BUILDINGS } from '../game/content/buildings'
 import { CORNERSTONES } from '../game/content/cornerstones'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
@@ -8,6 +9,7 @@ import { optionAffordable, rerollCost } from '../game/engine/events'
 import { useGameStore, useRun } from '../game/store'
 import type { ResourceBag } from '../game/types'
 import { Cost } from './BuildPanel'
+import { DialogTip } from './TipsCoach'
 import { CharterChoice } from './CharterChoice'
 
 /**
@@ -155,6 +157,7 @@ export function ChoiceModal() {
             <small>Choose a building to add to this settlement's options.</small>
           </div>
         </header>
+        <DialogTip id="first-draft" />
         <div className="option-list option-grid">
           {choice.options.map((id) => {
             const def = BUILDINGS[id]
@@ -234,6 +237,71 @@ function Effect({
   )
 }
 
-export function Overlay({ children }: { children: React.ReactNode }) {
-  return <div className="overlay">{children}</div>
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/**
+ * Backdrop + modal dialog. Every modal here is a decision the player must
+ * make, so Esc deliberately does nothing; instead focus moves into the dialog,
+ * Tab cycles inside it, and focus returns to where it was once it closes.
+ * The dialog is labelled by the first heading of its content.
+ */
+export function Overlay({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+
+  // Remember what had focus, and hand it back on close.
+  useLayoutEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    return () => {
+      if (previous && previous !== document.body && previous.isConnected) previous.focus()
+    }
+  }, [])
+
+  // On open, and whenever the content is swapped (one draft leading straight
+  // into the next), keep the label current and focus inside the dialog.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const heading = el.querySelector('h1, h2, h3')
+    if (heading) {
+      if (!heading.id) heading.id = titleId
+      el.setAttribute('aria-labelledby', heading.id)
+    }
+    if (!el.contains(document.activeElement)) el.focus({ preventScroll: true })
+  })
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab') return
+    const el = ref.current
+    if (!el) return
+    const items = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE))
+    if (items.length === 0) {
+      e.preventDefault()
+      return
+    }
+    const first = items[0]
+    const last = items[items.length - 1]
+    const current = document.activeElement
+    if (e.shiftKey && (current === first || current === el)) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && (current === last || current === el)) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="overlay"
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+    >
+      {children}
+    </div>
+  )
 }

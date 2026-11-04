@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { create } from 'zustand'
 import { idleVillagers } from '../game/engine/queries'
-import { useRun } from '../game/store'
+import { useGameStore, useRun } from '../game/store'
 import type { RunState } from '../game/types'
+import { useEscapeLayer } from './useGameLoop'
 
 /**
  * Contextual first-time tips. Each fires once, when its condition first holds,
@@ -13,6 +15,8 @@ interface Tip {
   title: string
   text: string
   when: (run: RunState) => boolean
+  /** Shown inside a dialog (via `DialogTip`) rather than in the corner. */
+  inDialog?: boolean
 }
 
 const TIPS: Tip[] = [
@@ -20,13 +24,15 @@ const TIPS: Tip[] = [
     id: 'welcome',
     title: 'Welcome, Viceroy',
     text: 'Fill the crown meter to win before the hourglass fills and the Queen recalls you. Resolve above each species’ threshold is what earns reputation.',
-    when: (run) => run.clock < 30,
+    // The run opens on the blueprint draft; welcome the player once it closes.
+    when: (run) => run.clock < 30 && run.pendingChoices.length === 0,
   },
   {
     id: 'first-draft',
     title: 'Drafting a blueprint',
     text: 'You can never unlock everything — pick buildings that satisfy the services your species actually want. The draft can be rerolled for amber.',
     when: (run) => run.pendingChoices[0]?.kind === 'blueprint',
+    inDialog: true,
   },
   {
     id: 'idle-builders',
@@ -84,35 +90,94 @@ function saveSeen(seen: string[]): void {
   }
 }
 
+/** Seen tip ids, shared by the corner coach and tips shown inside dialogs. */
+const useSeenTips = create<{ seen: string[]; markSeen: (id: string) => void }>((set, get) => ({
+  seen: loadSeen(),
+  markSeen: (id) => {
+    if (get().seen.includes(id)) return
+    const seen = [...get().seen, id]
+    saveSeen(seen)
+    set({ seen })
+  },
+}))
+
+/** True while a blocking dialog (a draft, an event, the run's end) covers the game. */
+function dialogOpen(run: RunState): boolean {
+  return run.phase !== 'playing' || run.pendingChoices.length > 0
+}
+
+/**
+ * The corner coach. It never shows while a dialog is up — it would sit under
+ * the overlay where it cannot be read or dismissed — so tips that belong to a
+ * dialog render inside it through `DialogTip` instead.
+ */
 export function TipsCoach() {
   const run = useRun()
-  const [seen, setSeen] = useState<string[]>(loadSeen)
+  const seen = useSeenTips((s) => s.seen)
+  const markSeen = useSeenTips((s) => s.markSeen)
   const [active, setActive] = useState<Tip | null>(null)
+  const blocked = run ? dialogOpen(run) : true
 
   useEffect(() => {
-    if (!run || active) return
-    const next = TIPS.find((tip) => !seen.includes(tip.id) && tip.when(run))
+    if (!run || active || blocked) return
+    const next = TIPS.find((tip) => !tip.inDialog && !seen.includes(tip.id) && tip.when(run))
     if (next) setActive(next)
-  }, [run, seen, active])
-
-  if (!run || !active) return null
+  }, [run, seen, active, blocked])
 
   const dismiss = () => {
-    const next = [...seen, active.id]
-    setSeen(next)
-    saveSeen(next)
+    if (active) markSeen(active.id)
     setActive(null)
   }
+  useEscapeLayer(active !== null && !blocked, dismiss, 'low')
+
+  if (!run || !active || blocked) return null
 
   return (
-    <div className="tip-coach" role="note">
+    <div className="tip-coach" role="status" aria-label="Tip">
+      <TipBody tip={active} onDismiss={dismiss} />
+    </div>
+  )
+}
+
+/** A tip shown inside a dialog, e.g. the first blueprint draft. */
+export function DialogTip({ id }: { id: string }) {
+  const run = useRun()
+  const seen = useSeenTips((s) => s.seen)
+  const markSeen = useSeenTips((s) => s.markSeen)
+  const tip = TIPS.find((t) => t.id === id)
+  const visible = !!run && !!tip && !seen.includes(tip.id) && tip.when(run)
+  // Once shown in a dialog it has done its job, even if the player picked
+  // without pressing "Got it" — do not repeat it at the next draft. Only
+  // count it once the dialog has really moved on: StrictMode's rehearsal
+  // unmount happens while the draft is still open.
+  useEffect(() => {
+    if (!visible || !tip) return
+    return () => {
+      const now = useGameStore.getState().run
+      if (!now || !tip.when(now)) markSeen(id)
+    }
+  }, [visible, id, tip, markSeen])
+  if (!visible || !tip) return null
+  return (
+    <div className="tip-coach is-inline" role="note" aria-label="Tip">
+      <TipBody tip={tip} onDismiss={() => markSeen(tip.id)} />
+    </div>
+  )
+}
+
+function TipBody({ tip, onDismiss }: { tip: Tip; onDismiss: () => void }) {
+  return (
+    <>
       <div className="tip-body">
-        <strong>💡 {active.title}</strong>
-        <p>{active.text}</p>
+        <strong>
+          <span aria-hidden>💡 </span>
+          {tip.title}
+        </strong>
+        <p>{tip.text}</p>
       </div>
-      <button type="button" onClick={dismiss}>
+      <button type="button" onClick={onDismiss} title="Dismiss tip (Esc)">
         Got it
       </button>
-    </div>
+    </>
   )
 }

@@ -512,11 +512,13 @@ export function MapView2D() {
 
 /** Shared banner for both renderers while a blueprint is in hand. */
 export function BuildBanner({ buildMode }: { buildMode: string }) {
+  // Touch screens have no Esc key and nothing to click with.
+  const touch = window.matchMedia?.('(pointer: coarse)').matches ?? false
   return (
     <div className="build-banner">
       <span>
-        Placing <strong>{BUILDINGS[buildMode]?.name}</strong> — click on cleared ground ·
-        Esc cancels
+        Placing <strong>{BUILDINGS[buildMode]?.name}</strong> —{' '}
+        {touch ? 'tap on cleared ground to place' : 'click on cleared ground · Esc cancels'}
       </span>
       <button type="button" onClick={() => useGameStore.getState().setBuildMode(null)}>
         Cancel

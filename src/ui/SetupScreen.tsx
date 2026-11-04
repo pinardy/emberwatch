@@ -1,10 +1,18 @@
 import { useMemo, useState } from 'react'
-import { SPECIES, SPECIES_LIST, STARTING_SPECIES } from '../game/content/species'
-import { NEED_LABELS } from '../game/content/species'
+import {
+  NEED_LABELS,
+  SPECIES,
+  SPECIES_LIST,
+  STARTING_SPECIES,
+  WORK_TAG_LABELS,
+} from '../game/content/species'
 import { parseSeed, randomSeed } from '../game/engine/rng'
 import { useGameStore } from '../game/store'
 import type { SpeciesId } from '../game/types'
 import { EdictPicker } from './EdictPicker'
+
+/** Settlements bring exactly this many species at most. */
+const MAX_SPECIES = 3
 
 /** Pre-run setup: pick a seed and which three species answer the call. */
 export function SetupScreen() {
@@ -19,16 +27,28 @@ export function SetupScreen() {
     () => [...new Set([...STARTING_SPECIES, ...meta.unlockedSpecies])],
     [meta.unlockedSpecies],
   )
-  const [chosen, setChosen] = useState<SpeciesId[]>(available.slice(0, 3))
+  const [chosen, setChosen] = useState<SpeciesId[]>(available.slice(0, MAX_SPECIES))
+  /** Why the last tap did nothing, rather than silently swapping a pick out. */
+  const [hint, setHint] = useState<string | null>(null)
 
   const toggle = (id: SpeciesId) => {
-    setChosen((current) => {
-      if (current.includes(id)) {
-        return current.length > 1 ? current.filter((s) => s !== id) : current
+    if (chosen.includes(id)) {
+      if (chosen.length === 1) {
+        setHint('At least one species has to answer the call.')
+        return
       }
-      if (current.length >= 3) return [...current.slice(1), id]
-      return [...current, id]
-    })
+      setChosen(chosen.filter((s) => s !== id))
+      setHint(null)
+      return
+    }
+    if (chosen.length >= MAX_SPECIES) {
+      setHint(
+        `You can bring ${MAX_SPECIES} species. Tap one of your picks to drop it, then choose ${SPECIES[id].name}.`,
+      )
+      return
+    }
+    setChosen([...chosen, id])
+    setHint(null)
   }
 
   const start = () => {
@@ -45,25 +65,36 @@ export function SetupScreen() {
           <h3>Settlers</h3>
           <p className="muted">
             Choose up to three species. Each brings work bonuses and two service needs you
-            will have to satisfy.
+            will have to satisfy.{' '}
+            <strong className="pick-count">
+              {chosen.length}/{MAX_SPECIES} chosen
+            </strong>
+          </p>
+          <p className="setup-hint" role="status">
+            {hint}
           </p>
           <div className="species-grid">
             {SPECIES_LIST.map((def) => {
               const unlocked = available.includes(def.id)
               const picked = chosen.includes(def.id)
+              const full = !picked && unlocked && chosen.length >= MAX_SPECIES
               return (
                 <button
                   key={def.id}
                   type="button"
                   className={`species-pick ${picked ? 'is-picked' : ''} ${
                     unlocked ? '' : 'is-locked'
-                  }`}
+                  } ${full ? 'is-full' : ''}`}
                   disabled={!unlocked}
+                  aria-pressed={unlocked ? picked : undefined}
                   onClick={() => toggle(def.id)}
                   style={{ ['--species' as string]: def.color }}
                 >
-                  <span className="species-icon">{def.icon}</span>
+                  <span className="species-icon" aria-hidden>
+                    {def.icon}
+                  </span>
                   <strong>{def.name}</strong>
+                  {picked && <em className="picked-tag">✓ Chosen</em>}
                   <small>{def.blurb}</small>
                   <div className="need-row">
                     {def.needs.map((need) => (
@@ -74,8 +105,8 @@ export function SetupScreen() {
                   </div>
                   <div className="chip-row">
                     {Object.entries(def.workBonus).map(([tag, bonus]) => (
-                      <span className="chip" key={tag}>
-                        {tag} +{Math.round((bonus ?? 0) * 100)}%
+                      <span className="chip" key={tag} title="Works this much faster here">
+                        {WORK_TAG_LABELS[tag] ?? tag} +{Math.round((bonus ?? 0) * 100)}%
                       </span>
                     ))}
                   </div>
@@ -99,7 +130,12 @@ export function SetupScreen() {
               placeholder="random"
               aria-label="Map seed"
             />
-            <button type="button" onClick={() => setSeedText(String(randomSeed()))}>
+            <button
+              type="button"
+              aria-label="Random seed"
+              title="Random seed"
+              onClick={() => setSeedText(String(randomSeed()))}
+            >
               🎲
             </button>
           </div>
@@ -114,12 +150,16 @@ export function SetupScreen() {
           <EdictPicker unlocked={meta.edictUnlocked} value={edict} onPick={setEdict} />
         </section>
 
-        <footer className="modal-foot">
+        <footer className="modal-foot setup-foot">
           <button type="button" onClick={() => goToScreen('menu')}>
             Back
           </button>
           <button type="button" className="primary" onClick={start}>
             Set out with {chosen.map((id) => SPECIES[id].icon).join(' ')}
+            <span className="sr-only">
+              {' '}
+              ({chosen.map((id) => SPECIES[id].name).join(', ')})
+            </span>
           </button>
         </footer>
       </div>
