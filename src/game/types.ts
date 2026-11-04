@@ -387,6 +387,11 @@ export interface CornerstoneDef {
   rarity: 'common' | 'rare' | 'epic'
   description: string
   effects: CornerstoneEffect[]
+  /**
+   * Kept out of the draft pool until a Citadel upgrade unlocks it (see
+   * `content/meta.ts`). Runs record what they unlocked in `RunState.citadel`.
+   */
+  citadelLocked?: boolean
 }
 
 /**
@@ -626,6 +631,11 @@ export interface RunState {
   /** Lifetime production totals, used by "produce N of X" orders. */
   producedTotals: ResourceBag
 
+  /** Queen's Decree difficulty level this run was founded under (0 = none). */
+  decree: number
+  /** Citadel upgrades that keep acting during the run (drafts, events). */
+  citadel: CitadelPerks
+
   /** Order def ids already drawn, so we do not repeat them. */
   ordersSeen: string[]
   orderCounter: number
@@ -643,6 +653,38 @@ export interface RunState {
 // Persistent meta progression (survives across runs)
 // ---------------------------------------------------------------------------
 
+/**
+ * The in-run part of the Citadel's upgrades: what keeps shaping drafts and
+ * events after `createRun` has applied the one-off starting bonuses.
+ */
+export interface CitadelPerks {
+  /** Extra options in every blueprint draft. */
+  blueprintOptions: number
+  /** Extra options in every cornerstone draft. */
+  cornerstoneOptions: number
+  /** Draft rerolls left this run that cost no amber. */
+  freeRerolls: number
+  /** Citadel-locked cornerstones admitted to this run's draft pool. */
+  cornerstones: string[]
+  /** Extra glade-event options (ids in `CITADEL_EVENT_OPTIONS`). */
+  eventOptions: string[]
+}
+
+export interface MetaHistoryEntry {
+  seed: number
+  won: boolean
+  years: number
+  reputation: number
+  /** Epoch ms the run was banked. */
+  at: number
+  /** Species drawn for the run (absent on pre-v2 entries). */
+  species?: SpeciesId[]
+  /** Queen's Decree level (absent on pre-v2 entries, meaning 0). */
+  decree?: number
+  /** Supplies the run paid out (absent on pre-v2 entries). */
+  supplies?: number
+}
+
 export interface MetaState {
   version: number
   /** Spendable currency earned by finishing runs. */
@@ -653,11 +695,8 @@ export interface MetaState {
   unlockedSpecies: SpeciesId[]
   /** Permanent perks bought in the Citadel. */
   upgrades: string[]
-  history: {
-    seed: number
-    won: boolean
-    years: number
-    reputation: number
-    at: number
-  }[]
+  /** Highest Queen's Decree that may be chosen; winning at it unlocks the next. */
+  decreeUnlocked: number
+  /** Newest first, capped. */
+  history: MetaHistoryEntry[]
 }

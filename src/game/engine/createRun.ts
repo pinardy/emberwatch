@@ -1,4 +1,5 @@
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
+import { citadelLoadout, clampDecree, decreeLabel, decreeModifiers } from '../content/meta'
 import { ORDER_LIST } from '../content/orders'
 import {
   SPECIES,
@@ -9,8 +10,10 @@ import {
 import type {
   BuildingInstance,
   MetaState,
+  OngoingEffect,
   Order,
   ResourceBag,
+  ResourceId,
   RunState,
   SpeciesId,
   Villager,
@@ -25,7 +28,7 @@ import {
   MAX_REPUTATION,
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
-import { offerBlueprint } from './events'
+import { offerBlueprint, offerCornerstone } from './events'
 import { defaultCaravan } from './trade'
 import { generateMap } from './mapgen'
 import { makeRng } from './rng'
@@ -35,10 +38,19 @@ export interface NewRunOptions {
   meta?: MetaState
   /** Override the species drawn for this map (used by the run setup screen). */
   species?: SpeciesId[]
+  /** Queen's Decree difficulty level (0 = none). Clamped to the ladder. */
+  decree?: number
 }
 
-export function createRun({ seed, meta, species }: NewRunOptions): RunState {
+/** A settlement never starts with fewer villagers than this, whatever the decree. */
+const MIN_STARTING_VILLAGERS = 3
+
+export function createRun({ seed, meta, species, decree }: NewRunOptions): RunState {
   const rng = makeRng(seed, 0)
+  // Citadel upgrades and the chosen decree, folded into plain numbers.
+  const loadout = citadelLoadout(meta?.upgrades ?? [])
+  const decreeLevel = clampDecree(decree)
+  const decreeMods = decreeModifiers(decreeLevel)
   const { world, glades, deposits, obstacles } = generateMap(rng)
 
   const available = meta
@@ -64,7 +76,11 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
 
   // --- starting villagers, spread across the drawn species ------------------
   const villagers: Record<string, Villager> = {}
-  for (let i = 0; i < STARTING_VILLAGERS; i++) {
+  const villagerCount = Math.max(
+    MIN_STARTING_VILLAGERS,
+    STARTING_VILLAGERS + loadout.startVillagers + decreeMods.startVillagers,
+  )
+  for (let i = 0; i < villagerCount; i++) {
     const sp = speciesPool[i % speciesPool.length]
     const id = `v${i}`
     const trait = rng.chance(VILLAGER_TRAIT_CHANCE)
@@ -79,9 +95,36 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
     }
   }
 
-  const stock: ResourceBag = { ...STARTING_STOCK }
-  if (meta?.upgrades.includes('deeperStores')) stock.wood = (stock.wood ?? 0) + 20
-  if (meta?.upgrades.includes('travelRations')) stock.biscuit = 15
+  // Decrees shrink the Queen's allotment; Citadel provisions ride on top.
+  const stock: ResourceBag = {}
+  for (const [id, amount] of Object.entries(STARTING_STOCK)) {
+    stock[id as ResourceId] = Math.round(amount * decreeMods.stockFactor)
+  }
+  for (const [id, amount] of Object.entries(loadout.startStock)) {
+    const key = id as ResourceId
+    stock[key] = (stock[key] ?? 0) + (amount ?? 0)
+  }
+
+  // Run-long modifiers from the Citadel and the decree, shown in the run.
+  const ongoing: OngoingEffect[] = []
+  if (loadout.ongoing.length > 0) {
+    ongoing.push({
+      id: 'citadel',
+      name: 'Citadel provisions',
+      icon: '🏛️',
+      description: 'Standing favours bought in the Citadel.',
+      effects: loadout.ongoing,
+    })
+  }
+  if (decreeMods.effects.length > 0) {
+    ongoing.push({
+      id: 'decree',
+      name: `Queen's ${decreeLabel(decreeLevel)}`,
+      icon: '📜',
+      description: 'The harsher terms this settlement was founded under.',
+      effects: decreeMods.effects,
+    })
+  }
 
   const state: RunState = {
     seed,
@@ -98,10 +141,13 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
     stock,
     storageCap: BASE_STORAGE + (BUILDINGS.ancientHearth.storage ?? 0),
     reputation: 0,
-    maxReputation: MAX_REPUTATION,
+    maxReputation: MAX_REPUTATION + decreeMods.maxReputation,
     reputationProgress: 0,
     impatience: 0,
-    maxImpatience: MAX_IMPATIENCE,
+    maxImpatience: Math.max(
+      6,
+      MAX_IMPATIENCE + loadout.maxImpatience + decreeMods.maxImpatience,
+    ),
     impatienceProgress: 0,
     hostility: 0,
     resolve: {
@@ -116,11 +162,11 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
     starving: false,
     coldHearth: false,
     orders: [],
-    cornerstones: meta?.upgrades.includes('citadelBlessing') ? ['campfireTales'] : [],
+    cornerstones: [...loadout.startCornerstones],
     cornerstonesTaken: 0,
     threats: [],
     threatCounter: 0,
-    ongoing: [],
+    ongoing,
     caravan: defaultCaravan(),
     rerollsUsed: 0,
     soothesUsed: 0,
@@ -129,10 +175,12 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
     logCounter: 0,
     speciesPool,
     newcomerTimer: 0,
-    unlockedBuildings: [...STARTING_BLUEPRINTS],
+    unlockedBuildings: [...new Set([...STARTING_BLUEPRINTS, ...loadout.startBlueprints])],
     producedTotals: {},
     ordersSeen: [],
     orderCounter: 0,
+    decree: decreeLevel,
+    citadel: loadout.perks,
     stats: {
       resourcesProduced: 0,
       gladesCleared: 0,
@@ -148,7 +196,10 @@ export function createRun({ seed, meta, species }: NewRunOptions): RunState {
   // --- opening blueprint draft ---------------------------------------------
   // The run begins on a choice: which buildings this settlement will have. It
   // also guarantees a route to satisfying at least one service need.
-  for (let i = 0; i < OPENING_BLUEPRINT_PICKS; i++) offerBlueprint(state)
+  const openingPicks = OPENING_BLUEPRINT_PICKS + loadout.openingPicks
+  for (let i = 0; i < openingPicks; i++) offerBlueprint(state)
+  // The Viceroy's Signet adds a cornerstone pick to the opening.
+  if (loadout.startCornerstoneChoice) offerCornerstone(state)
 
   pushLog(
     state,

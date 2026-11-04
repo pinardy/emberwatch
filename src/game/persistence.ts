@@ -1,4 +1,4 @@
-import { META_VERSION, defaultMeta } from './content/meta'
+import { defaultMeta, emptyCitadelPerks, migrateMeta } from './content/meta'
 import { defaultCaravan } from './engine/trade'
 import type { MetaState, RunState } from './types'
 
@@ -51,6 +51,9 @@ export function loadRun(): RunState | null {
   run.caravan ??= defaultCaravan()
   run.rerollsUsed ??= 0
   run.soothesUsed ??= 0
+  // Saves from before the Citadel tree and the Queen's Decrees.
+  run.decree ??= 0
+  run.citadel = { ...emptyCitadelPerks(), ...(run.citadel ?? {}) }
   return run
 }
 
@@ -67,9 +70,10 @@ export function saveRun(run: RunState | null): void {
 }
 
 export function loadMeta(): MetaState {
-  const meta = read<MetaState>(META_KEY)
-  if (!meta || meta.version !== META_VERSION) return defaultMeta()
-  return { ...defaultMeta(), ...meta }
+  const raw = read<unknown>(META_KEY)
+  // Older versions are migrated in place rather than discarded: supplies and
+  // upgrades are the player's progress and must survive any format change.
+  return raw ? migrateMeta(raw) : defaultMeta()
 }
 
 export function saveMeta(meta: MetaState): void {
