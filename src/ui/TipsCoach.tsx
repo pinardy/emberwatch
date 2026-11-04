@@ -43,7 +43,7 @@ const TIPS: Tip[] = [
   {
     id: 'first-storm',
     title: 'The Blightstorm',
-    text: 'Farms stop, gathering halves, and the hearth burns wood fast. Stockpile food and fuel during Clearance, and keep homes near the hearth’s warmth.',
+    text: 'Farms stop, gathering halves, and the hearth burns wood fast. Stockpile food and fuel during Clearance, and keep homes near the hearth’s warmth — or raise a brazier beside distant ones.',
     when: (run) => run.season.season === 'storm' && run.season.year === 1,
   },
   {

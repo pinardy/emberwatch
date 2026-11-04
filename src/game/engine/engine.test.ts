@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
+import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST, STARTING_BLUEPRINTS } from '../content/buildings'
 import { CHARTERS } from '../content/charters'
 import { DECREES, DECREE_LIST } from '../content/decrees'
 import { GLADE_EVENTS, GLADE_EVENT_LIST } from '../content/gladeEvents'
 import { ORDER_LIST, evaluateGoal } from '../content/orders'
 import { RESOURCES } from '../content/resources'
 import { VILLAGER_TRAITS } from '../content/species'
+import { TERRAIN } from '../content/terrain'
+import { pairsWith, serviceCapacity } from './adjacency'
 import {
   placeBuilding,
   assignWorker,
   canPlaceBuilding,
+  footprintOf,
   addClearer,
   findPlacement,
   rushConstruction,
@@ -19,12 +22,16 @@ import {
 } from './actions'
 import {
   ADJACENCY_RANGE,
+  BRAZIER_FOOTPRINT,
+  BRAZIER_FUEL_PER_SECOND,
+  BRAZIER_WARMTH_RADIUS,
   CARAVAN_OFFERS,
   CHARTER_REPUTATION,
   DECREE_FIRST_DELAY,
   DECREE_INTERVAL,
   DECREE_MISS_IMPATIENCE,
   DEPARTURE_GRACE,
+  HEARTH_FUEL_PER_SECOND,
   HEARTH_WARMTH_RADIUS,
   OPENING_BLUEPRINT_PICKS,
   REPUTATION_UNSERVED_SHARE,
@@ -36,6 +43,7 @@ import {
   TRADE_LOT,
 } from './balance'
 import { collectWarnings } from './diagnostics'
+import { describePlacement } from './placement'
 import { createRun } from './createRun'
 import {
   addVillager,
@@ -53,7 +61,14 @@ import {
 import { dist, pointInPolygon } from './geometry'
 import { gladeAt } from './mapgen'
 import { computeModifiers } from './modifiers'
-import { adjacencyMultiplier, seasonMultiplier } from './production'
+import {
+  adjacencyMultiplier,
+  seasonMultiplier,
+  terrainBuildMultiplier,
+  terrainOf,
+  terrainWorkMultiplier,
+  workRate,
+} from './production'
 import {
   foodStock,
   secondsUntilDeparture,
@@ -62,6 +77,9 @@ import {
   storageUsed,
   totalHousing,
   warmHousing,
+  isWarmAt,
+  serviceCoverage,
+  warmthSources,
 } from './queries'
 import { makeRng } from './rng'
 import {
@@ -72,6 +90,8 @@ import {
   stepDepartures,
   stepImpatience,
   stepReputation,
+  stepBraziers,
+  stormFuelPerSecond,
 } from './society'
 import {
   checkCharter,
@@ -1312,5 +1332,291 @@ describe('pacing: departures, hunger and the Queen', () => {
 
     expect(idle).toBeGreaterThan(0)
     expect(idle / full).toBeCloseTo(REPUTATION_UNSERVED_SHARE)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Placement depth: terrain, braziers, neighbourhoods
+// ---------------------------------------------------------------------------
+
+/** Drops a finished building at an exact spot, bypassing placement rules. */
+function put(state: RunState, defId: string, pos: { x: number; y: number }) {
+  const id = `test_${defId}_${Object.keys(state.buildings).length}`
+  state.buildings[id] = {
+    id,
+    defId,
+    pos,
+    gladeId: gladeAt(state.glades, pos)?.id ?? Object.keys(state.glades)[0],
+    built: true,
+    buildProgress: BUILDINGS[defId].buildSeconds,
+    workers: [],
+    activeRecipeId: BUILDINGS[defId].recipes[0]?.id ?? '',
+    recipeProgress: 0,
+    paused: false,
+    depositsInRange: {},
+  }
+  return state.buildings[id]
+}
+
+/** A spot well away from the hearth, for setups that must not touch it. */
+const FAR = { x: 12, y: 9 }
+
+describe('terrain yields', () => {
+  it('declares a multiplier per terrain and building', () => {
+    expect(terrainWorkMultiplier('smallFarm', 'fertile')).toBeCloseTo(1.25)
+    expect(terrainWorkMultiplier('smallFarm', 'rock')).toBeCloseTo(0.8)
+    expect(terrainWorkMultiplier('stonecuttersCamp', 'rock')).toBeCloseTo(1.2)
+    expect(terrainWorkMultiplier('brickyard', 'rock')).toBeCloseTo(1.2)
+    expect(terrainWorkMultiplier('copperMine', 'rock')).toBeCloseTo(1.15)
+    expect(terrainWorkMultiplier('clayPit', 'marsh')).toBeCloseTo(1.25)
+    expect(terrainWorkMultiplier('woodcuttersCamp', 'forest')).toBeCloseTo(1.15)
+    // Unrelated buildings are unaffected; a clearing is neutral for everyone.
+    expect(terrainWorkMultiplier('lumberMill', 'rock')).toBe(1)
+    for (const id of Object.keys(BUILDINGS)) {
+      expect(terrainWorkMultiplier(id, 'clearing')).toBe(1)
+      expect(terrainBuildMultiplier(id, 'clearing')).toBe(1)
+    }
+    expect(terrainBuildMultiplier('shelter', 'marsh')).toBeCloseTo(0.8)
+    expect(terrainBuildMultiplier('shelter', 'fertile')).toBe(1)
+  })
+
+  it('every terrain effect names a real tag or resource', () => {
+    for (const terrain of Object.values(TERRAIN)) {
+      for (const effect of terrain.effects) {
+        if (effect.kind === 'workSpeed') {
+          expect(BUILDING_LIST.some((d) => d.tags.includes(effect.tag))).toBe(true)
+        }
+        if (effect.kind === 'yield') expect(RESOURCES[effect.resource]).toBeDefined()
+      }
+    }
+  })
+
+  it('speeds up a brickyard standing on rocky ground', () => {
+    const state = newRun()
+    const yard = put(state, 'brickyard', FAR)
+    const glade = state.glades[yard.gladeId]
+    expect(assignWorker(state, yard.id)).toBeNull()
+    const mods = computeModifiers(state)
+
+    glade.terrain = 'clearing'
+    const plain = workRate(state, yard, mods)
+    expect(plain).toBeGreaterThan(0)
+    glade.terrain = 'rock'
+    expect(terrainOf(state, yard)).toBe('rock')
+    expect(workRate(state, yard, mods)).toBeCloseTo(plain * 1.2)
+  })
+
+  it('slows construction on marsh', () => {
+    const progressOn = (terrain: 'clearing' | 'marsh') => {
+      const state = newRun()
+      const pos = findPlacement(state, 'shelter')!
+      expect(placeBuilding(state, 'shelter', pos)).toBeNull()
+      const site = Object.values(state.buildings).find((b) => b.defId === 'shelter')!
+      state.glades[site.gladeId].terrain = terrain
+      tick(state, 1)
+      return site.buildProgress
+    }
+    const plain = progressOn('clearing')
+    expect(plain).toBeGreaterThan(0)
+    expect(progressOn('marsh')).toBeCloseTo(plain * 0.8)
+  })
+
+  it('shows the ground in the placement hint', () => {
+    const state = newRun()
+    const pos = findPlacement(state, 'brickyard')!
+    gladeAt(state.glades, pos)!.terrain = 'rock'
+    const preview = describePlacement(state, 'brickyard', pos)
+    expect(preview.terrain).toBe('rock')
+    expect(preview.terrainEffects).toHaveLength(1)
+    expect(preview.parts.join(' ')).toContain('+20% masonry')
+    // Neutral for a building the ground does nothing for.
+    expect(describePlacement(state, 'lumberMill', pos).terrainEffects).toHaveLength(0)
+  })
+})
+
+describe('brazier warmth', () => {
+  /** A Storm settlement with one shelter beyond the hearth and people in it. */
+  function coldSuburb() {
+    const state = newRun()
+    const shelter = put(state, 'shelter', { x: HEARTH_WARMTH_RADIUS + 4, y: 0 })
+    while (population(state) <= 6) addVillager(state)
+    state.season.season = 'storm'
+    state.stock.wood = 50
+    return { state, shelter }
+  }
+
+  it('is a cheap, small starting blueprint', () => {
+    expect(STARTING_BLUEPRINTS).toContain('brazier')
+    expect(BLUEPRINT_POOL).not.toContain('brazier')
+    expect(footprintOf('brazier')).toBe(BRAZIER_FOOTPRINT)
+    expect(BUILDINGS.brazier.warmth?.radius).toBe(BRAZIER_WARMTH_RADIUS)
+    expect(BRAZIER_WARMTH_RADIUS).toBeLessThan(HEARTH_WARMTH_RADIUS)
+  })
+
+  it('warms housing within its radius that the hearth cannot reach', () => {
+    const { state, shelter } = coldSuburb()
+    const housing = BUILDINGS.shelter.housing ?? 0
+    const before = warmHousing(state, HEARTH_WARMTH_RADIUS)
+    expect(isWarmAt(state, shelter.pos)).toBe(false)
+
+    const brazier = put(state, 'brazier', {
+      x: shelter.pos.x,
+      y: shelter.pos.y + BRAZIER_WARMTH_RADIUS - 0.5,
+    })
+    expect(isWarmAt(state, shelter.pos)).toBe(true)
+    expect(warmHousing(state, HEARTH_WARMTH_RADIUS)).toBe(before + housing)
+    expect(warmthSources(state).map((w) => w.kind)).toEqual(
+      expect.arrayContaining(['hearth', 'brazier']),
+    )
+
+    // A site still under construction warms nobody.
+    brazier.built = false
+    expect(isWarmAt(state, shelter.pos)).toBe(false)
+  })
+
+  it('lifts the storm chill off its homes', () => {
+    const { state, shelter } = coldSuburb()
+    const mods = computeModifiers(state)
+    const chilled = resolveBreakdowns(state, mods)[0].penalties
+    expect(chilled).toBeLessThan(0)
+    put(state, 'brazier', { x: shelter.pos.x + 1.5, y: shelter.pos.y })
+    stepBraziers(state, 0.125)
+    expect(resolveBreakdowns(state, mods)[0].penalties).toBeGreaterThan(chilled)
+  })
+
+  it('burns wood only while the Storm rages', () => {
+    const { state } = coldSuburb()
+    put(state, 'brazier', FAR)
+    state.stock.wood = 10
+    stepBraziers(state, 10)
+    expect(state.stock.wood).toBeCloseTo(10 - BRAZIER_FUEL_PER_SECOND * 10)
+
+    state.season.season = 'clearance'
+    state.stock.wood = 10
+    stepBraziers(state, 10)
+    expect(state.stock.wood).toBe(10)
+  })
+
+  it('goes cold without wood, and its homes chill again', () => {
+    const { state, shelter } = coldSuburb()
+    const brazier = put(state, 'brazier', { x: shelter.pos.x + 1.5, y: shelter.pos.y })
+    delete state.stock.wood
+    expect(stepBraziers(state, 0.125)).toBe(1)
+    expect(brazier.unlit).toBe(true)
+    expect(isWarmAt(state, shelter.pos)).toBe(false)
+    expect(collectWarnings(state).some((w) => w.id === 'cold-braziers')).toBe(true)
+    // Already cold: not reported twice.
+    expect(stepBraziers(state, 0.125)).toBe(0)
+
+    // Wood relights it; the Storm passing resets it either way.
+    state.stock.wood = 5
+    stepBraziers(state, 0.125)
+    expect(brazier.unlit).toBe(false)
+    brazier.unlit = true
+    state.season.season = 'drizzle'
+    stepBraziers(state, 0.125)
+    expect(brazier.unlit).toBe(false)
+  })
+
+  it('adds its burn to the Storm fuel forecast', () => {
+    const { state } = coldSuburb()
+    const mods = computeModifiers(state)
+    const hearthOnly = stormFuelPerSecond(state, HEARTH_FUEL_PER_SECOND, mods.hearthFuel)
+    put(state, 'brazier', FAR)
+    expect(stormFuelPerSecond(state, HEARTH_FUEL_PER_SECOND, mods.hearthFuel)).toBeCloseTo(
+      hearthOnly + BRAZIER_FUEL_PER_SECOND * mods.hearthFuel,
+    )
+    // A thin woodpile mid-Storm raises the fuel caution.
+    state.stock.wood = 1
+    expect(collectWarnings(state).some((w) => w.id === 'fuel')).toBe(true)
+  })
+
+  it('hints how many homes a brazier ghost would warm, and whether a home is warm', () => {
+    const { state, shelter } = coldSuburb()
+    const near = { x: shelter.pos.x, y: shelter.pos.y + 1.5 }
+    expect(describePlacement(state, 'brazier', near).warms).toBe(1)
+    expect(describePlacement(state, 'shelter', near).warm).toBe(false)
+    expect(describePlacement(state, 'shelter', { x: 1.5, y: 1.5 }).warm).toBe(true)
+  })
+})
+
+describe('multi-partner adjacency', () => {
+  it('every adjacency names a real partner', () => {
+    for (const def of BUILDING_LIST) {
+      for (const bonus of def.adjacency ?? []) {
+        expect(!!bonus.nearId !== !!bonus.nearCategory, `${def.id}: one partner key`).toBe(true)
+        if (bonus.nearId) expect(BUILDINGS[bonus.nearId], `${def.id} → ${bonus.nearId}`).toBeDefined()
+        expect(bonus.percent).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('stacks speed bonuses from different partners', () => {
+    const state = newRun()
+    const yard = put(state, 'brickyard', FAR)
+    expect(adjacencyMultiplier(state, yard)).toBe(1)
+
+    const pit = put(state, 'clayPit', { x: FAR.x + 1.6, y: FAR.y })
+    expect(adjacencyMultiplier(state, yard)).toBeCloseTo(1.2)
+    put(state, 'stonecuttersCamp', { x: FAR.x - 1.6, y: FAR.y })
+    expect(adjacencyMultiplier(state, yard)).toBeCloseTo(1.3)
+
+    // A second clay pit adds nothing: each bonus counts one partner.
+    const second = put(state, 'clayPit', { x: FAR.x, y: FAR.y + 1.6 })
+    expect(adjacencyMultiplier(state, yard)).toBeCloseTo(1.3)
+
+    // Out-of-range or unbuilt partners do not count.
+    delete state.buildings[pit.id]
+    second.built = false
+    put(state, 'clayPit', { x: FAR.x + ADJACENCY_RANGE + 1, y: FAR.y })
+    expect(adjacencyMultiplier(state, yard)).toBeCloseTo(1.1)
+  })
+
+  it('homes near a service raise its capacity, up to three', () => {
+    const state = newRun()
+    const tavern = put(state, 'tavern', FAR)
+    const base = BUILDINGS.tavern.service!.capacity
+    expect(serviceCapacity(state, tavern)).toBe(base)
+
+    put(state, 'shelter', { x: FAR.x + 1.6, y: FAR.y })
+    expect(serviceCapacity(state, tavern)).toBe(Math.floor(base * 1.1))
+    put(state, 'cabin', { x: FAR.x - 1.6, y: FAR.y })
+    put(state, 'shelter', { x: FAR.x, y: FAR.y + 1.6 })
+    expect(serviceCapacity(state, tavern)).toBe(Math.floor(base * 1.3))
+    put(state, 'shelter', { x: FAR.x, y: FAR.y - 1.6 })
+    expect(serviceCapacity(state, tavern)).toBe(Math.floor(base * 1.3))
+
+    // The supplier next door stacks on top.
+    put(state, 'brewery', { x: FAR.x + 1.4, y: FAR.y + 1.4 })
+    expect(serviceCapacity(state, tavern)).toBe(Math.floor(base * 1.4))
+
+    // The sim's coverage uses the effective number once staffed and supplied.
+    expect(assignWorker(state, tavern.id)).toBeNull()
+    state.stock.ale = 5
+    expect(serviceCoverage(state).luxury.capacity).toBe(Math.floor(base * 1.4))
+  })
+
+  it('pairs buildings in either direction for the partner pulse', () => {
+    expect(pairsWith('tavern', 'shelter')).toBe(true)
+    expect(pairsWith('cabin', 'temple')).toBe(true)
+    expect(pairsWith('woodcuttersCamp', 'smelter')).toBe(true)
+    expect(pairsWith('lumberMill', 'shelter')).toBe(false)
+  })
+
+  it('lists every satisfied partner in the placement hint', () => {
+    const state = newRun()
+    put(state, 'clayPit', { x: FAR.x + 1.6, y: FAR.y })
+    put(state, 'stonecuttersCamp', { x: FAR.x - 1.6, y: FAR.y })
+    const preview = describePlacement(state, 'brickyard', FAR)
+    expect(preview.adjacency.map((a) => a.percent)).toEqual([20, 10])
+    const hint = preview.parts.join(' · ')
+    expect(hint).toContain('Clay Pit')
+    expect(hint).toContain('Stonecutters')
+
+    put(state, 'shelter', { x: FAR.x, y: FAR.y + 1.6 })
+    put(state, 'shelter', { x: FAR.x, y: FAR.y - 1.6 })
+    expect(describePlacement(state, 'tavern', FAR).parts.join(' ')).toContain(
+      '+20% capacity beside 2 homes',
+    )
   })
 })

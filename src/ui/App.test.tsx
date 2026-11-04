@@ -146,6 +146,32 @@ describe('app shell', () => {
     expect(within(inspector!).getByText(/Under construction/i)).toBeTruthy()
   })
 
+  it('offers a brazier and shows its warmth beside the hearth’s', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+
+    clickBuildCard('Brazier')
+    expect(useGameStore.getState().buildMode).toBe('brazier')
+    const target = findPlacement(currentRun(), 'brazier')
+    expect(target).toBeTruthy()
+    act(() => {
+      useGameStore.getState().place(target!)
+    })
+    const brazier = Object.values(currentRun().buildings).find((b) => b.defId === 'brazier')!
+    act(() => {
+      useGameStore.getState().setBuildMode(null)
+      useGameStore.getState().rush(brazier.id)
+      useGameStore.getState().selectBuilding(brazier.id)
+    })
+    const inspector = document.querySelector('.inspector') as HTMLElement
+    expect(within(inspector).getByText(/warm during the Storm/i)).toBeTruthy()
+    // Selecting a fire shows every warmth source: the hearth and this brazier.
+    const svg = screen.getByRole('application', { name: /Settlement map/i })
+    expect(svg.querySelectorAll('circle.warmth-ring').length).toBe(2)
+  })
+
   it('zooms the map on wheel and consumes the event', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))

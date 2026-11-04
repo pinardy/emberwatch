@@ -1,3 +1,4 @@
+import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
 import { SPECIES } from '../content/species'
 import type { ResourceId, RunState, SpeciesId, Villager } from '../types'
@@ -114,6 +115,46 @@ export function stepHearth(s: RunState, dt: number, fuelPerSecond: number): bool
   return true
 }
 
+/**
+ * Braziers burn wood only while the Storm rages, after the hearth has taken
+ * its share. One that finds the woodpile empty goes cold, and the homes that
+ * relied on it chill. Returns how many went cold this step (for the log).
+ */
+export function stepBraziers(s: RunState, dt: number, fuelMultiplier = 1): number {
+  const storm = s.season.season === 'storm'
+  let wentCold = 0
+  for (const b of Object.values(s.buildings)) {
+    const warmth = BUILDINGS[b.defId]?.warmth
+    if (!warmth || !b.built) continue
+    if (!storm) {
+      // Out of the Storm a brazier idles, and is relit for the next one.
+      if (b.unlit) b.unlit = false
+      continue
+    }
+    const need = warmth.fuelPerSecond * fuelMultiplier * dt
+    const wood = s.stock.wood ?? 0
+    if (wood >= need && wood > 0) {
+      s.stock.wood = wood - need
+      if ((s.stock.wood ?? 0) <= 0.0001) delete s.stock.wood
+      b.unlit = false
+    } else {
+      if (!b.unlit) wentCold++
+      b.unlit = true
+    }
+  }
+  return wentCold
+}
+
+/** Wood per second the hearth and every brazier burn during the Storm. */
+export function stormFuelPerSecond(s: RunState, hearthFuelPerSecond: number, fuelMultiplier = 1): number {
+  let rate = hearthFuelPerSecond * fuelMultiplier
+  for (const b of Object.values(s.buildings)) {
+    const warmth = BUILDINGS[b.defId]?.warmth
+    if (warmth && b.built) rate += warmth.fuelPerSecond * fuelMultiplier
+  }
+  return rate
+}
+
 export interface ResolveBreakdown {
   species: SpeciesId
   base: number
@@ -157,9 +198,10 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
   const coldTerm = s.coldHearth ? RESOLVE_COLD_HEARTH : 0
 
   /*
-   * Homes beyond the hearth's warmth are cold in the Storm. The penalty scales
-   * with the share of the housed population sleeping out there, so one distant
-   * shelter is a nuisance and a whole cold suburb is a crisis.
+   * Homes beyond every warmth source — the hearth's radius or a lit brazier's —
+   * are cold in the Storm. The penalty scales with the share of the housed
+   * population sleeping out there, so one distant shelter is a nuisance and a
+   * whole cold suburb is a crisis.
    */
   let chillTerm = 0
   if (storm && pop > 0 && housing > 0) {
