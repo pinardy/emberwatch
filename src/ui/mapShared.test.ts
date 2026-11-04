@@ -2,22 +2,28 @@ import { describe, expect, it } from 'vitest'
 import { addClearer, isReachable } from '../game/engine/actions'
 import { HEARTH_WARMTH_RADIUS, TICK_SECONDS } from '../game/engine/balance'
 import { createRun } from '../game/engine/createRun'
+import { buildingStatus as engineStatus } from '../game/engine/forecast'
+import { computeModifiers } from '../game/engine/modifiers'
+import { warmthSources } from '../game/engine/queries'
 import { resolveGladeEvent, takeChoice } from '../game/engine/events'
 import { pointInPolygon } from '../game/engine/geometry'
 import { tick } from '../game/engine/tick'
 import type { BuildingInstance, RunState } from '../game/types'
 import {
   GLADE_KIND_STYLE,
-  buildingStatus,
+  STATUS_BADGE,
+  buildingStatusKind,
   gladeAccessText,
   gladeFill,
   gladeKindLabel,
   gladeLook,
   gladePlateInfo,
   isColdHousing,
+  isUnlitWarmthSource,
   shade,
   showsWarmthRing,
   terrainColor,
+  type MapBuildingStatus,
 } from './mapShared'
 import {
   buildingKey,
@@ -29,6 +35,7 @@ import {
   pathKey,
   threatKey,
   villagerKey,
+  warmthKey,
 } from './map3d/layerKeys'
 import { gladeEdgeGeometry } from './map3d/staticGeometry'
 
@@ -107,57 +114,100 @@ describe('glade visual language', () => {
 })
 
 describe('building status', () => {
-  it('walks construction → unstaffed → working → inputs/storage/paused', () => {
+  /*
+   * The rules live in the engine (`forecast.buildingStatus`); the map only
+   * reduces them to a kind and adds a badge. These check the reduction and
+   * that every kind the engine can report has a badge.
+   */
+  it('mirrors the engine status kind, with construction on top', () => {
     const run = newRun()
     const mill = addBuilding(run, 'lumberMill', { built: false, activeRecipeId: 'plank' })
-    expect(buildingStatus(run, mill)).toBe('construction')
+    const engineKind = () => engineStatus(run, mill, computeModifiers(run)).kind
+    expect(buildingStatusKind(run, mill)).toBe('construction')
     mill.built = true
-    expect(buildingStatus(run, mill)).toBe('unstaffed')
+    expect(buildingStatusKind(run, mill)).toBe('noWorkers')
     mill.workers = [Object.keys(run.villagers)[0]]
     run.stock.wood = 10
-    expect(buildingStatus(run, mill)).toBe('working')
+    expect(buildingStatusKind(run, mill)).toBe('working')
     run.stock.wood = 0
-    expect(buildingStatus(run, mill)).toBe('noInputs')
+    expect(buildingStatusKind(run, mill)).toBe('waitingInputs')
+    expect(buildingStatusKind(run, mill)).toBe(engineKind())
     run.stock.wood = 10
     mill.recipeProgress = 16
     run.storageCap = 0
-    expect(buildingStatus(run, mill)).toBe('storageFull')
+    expect(buildingStatusKind(run, mill)).toBe('storageFull')
     mill.paused = true
-    expect(buildingStatus(run, mill)).toBe('paused')
+    expect(buildingStatusKind(run, mill)).toBe('paused')
+    expect(buildingStatusKind(run, mill)).toBe(engineKind())
   })
 
   it('flags camps without a live deposit and farms idled by the Storm', () => {
     const run = newRun()
     const villager = Object.keys(run.villagers)[0]
     const camp = addBuilding(run, 'woodcuttersCamp', { activeRecipeId: 'wood', workers: [villager] })
-    expect(buildingStatus(run, camp)).toBe('noDeposit')
+    expect(buildingStatusKind(run, camp)).toBe('noDeposit')
     const farm = addBuilding(run, 'smallFarm', { activeRecipeId: 'grain', workers: [villager] })
     const soil = Object.values(run.deposits).find((d) => d.kind === 'fertileSoil')!
     farm.depositsInRange = { fertileSoil: [soil.id] }
     run.season.season = 'storm'
-    expect(buildingStatus(run, farm)).toBe('seasonIdle')
+    expect(buildingStatusKind(run, farm)).toBe('offSeason')
+  })
+
+  it('has a badge for every kind the engine reports except none', () => {
+    const kinds: MapBuildingStatus[] = [
+      'construction',
+      'paused',
+      'noWorkers',
+      'noDeposit',
+      'offSeason',
+      'waitingInputs',
+      'storageFull',
+      'working',
+    ]
+    for (const kind of kinds) expect(STATUS_BADGE[kind as Exclude<MapBuildingStatus, 'none'>]).toBeTruthy()
+    expect(Object.keys(STATUS_BADGE).sort()).toEqual([...kinds].sort())
   })
 
   it('has nothing to say about housing, and knows when it is cold', () => {
     const run = newRun()
     const near = addBuilding(run, 'shelter', { pos: { x: 1, y: 0 } })
     const far = addBuilding(run, 'shelter', { pos: { x: HEARTH_WARMTH_RADIUS + 1, y: 0 } })
-    expect(buildingStatus(run, near)).toBe('none')
+    expect(buildingStatusKind(run, near)).toBe('none')
     run.season.season = 'storm'
     expect(isColdHousing(run, near)).toBe(false)
     expect(isColdHousing(run, far)).toBe(true)
     run.season.season = 'drizzle'
     expect(isColdHousing(run, far)).toBe(false)
   })
+
+  it('counts a lit brazier as warmth, and an unlit one as cold', () => {
+    const run = newRun()
+    const far = addBuilding(run, 'shelter', { pos: { x: HEARTH_WARMTH_RADIUS + 1, y: 0 } })
+    const brazier = addBuilding(run, 'brazier', { pos: { x: HEARTH_WARMTH_RADIUS + 1.6, y: 0.4 } })
+    run.season.season = 'storm'
+    expect(isColdHousing(run, far)).toBe(false)
+    expect(isColdHousing(run, far, warmthSources(run))).toBe(false)
+    expect(isUnlitWarmthSource(brazier)).toBe(false)
+    brazier.unlit = true
+    expect(isColdHousing(run, far)).toBe(true)
+    expect(isColdHousing(run, far, warmthSources(run))).toBe(true)
+    expect(isUnlitWarmthSource(brazier)).toBe(true)
+  })
 })
 
 describe('warmth overlay', () => {
-  it('shows when toggled, placing housing, or inspecting the hearth', () => {
-    expect(showsWarmthRing({ toggled: false, buildMode: null, hearthSelected: false })).toBe(false)
-    expect(showsWarmthRing({ toggled: true, buildMode: null, hearthSelected: false })).toBe(true)
-    expect(showsWarmthRing({ toggled: false, buildMode: 'shelter', hearthSelected: false })).toBe(true)
-    expect(showsWarmthRing({ toggled: false, buildMode: 'lumberMill', hearthSelected: false })).toBe(false)
-    expect(showsWarmthRing({ toggled: false, buildMode: null, hearthSelected: true })).toBe(true)
+  it('shows when toggled, placing housing or a brazier, or inspecting a fire or a home', () => {
+    const show = (toggled: boolean, buildMode: string | null, selectedDefId: string | null) =>
+      showsWarmthRing({ toggled, buildMode, selectedDefId })
+    expect(show(false, null, null)).toBe(false)
+    expect(show(true, null, null)).toBe(true)
+    expect(show(false, 'shelter', null)).toBe(true)
+    expect(show(false, 'brazier', null)).toBe(true)
+    expect(show(false, 'lumberMill', null)).toBe(false)
+    expect(show(false, null, 'ancientHearth')).toBe(true)
+    expect(show(false, null, 'brazier')).toBe(true)
+    expect(show(false, null, 'shelter')).toBe(true)
+    expect(show(false, null, 'lumberMill')).toBe(false)
   })
 })
 
@@ -169,7 +219,11 @@ describe('3D layer keys', () => {
    */
   it('stay stable across sim ticks that change nothing they draw', () => {
     const run = newRun()
+    // A brazier in play must not churn the keys while it simply burns on.
+    // (A cold one would be relit outside the Storm — a real change.)
+    addBuilding(run, 'brazier', { pos: { x: 2.4, y: -1.2 } })
     const keys = () => ({
+      warmth: warmthKey(run),
       glades: gladeSurfaceKey(run),
       forest: forestKey(run),
       cleared: clearedKey(run),
@@ -184,6 +238,20 @@ describe('3D layer keys', () => {
     for (let i = 0; i < 40; i++) tick(run, TICK_SECONDS)
     expect(run.clock).toBeGreaterThan(4)
     expect(keys()).toEqual(before)
+  })
+
+  it('change when a brazier goes out or is lit again', () => {
+    const run = newRun()
+    const brazier = addBuilding(run, 'brazier', { pos: { x: 2.4, y: -1.2 } })
+    const buildings = buildingKey(run)
+    const warmth = warmthKey(run)
+    expect(warmth).toContain(brazier.id)
+    brazier.unlit = true
+    expect(buildingKey(run)).not.toBe(buildings) // lit → ash model, cold marker
+    expect(warmthKey(run)).not.toContain(brazier.id) // its ring goes
+    brazier.unlit = false
+    expect(buildingKey(run)).toBe(buildings)
+    expect(warmthKey(run)).toBe(warmth)
   })
 
   it('change when a glade is cleared', () => {

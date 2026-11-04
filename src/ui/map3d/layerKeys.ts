@@ -1,12 +1,14 @@
 import { BUILDINGS } from '../../game/content/buildings'
+import { warmthSources } from '../../game/engine/queries'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, RunState } from '../../game/types'
 import {
-  buildingStatus,
+  buildingStatusKind,
   gladeLook,
   gladePlateInfo,
   isColdHousing,
-  type BuildingStatus,
+  isUnlitWarmthSource,
+  type MapBuildingStatus,
   type StatusContext,
 } from '../mapShared'
 
@@ -80,12 +82,16 @@ export interface BuildingView {
   /** Construction progress in 2% steps (1 once built). */
   progress: number
   workers: number
-  status: BuildingStatus
+  status: MapBuildingStatus
+  /** A home out in the Storm's cold, or a brazier that has gone out. */
   cold: boolean
+  /** Warmth sources: whether the fire is burning (drives the brazier model). */
+  lit: boolean
 }
 
 export function buildingViews(run: RunState): BuildingView[] {
   const ctx: StatusContext = {}
+  const sources = warmthSources(run)
   return Object.values(run.buildings).map((building) => {
     const def = BUILDINGS[building.defId]
     const raw = building.built ? 1 : building.buildProgress / Math.max(1, def?.buildSeconds ?? 1)
@@ -93,8 +99,9 @@ export function buildingViews(run: RunState): BuildingView[] {
       building,
       progress: Math.min(1, Math.floor(raw * 50) / 50),
       workers: building.workers.length,
-      status: buildingStatus(run, building, ctx),
-      cold: isColdHousing(run, building),
+      status: buildingStatusKind(run, building, ctx),
+      cold: isColdHousing(run, building, sources) || isUnlitWarmthSource(building),
+      lit: !building.unlit,
     }
   })
 }
@@ -102,7 +109,7 @@ export function buildingViews(run: RunState): BuildingView[] {
 export function buildingKey(run: RunState): string {
   let key = ''
   for (const v of buildingViews(run)) {
-    key += `${v.building.id}:${v.progress}:${v.workers}:${v.status}:${v.cold ? 1 : 0},`
+    key += `${v.building.id}:${v.progress}:${v.workers}:${v.status}:${v.cold ? 1 : 0}${v.lit ? 1 : 0},`
   }
   return key
 }
@@ -120,7 +127,7 @@ export function smokeKey(run: RunState): string {
   const ctx: StatusContext = {}
   for (const b of Object.values(run.buildings)) {
     if (BUILDINGS[b.defId]?.category !== 'production') continue
-    if (buildingStatus(run, b, ctx) === 'working') key += `${b.id},`
+    if (buildingStatusKind(run, b, ctx) === 'working') key += `${b.id},`
   }
   return key
 }
@@ -130,6 +137,13 @@ export function villagerKey(run: RunState): string {
   let key = ''
   for (const v of Object.values(run.villagers)) key += `${v.id}:${v.species}:${v.assignment},`
   return key
+}
+
+/** Live warmth sources: the hearth and every lit brazier, with their reach. */
+export function warmthKey(run: RunState): string {
+  return warmthSources(run)
+    .map((w) => `${w.id}:${w.pos.x}:${w.pos.y}:${w.radius}`)
+    .join(',')
 }
 
 export function threatKey(run: RunState): string {

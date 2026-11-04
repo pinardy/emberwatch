@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { BUILDINGS } from '../../game/content/buildings'
 import { footprintOf } from '../../game/engine/actions'
 import type { RunState } from '../../game/types'
-import { buildingStatus, type StatusContext } from '../mapShared'
+import { buildingStatusKind, type StatusContext } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import { smokeKey, useRunKey } from './layerKeys'
 import { NO_RAYCAST } from './models'
@@ -67,7 +67,7 @@ export const Smoke = memo(function Smoke({ run }: { run: RunState }) {
   for (const b of Object.values(run.buildings)) {
     const def = BUILDINGS[b.defId]
     // Only chimneys that are really producing: staffed, supplied, with room.
-    if (def?.category !== 'production' || buildingStatus(run, b, ctx) !== 'working') continue
+    if (def?.category !== 'production' || buildingStatusKind(run, b, ctx) !== 'working') continue
     const scale = footprintOf(b.defId) / 0.6
     // The chimney block sits at (0.32, 0.9, -0.18) in the model's local space.
     emitters.push({

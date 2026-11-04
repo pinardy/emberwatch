@@ -7,7 +7,7 @@ import { footprintOf } from '../../game/engine/actions'
 import { DEPOSIT_INFO } from '../../game/engine/mapgen'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, DepositId, Vec2, WorldDeposit } from '../../game/types'
-import { DEPOSIT_TINT, STATUS_BADGE, type BuildingStatus } from '../mapShared'
+import { DEPOSIT_TINT, STATUS_BADGE, type MapBuildingStatus } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import { requestGhost } from './ghostBus'
 import {
@@ -165,11 +165,12 @@ export const BuildingNode = memo(function BuildingNode({
   progress: progressProp,
   workers: workersProp,
   status = 'none',
+  lit: litProp,
 }: {
   building: BuildingInstance
   selected: boolean
   bucket: ZoomBucket
-  /** Storm chill: this housing stands beyond the hearth's warmth. */
+  /** Storm chill: a home beyond every fire, or a brazier gone out. */
   cold: boolean
   /** Pulses while the player is placing this building's adjacency partner. */
   partnerHint: boolean
@@ -178,7 +179,9 @@ export const BuildingNode = memo(function BuildingNode({
   /** Workers assigned. */
   workers?: number
   /** What it is doing right now; drives the status badge. */
-  status?: BuildingStatus
+  status?: MapBuildingStatus
+  /** Warmth sources: whether the fire burns. A prop so going out re-renders. */
+  lit?: boolean
 }) {
   const def = BUILDINGS[building.defId]
   const [hovered, setHovered] = useState(false)
@@ -241,7 +244,7 @@ export const BuildingNode = memo(function BuildingNode({
       </mesh>
       <group ref={body}>
         {building.built ? (
-          <BuildingModel category={def.category} scale={scale} />
+          <BuildingModel category={def.category} scale={scale} defId={building.defId} lit={litProp ?? !building.unlit} />
         ) : (
           <ConstructionSite progress={progress} scale={scale} />
         )}

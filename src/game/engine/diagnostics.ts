@@ -1,8 +1,22 @@
 import { BUILDINGS } from '../content/buildings'
-import { NEED_LABELS } from '../content/species'
+import { NEED_LABELS, SPECIES } from '../content/species'
 import { RESOURCES } from '../content/resources'
-import type { ResourceId, RunState } from '../types'
-import { canAfford, idleVillagers, population, totalHousing } from './queries'
+import type { ResourceId, RunState, SpeciesId } from '../types'
+import {
+  RUNWAY_WARNING_SECONDS,
+  foodForecast,
+  formatDuration,
+  hearthForecast,
+  storageBlocked,
+} from './forecast'
+import { computeModifiers } from './modifiers'
+import {
+  canAfford,
+  idleVillagers,
+  population,
+  secondsUntilDeparture,
+  totalHousing,
+} from './queries'
 
 /**
  * Things that are quietly going wrong.
@@ -30,15 +44,77 @@ export function collectWarnings(s: RunState): Warning[] {
     })
   }
 
+  const braziers = Object.values(s.buildings).filter(
+    (b) => b.built && BUILDINGS[b.defId]?.warmth,
+  )
+  const unlit = braziers.filter((b) => b.unlit).length
   if (s.coldHearth) {
     out.push({
       id: 'cold',
       severity: 'danger',
-      text: '🔥 The hearth has gone out. It needs wood.',
+      text:
+        braziers.length > 0
+          ? '🔥 The hearth and its braziers have gone out. They need wood.'
+          : '🔥 The hearth has gone out. It needs wood.',
+    })
+  } else if (unlit > 0) {
+    out.push({
+      id: 'cold-braziers',
+      severity: 'danger',
+      text: `🏮 ${unlit} brazier${unlit > 1 ? 's have' : ' has'} gone cold — the homes around ${unlit > 1 ? 'them' : 'it'} are freezing. Bring wood.`,
     })
   }
 
+  // A species in despair is on a visible countdown, not a silent one.
+  for (const [sp, seconds] of Object.entries(secondsUntilDeparture(s))) {
+    out.push({
+      id: `leaving-${sp}`,
+      severity: 'danger',
+      text: `🚪 ${SPECIES[sp as SpeciesId].name} will start leaving in ${Math.ceil(seconds ?? 0)}s.`,
+    })
+  }
+
+  const mods = computeModifiers(s)
+
+  // Say so *before* the hearth goes out, while there is still time to chop.
+  // The forecast counts every lit brazier, which shares the woodpile.
+  if (!s.coldHearth) {
+    const hearth = hearthForecast(s, mods)
+    const fires = braziers.length > 0 ? 'Hearth and brazier' : 'Hearth'
+    const seasonLeft = s.season.length - s.season.elapsed
+    if (hearth.runway < RUNWAY_WARNING_SECONDS) {
+      out.push({
+        id: 'hearth-low',
+        severity: 'danger',
+        text: `🔥 ${fires} wood runs out in ${formatDuration(hearth.runway)}. Cut more wood.`,
+      })
+    } else if (s.season.season === 'storm' && hearth.stormShortfall > 0) {
+      out.push({
+        id: 'hearth-storm',
+        severity: 'caution',
+        text: `🔥 ${fires} wood lasts ${formatDuration(hearth.runway)}; the Storm has ${formatDuration(seasonLeft)} left.`,
+      })
+    } else if (s.season.season === 'clearance' && hearth.stormShortfall > 0) {
+      out.push({
+        id: 'hearth-storm',
+        severity: 'caution',
+        text: `🔥 Not enough wood for the Storm — about ${Math.ceil(hearth.stormShortfall)} more needed (it burns ${hearth.stormRate.toFixed(2)}/s).`,
+      })
+    }
+  }
+
   const pop = population(s)
+  if (!s.starving && pop > 0) {
+    const food = foodForecast(s, mods)
+    if (food.runway < RUNWAY_WARNING_SECONDS) {
+      out.push({
+        id: 'food-low',
+        severity: 'caution',
+        text: `🍽️ Food runs out in ${formatDuration(food.runway)} at the current rate.`,
+      })
+    }
+  }
+
   const housing = totalHousing(s)
   if (pop > housing) {
     out.push({
@@ -55,6 +131,16 @@ export function collectWarnings(s: RunState): Warning[] {
       id: 'no-builders',
       severity: 'caution',
       text: `🔨 ${sites} building${sites > 1 ? 's' : ''} stalled — idle villagers are your builders.`,
+    })
+  }
+
+  // A full stockpile silently halts every producer at the brim.
+  const blocked = storageBlocked(s, mods)
+  if (blocked.length > 0) {
+    out.push({
+      id: 'storage-full',
+      severity: 'caution',
+      text: `📦 Stockpile full — ${blocked.length} building${blocked.length > 1 ? 's have' : ' has'} stopped. Build a Warehouse or sell surplus.`,
     })
   }
 

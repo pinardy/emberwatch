@@ -2,9 +2,14 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
+import { DECREES } from '../game/content/decrees'
+import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { findPlacement } from '../game/engine/actions'
+import { pushLog } from '../game/engine/createRun'
+import { CHARTER_REPUTATION, REWARD_MILESTONES } from '../game/engine/balance'
+import { addCondition, issueDecree } from '../game/engine/structure'
 import { useGameStore } from '../game/store'
-import type { RunState } from '../game/types'
+import type { BuildingInstance, RunState } from '../game/types'
 
 /**
  * UI smoke tests. Typechecking cannot catch a component that throws on render or
@@ -140,6 +145,32 @@ describe('app shell', () => {
     expect(inspector).toBeTruthy()
     expect(within(inspector!).getByText(BUILDINGS.shelter.name)).toBeTruthy()
     expect(within(inspector!).getByText(/Under construction/i)).toBeTruthy()
+  })
+
+  it('offers a brazier and shows its warmth beside the hearth’s', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+
+    clickBuildCard('Brazier')
+    expect(useGameStore.getState().buildMode).toBe('brazier')
+    const target = findPlacement(currentRun(), 'brazier')
+    expect(target).toBeTruthy()
+    act(() => {
+      useGameStore.getState().place(target!)
+    })
+    const brazier = Object.values(currentRun().buildings).find((b) => b.defId === 'brazier')!
+    act(() => {
+      useGameStore.getState().setBuildMode(null)
+      useGameStore.getState().rush(brazier.id)
+      useGameStore.getState().selectBuilding(brazier.id)
+    })
+    const inspector = document.querySelector('.inspector') as HTMLElement
+    expect(within(inspector).getByText(/warm during the Storm/i)).toBeTruthy()
+    // Selecting a fire shows every warmth source: the hearth and this brazier.
+    const svg = screen.getByRole('application', { name: /Settlement map/i })
+    expect(svg.querySelectorAll('circle.warmth-ring').length).toBe(2)
   })
 
   it('zooms the map on wheel and consumes the event', () => {
@@ -292,5 +323,155 @@ describe('app shell', () => {
     })
     expect(screen.getByText(/The settlement holds/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: /Return to the Citadel/i })).toBeTruthy()
+  })
+
+  it('toasts sim events as they happen, but not the opening entries', () => {
+    startPlaying()
+    // The opening narration and the blueprint draft are set-up, not news.
+    expect(document.querySelector('.event-toast')).toBeNull()
+
+    act(() => {
+      pushLog(currentRun(), 'Ada the Human left the settlement.', 'bad')
+      bump()
+    })
+    const toast = document.querySelector('.event-toast.is-bad') as HTMLElement | null
+    expect(toast?.textContent).toContain('Ada the Human left the settlement.')
+
+    // A repeat collapses into the same toast with a counter.
+    act(() => {
+      pushLog(currentRun(), 'Ada the Human left the settlement.', 'bad')
+      bump()
+    })
+    expect(document.querySelectorAll('.event-toast')).toHaveLength(1)
+    expect(document.querySelector('.event-toast-count')?.textContent).toBe('×2')
+
+    // Clicking dismisses it.
+    fireEvent.click(document.querySelector('.event-toast')!)
+    expect(document.querySelector('.event-toast')).toBeNull()
+  })
+
+  it('counts unread chronicle entries on the Log tab until it is opened', () => {
+    startPlaying()
+    const tabs = screen.getByRole('tablist')
+    const logTab = () => within(tabs).getByRole('tab', { name: /Log/i })
+    expect(logTab().querySelector('.tab-badge')).toBeNull()
+
+    act(() => {
+      pushLog(currentRun(), 'The Wolf Pack strikes.', 'bad')
+      pushLog(currentRun(), 'A caravan has arrived.', 'good')
+      bump()
+    })
+    expect(logTab().querySelector('.tab-badge')?.textContent).toBe('2')
+
+    fireEvent.click(logTab())
+    expect(logTab().querySelector('.tab-badge')).toBeNull()
+    const log = document.querySelector('.log-list') as HTMLElement
+    expect(within(log).getByText('The Wolf Pack strikes.')).toBeTruthy()
+  })
+
+  it('tells the player what an input-starved workshop is waiting for', () => {
+    startPlaying()
+    const run = currentRun()
+    const worker = Object.values(run.villagers).find((v) => v.assignment === null)!
+    const hearth = Object.values(run.buildings)[0]
+    const mill: BuildingInstance = {
+      id: 'test-mill',
+      defId: 'lumberMill',
+      pos: { x: hearth.pos.x + 3, y: hearth.pos.y },
+      gladeId: hearth.gladeId,
+      built: true,
+      buildProgress: BUILDINGS.lumberMill.buildSeconds,
+      workers: [worker.id],
+      activeRecipeId: 'plank',
+      // Held at the brim: the bar looks full, which on its own reads as healthy.
+      recipeProgress: 16,
+      paused: false,
+      depositsInRange: {},
+    }
+    act(() => {
+      worker.assignment = mill.id
+      run.buildings[mill.id] = mill
+      delete run.stock.wood
+      useGameStore.getState().selectBuilding(mill.id)
+    })
+    const inspector = document.querySelector('.inspector') as HTMLElement
+    expect(within(inspector).getByText(/Waiting for 2 .*Wood/)).toBeTruthy()
+  })
+
+  it('fills the hostility meter in proportion to hostility', () => {
+    startPlaying()
+    const fill = () =>
+      document.querySelector('.meter-warn .meter-fill') as HTMLElement
+    const impatienceFill = document.querySelector('.meter-bad .meter-fill')
+
+    act(() => {
+      const run = currentRun()
+      run.hostility = 37.5
+      run.impatience += 1 // a pulse must not remount the meter
+      bump()
+    })
+    expect(fill().style.width).toBe('37.5%')
+    // The impatience bar is the same node, so its width transition keeps running.
+    expect(document.querySelector('.meter-bad .meter-fill')).toBe(impatienceFill)
+  })
+})
+
+/** Menu → setup → draft → a moment of play, so the clock has started. */
+function startPlaying() {
+  render(<App />)
+  fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+  fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+  takeOpeningDraft()
+  act(() => {
+    useGameStore.getState().setSpeed(1)
+    useGameStore.getState().advance(0.5)
+    useGameStore.getState().setSpeed(0)
+  })
+  expect(currentRun().clock).toBeGreaterThan(0)
+}
+
+/** Tells subscribers the run changed, as every sim step and command does. */
+function bump() {
+  useGameStore.setState({ version: useGameStore.getState().version + 1 })
+}
+
+describe('mid-run structure UI', () => {
+  it('shows decrees and lingering conditions, and takes the charter', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+
+    act(() => {
+      const run = currentRun()
+      run.decreeTimer = 0
+      issueDecree(run)
+      const option = GLADE_EVENTS.sunkenGranary.options.find((o) => o.condition)!
+      addCondition(run, option.condition!, 'glade1')
+      useGameStore.setState({ version: useGameStore.getState().version + 1 })
+    })
+    const decreeName = DECREES[currentRun().decree!.defId].name
+    const bar = screen.getByLabelText(/Conditions and decrees/i)
+    expect(within(bar).getByText(/Flooded Paths/)).toBeTruthy()
+    expect(within(bar).getByText(decreeName)).toBeTruthy()
+
+    // Clicking the decree card opens the Orders panel, where the countdown sits.
+    fireEvent.click(within(bar).getByText(decreeName))
+    expect(useGameStore.getState().panel).toBe('orders')
+    expect(screen.getByText(/left · miss it/)).toBeTruthy()
+
+    act(() => {
+      const run = currentRun()
+      run.reputation = CHARTER_REPUTATION
+      run.cornerstonesTaken = REWARD_MILESTONES.length
+      useGameStore.getState().setSpeed(1)
+      useGameStore.getState().advance(0.5)
+    })
+    expect(screen.getByRole('heading', { name: /The Queen's Charter/i })).toBeTruthy()
+    const options = screen.getAllByRole('button').filter((b) => b.className.includes('charter-'))
+    expect(options).toHaveLength(3)
+    fireEvent.click(options[1])
+    expect(currentRun().charter).not.toBeNull()
+    expect(currentRun().pendingChoices).toHaveLength(0)
   })
 })

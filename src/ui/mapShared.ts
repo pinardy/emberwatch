@@ -2,11 +2,14 @@ import { useEffect, useRef } from 'react'
 import { create } from 'zustand'
 import { BUILDINGS } from '../game/content/buildings'
 import { isReachable } from '../game/engine/actions'
-import { HEARTH_WARMTH_RADIUS } from '../game/engine/balance'
+import {
+  buildingStatus,
+  type BuildingStatus as EngineBuildingStatus,
+} from '../game/engine/forecast'
+import { dist } from '../game/engine/geometry'
 import { TERRAIN_COLORS } from '../game/engine/mapgen'
 import { computeModifiers, type Modifiers } from '../game/engine/modifiers'
-import { seasonMultiplier } from '../game/engine/production'
-import { activeRecipe, canAfford, storageUsed } from '../game/engine/queries'
+import { isWarmAt, storageUsed, type WarmthSource } from '../game/engine/queries'
 import { useGameStore } from '../game/store'
 import type {
   BuildingInstance,
@@ -187,17 +190,13 @@ export const DEPOSIT_TINT: Record<DepositId, string> = {
 // Buildings
 // ---------------------------------------------------------------------------
 
-export type BuildingStatus =
-  | 'construction'
-  | 'paused'
-  | 'unstaffed'
-  | 'noDeposit'
-  | 'seasonIdle'
-  | 'noInputs'
-  | 'storageFull'
-  | 'working'
-  /** Housing, storage, the hearth — nothing to report. */
-  | 'none'
+/**
+ * What a building is doing, as a badge-sized kind. The rules live in one
+ * place — the engine's `forecast.buildingStatus`, which mirrors
+ * `stepProduction` (and also feeds the Inspector's status line); the map
+ * only picks an icon and colour for each kind.
+ */
+export type MapBuildingStatus = EngineBuildingStatus['kind']
 
 export interface StatusBadge {
   icon: string
@@ -207,13 +206,13 @@ export interface StatusBadge {
   problem: boolean
 }
 
-export const STATUS_BADGE: Record<Exclude<BuildingStatus, 'none'>, StatusBadge> = {
+export const STATUS_BADGE: Record<Exclude<MapBuildingStatus, 'none'>, StatusBadge> = {
   construction: { icon: '🔨', label: 'Under construction', color: '#d9b46a', problem: false },
   paused: { icon: '⏸', label: 'Paused', color: '#8a949a', problem: true },
-  unstaffed: { icon: '👤', label: 'No workers', color: '#e8a33c', problem: true },
+  noWorkers: { icon: '👤', label: 'No workers', color: '#e8a33c', problem: true },
   noDeposit: { icon: '🚫', label: 'No deposit in reach', color: '#d05050', problem: true },
-  seasonIdle: { icon: '🌧', label: 'Idle this season', color: '#5f8fd4', problem: true },
-  noInputs: { icon: '⏳', label: 'Waiting for inputs', color: '#e07a3c', problem: true },
+  offSeason: { icon: '🌧', label: 'Idle this season', color: '#5f8fd4', problem: true },
+  waitingInputs: { icon: '⏳', label: 'Waiting for inputs', color: '#e07a3c', problem: true },
   storageFull: { icon: '📦', label: 'Storage full', color: '#d05050', problem: true },
   working: { icon: '⚙', label: 'Working', color: '#6fbf72', problem: false },
 }
@@ -225,56 +224,38 @@ export interface StatusContext {
 }
 
 /**
- * What a building is doing right now, mirroring the gates in
- * `stepProduction`: construction, pause, staff, deposit, season, inputs and
- * finally storage room for the output.
+ * The engine's status for `b`, reduced to its kind. Modifiers and storage use
+ * are computed once per `ctx`, so a whole layer of buildings shares them.
  */
-export function buildingStatus(
+export function buildingStatusKind(
   run: RunState,
   b: BuildingInstance,
   ctx: StatusContext = {},
-): BuildingStatus {
-  const def = BUILDINGS[b.defId]
-  if (!def) return 'none'
+): MapBuildingStatus {
   if (!b.built) return 'construction'
-  if (def.recipes.length === 0 || def.workerSlots === 0) return 'none'
-  if (b.paused) return 'paused'
-  if (b.workers.length === 0) return 'unstaffed'
-  const recipe = activeRecipe(b)
-  if (!recipe) return 'none'
-  if (recipe.requiresDeposit) {
-    const live = (b.depositsInRange[recipe.requiresDeposit] ?? []).some((id) => {
-      const deposit = run.deposits[id]
-      return deposit && (deposit.amount === null || deposit.amount > 0)
-    })
-    if (!live) return 'noDeposit'
-  }
-  if (def.tags.includes('farming') && run.season.season === 'storm') {
-    ctx.mods ??= computeModifiers(run)
-    if (seasonMultiplier(b.defId, run.season.season, ctx.mods) <= 0) return 'seasonIdle'
-  }
-  if (!canAfford(run.stock, recipe.inputs)) return 'noInputs'
-  // A finished cycle held at the brim with its inputs on hand is waiting
-  // for room in the stockpile.
-  if (b.recipeProgress >= recipe.seconds) {
-    let outputs = 0
-    for (const [id, amount] of Object.entries(recipe.outputs)) {
-      if (id !== 'amber') outputs += amount ?? 0
-    }
-    ctx.used ??= storageUsed(run)
-    if (outputs > 0 && ctx.used + outputs > run.storageCap) return 'storageFull'
-  }
-  return 'working'
+  ctx.mods ??= computeModifiers(run)
+  ctx.used ??= storageUsed(run)
+  return buildingStatus(run, b, ctx.mods, ctx.used).kind
 }
 
-/** Storm chill: finished housing standing beyond the hearth's warmth. */
-export function isColdHousing(run: RunState, b: BuildingInstance): boolean {
-  return (
-    run.season.season === 'storm' &&
-    b.built &&
-    (BUILDINGS[b.defId]?.housing ?? 0) > 0 &&
-    Math.hypot(b.pos.x, b.pos.y) > HEARTH_WARMTH_RADIUS
-  )
+/**
+ * Storm chill: finished housing standing outside every live warmth source.
+ * Pass `sources` (from `warmthSources`) when checking many buildings at once.
+ */
+export function isColdHousing(
+  run: RunState,
+  b: BuildingInstance,
+  sources?: WarmthSource[],
+): boolean {
+  if (run.season.season !== 'storm' || !b.built) return false
+  if ((BUILDINGS[b.defId]?.housing ?? 0) <= 0) return false
+  if (!sources) return !isWarmAt(run, b.pos)
+  return !sources.some((w) => dist(w.pos, b.pos) <= w.radius)
+}
+
+/** A built warmth source (brazier) whose fire has gone out. */
+export function isUnlitWarmthSource(b: BuildingInstance): boolean {
+  return b.built && !!BUILDINGS[b.defId]?.warmth && !!b.unlit
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +263,7 @@ export function isColdHousing(run: RunState, b: BuildingInstance): boolean {
 // ---------------------------------------------------------------------------
 
 interface MapOverlayState {
-  /** Player toggle: show the hearth's warmth radius at all times. */
+  /** Player toggle: show every warmth source's radius at all times. */
   showWarmth: boolean
   toggleWarmth: () => void
 }
@@ -293,25 +274,33 @@ export const useMapOverlays = create<MapOverlayState>((set, get) => ({
   toggleWarmth: () => set({ showWarmth: !get().showWarmth }),
 }))
 
-/** The warmth ring shows while toggled on, placing housing, or inspecting the hearth. */
+/**
+ * Every fire's reach (`warmthSources`) shows while toggled on (R / 🔥),
+ * while placing housing or a brazier, or while inspecting a fire or a home.
+ */
 export function showsWarmthRing(opts: {
   toggled: boolean
   buildMode: string | null
-  hearthSelected: boolean
+  selectedDefId: string | null
 }): boolean {
-  if (opts.toggled || opts.hearthSelected) return true
-  return !!opts.buildMode && (BUILDINGS[opts.buildMode]?.housing ?? 0) > 0
+  if (opts.toggled) return true
+  const build = opts.buildMode ? BUILDINGS[opts.buildMode] : undefined
+  if (build && ((build.housing ?? 0) > 0 || !!build.warmth)) return true
+  const selected = opts.selectedDefId ? BUILDINGS[opts.selectedDefId] : undefined
+  return (
+    selected?.category === 'hearth' || selected?.category === 'housing' || !!selected?.warmth
+  )
 }
 
 /** Store-subscribed form of `showsWarmthRing` for either renderer. */
 export function useWarmthRingVisible(): boolean {
   const toggled = useMapOverlays((s) => s.showWarmth)
   const buildMode = useGameStore((s) => s.buildMode)
-  const hearthSelected = useGameStore((s) => {
+  const selectedDefId = useGameStore((s) => {
     const id = s.selectedBuilding
-    return !!id && s.run?.buildings[id]?.defId === 'ancientHearth'
+    return (id && s.run?.buildings[id]?.defId) || null
   })
-  return showsWarmthRing({ toggled, buildMode, hearthSelected })
+  return showsWarmthRing({ toggled, buildMode, selectedDefId })
 }
 
 // ---------------------------------------------------------------------------

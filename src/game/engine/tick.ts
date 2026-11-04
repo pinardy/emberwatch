@@ -1,8 +1,6 @@
 import type { RunState, Season } from '../types'
 import {
   BASE_STORAGE,
-  HEARTH_FUEL_PER_SECOND,
-  HEARTH_IDLE_FUEL_PER_SECOND,
   HOSTILITY_PER_POPULATION,
   HOSTILITY_PER_SECOND,
   HOSTILITY_PER_STORM,
@@ -10,6 +8,7 @@ import {
   HOSTILITY_YEAR_SCALING,
   NEWCOMER_SEASONS,
   newcomerInterval,
+  QUEEN_DEADLINE_YEAR,
   SEASON_INFO,
   SEASON_LENGTH,
   SEASON_ORDER,
@@ -25,9 +24,12 @@ import {
 import { computeModifiers } from './modifiers'
 import { stepProduction } from './production'
 import { computeStorageCap, population, totalHousing } from './queries'
+import { checkCharter, stepConditions, stepDecree } from './structure'
 import { stepCaravan } from './trade'
 import {
+  stepBraziers,
   stepDepartures,
+  hearthFuelRate,
   stepFood,
   stepHearth,
   stepImpatience,
@@ -36,6 +38,8 @@ import {
 } from './society'
 
 export const MAX_HOSTILITY = 100
+
+const BRAZIER_COLD_LOG = 'A brazier has gone cold — the homes around it are freezing. It needs wood.'
 
 /**
  * Advances the whole simulation by `dt` seconds. Mutates `s` in place — the
@@ -57,12 +61,18 @@ export function tick(s: RunState, dt: number): void {
   stepProduction(s, dt, mods)
   stepClearing(s, dt, mods)
   stepThreats(s, dt)
+  stepConditions(s, dt)
   stepCaravan(s, dt)
 
-  const fuelRate =
-    (s.season.season === 'storm' ? HEARTH_FUEL_PER_SECOND : HEARTH_IDLE_FUEL_PER_SECOND) *
-    mods.hearthFuel
-  s.coldHearth = stepHearth(s, dt, fuelRate)
+  s.coldHearth = stepHearth(s, dt, hearthFuelRate(s.season.season, mods))
+  // Braziers draw on the same woodpile, after the hearth. Said once a Storm,
+  // however often a thin woodpile makes them gutter.
+  if (stepBraziers(s, dt, mods.hearthFuel) > 0) {
+    const said = s.log.some(
+      (e) => e.text === BRAZIER_COLD_LOG && e.year === s.season.year && e.season === 'storm',
+    )
+    if (!said) pushLog(s, BRAZIER_COLD_LOG, 'bad')
+  }
 
   stepFood(s, dt, mods)
   stepHostility(s, dt, mods.hostilityRate)
@@ -73,7 +83,8 @@ export function tick(s: RunState, dt: number): void {
 
   for (const message of stepDepartures(s, dt)) pushLog(s, message, 'bad')
 
-  if (NEWCOMER_SEASONS.includes(s.season.season)) {
+  // Nobody moves to a settlement that cannot feed the mouths it has.
+  if (NEWCOMER_SEASONS.includes(s.season.season) && !s.starving) {
     stepNewcomers(
       s,
       dt,
@@ -82,17 +93,26 @@ export function tick(s: RunState, dt: number): void {
     )
   }
 
+  stepDecree(s, dt)
   stepOrders(s)
   checkMilestones(s)
+  checkCharter(s)
   checkEndConditions(s)
 }
 
-function stepHostility(s: RunState, dt: number, rateMultiplier: number): void {
+/**
+ * Passive hostility gained per second right now (before storms, glades and
+ * threat strikes). Shared with the HUD so its forecast matches the sim.
+ */
+export function hostilityRate(s: RunState, rateMultiplier: number): number {
   const yearScale = 1 + (s.season.year - 1) * HOSTILITY_YEAR_SCALING
   const popScale = 1 + population(s) * HOSTILITY_PER_POPULATION
   const seasonScale = HOSTILITY_SEASON_MULTIPLIER[s.season.season]
-  const gain =
-    HOSTILITY_PER_SECOND * yearScale * popScale * seasonScale * rateMultiplier * dt
+  return HOSTILITY_PER_SECOND * yearScale * popScale * seasonScale * rateMultiplier
+}
+
+function stepHostility(s: RunState, dt: number, rateMultiplier: number): void {
+  const gain = hostilityRate(s, rateMultiplier) * dt
   s.hostility = Math.min(MAX_HOSTILITY, Math.max(0, s.hostility + gain))
 }
 
@@ -116,6 +136,15 @@ function advanceSeason(s: RunState, dt: number): void {
     )
   } else if (next === 'drizzle') {
     pushLog(s, `Year ${s.season.year} begins. The storm has passed.`, 'good')
+    if (s.season.year === QUEEN_DEADLINE_YEAR - 1) {
+      pushLog(
+        s,
+        `The Queen expects the settlement secured by Year ${QUEEN_DEADLINE_YEAR}. After that, her patience drains by the day.`,
+        'bad',
+      )
+    } else if (s.season.year === QUEEN_DEADLINE_YEAR) {
+      pushLog(s, `The Queen's deadline has passed. Her patience now drains faster every day.`, 'bad')
+    }
   } else {
     pushLog(s, `${SEASON_INFO[next].name}. ${SEASON_INFO[next].blurb}`, 'info')
   }
