@@ -1,8 +1,14 @@
 import { BUILDINGS } from '../content/buildings'
-import { NEED_LABELS } from '../content/species'
+import { NEED_LABELS, SPECIES } from '../content/species'
 import { RESOURCES } from '../content/resources'
-import type { ResourceId, RunState } from '../types'
-import { canAfford, idleVillagers, population, totalHousing } from './queries'
+import type { ResourceId, RunState, SpeciesId } from '../types'
+import {
+  canAfford,
+  idleVillagers,
+  population,
+  secondsUntilDeparture,
+  totalHousing,
+} from './queries'
 
 /**
  * Things that are quietly going wrong.
@@ -35,6 +41,15 @@ export function collectWarnings(s: RunState): Warning[] {
       id: 'cold',
       severity: 'danger',
       text: '🔥 The hearth has gone out. It needs wood.',
+    })
+  }
+
+  // A species in despair is on a visible countdown, not a silent one.
+  for (const [sp, seconds] of Object.entries(secondsUntilDeparture(s))) {
+    out.push({
+      id: `leaving-${sp}`,
+      severity: 'danger',
+      text: `🚪 ${SPECIES[sp as SpeciesId].name} will start leaving in ${Math.ceil(seconds ?? 0)}s.`,
     })
   }
 

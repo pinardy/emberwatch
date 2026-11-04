@@ -21,9 +21,11 @@ import {
   HEARTH_WARMTH_RADIUS,
   OPENING_BLUEPRINT_PICKS,
   SEASON_LENGTH,
+  SECONDS_TO_LEAVE,
   STARTING_VILLAGERS,
   TRADE_LOT,
 } from './balance'
+import { collectWarnings } from './diagnostics'
 import { createRun } from './createRun'
 import {
   addVillager,
@@ -44,6 +46,7 @@ import { computeModifiers } from './modifiers'
 import { adjacencyMultiplier, seasonMultiplier } from './production'
 import {
   foodStock,
+  secondsUntilDeparture,
   idleVillagers,
   population,
   storageUsed,
@@ -836,3 +839,26 @@ describe('glade event content invariants', () => {
   })
 })
 
+
+describe('departure countdown', () => {
+  it('reports seconds until each despairing species leaves, and warns about it', () => {
+    const state = newRun()
+    for (const sp of state.speciesPool) {
+      const id = addVillager(state)
+      if (id) state.villagers[id].species = sp
+    }
+    expect(secondsUntilDeparture(state)).toEqual({})
+    state.resolve.beaver = -20
+    state.despair.beaver = SECONDS_TO_LEAVE - 40
+    expect(secondsUntilDeparture(state).beaver).toBeCloseTo(40)
+    expect(secondsUntilDeparture(state).human).toBeUndefined()
+    const warning = collectWarnings(state).find((w) => w.id === 'leaving-beaver')
+    expect(warning?.text).toBe('🚪 Beavers will start leaving in 40s.')
+    // Humans grind despair out at half speed, so their countdown is longer.
+    state.resolve.human = -20
+    state.despair.human = 0
+    expect(secondsUntilDeparture(state).human).toBeCloseTo(
+      SECONDS_TO_LEAVE / despairRate('human'),
+    )
+  })
+})
