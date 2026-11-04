@@ -21,10 +21,12 @@ import {
   foodStock,
   idleVillagers,
   population,
+  isWarmAt,
   serviceCoverage,
   storageUsed,
   totalHousing,
 } from './queries'
+import { dist } from './geometry'
 import { tick } from './tick'
 
 /**
@@ -72,6 +74,8 @@ interface BotReport {
   coldHearth: boolean
   services: string
   drafted: string
+  /** Braziers raised to warm homes beyond the hearth. */
+  braziers: number
 }
 
 /** Snapshot of resolve versus the threshold each species must beat. */
@@ -173,6 +177,8 @@ function build(s: RunState): void {
   // Housing and storage need no workers, so they are never gated.
   if (totalHousing(s) < pop + 4 && (tryPlace(s, 'cabin') || tryPlace(s, 'shelter'))) return
   if (storageUsed(s) > s.storageCap * 0.8 && tryPlace(s, 'warehouse')) return
+  // Homes that sprawled past the hearth's reach get a brazier before the Storm.
+  if (warmSprawl(s)) return
 
   // 1. Wood first — it is the input to nearly everything.
   if (countPlanned(s, 'woodcuttersCamp') < 2 && tryPlace(s, 'woodcuttersCamp')) return
@@ -214,6 +220,30 @@ function build(s: RunState): void {
 
   // 6. A cookhouse doubles what every one of those camps is worth.
   if (countPlanned(s, 'cookhouse') < 2 && pop > 18 && tryPlace(s, 'cookhouse')) return
+}
+
+/**
+ * Housing packed around the hearth eventually spills past its warmth radius,
+ * and those homes chill in the Storm. A competent player plants a brazier
+ * among them rather than eating the resolve penalty.
+ */
+function warmSprawl(s: RunState): boolean {
+  if (!s.unlockedBuildings.includes('brazier')) return false
+  const braziers = Object.values(s.buildings).filter((b) => BUILDINGS[b.defId]?.warmth)
+  const reach = BUILDINGS.brazier?.warmth?.radius ?? 0
+  const cold = Object.values(s.buildings).filter(
+    (b) =>
+      b.built &&
+      BUILDINGS[b.defId]?.category === 'housing' &&
+      !isWarmAt(s, b.pos) &&
+      // A planned (or guttering) brazier already covers it.
+      !braziers.some((w) => dist(w.pos, b.pos) <= reach),
+  )
+  const target = cold[0]
+  if (!target || !canAfford(s.stock, BUILDINGS.brazier.cost)) return false
+  const pos = findPlacement(s, 'brazier', target.pos)
+  if (!pos || dist(pos, target.pos) > reach) return false
+  return placeBuilding(s, 'brazier', pos) === null
 }
 
 /** Stands up service venues and the chains that supply them. */
@@ -472,6 +502,7 @@ function playRun(seed: number, species: SpeciesId[], maxMinutes = 45): BotReport
     drafted: s.unlockedBuildings
       .filter((b) => !STARTING_BLUEPRINTS.includes(b))
       .join(','),
+    braziers: countPlanned(s, 'brazier'),
   }
 }
 
@@ -483,7 +514,7 @@ describe('balance harness', () => {
 
     for (const [i, r] of reports.entries()) {
       console.log(
-        `seed ${SEEDS[i]}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
+        `seed ${SEEDS[i]}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
           `\n    services: ${r.services}\n    drafted: ${r.drafted}`,
       )
     }
