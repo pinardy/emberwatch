@@ -6,6 +6,7 @@ import {
 } from '../game/content/meta'
 import { useGameStore, useRun } from '../game/store'
 import { Overlay } from './ChoiceModal'
+import { RunTimelineChart } from './RunTimeline'
 
 export function EndModal() {
   const run = useRun()
@@ -37,72 +38,78 @@ export function EndModal() {
           </div>
         </header>
 
-        <dl className="end-stats">
-          <div>
-            <dt>Years survived</dt>
-            <dd>{run.season.year}</dd>
-          </div>
-          <div>
-            <dt>Reputation</dt>
-            <dd>
-              {run.reputation}/{run.maxReputation}
-            </dd>
-          </div>
-          <div>
-            <dt>Villagers</dt>
-            <dd>{Object.keys(run.villagers).length}</dd>
-          </div>
-          <div>
-            <dt>Glades cleared</dt>
-            <dd>{run.stats.gladesCleared}</dd>
-          </div>
-          <div>
-            <dt>Orders completed</dt>
-            <dd>{run.stats.ordersCompleted}</dd>
-          </div>
-          <div>
-            <dt>Villagers lost</dt>
-            <dd>{run.stats.villagersLost}</dd>
-          </div>
-          <div>
-            <dt>Buildings raised</dt>
-            <dd>{run.stats.buildingsBuilt}</dd>
-          </div>
-          <div>
-            <dt>Goods produced</dt>
-            <dd>{Math.floor(run.stats.resourcesProduced)}</dd>
-          </div>
-        </dl>
+        <div className="end-layout">
+          <RunTimelineChart run={run} />
 
-        <section className="reward-breakdown" aria-label="Citadel supplies">
-          <h3>Supplies sent home</h3>
-          <ul>
-            {breakdown.lines.map((line) => (
-              <li key={line.label}>
-                <span>{line.label}</span>
-                <span>+{line.amount}</span>
-              </li>
-            ))}
-            {breakdown.edict > 0 && (
-              <li className="is-good">
-                <span>
-                  Queen's {edictLabel(breakdown.edict)} (+
-                  {Math.round(breakdown.edict * EDICT_REWARD_STEP * 100)}%)
-                </span>
-                <span>+{breakdown.edictBonus}</span>
-              </li>
-            )}
-            <li className="reward-total">
-              <span>Total</span>
-              <span>📦 {reward}</span>
-            </li>
-          </ul>
-          {opensEdict !== null && (
-            <p className="is-good">
-              📜 Victory under these terms unlocks {edictLabel(opensEdict)}.
-            </p>
-          )}
-        </section>
+          <div className="end-side">
+            <dl className="end-stats">
+              <div>
+                <dt>Years survived</dt>
+                <dd>{run.season.year}</dd>
+              </div>
+              <div>
+                <dt>Reputation</dt>
+                <dd>
+                  {run.reputation}/{run.maxReputation}
+                </dd>
+              </div>
+              <div>
+                <dt>Villagers</dt>
+                <dd>{Object.keys(run.villagers).length}</dd>
+              </div>
+              <div>
+                <dt>Glades cleared</dt>
+                <dd>{run.stats.gladesCleared}</dd>
+              </div>
+              <div>
+                <dt>Orders completed</dt>
+                <dd>{run.stats.ordersCompleted}</dd>
+              </div>
+              <div>
+                <dt>Villagers lost</dt>
+                <dd>{run.stats.villagersLost}</dd>
+              </div>
+              <div>
+                <dt>Buildings raised</dt>
+                <dd>{run.stats.buildingsBuilt}</dd>
+              </div>
+              <div>
+                <dt>Goods produced</dt>
+                <dd>{Math.floor(run.stats.resourcesProduced)}</dd>
+              </div>
+            </dl>
+
+            <section className="reward-breakdown" aria-label="Citadel supplies">
+              <h3>Supplies sent home</h3>
+              <ul>
+                {breakdown.lines.map((line) => (
+                  <li key={line.label}>
+                    <span>{line.label}</span>
+                    <span>+{line.amount}</span>
+                  </li>
+                ))}
+                {breakdown.edict > 0 && (
+                  <li className="is-good">
+                    <span>
+                      Queen's {edictLabel(breakdown.edict)} (+
+                      {Math.round(breakdown.edict * EDICT_REWARD_STEP * 100)}%)
+                    </span>
+                    <span>+{breakdown.edictBonus}</span>
+                  </li>
+                )}
+                <li className="reward-total">
+                  <span>Total</span>
+                  <span>📦 {reward}</span>
+                </li>
+              </ul>
+              {opensEdict !== null && (
+                <p className="is-good">
+                  📜 Victory under these terms unlocks {edictLabel(opensEdict)}.
+                </p>
+              )}
+            </section>
+          </div>
+        </div>
 
         <p className="modal-flavour">
           Seed <code>{run.seed}</code> — reuse it from the menu to replay this map.
