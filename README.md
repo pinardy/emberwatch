@@ -29,7 +29,8 @@ npm run preview    # serve the built PWA (installable, works offline)
 | **Impatience** | The Queen's patience. Grows over time, when villagers leave, and sharply once hostility is high. From Year 5 her deadline has passed and it climbs steeper every day, so every run ends by ~40 minutes. Fill it and you lose. |
 | **Hostility** | Rises with time, population and cleared glades. Drags resolve down for everyone. |
 | **Drafts** | The run opens on a blueprint draft, and reputation milestones alternate blueprints and cornerstones. You can never unlock everything, so which needs you *can* satisfy is the run's central decision. |
-| **Citadel** | Won or lost, each settlement sends supplies home. Spend them on species charters and provisions that carry into future runs. |
+| **Citadel** | Won or lost, each settlement sends supplies home — itemised by reputation, land, orders and years, so a strong loss still pays. Spend them on an 18-upgrade tree in four branches (Provisions, Charters, Knowledge, Crown) with prerequisites; most upgrades widen options rather than add power: extra draft options, a free reroll, a starting cornerstone draft, extra glade-event choices, and Citadel-locked cornerstones admitted to the draft pool. The ledger shows your last ten runs. |
+| **Queen's Edicts** | A seven-rung difficulty ladder chosen on the setup screen. Each edict stacks on the ones below (faster impatience, a leaner stockpile, a restless forest, bitter storms, a shorter leash, thinner ranks, a stricter victory) and pays +25% supplies per rung. Winning under your hardest edict unlocks the next. |
 
 Idle villagers are your builders and your clearing crews, so every worker you assign is a builder you gave up. That tension is deliberate — the top bar always shows the idle count.
 
@@ -106,6 +107,6 @@ Icons are generated at build time by `scripts/generate-icons.mjs`, which writes 
 ## Known scope limits
 
 - Art is emoji throughout; there are no sprites. Audio is synthesised in WebAudio (season stings, event cues, a rain loop that follows the season) — no recorded assets.
-- Meta progression is intentionally small: five Citadel upgrades, no world map campaign.
+- Meta progression is an upgrade tree and a difficulty ladder, with no world map campaign. Edicts were sanity-checked against the balance bot (it wins less often as the ladder climbs) but are not asserted by the harness.
 - ~30 buildings, 25 glade events, and 30+ cornerstones — enough for the loop to have real decisions, well short of Against the Storm's catalogue.
 - Buildings have circular footprints and free placement; there are no road networks or villager pathing, though warmth (hearth and braziers), terrain, deposit reach and adjacency bonuses make placement matter.
