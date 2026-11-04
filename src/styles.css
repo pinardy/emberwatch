@@ -654,58 +654,7 @@ code {
   cursor: grabbing;
 }
 
-.hex {
-  cursor: pointer;
-}
-
-.hex polygon {
-  transition:
-    fill 160ms ease,
-    stroke 120ms ease;
-}
-
-.hex.is-hidden {
-  cursor: default;
-  pointer-events: none;
-}
-
-.hex.is-fogged polygon:first-child {
-  filter: saturate(0.3) brightness(0.6);
-}
-
-.hex.is-blocked polygon:first-child {
-  filter: brightness(0.65) saturate(0.5);
-}
-
-.hex:not(.is-hidden):hover polygon:first-child {
-  stroke: rgba(217, 180, 106, 0.75);
-  stroke-width: 2;
-}
-
-.hex.is-selected polygon:first-child {
-  stroke: var(--gold);
-  stroke-width: 2.5;
-}
-
-.hex.is-glade-selected polygon:first-child {
-  stroke: rgba(217, 180, 106, 0.5);
-  stroke-width: 2;
-}
-
-.hex.is-build-ok polygon:first-child {
-  stroke: #6fbf72;
-  stroke-width: 2;
-  fill: #3c5c40;
-}
-
-.hex.is-build-bad {
-  cursor: not-allowed;
-}
-
-.hex.is-build-bad polygon:first-child {
-  filter: brightness(0.55);
-}
-
+/* Map label text shared by the 2D renderer's markers. */
 .hex-icon {
   font-size: 18px;
   text-anchor: middle;
@@ -831,11 +780,13 @@ code {
    ========================================================================== */
 
 .inspector {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
-  width: min(340px, calc(100% - 24px));
-  z-index: 5;
+  width: min(340px, 100%);
+  display: flex;
+  flex-direction: column;
+  /* The inspector is the one item in the HUD stack that gives way: it
+     shrinks and scrolls rather than pushing tips or threats off the map. */
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .inspector-body {
@@ -845,6 +796,7 @@ code {
   box-shadow: var(--shadow);
   padding: 12px;
   max-height: 60vh;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -1524,8 +1476,10 @@ code {
 .modal-foot {
   display: flex;
   gap: 10px;
-  justify-content: flex-end;
-  margin-top: 18px;
+  justify-content: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 12px;
 }
 
 .modal-end.is-won {
@@ -1561,20 +1515,24 @@ code {
 }
 
 .notice {
-  position: fixed;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
+  align-self: center;
+  max-width: 100%;
   background: rgba(13, 18, 22, 0.96);
   border: 1px solid var(--warn);
   color: #f2ddba;
   padding: 9px 16px;
   border-radius: 22px;
   font-size: 13px;
-  z-index: 60;
   box-shadow: var(--shadow);
   cursor: pointer;
-  animation: rise 180ms ease;
+  animation: rise-in 180ms ease;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
 }
 
 @keyframes rise {
@@ -1584,15 +1542,22 @@ code {
   }
 }
 
+/* Desktop: pinned to the top of the map, below the build banner. Phones put
+   it back into the bottom stack (see the 860px breakpoint). */
 .warnings {
   position: absolute;
-  top: 96px;
+  top: 40px;
   left: 50%;
   transform: translateX(-50%);
   display: grid;
   gap: 5px;
-  z-index: 6;
+  width: max-content;
+  max-width: 100%;
   pointer-events: none;
+}
+
+.warnings:empty {
+  display: none;
 }
 
 .warning {
@@ -1622,20 +1587,66 @@ code {
   }
 }
 
+/* Service-worker status. Neither form may cover a primary action. */
 .sw-toast {
-  position: fixed;
-  bottom: 14px;
-  right: 14px;
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(17, 23, 28, 0.97);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 10px 14px;
   font-size: 13px;
+}
+
+/* "Ready to play offline": a passing pill that the pointer goes straight
+   through, at the top edge where no primary action lives. */
+.sw-toast.is-pill {
+  position: fixed;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 70;
+  pointer-events: none;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(17, 23, 28, 0.94);
+  border: 1px solid #47694c;
+  color: #c6e3c4;
   box-shadow: var(--shadow);
+  animation: pill-in 240ms ease;
+}
+
+@keyframes pill-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+/* "New version ready": a strip in the page flow (first in #root), so it
+   pushes the screen down rather than sitting on top of it. */
+.sw-toast.is-strip {
+  order: -1;
+  flex: none;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 6px 12px;
+  padding-top: calc(6px + env(safe-area-inset-top, 0px));
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--gold);
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Menus grow to fill and scroll as a page; the game fits what is left. */
+#root > .screen {
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+#root > .game {
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 /* ==========================================================================
@@ -1671,26 +1682,11 @@ code {
     grid-template-rows: minmax(220px, 1fr) auto;
   }
 
+  /* A shorter bottom sheet leaves the map room for its own HUD. */
   .sidebar {
     border-left: none;
     border-top: 1px solid var(--line);
-    max-height: 46vh;
-  }
-
-  .inspector {
-    left: 8px;
-    right: 8px;
-    width: auto;
-  }
-
-  .inspector-body {
     max-height: 40vh;
-  }
-
-  .warnings {
-    top: auto;
-    bottom: 8px;
-    width: calc(100% - 24px);
   }
 }
 
@@ -1707,12 +1703,9 @@ code {
     font-size: 34px;
   }
 
-  .tabs button em {
-    display: none;
-  }
-
+  /* Labels stay: five bare emoji are not a navigation. */
   .tabs button {
-    padding: 10px 2px;
+    padding: 8px 2px;
   }
 
   .end-stats {
@@ -1781,14 +1774,10 @@ code {
    ========================================================================== */
 
 .threat-bar {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  align-self: center;
   display: grid;
   gap: 6px;
-  z-index: 24;
-  max-width: min(560px, calc(100vw - 24px));
+  max-width: min(560px, 100%);
 }
 
 .threat-card {
@@ -1823,14 +1812,14 @@ code {
   font-size: 12px;
 }
 
-.threat-card button {
+.threat-card .threat-appease {
   background: rgba(90, 38, 34, 0.9);
   border-color: #a35b52;
   color: #ffe9e4;
   white-space: nowrap;
 }
 
-.threat-card button:hover:not(:disabled) {
+.threat-card .threat-appease:hover:not(:disabled) {
   background: #6d2e29;
 }
 
@@ -1839,9 +1828,6 @@ code {
    ========================================================================== */
 
 .tip-coach {
-  position: fixed;
-  bottom: 14px;
-  left: 14px;
   display: flex;
   gap: 12px;
   align-items: flex-end;
@@ -1850,9 +1836,16 @@ code {
   border: 1px solid var(--gold);
   border-radius: var(--radius);
   padding: 12px 14px;
-  z-index: 40;
   box-shadow: var(--shadow);
-  animation: rise 220ms ease;
+  animation: rise-in 220ms ease;
+}
+
+/* Inside a dialog (the first draft): part of the content, not floating. */
+.tip-coach.is-inline {
+  max-width: none;
+  margin: 0 0 14px;
+  box-shadow: none;
+  animation: none;
 }
 
 .tip-coach .tip-body strong {
@@ -1960,14 +1953,6 @@ code {
   cursor: default;
 }
 
-.modal-foot {
-  display: flex;
-  justify-content: center;
-  padding-top: 12px;
-  border-top: 1px solid var(--line-soft);
-  margin-top: 12px;
-}
-
 .reroll-button {
   border-color: var(--gold);
   color: var(--gold);
@@ -2028,6 +2013,9 @@ code {
 
 .map-wrap-3d canvas {
   display: block;
+}
+
+.map-wrap-3d canvas:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -2210,8 +2198,21 @@ code {
   border-color: rgba(217, 180, 106, 0.6);
 }
 
-.threat-card {
-  cursor: pointer;
+.threat-focus {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
+
+.threat-card .threat-focus:hover:not(:disabled) {
+  background: transparent;
 }
 
 .threat-card:hover {
@@ -2333,10 +2334,468 @@ code {
     padding: 4px 9px;
   }
 
+  /* Beside the (taller, touch-sized) map buttons, never taller than the map. */
   .controls-help {
-    left: 10px;
-    right: 10px;
-    bottom: 54px;
+    left: 8px;
+    right: 60px;
+    bottom: 8px;
     width: auto;
+    max-height: calc(100% - 16px);
+    overflow-y: auto;
+  }
+}
+
+/* ==========================================================================
+   Accessibility & interaction: focus rings, screen-reader text, confirms
+   ========================================================================== */
+
+/* A visible ring for keyboard users everywhere; pointer clicks stay clean. */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+canvas:focus-visible {
+  outline-offset: -3px;
+}
+
+/* The dialog container takes focus only so Tab starts inside it. */
+.overlay:focus {
+  outline: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Armed destructive buttons: a second press within a few seconds confirms. */
+button.is-armed {
+  background: #5a2622;
+  border-color: var(--bad);
+  color: #ffe9e4;
+  animation: armed-pulse 1s ease-in-out infinite;
+}
+
+@keyframes armed-pulse {
+  50% {
+    box-shadow: 0 0 0 3px rgba(217, 105, 95, 0.25);
+  }
+}
+
+.bag-label {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.link-button {
+  border: none;
+  background: transparent;
+  color: var(--gold);
+  padding: 2px 4px;
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+ * The HUD stack: warnings, notices, threats, the tip coach and the inspector
+ * are laid out together over the map so they never overlap. The right edge
+ * leaves the map's zoom/compass buttons clear.
+ *
+ * Desktop: a grid — tip above inspector on the left, notice above threats
+ * at the bottom centre, warnings pinned to the top. Phones (below): one
+ * bottom-aligned column in which the warnings and inspector give way.
+ * ------------------------------------------------------------------------- */
+
+.hud-stack {
+  position: absolute;
+  inset: 12px 56px 12px 12px;
+  /* Under the 3D touch-placement ✓/✕ (25) and the minimap; above glade plates. */
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto minmax(0, auto);
+  grid-template-areas:
+    '. .'
+    'tip notice'
+    'inspector threats';
+  column-gap: 16px;
+  row-gap: 8px;
+  pointer-events: none;
+}
+
+.hud-stack > * {
+  pointer-events: auto;
+}
+
+.hud-stack > .warnings {
+  pointer-events: none;
+}
+
+.hud-stack > .tip-coach {
+  grid-area: tip;
+  align-self: end;
+}
+
+.hud-stack > .notice {
+  grid-area: notice;
+  align-self: end;
+  justify-self: center;
+}
+
+.hud-stack > .threat-bar {
+  grid-area: threats;
+  align-self: end;
+  justify-self: center;
+}
+
+.hud-stack > .inspector {
+  grid-area: inspector;
+  align-self: end;
+  max-height: 100%;
+}
+
+@media (max-width: 860px) {
+  .hud-stack {
+    inset: 8px 60px 8px 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .hud-stack > * {
+    flex-shrink: 0;
+    max-width: 100%;
+  }
+
+  /* Warnings join the column, one line each, at most two rows, dangers
+     first; the rest is clipped rather than crowding the inspector. */
+  .hud-stack > .warnings {
+    position: static;
+    transform: none;
+    width: auto;
+    max-height: 56px;
+    overflow: hidden;
+  }
+
+  .hud-stack > .warnings > .warning.is-danger {
+    order: -1;
+  }
+
+  .warning {
+    font-size: 12px;
+    padding: 4px 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hud-stack > .notice {
+    align-self: center;
+  }
+
+  .hud-stack > .threat-bar {
+    align-self: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .threat-text small {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* The inspector shrinks and scrolls, but never below a usable height. */
+  .hud-stack > .inspector {
+    width: 100%;
+    flex-shrink: 1;
+    min-height: min(120px, 100%);
+  }
+
+  .inspector-body {
+    max-height: 100%;
+  }
+
+  /* While the player inspects something, the tip waits its turn. */
+  .hud-stack:has(.inspector) > .tip-coach {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Workers: slot list and the who-works-here picker
+ * ------------------------------------------------------------------------- */
+
+.hire-best {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.worker-slots,
+.picker-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.worker-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 5px;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.worker-slot button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.worker-who {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.worker-who strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.mult {
+  font-style: normal;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.worker-slot.is-empty {
+  grid-template-columns: 1fr;
+}
+
+.slot-pick {
+  width: 100%;
+  text-align: left;
+  border-style: dashed;
+  color: var(--muted);
+}
+
+.worker-picker {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.worker-picker .row-between {
+  margin-bottom: 6px;
+}
+
+.picker-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.picker-option {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+  text-align: left;
+  padding: 5px 8px;
+  font-size: 12.5px;
+}
+
+.picker-option small {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.best-tag {
+  font-size: 10.5px;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+ * People panel rows: who they are + where to send them
+ * ------------------------------------------------------------------------- */
+
+.villager {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 3px 4px 3px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+.villager-main {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  padding: 4px 9px;
+  border: none;
+  background: transparent;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.villager-assign {
+  max-width: 132px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+}
+
+/* Idle is said in words (💤 Idle) as well as by the warm border. */
+.villager.is-idle {
+  border-color: #5c5330;
+  border-style: dashed;
+}
+
+/* ---------------------------------------------------------------------------
+ * Non-colour cues: every red/green/amber signal also has a glyph or pattern
+ * ------------------------------------------------------------------------- */
+
+.need-state {
+  font-weight: 700;
+  font-size: 10px;
+}
+
+.cost-short small {
+  font-size: 10.5px;
+}
+
+.build-tags .tag-short {
+  color: #f0c0bb;
+  background: rgba(217, 105, 95, 0.14);
+}
+
+/* Storage filling up: stripes on the gauge, and a "!" when nearly full. */
+.storage.is-warn .storage-fill,
+.storage.is-bad .storage-fill {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--warn) 0 4px,
+    #8a6a32 4px 7px
+  );
+}
+
+.storage.is-bad .storage-fill {
+  background: repeating-linear-gradient(-45deg, var(--bad) 0 4px, #7a3a33 4px 7px);
+}
+
+.storage.is-bad:not(.food-summary) > strong::after {
+  content: ' !';
+  color: var(--bad);
+}
+
+/* Chronicle tone: an arrow in the date gutter as well as the coloured edge. */
+.log-good .log-when::before {
+  content: '▲ ';
+  color: var(--good);
+}
+
+.log-bad .log-when::before {
+  content: '▼ ';
+  color: var(--bad);
+}
+
+/* ---------------------------------------------------------------------------
+ * Setup screen: picks, the cap, and a footer that is always reachable
+ * ------------------------------------------------------------------------- */
+
+.pick-count {
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.setup-hint {
+  min-height: 1.2em;
+  margin: 6px 0 0;
+  color: var(--warn);
+  font-size: 12.5px;
+}
+
+.picked-tag {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--species, var(--gold));
+}
+
+.species-pick.is-full {
+  opacity: 0.75;
+}
+
+.setup-foot {
+  position: sticky;
+  bottom: 0;
+  margin: 12px -28px -28px;
+  padding: 12px 28px 16px;
+  background: linear-gradient(180deg, rgba(18, 24, 29, 0.92), #12181d);
+  justify-content: flex-end;
+}
+
+/* ---------------------------------------------------------------------------
+ * Touch: every control a finger has to hit is at least 44px
+ * ------------------------------------------------------------------------- */
+
+@media (pointer: coarse) {
+  .map-controls button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tabs button,
+  .threat-focus,
+  .icon-btn,
+  .speed-group button,
+  .inspector button,
+  .tip-coach button,
+  .threat-card .threat-appease,
+  .villager-main,
+  .villager-assign,
+  .sw-toast button,
+  .build-banner button {
+    min-height: 44px;
+  }
+
+  .icon-btn,
+  .speed-group button,
+  .worker-slot button {
+    min-width: 44px;
+  }
+}
+
+@media (max-width: 560px) {
+  .setup-foot {
+    margin: 12px -20px -20px;
+    padding: 12px 20px 14px;
   }
 }

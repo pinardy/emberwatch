@@ -46,9 +46,12 @@ export function BuildPanel() {
                     className={`build-card ${active ? 'is-active' : ''} ${
                       affordable ? '' : 'is-poor'
                     }`}
+                    aria-pressed={active}
                     onClick={() => setBuildMode(active ? null : def.id)}
                   >
-                    <span className="build-icon">{def.icon}</span>
+                    <span className="build-icon" aria-hidden>
+                      {def.icon}
+                    </span>
                     <span className="build-main">
                       <strong>{def.name}</strong>
                       <span className="build-cost">
@@ -56,6 +59,7 @@ export function BuildPanel() {
                       </span>
                       <small>{def.description}</small>
                       <span className="build-tags">
+                        {!affordable && <em className="tag-short">✕ Can't afford yet</em>}
                         {def.workerSlots > 0 && <em>👷 {def.workerSlots}</em>}
                         {def.housing ? <em>🛏 {def.housing}</em> : null}
                         {def.storage ? <em>📦 {def.storage}</em> : null}
@@ -90,10 +94,23 @@ export function Cost({ cost, stock }: { cost: ResourceBag; stock: ResourceBag })
   return (
     <>
       {entries.map(([id, amount]) => {
-        const have = stock[id] ?? 0
+        const have = Math.floor(stock[id] ?? 0)
+        if (have >= amount) {
+          return (
+            <span key={id} title={RESOURCES[id]?.name}>
+              {RESOURCES[id]?.icon} {amount}
+            </span>
+          )
+        }
+        // Short: say so in words too, not only in red.
         return (
-          <span key={id} className={have >= amount ? '' : 'is-bad'}>
-            {RESOURCES[id]?.icon} {amount}
+          <span
+            key={id}
+            className="is-bad cost-short"
+            title={`${RESOURCES[id]?.name}: you have ${have} of ${amount}`}
+          >
+            {RESOURCES[id]?.icon} {amount}{' '}
+            <small>({amount - have} short)</small>
           </span>
         )
       })}
