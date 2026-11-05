@@ -787,6 +787,14 @@ const MAP_ICONS = {
     F('ink', 'M12 13.6L10.9 15.6H13.1Z'),
     l('ink', 'M10.4 18V20.8M13.6 18V20.8', 1),
   ),
+  // ---- roads (the road tool, the road card and the Inspector's road line)
+  road: art(
+    F('leaf', 'M2 21.5C2.6 19 3.8 17.6 5 17.2C5.2 18.8 4.4 20.4 2 21.5Z'),
+    F('leaf', 'M22 13.5C21.2 11.6 20 10.8 18.8 10.8C19 12.2 20 13.2 22 13.5Z'),
+    f('timber', 'M3.5 21.5L10.2 2.5H13.8L20.5 21.5Z'),
+    l('bark', 'M7.6 12.5H16.4M5.6 17.5H18.4M9.2 7.5H14.8', 1.1, 0.75),
+    l('cream', 'M12 4.2V5.8M12 9.6V11.4M12 14.4V16.6M12 19.4V21.5', 1.4),
+  ),
   // ---- terrain (beyond what the deposits already draw)
   marsh: art(
     f('water', ellipse(12, 18, 9.5, 3)),

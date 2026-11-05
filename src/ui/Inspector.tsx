@@ -47,6 +47,7 @@ import {
   warmthRadiusOf,
   workerSlotsOf,
 } from '../game/engine/upgrades'
+import { IconText } from './IconText'
 
 /**
  * Context panel for whatever the player last tapped: a building, a deposit,
@@ -287,7 +288,9 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
           {benefitsFromRoad(def) && (
             <section className="inspector-section">
               <h4>Road</h4>
-              <p className="muted">{describeRoadLink(roadLinkOf(run, building))}</p>
+              <p className="muted">
+                <IconText text={describeRoadLink(roadLinkOf(run, building)) ?? ''} />
+              </p>
             </section>
           )}
 

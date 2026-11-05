@@ -3,6 +3,7 @@ import { RUN_MODIFIERS } from '../game/content/runModifiers'
 import { SPECIES } from '../game/content/species'
 import { SEASON_INFO } from '../game/engine/balance'
 import type { SlotId, SlotMeta, SlotSummary } from '../game/saveSlots'
+import { Icon } from './Icon'
 import './saves.css'
 
 /** "Year 3 · Storm" */
@@ -31,6 +32,34 @@ export function slotOneLiner(meta: SlotMeta): string {
   )}/${meta.maxReputation} · ⏳ ${Math.floor(meta.impatience)}/${meta.maxImpatience}`
 }
 
+/** `slotOneLiner` with drawn icons, for the menu's Continue button. */
+export function SlotOneLiner({ meta }: { meta: SlotMeta }) {
+  return (
+    <>
+      {meta.species.map((id) => (
+        <Icon key={id} of={SPECIES[id]} />
+      ))}{' '}
+      {slotWhen(meta)} · <Icon id="reputation" label="reputation" /> {Math.floor(meta.reputation)}/
+      {meta.maxReputation} · <Icon id="impatience" label="impatience" /> {Math.floor(meta.impatience)}/
+      {meta.maxImpatience}
+    </>
+  )
+}
+
+/** The species line of a slot: each drawn icon beside its name. */
+function SlotSpecies({ meta }: { meta: SlotMeta }) {
+  return (
+    <>
+      {meta.species.map((id, i) => (
+        <span key={id}>
+          {i > 0 ? ', ' : ''}
+          <Icon of={SPECIES[id]} /> {SPECIES[id].name}
+        </span>
+      ))}
+    </>
+  )
+}
+
 /** The metadata block shown on the load screen and in slot pickers. */
 export function SlotDetails({
   meta,
@@ -48,13 +77,15 @@ export function SlotDetails({
         <strong>{slotWhen(meta)}</strong>
         {outcome}
       </div>
-      <div className="slot-line">{slotSpecies(meta)}</div>
+      <div className="slot-line">
+        <SlotSpecies meta={meta} />
+      </div>
       <div className="slot-line slot-race">
         <span title="Reputation">
-          👑 {Math.floor(meta.reputation)}/{meta.maxReputation}
+          <Icon id="reputation" label="reputation" /> {Math.floor(meta.reputation)}/{meta.maxReputation}
         </span>
         <span title="Impatience">
-          ⏳ {Math.floor(meta.impatience)}/{meta.maxImpatience}
+          <Icon id="impatience" label="impatience" /> {Math.floor(meta.impatience)}/{meta.maxImpatience}
         </span>
         <span>{edict ? `${edict.icon} ${edict.name}` : 'No edict'}</span>
       </div>

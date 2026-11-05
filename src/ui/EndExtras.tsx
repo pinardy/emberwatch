@@ -5,6 +5,7 @@ import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { ShareLine, describeDaily, isNewDailyBest } from './DailyScreen'
 import './replay.css'
+import { IconText } from './IconText'
 
 /**
  * The end screen's extras: achievements this run earns and, for a daily
@@ -37,7 +38,7 @@ export function EndExtras({ run }: { run: RunState }) {
         <section className="end-daily" aria-label="Daily expedition">
           <h3>📅 Daily expedition {settled.daily.date}</h3>
           <p className={settled.daily.won ? 'is-good' : ''}>
-            {describeDaily(settled.daily)}
+            <IconText text={describeDaily(settled.daily)} />
             {isNewDailyBest(settled.daily, best)
               ? best
                 ? ' — a new best for the day.'

@@ -55,7 +55,7 @@ export function DecreeCard() {
       <div className="row-between">
         <small className="muted">{Math.floor(decree.progress * 100)}%</small>
         <small className={`decree-clock ${urgent ? 'is-bad' : ''}`}>
-          ⏱ {clockText(decree.timeLeft)} left · miss it: ⏳ +{missCost}
+          ⏱ {clockText(decree.timeLeft)} left · miss it: <Icon id="impatience" label="impatience" /> +{missCost}
         </small>
       </div>
     </div>

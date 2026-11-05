@@ -2,6 +2,7 @@ import { RESOURCES } from '../game/content/resources'
 import { ROAD_MAX_LENGTH, ROAD_WOOD_PER_UNIT, ROAD_WORK_BONUS } from '../game/engine/balance'
 import { ROAD_TOOL } from '../game/engine/roads'
 import { useGameStore, useRun } from '../game/store'
+import { Icon } from './Icon'
 
 /**
  * The road tool's controls: its card in the build panel and the banner shown
@@ -25,13 +26,13 @@ export function RoadCard() {
           onClick={() => useGameStore.getState().setBuildMode(active ? null : ROAD_TOOL)}
         >
           <span className="build-icon" aria-hidden>
-            🛤️
+            <Icon id="road" />
           </span>
           <span className="build-main">
             <strong>Road</strong>
             <span className="build-cost">
               <span title={RESOURCES.wood.name}>
-                {RESOURCES.wood.icon} {ROAD_WOOD_PER_UNIT} per pace
+                <Icon of={RESOURCES.wood} /> {ROAD_WOOD_PER_UNIT} per pace
               </span>
             </span>
             <small>
@@ -40,7 +41,11 @@ export function RoadCard() {
             </small>
             <span className="build-tags">
               <em>Laid at once</em>
-              {roads > 0 && <em>🛤️ {roads} laid</em>}
+              {roads > 0 && (
+                <em>
+                  <Icon id="road" /> {roads} laid
+                </em>
+              )}
             </span>
           </span>
         </button>

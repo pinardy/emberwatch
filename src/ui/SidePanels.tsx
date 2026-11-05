@@ -40,7 +40,7 @@ export function OrdersPanel() {
               <div className="row-between">
                 <strong>{def.name}</strong>
                 <span className="order-reward">
-                  👑 +{orderReputation(run, def.reputationReward)}
+                  <Icon id="reputation" label="reputation" /> +{orderReputation(run, def.reputationReward)}
                 </span>
               </div>
               <small>{describeGoal(def.goal)}</small>

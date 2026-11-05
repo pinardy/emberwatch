@@ -563,7 +563,9 @@ function DeadlineNote({ deadline }: { deadline: DeadlineForecast }) {
     const rate = `+${deadline.overtimePerMinute.toFixed(2)}/min`
     return (
       <small className="meter-note deadline-note is-passed">
-        <span aria-hidden>👑 </span>
+        <span aria-hidden>
+          <Icon id={METER_ART.reputation} />{' '}
+        </span>
         <span className="deadline-note-long">Deadline passed · {rate}</span>
         <span className="deadline-note-short" aria-hidden>
           Past +{deadline.overtimePerMinute.toFixed(2)}/m
@@ -579,7 +581,9 @@ function DeadlineNote({ deadline }: { deadline: DeadlineForecast }) {
         deadline.secondsLeft <= RUNWAY_WARNING_SECONDS ? 'is-urgent' : ''
       }`}
     >
-      <span aria-hidden>👑 </span>
+      <span aria-hidden>
+          <Icon id={METER_ART.reputation} />{' '}
+        </span>
       <span className="deadline-note-long">Queen's deadline in {left}</span>
       <span className="deadline-note-short" aria-hidden>
         in {left}

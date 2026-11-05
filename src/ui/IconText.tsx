@@ -50,6 +50,7 @@ export const LEADING_GLYPH_ART: Record<string, IconId> = {
   '📜': 'education',
   '🥊': 'brawling',
   '🍵': 'treatment',
+  '🛤': 'road',
 }
 
 const GLYPHS = [...new Set([...NAMED.keys(), ...Object.keys(LEADING_GLYPH_ART)])].sort(
