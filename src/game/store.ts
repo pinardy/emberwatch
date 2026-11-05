@@ -282,6 +282,10 @@ function layRoadPoint(
   if (laid) set({ roadAnchor: snap })
 }
 
+/** Shown when a new run is refused because every save slot holds one. */
+export const SLOTS_FULL_NOTICE =
+  'Every save slot holds a settlement. Choose one to replace, or delete one first.'
+
 /**
  * Starts a freshly created run in a save slot: the run being left is saved to
  * its own slot first, the run takes `slot` or the first free one, and with
@@ -300,7 +304,7 @@ function beginRun(
   if (!target) {
     set({
       screen: fullScreen,
-      notice: 'Every save slot holds a settlement. Choose one to replace, or delete one first.',
+      notice: SLOTS_FULL_NOTICE,
     })
     return
   }
