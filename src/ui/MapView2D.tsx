@@ -40,7 +40,7 @@ const MAP_SYMBOLS: IconId[] = [
     ...Object.values(BUILDING_ART).filter((id): id is IconId => id !== undefined),
   ]),
 ]
-/** Icon size on the 2D map, in SVG units (the old emoji were 18px text). */
+/** Smallest icon on the 2D map, in SVG units (the old emoji were 18px text). */
 const MAP_ICON = 22
 
 /** Pixels per world unit inside the SVG coordinate system. */
@@ -342,7 +342,12 @@ export function MapView2D() {
                     className="deposit-disc"
                     style={{ stroke: DEPOSIT_TINT[d.kind], strokeOpacity: 0.7 }}
                   />
-                  <IconUse id={DEPOSIT_ART[d.kind]} x={cx} y={cy} size={MAP_ICON} />
+                  <IconUse
+                    id={DEPOSIT_ART[d.kind]}
+                    x={cx}
+                    y={cy}
+                    size={Math.max(MAP_ICON, d.radius * S * 1.1)}
+                  />
                   {d.amount !== null && (
                     <text className="hex-sub" x={cx} y={cy + d.radius * S + 10}>
                       {d.amount}
@@ -395,7 +400,7 @@ export function MapView2D() {
                     />
                   )}
                   {def.art ? (
-                    <IconUse id={def.art} x={cx} y={cy} size={MAP_ICON} />
+                    <IconUse id={def.art} x={cx} y={cy} size={Math.max(MAP_ICON, r * 1.15)} />
                   ) : (
                     <text className="hex-icon" x={cx} y={cy + 6}>
                       {def.icon}
