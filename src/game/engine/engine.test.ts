@@ -7,7 +7,7 @@ import { DECREES, DECREE_LIST } from '../content/decrees'
 import { GLADE_EVENTS, GLADE_EVENT_LIST } from '../content/gladeEvents'
 import { ORDER_LIST, evaluateGoal } from '../content/orders'
 import { RESOURCES } from '../content/resources'
-import { VILLAGER_TRAITS } from '../content/species'
+import { VILLAGER_TRAITS, speciesSingular } from '../content/species'
 import { TERRAIN } from '../content/terrain'
 import { pairsWith, serviceCapacity } from './adjacency'
 import {
@@ -56,6 +56,7 @@ import {
   addVillager,
   appeaseThreat,
   describeOptionCost,
+  describeOptionShortfall,
   optionAffordable,
   relevantBlueprints,
   rerollChoice,
@@ -691,6 +692,27 @@ describe('food costs', () => {
 
   it('describes the price including food', () => {
     expect(describeOptionCost({ ...option, cost: { ale: 5 } })).toBe('10 food, 5 Ale')
+  })
+
+  it('says why an option is out of reach, and nothing when it is not', () => {
+    expect(describeOptionShortfall({ berry: 4, meat: 2, wood: 50 }, option)).toBe(
+      'Needs 10 food — you have 6',
+    )
+    const hosted = { ...option, requires: { ale: 5 }, cost: { ale: 5 } }
+    expect(describeOptionShortfall({ ale: 2 }, hosted)).toBe(
+      'Needs 10 food — you have 0; 5 Ale — you have 2',
+    )
+    expect(describeOptionShortfall({ ale: 5, berry: 10 }, hosted)).toBeNull()
+    // Every food-priced option in the game agrees with optionAffordable.
+    for (const event of GLADE_EVENT_LIST) {
+      for (const o of event.options) {
+        for (const stock of [{}, { berry: (o.foodCost ?? 0) - 1 }, { berry: 99, ale: 99 }]) {
+          expect(describeOptionShortfall(stock, o) === null, `${event.id}: ${o.label}`).toBe(
+            optionAffordable(stock, o),
+          )
+        }
+      }
+    }
   })
 
   it('lets a food-priced glade option be paid with meat', () => {
@@ -1337,6 +1359,47 @@ describe('departure countdown', () => {
       SECONDS_TO_LEAVE / despairRate('human'),
     )
   })
+
+  it('words the countdown from what has happened: first leaver, grace, then another', () => {
+    const state = newRun()
+    for (let i = 0; i < 3; i++) {
+      const id = addVillager(state)
+      if (id) state.villagers[id].species = 'beaver'
+    }
+    const text = () => collectWarnings(state).find((w) => w.id === 'leaving-beaver')?.text
+    const rate = despairRate('beaver')
+    state.clock = 500
+    state.resolve.beaver = -20
+    state.despair.beaver = SECONDS_TO_LEAVE - 10 * rate
+    expect(text()).toBe('🚪 Beavers will start leaving in 10s.')
+
+    // One walks out; the rest hold on through the grace period.
+    state.despair.beaver = SECONDS_TO_LEAVE
+    expect(stepDepartures(state, 0)).toHaveLength(1)
+    expect(state.despair.beaver).toBe(-DEPARTURE_GRACE)
+    const next = Math.ceil((DEPARTURE_GRACE + SECONDS_TO_LEAVE) / rate)
+    expect(text()).toBe(
+      `🚪 Another Beaver will leave in ${next}s — the rest are holding on after a departure (${Math.ceil(
+        DEPARTURE_GRACE / rate,
+      )}s of grace left).`,
+    )
+
+    // Grace over, despair building again: no more talk of grace.
+    state.clock += (DEPARTURE_GRACE + 20) / rate
+    state.despair.beaver = 20
+    expect(text()).toBe(`🚪 Another Beaver will leave in ${Math.ceil((SECONDS_TO_LEAVE - 20) / rate)}s.`)
+
+    // Long after that departure, a fresh spell of despair starts the count afresh.
+    state.clock += 600
+    state.despair.beaver = 0
+    expect(text()).toBe(`🚪 Beavers will start leaving in ${Math.ceil(SECONDS_TO_LEAVE / rate)}s.`)
+  })
+
+  it('names one villager of each species properly', () => {
+    expect(speciesSingular('harpy')).toBe('Harpy')
+    expect(speciesSingular('fox')).toBe('Fox')
+    expect(speciesSingular('beaver')).toBe('Beaver')
+  })
 })
 
 describe('pacing: departures, hunger and the Queen', () => {
@@ -1785,5 +1848,23 @@ describe('demolition refunds', () => {
     expect(demolishRefundShare({ defId: 'woodcuttersCamp', built: true, buildProgress: 0 })).toBe(
       0.5,
     )
+  })
+})
+
+describe('log lines name a single villager by species', () => {
+  it('says "the Harpy" and "the Fox", not "the Harpie" or "the Foxe"', () => {
+    const state = newRun()
+    state.speciesPool = ['harpy', 'fox', 'human']
+    for (const sp of ['harpy', 'fox'] as const) {
+      for (const v of Object.values(state.villagers)) delete state.villagers[v.id]
+      const id = addVillager(state)!
+      state.villagers[id].species = sp
+      state.resolve[sp] = -20
+      state.despair[sp] = 0
+      const text = stepDepartures(state, SECONDS_TO_LEAVE * 4).find((t) =>
+        t.includes('left the settlement'),
+      )
+      expect(text).toContain(sp === 'harpy' ? 'the Harpy left' : 'the Fox left')
+    }
   })
 })
