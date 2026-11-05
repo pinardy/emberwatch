@@ -187,8 +187,49 @@ interface Stop {
   dwell: number
 }
 
+interface Circle {
+  pos: Vec2
+  r: number
+}
+
+/**
+ * Roads snap to building centres, so a road path can run straight through
+ * the hearth on its way past. Where a path bends at a building's centre, walk
+ * round its edge instead (an arc in 30° steps), so nobody strolls through
+ * the fire. `points` follow `from`; the first and last are left alone.
+ */
+export function skirtBuildings(from: Vec2, points: Vec2[], circles: Circle[]): Vec2[] {
+  const out: Vec2[] = []
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i]
+    const prev = i === 0 ? from : points[i - 1]
+    const next = points[i + 1]
+    const circle = next ? circles.find((c) => Math.abs(c.pos.x - p.x) < 0.05 && Math.abs(c.pos.y - p.y) < 0.05) : undefined
+    if (!circle || !next) {
+      out.push(p)
+      continue
+    }
+    const r = circle.r + 0.15
+    const a0 = Math.atan2(prev.y - p.y, prev.x - p.x)
+    let sweep = Math.atan2(next.y - p.y, next.x - p.x) - a0
+    while (sweep > Math.PI) sweep -= Math.PI * 2
+    while (sweep < -Math.PI) sweep += Math.PI * 2
+    const steps = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 6)))
+    for (let k = 0; k <= steps; k++) {
+      const angle = a0 + (sweep * k) / steps
+      out.push({ x: p.x + Math.cos(angle) * r, y: p.y + Math.sin(angle) * r })
+    }
+  }
+  return out
+}
+
 /** Lays a loop of stops out as timed waypoints. */
-function timeline(stops: Stop[], net: RoadNetwork, cache: Map<number, { d: number[]; prev: number[] }>) {
+function timeline(
+  stops: Stop[],
+  net: RoadNetwork,
+  cache: Map<number, { d: number[]; prev: number[] }>,
+  circles: Circle[],
+) {
   const xs: number[] = []
   const ys: number[] = []
   const ts: number[] = []
@@ -207,7 +248,7 @@ function timeline(stops: Stop[], net: RoadNetwork, cache: Map<number, { d: numbe
     const path = walkPath(net, stop.pos, next, cache)
     onRoad ||= path.onRoad
     let from = stop.pos
-    const points = path.points
+    const points = path.onRoad ? skirtBuildings(stop.pos, path.points, circles) : path.points
     for (let k = 0; k < points.length; k++) {
       const p = points[k]
       t += Math.hypot(p.x - from.x, p.y - from.y) / WALK_SPEED
@@ -235,6 +276,7 @@ export function deriveVillagerRoutes(run: RunState, net: RoadNetwork = roadNetwo
   const homes = assignHomes(run)
   const sites = Object.values(run.buildings).filter((b) => !b.built || isUpgrading(b))
   const cache = new Map<number, { d: number[]; prev: number[] }>()
+  const circles = Object.values(run.buildings).map((b) => ({ pos: b.pos, r: footprint(b) }))
   const fire = (id: string, salt: number): Vec2 => {
     if (hearth) return doorstep(hearth, id, salt, 1.1)
     const angle = hash01(id, salt) * Math.PI * 2
@@ -284,7 +326,7 @@ export function deriveVillagerRoutes(run: RunState, net: RoadNetwork = roadNetwo
       ]
       rest = stops[1].pos
     }
-    const line = timeline(stops, net, cache)
+    const line = timeline(stops, net, cache, circles)
     return {
       id: v.id,
       species: v.species,

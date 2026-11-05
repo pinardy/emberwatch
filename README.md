@@ -25,6 +25,7 @@ npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
 | **Warmth** | Housing within the hearth's warmth radius is safe; homes beyond it chill their residents during the Storm unless a **brazier** stands near them — a small fire bowl (a starting blueprint) that warms homes in its own radius but burns wood every Storm second, and goes cold when the woodpile runs dry. |
 | **Upgrades** | Twenty buildings can be raised one or two tiers — a shelter into a reinforced shelter (insulated against the Storm) and then a snug lodge (comfort), a tavern into a taproom and an alehouse, a mill into a joinery. First tiers cost mostly planks and bricks, second tiers parts, tools or copper bars, so the deeper chains pay off late. An upgrade is a construction job for idle builders (rushable with amber); the building keeps working at its old tier until it lands. Upgrades take no new ground and no new worker — the answer when the hearth's warm ring is full. |
 | **Placement** | Ground matters: fertile glades speed farms, rocky ones masons and miners (and break ploughs), marsh yields rich clay but slows construction, forest speeds gatherers. Buildings have several adjacency partners each, and every service venue reaches more villagers with homes around it (+10% capacity per home, up to three) and its supplier next door. The placement ghost and the Inspector spell all of it out. |
+| **Roads** | Lay roads point to point (click or tap each bend; Esc, right-click or Done ends one) for a pace of wood each, over cleared ground and around crags and deposits. A workplace joined by road to the hearth or a warehouse works up to 15% faster — the full amount for a road as straight as the crow flies, less for a winding one. A settlement without roads works exactly as before. The placement ghost and the Inspector say what a spot or a building earns. |
 | **Caravans** | Once a Trading Post stands, caravans call on a cycle with rotating lots to buy — and pay double for one good they want that visit. Amber also rerolls drafts, rushes construction, and soothes the Queen. |
 | **Reputation** | Fills from completed orders, glade events, reclaimed land, and high resolve — which only pays in full for species whose service needs are met. Fill it and you win. |
 | **Decrees & charter** | Every few minutes the Queen issues a timed decree: meet it before the countdown ends for extra reputation and amber, or miss it and her patience frays. At 10 reputation she grants a one-time charter — a run-shaping perk, more patience, or a guaranteed blueprint. |
@@ -58,6 +59,8 @@ src/
       production.ts     #   construction, recipes, deposits, terrain yields
       adjacency.ts      #   neighbourhood bonuses (speed & service capacity)
       placement.ts      #   the placement-ghost hint shared by both maps
+      roads.ts          #   road rules, and the derived (never saved) road
+                        #   graph behind the work bonus, cached per run
       society.ts        #   food, resolve, reputation, impatience, departures
       events.ts         #   glade clearing, drafts, threats, orders, newcomers
       structure.ts      #   mid-run beats: timed decrees, the charter,
@@ -73,6 +76,9 @@ src/
                         # (audio.ts synthesises all cues & rain — no assets)
     MapView.tsx         #   picks the map renderer: 3D by default, 2D fallback
     MapView2D.tsx       #   SVG vector map of the same world (no-WebGL, tests)
+    villagerRoutes.ts   #   walking villagers for both maps: routes derived
+                        #   from assignments, homes and roads, played back
+                        #   against the clock (presentation only)
     map3d/              #   three.js scene via react-three-fiber: glade
                         #   polygons, instanced forest, procedural buildings,
                         #   ghost placement cursor, season lighting & rain —
@@ -90,10 +96,10 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs fourteen test files:
+`npm test` runs sixteen test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
-- **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), and clears glades. It plays 24 seeds for each of three species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
+- **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), joins its workplaces to the hearth by road when it has wood to spare, and clears glades. It plays 24 seeds for each of three species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
 
   ```
   human/fox/harpy      won 19/24 lost 5 stall 0 early-collapse 0 · avg win 23.4min · longest 32.0min · rep in wins: orders 8.5 glades 2.0 events 3.2 resolve 6.6
@@ -109,7 +115,9 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`runModifiers.test.ts`** — the map-modifier pool: content invariants, seed-deterministic draws, mapgen hooks changing deposit counts exactly as declared, effects folding into the modifiers (seasons, caravans, decrees, braziers, terrain, adjacency), and saves and history. The balance harness also forces each modifier in turn on a smaller seed set and checks it stays winnable but not trivial.
 - **`timeline.test.ts`** and **`RunTimeline.test.tsx`** — the run timeline: sampling cadence, the size bound and downsampling, recorded events, save/load and old saves, the outcome sentence, and the end-screen chart's keyboard readout, views and table.
 - **`onboarding.test.ts`** and **`Onboarding.test.tsx`** — the opening: the first-steps checklist, the first royal decree, and how the blueprint draft presents its options.
-- **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, building badges, warmth, and that static geometry is not rebuilt on every tick.
+- **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, building badges, warmth, roads and villagers, and that static geometry is not rebuilt on every tick.
+- **`roads.test.ts`** — the road graph and its bonus (directness, junctions, warehouse hubs), the rules for laying roads, the cache that keeps the per-tick cost a lookup, and old saves without roads.
+- **`villagerRoutes.test.ts`** — the walking villagers' routes: a pure function of the run, following roads where they run and walking straight where they do not.
 
 ## PWA
 
@@ -165,4 +173,4 @@ npm 10 crashes ("Cannot read properties of null (reading 'edgesOut')") when it r
 - Art is emoji throughout; there are no sprites. Audio is synthesised in WebAudio (season stings, event cues, a rain loop that follows the season) — no recorded assets.
 - Meta progression is an upgrade tree and a difficulty ladder, with no world map campaign. Edicts were sanity-checked against the balance bot (it wins less often as the ladder climbs) but are not asserted by the harness.
 - ~30 buildings, 34 glade events, 40+ cornerstones and 12 map modifiers — enough for the loop to have real decisions, well short of Against the Storm's catalogue.
-- Buildings have circular footprints and free placement; there are no road networks or villager pathing, though warmth (hearth and braziers), terrain, deposit reach and adjacency bonuses make placement matter.
+- Buildings have circular footprints and free placement. Roads are straight stretches with no traffic; villagers walk them for show, while the simulation stays assignment-based.

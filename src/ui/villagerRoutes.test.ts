@@ -11,6 +11,7 @@ import {
   assignHomes,
   deriveVillagerRoutes,
   poseAt,
+  skirtBuildings,
   walkPath,
   type Pose,
   type VillagerRoute,
@@ -146,6 +147,15 @@ describe('villager routes', () => {
     const routed = deriveVillagerRoutes(run, net).find((r) => r.id === villager.id)!
     expect(routed.onRoad).toBe(true)
     expect(sample(routed).some((p) => near(p, bend, 0.3))).toBe(true)
+  })
+
+  it('walk round a building a road passes through, not across it', () => {
+    const hearth = { pos: { x: 0, y: 0 }, r: 1 }
+    // In from the east, out to the north, bending at the hearth's centre.
+    const path = skirtBuildings({ x: 5, y: 0 }, [{ x: 0, y: 0 }, { x: 0, y: -5 }], [hearth])
+    expect(path[path.length - 1]).toEqual({ x: 0, y: -5 })
+    for (const p of path.slice(0, -1)) expect(Math.hypot(p.x, p.y)).toBeCloseTo(1.15)
+    expect(path.length).toBeGreaterThan(3)
   })
 
   it('ignore a road that would be a long detour', () => {
