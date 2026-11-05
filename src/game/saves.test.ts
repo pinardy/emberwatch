@@ -514,7 +514,8 @@ describe('export and import', () => {
         if (accepted) expect(() => tick(accepted!, 0.125), label).not.toThrow()
       }
     }
-  })
+    // Some 800 parses, each with a dry tick: seconds, not milliseconds.
+  }, 60_000)
 })
 
 describe('hostile save files', () => {
