@@ -17,6 +17,7 @@ import { CharterChoice } from './CharterChoice'
 import { RunModifierList } from './RunModifierList'
 import { DraftAppealChips } from './DraftAppealChips'
 import { Icon } from './Icon'
+import { conditionArt, cornerstoneArt, gladeEventArt, ongoingArt, threatArt } from '../game/content/artFamilies'
 
 /**
  * Blocking modal for the three things that interrupt play: cornerstone picks,
@@ -38,7 +39,9 @@ export function ChoiceModal() {
       <Overlay>
         <div className="modal modal-event">
           <header>
-            <span className="modal-icon">{def.icon}</span>
+            <span className="modal-icon">
+              <Icon id={gladeEventArt(def)} emoji={def.icon} />
+            </span>
             <div>
               <h2>{def.name}</h2>
               <small>{glade ? `${glade.name} · ${glade.kind} glade` : 'Glade event'}</small>
@@ -90,24 +93,31 @@ export function ChoiceModal() {
                       </span>
                     ) : null}
                     {option.villagerLoss ? (
-                      <span className="is-bad">🪦 −{option.villagerLoss} villagers</span>
+                      <span className="is-bad">
+                        <Icon id="grave" emoji="🪦" /> −{option.villagerLoss} villagers
+                      </span>
                     ) : null}
                     {option.villagerGain ? (
-                      <span className="is-good">🧑‍🤝‍🧑 +{option.villagerGain} villagers</span>
+                      <span className="is-good">
+                        <Icon id="people" emoji="🧑‍🤝‍🧑" /> +{option.villagerGain} villagers
+                      </span>
                     ) : null}
                     {option.threat ? (
                       <span className="is-bad">
-                        {option.threat.icon} Unleashes: {option.threat.name}
+                        <Icon id={threatArt(option.threat)} emoji={option.threat.icon} /> Unleashes:{' '}
+                        {option.threat.name}
                       </span>
                     ) : null}
                     {option.ongoing ? (
                       <span className="is-good">
-                        {option.ongoing.icon} Lasting: {option.ongoing.name}
+                        <Icon id={ongoingArt({ id: '', name: option.ongoing.name })} emoji={option.ongoing.icon} />{' '}
+                        Lasting: {option.ongoing.name}
                       </span>
                     ) : null}
                     {option.condition ? (
                       <span className="is-bad" title={option.condition.description}>
-                        {option.condition.icon} Lingering: {option.condition.name}
+                        <Icon id={conditionArt(option.condition)} emoji={option.condition.icon} />{' '}
+                        Lingering: {option.condition.name}
                       </span>
                     ) : null}
                   </div>
@@ -134,7 +144,9 @@ export function ChoiceModal() {
       <Overlay>
         <div className="modal">
           <header>
-            <span className="modal-icon">🪨</span>
+            <span className="modal-icon">
+              <Icon id="monolith" emoji="🪨" />
+            </span>
             <div>
               <h2>Lay a Cornerstone</h2>
               <small>The Queen rewards your progress. Choose one — permanently.</small>
@@ -151,7 +163,9 @@ export function ChoiceModal() {
                   className={`option rarity-${def.rarity}`}
                   onClick={() => chooseOption(id)}
                 >
-                  <span className="option-icon">{def.icon}</span>
+                  <span className="option-icon">
+                    <Icon id={cornerstoneArt(def)} emoji={def.icon} />
+                  </span>
                   <strong>{def.name}</strong>
                   <em className="rarity-tag">{def.rarity}</em>
                   <small>{def.description}</small>
@@ -169,7 +183,9 @@ export function ChoiceModal() {
     <Overlay>
       <div className="modal">
         <header>
-          <span className="modal-icon">📐</span>
+          <span className="modal-icon">
+            <Icon id="setSquare" emoji="📐" />
+          </span>
           <div>
             <h2>New Blueprint</h2>
             <small>Choose a building to add to this settlement's options.</small>
@@ -201,7 +217,11 @@ export function ChoiceModal() {
                 <small>{def.description}</small>
                 <div className="option-effects">
                   <Effect label="Cost" bag={def.cost} tone="bad" />
-                  {def.workerSlots > 0 && <span>👷 {def.workerSlots}</span>}
+                  {def.workerSlots > 0 && (
+                    <span>
+                      <Icon id="worker" emoji="👷" /> {def.workerSlots}
+                    </span>
+                  )}
                   <DraftAppealChips run={run} defId={id} />
                 </div>
               </button>
@@ -229,10 +249,12 @@ function RerollButton() {
         onClick={reroll}
       >
         {freeRerollsLeft(run) > 0 ? (
-          `🎲 Reroll the offer — free (${freeRerollsLeft(run)} left)`
+          <>
+            <Icon id="die" emoji="🎲" /> Reroll the offer — free ({freeRerollsLeft(run)} left)
+          </>
         ) : (
           <>
-            🎲 Reroll the offer — {cost} <Icon of={RESOURCES.amber} label="amber" />
+            <Icon id="die" emoji="🎲" /> Reroll the offer — {cost} <Icon of={RESOURCES.amber} label="amber" />
           </>
         )}
       </button>
@@ -258,7 +280,12 @@ function Effect({
   if (entries.length === 0 && !food) return null
   return (
     <span className={tone === 'good' ? 'is-good' : 'is-bad'} title={title}>
-      {label}: {food ? <span>🍽️ {food} food </span> : null}
+      {label}:{' '}
+      {food ? (
+        <span>
+          <Icon id="plate" emoji="🍽️" label="food" /> {food} food{' '}
+        </span>
+      ) : null}
       {entries.map(([id, amount]) => (
         <span key={id}>
           <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />

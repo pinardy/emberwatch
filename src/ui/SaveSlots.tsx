@@ -5,6 +5,7 @@ import { SEASON_INFO } from '../game/engine/balance'
 import type { SlotId, SlotMeta, SlotSummary } from '../game/saveSlots'
 import { Icon } from './Icon'
 import './saves.css'
+import { edictArt } from '../game/content/art'
 
 /** "Year 3 · Storm" */
 export function slotWhen(meta: SlotMeta): string {
@@ -70,7 +71,12 @@ export function SlotDetails({
 }) {
   const edict = EDICTS.find((d) => d.level === meta.edict)
   const outcome =
-    meta.phase === 'won' ? ' · 🏆 Won' : meta.phase === 'lost' ? ' · Lost' : ''
+    meta.phase === 'won' ? (
+      <>
+        {' · '}
+        <Icon id="medal" emoji="🏆" /> Won
+      </>
+    ) : meta.phase === 'lost' ? ' · Lost' : ''
   return (
     <div className="slot-details">
       <div className="slot-line">
@@ -87,7 +93,15 @@ export function SlotDetails({
         <span title="Impatience">
           <Icon id="impatience" label="impatience" /> {Math.floor(meta.impatience)}/{meta.maxImpatience}
         </span>
-        <span>{edict ? `${edict.icon} ${edict.name}` : 'No edict'}</span>
+        <span>
+          {edict ? (
+            <>
+              <Icon id={edictArt(edict.level)} emoji={edict.icon} /> {edict.name}
+            </>
+          ) : (
+            'No edict'
+          )}
+        </span>
       </div>
       {!compact && meta.runModifiers.length > 0 && (
         <div className="slot-line muted">

@@ -6,6 +6,8 @@ import type { RunState } from '../game/types'
 import { ShareLine, describeDaily, isNewDailyBest } from './DailyScreen'
 import './replay.css'
 import { IconText } from './IconText'
+import { achievementArt } from '../game/content/artFamilies'
+import { Icon } from './Icon'
 
 /**
  * The end screen's extras: achievements this run earns and, for a daily
@@ -25,9 +27,15 @@ export function EndExtras({ run }: { run: RunState }) {
           <ul>
             {settled.achievements.map((a) => (
               <li key={a.id}>
-                <span aria-hidden>{a.icon}</span> <strong>{a.name}</strong>{' '}
+                <span aria-hidden>
+                  <Icon id={achievementArt(a)} emoji={a.icon} />
+                </span>{' '}
+                <strong>{a.name}</strong>{' '}
                 <small className="muted">{a.description}</small>
-                {a.reward?.supplies ? <em className="is-good"> +{a.reward.supplies} 📦</em> : null}
+                {a.reward?.supplies ? <em className="is-good">
+                    {' '}
+                    +{a.reward.supplies} <Icon id="warehouse" emoji="📦" />
+                  </em> : null}
                 {a.reward?.title ? <em className="is-good"> Title: “{a.reward.title}”</em> : null}
               </li>
             ))}
@@ -36,7 +44,9 @@ export function EndExtras({ run }: { run: RunState }) {
       )}
       {settled.daily && (
         <section className="end-daily" aria-label="Daily expedition">
-          <h3>📅 Daily expedition {settled.daily.date}</h3>
+          <h3>
+            <Icon id="calendar" emoji="📅" /> Daily expedition {settled.daily.date}
+          </h3>
           <p className={settled.daily.won ? 'is-good' : ''}>
             <IconText text={describeDaily(settled.daily)} />
             {isNewDailyBest(settled.daily, best)

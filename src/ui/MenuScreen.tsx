@@ -5,6 +5,7 @@ import { ACHIEVEMENT_LIST, achievementCount } from '../game/content/achievements
 import { DailyMenuEntry } from './DailyScreen'
 import { SlotOneLiner } from './SaveSlots'
 import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
+import { Icon } from './Icon'
 
 export function MenuScreen() {
   const goToScreen = useGameStore((s) => s.goToScreen)
@@ -53,17 +54,17 @@ export function MenuScreen() {
             className={run ? '' : 'primary'}
             onClick={() => goToScreen('setup')}
           >
-            🌱 New settlement
+            <Icon id="small" emoji="🌱" /> New settlement
           </button>
           <button type="button" onClick={() => goToScreen('saves')}>
-            📂 Saved settlements
+            <Icon id="folder" emoji="📂" /> Saved settlements
           </button>
           <button type="button" onClick={() => goToScreen('citadel')}>
-            🏛️ The Citadel ({meta.citadelSupplies} supplies)
+            <Icon id="guildHouse" emoji="🏛️" /> The Citadel ({meta.citadelSupplies} supplies)
           </button>
           <DailyMenuEntry />
           <button type="button" onClick={() => goToScreen('achievements')}>
-            🏅 Achievements ({achievementCount(meta.achievements)}/{ACHIEVEMENT_LIST.length})
+            <Icon id="medal" emoji="🏅" /> Achievements ({achievementCount(meta.achievements)}/{ACHIEVEMENT_LIST.length})
           </button>
         </div>
 

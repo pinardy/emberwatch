@@ -1,4 +1,4 @@
-import type { IconId } from '../../art/icons'
+import type { BaseIconId, IconId } from '../../art/icons'
 import type {
   DepositId,
   GladeKind,
@@ -142,4 +142,46 @@ export const TERRAIN_ART: Record<TerrainId, IconId> = {
   rock: 'stoneVein',
   marsh: 'marsh',
   forest: 'trees',
+}
+
+/** The Queen's Edicts by rung (1–7). */
+export const EDICT_MOTIF: Partial<Record<number, BaseIconId>> = {
+  1: 'impatience',
+  2: 'bread',
+  3: 'trees',
+  4: 'storm',
+  5: 'chain',
+  6: 'walker',
+  7: 'scroll',
+}
+
+/** An edict: its motif on a red-rimmed shield. */
+export function edictArt(level: number): IconId | undefined {
+  const motif = EDICT_MOTIF[level]
+  return motif && `edict/${motif}`
+}
+
+/** Lands (run modifiers): shown on the menu's daily card, so they ship eagerly. */
+export const RUN_MODIFIER_MOTIF: Partial<Record<string, BaseIconId>> = {
+  richVeins: 'stonecuttersCamp',
+  fertileFloodplain: 'fertileSoil',
+  restlessForest: 'trees',
+  longStorms: 'swirl',
+  wanderingTraders: 'camel',
+  sparseGame: 'deer',
+  ancientRuins: 'guildHouse',
+  earlyFrost: 'snowflake',
+  bountifulGroves: 'berry',
+  illOmens: 'owl',
+  crowdedRoads: 'road',
+  petrifiedWoods: 'wood',
+  amberSprings: 'drop',
+  pilgrimRoad: 'religion',
+  wildFrontier: 'wolf',
+}
+
+/** A land (run modifier): its motif on a mossy tile. */
+export function runModifierArt(def: { id: string }): IconId | undefined {
+  const motif = RUN_MODIFIER_MOTIF[def.id]
+  return motif && `land/${motif}`
 }
