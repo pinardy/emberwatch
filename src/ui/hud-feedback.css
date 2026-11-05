@@ -188,6 +188,7 @@
 
 .storage-flag {
   font-style: normal;
+  white-space: nowrap;
   font-weight: 700;
   font-size: 10.5px;
   text-transform: uppercase;
@@ -267,4 +268,20 @@
 .building-status.is-paused,
 .building-status.is-offSeason {
   color: var(--muted);
+}
+
+/*
+ * Phones: a full stockpile already says so in its flag, so the fill track
+ * gives way, and "N stopped" shortens to "N" (the pill's tooltip and title
+ * carry the full sentence). Keeps the pill from shoving the food pill and
+ * resources off a 390px bar.
+ */
+@media (max-width: 560px) {
+  .storage.is-full .storage-track {
+    display: none;
+  }
+
+  .storage-flag-word {
+    display: none;
+  }
 }
