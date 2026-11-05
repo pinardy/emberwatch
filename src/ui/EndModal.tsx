@@ -6,6 +6,7 @@ import {
 } from '../game/content/meta'
 import { useGameStore, useRun } from '../game/store'
 import { Overlay } from './ChoiceModal'
+import { RunModifierList } from './RunModifierList'
 
 export function EndModal() {
   const run = useRun()
@@ -73,6 +74,13 @@ export function EndModal() {
             <dd>{Math.floor(run.stats.resourcesProduced)}</dd>
           </div>
         </dl>
+
+        {(run.runModifiers ?? []).length > 0 && (
+          <section className="end-land" aria-label="Lay of the land">
+            <h3>The land</h3>
+            <RunModifierList ids={run.runModifiers} compact />
+          </section>
+        )}
 
         <section className="reward-breakdown" aria-label="Citadel supplies">
           <h3>Supplies sent home</h3>

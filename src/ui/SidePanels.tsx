@@ -3,15 +3,21 @@ import { ORDERS, describeGoal } from '../game/content/orders'
 import { RESOURCES, RESOURCE_LIST } from '../game/content/resources'
 import { sootheCost } from '../game/engine/actions'
 import { TRADE_LOT } from '../game/engine/balance'
-import { hasTradingPost, offerPrice, sellPrice } from '../game/engine/trade'
+import { orderReputation } from '../game/engine/events'
+import { modifierOngoingId } from '../game/engine/runModifiers'
+import { caravanAvailable, hasTradingPost, offerPrice, sellPrice } from '../game/engine/trade'
 import { useGameStore, useRun } from '../game/store'
 import { DecreeCard } from './DecreeCard'
+import { RunModifierList } from './RunModifierList'
 import type { ResourceId } from '../game/types'
 
 export function OrdersPanel() {
   const run = useRun()
   const soothe = useGameStore((s) => s.soothe)
   if (!run) return null
+  // Modifier effects live in `ongoing` too; they are listed with the land.
+  const landIds = new Set((run.runModifiers ?? []).map(modifierOngoingId))
+  const pacts = run.ongoing.filter((effect) => !landIds.has(effect.id))
   return (
     <div className="panel-body">
       <section className="build-group">
@@ -27,7 +33,9 @@ export function OrdersPanel() {
             <div className="order-card" key={order.id}>
               <div className="row-between">
                 <strong>{def.name}</strong>
-                <span className="order-reward">👑 +{def.reputationReward}</span>
+                <span className="order-reward">
+                  👑 +{orderReputation(run, def.reputationReward)}
+                </span>
               </div>
               <small>{describeGoal(def.goal)}</small>
               <div className="bar">
@@ -78,11 +86,19 @@ export function OrdersPanel() {
         </div>
       </section>
 
-      {run.ongoing.length > 0 && (
+      {(run.runModifiers ?? []).length > 0 && (
+        <section className="build-group">
+          <h3>Lay of the land</h3>
+          <p className="panel-hint">This map's own character, drawn from its seed.</p>
+          <RunModifierList ids={run.runModifiers} />
+        </section>
+      )}
+
+      {pacts.length > 0 && (
         <section className="build-group">
           <h3>Pacts &amp; blessings</h3>
           <div className="chip-column">
-            {run.ongoing.map((effect) => (
+            {pacts.map((effect) => (
               <div className="cornerstone-chip rarity-rare" key={effect.id}>
                 <span>{effect.icon}</span>
                 <div>
@@ -130,7 +146,8 @@ export function TradePanel() {
   const sell = useGameStore((s) => s.sell)
   if (!run) return null
 
-  const available = hasTradingPost(run)
+  const available = caravanAvailable(run)
+  const wandering = available && !hasTradingPost(run)
   const amber = run.stock.amber ?? 0
   const caravan = run.caravan
   const sellable = RESOURCE_LIST.filter(
@@ -153,6 +170,7 @@ export function TradePanel() {
           </p>
         ) : !caravan.here ? (
           <p className="muted">
+            {wandering ? 'Wandering traders find you without a Trading Post. ' : ''}
             🐫 The next caravan arrives in about{' '}
             <strong>{Math.max(1, Math.ceil(caravan.timer / 60))} min</strong>. Stock up
             on whatever it might want.

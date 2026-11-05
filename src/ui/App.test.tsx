@@ -4,7 +4,9 @@ import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
 import { DECREES } from '../game/content/decrees'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
+import { RUN_MODIFIERS } from '../game/content/runModifiers'
 import { findPlacement } from '../game/engine/actions'
+import { drawRunModifiers } from '../game/engine/runModifiers'
 import { pushLog } from '../game/engine/createRun'
 import { CHARTER_REPUTATION, REWARD_MILESTONES } from '../game/engine/balance'
 import { addCondition, issueDecree } from '../game/engine/structure'
@@ -283,6 +285,35 @@ describe('app shell', () => {
       expect(simulated).toBeGreaterThanOrEqual(10 * speed - 0.125 - 1e-9)
       expect(simulated).toBeLessThanOrEqual(10 * speed + 0.125 + 1e-9)
     }
+  })
+
+  it("previews the seed's map modifiers, then shows them in the run and at its end", () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    // No seed yet: the land is a surprise.
+    expect(screen.getByText(/reveals them when you set out/i)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/Map seed/i), { target: { value: '4242' } })
+    const expected = drawRunModifiers(4242).map((id) => RUN_MODIFIERS[id].name)
+    const preview = screen.getByRole('list', { name: /Lay of the land/i })
+    for (const name of expected) expect(within(preview).getByText(name)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    expect(currentRun().runModifiers).toEqual(drawRunModifiers(4242))
+    // The opening draft names the land too.
+    const strip = screen.getByRole('list', { name: /Lay of the land/i })
+    for (const name of expected) expect(within(strip).getByText(new RegExp(name))).toBeTruthy()
+    takeOpeningDraft()
+
+    fireEvent.click(within(screen.getByRole('tablist')).getByRole('tab', { name: /Orders/i }))
+    expect(screen.getByRole('heading', { name: /Lay of the land/i })).toBeTruthy()
+    for (const name of expected) expect(screen.getAllByText(name).length).toBeGreaterThan(0)
+
+    // And the end screen remembers it.
+    act(() => {
+      useGameStore.setState({ run: { ...currentRun(), phase: 'won' } })
+    })
+    const land = screen.getByRole('region', { name: /Lay of the land/i })
+    for (const name of expected) expect(within(land).getByText(new RegExp(name))).toBeTruthy()
   })
 
   it('switches side panels without crashing', () => {

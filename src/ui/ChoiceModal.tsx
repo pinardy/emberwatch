@@ -11,6 +11,7 @@ import type { ResourceBag } from '../game/types'
 import { Cost } from './BuildPanel'
 import { DialogTip } from './TipsCoach'
 import { CharterChoice } from './CharterChoice'
+import { RunModifierList } from './RunModifierList'
 
 /**
  * Blocking modal for the three things that interrupt play: cornerstone picks,
@@ -158,6 +159,13 @@ export function ChoiceModal() {
           </div>
         </header>
         <DialogTip id="first-draft" />
+        {run.clock === 0 && (run.runModifiers ?? []).length > 0 && (
+          // The opening draft is the first thing a run shows: say what land it is.
+          <div className="land-strip">
+            <span>This land:</span>
+            <RunModifierList ids={run.runModifiers} compact />
+          </div>
+        )}
         <div className="option-list option-grid">
           {choice.options.map((id) => {
             const def = BUILDINGS[id]

@@ -3193,3 +3193,81 @@ button.is-armed {
 .condition-progress .bar-fill {
   display: block;
 }
+
+/* ---- Run modifiers: the lay of the land ------------------------------------ */
+
+.land-chip.tone-boon {
+  border-left-color: var(--good);
+}
+
+.land-chip.tone-bane {
+  border-left-color: var(--bad);
+}
+
+.land-chip.tone-mixed {
+  border-left-color: var(--gold);
+}
+
+.land-tone {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.land-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.land-tag {
+  padding: 3px 8px;
+  font-size: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+}
+
+.land-tag.tone-boon {
+  border-color: var(--good);
+}
+
+.land-tag.tone-bane {
+  border-color: var(--bad);
+}
+
+.land-tag.tone-mixed {
+  border-color: var(--gold);
+}
+
+.land-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.end-land {
+  margin: 12px 0;
+}
+
+.end-land h3 {
+  margin-bottom: 6px;
+}
+
+.setup-land {
+  margin-top: 12px;
+}
+
+.setup-land h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
