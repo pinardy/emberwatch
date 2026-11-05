@@ -21,6 +21,7 @@ import { PANEL_KEY_LABEL, useGameLoop, useHotkeys } from './useGameLoop'
 import { VillagerPanel } from './VillagerPanel'
 import { Warnings } from './Warnings'
 import './hud-feedback.css'
+import { TAB_ART, threatArt } from '../game/content/art'
 
 const TABS: { id: Exclude<SidePanel, null>; label: string; icon: string }[] = [
   { id: 'build', label: 'Build', icon: '🔨' },
@@ -110,7 +111,9 @@ export function GameScreen() {
                 className={panel === tab.id ? 'is-active' : ''}
                 onClick={() => setPanel(panel === tab.id ? null : tab.id)}
               >
-                <span aria-hidden>{tab.icon}</span>
+                <span aria-hidden>
+                  <Icon id={TAB_ART[tab.id]} emoji={tab.icon} />
+                </span>
                 <em>{tab.label}</em>
                 {tab.id === 'log' && unreadLog > 0 && (
                   <span className="tab-badge" aria-label={`${unreadLog} unread`}>
@@ -164,7 +167,7 @@ function ThreatBar() {
               title={`${threat.description}${glade ? ` Show ${glade.name} on the map.` : ''}`}
             >
               <span className="threat-icon" aria-hidden>
-                {threat.icon}
+                <Icon id={threatArt(threat)} emoji={threat.icon} />
               </span>
               <span className="threat-text">
                 <strong>

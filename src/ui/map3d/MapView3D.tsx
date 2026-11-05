@@ -3,7 +3,7 @@ import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Html, MapControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
-import { GLADE_ART } from '../../game/content/art'
+import { GLADE_ART, threatArt } from '../../game/content/art'
 import { BUILDINGS } from '../../game/content/buildings'
 import { canPlaceBuilding, footprintOf } from '../../game/engine/actions'
 import { pairsWith } from '../../game/engine/adjacency'
@@ -560,7 +560,7 @@ const ThreatLayer = memo(function ThreatLayer({ run }: { run: RunState }) {
     <>
       {run.threats.map((threat) => {
         const glade = run.glades[threat.gladeId]
-        return glade ? <ThreatMarker key={threat.id} pos={glade.center} /> : null
+        return glade ? <ThreatMarker key={threat.id} pos={glade.center} art={threatArt(threat)} /> : null
       })}
     </>
   )

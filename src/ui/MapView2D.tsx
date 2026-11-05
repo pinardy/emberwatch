@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconId } from '../art/icons'
-import { BUILDING_ART, DEPOSIT_ART, GLADE_ART } from '../game/content/art'
+import { BUILDING_ART, DEPOSIT_ART, GLADE_ART, STATUS_BADGE_ART } from '../game/content/art'
 import { BUILDINGS } from '../game/content/buildings'
 import { canPlaceBuilding, footprintOf } from '../game/engine/actions'
 import { describePlacement } from '../game/engine/placement'
@@ -42,7 +42,10 @@ const MAP_SYMBOLS: IconId[] = [
     ...Object.values(DEPOSIT_ART),
     ...Object.values(GLADE_ART),
     ...Object.values(BUILDING_ART).filter((id): id is IconId => id !== undefined),
-  ]),
+    ...Object.values(STATUS_BADGE_ART),
+    'snowflake',
+    'upArrow',
+  ] satisfies IconId[]),
 ]
 /** Smallest icon on the 2D map, in SVG units (the old emoji were 18px text). */
 const MAP_ICON = 22
@@ -496,9 +499,7 @@ export function MapView2D() {
                         rx={2}
                         className="upgrade-bar"
                       />
-                      <text className="hex-flag" x={cx - 22} y={cy - r - 4}>
-                        ⬆
-                      </text>
+                      <IconUse id="upArrow" x={cx - 22} y={cy - r - 6} size={8} />
                     </g>
                   )}
                   {badge && (
@@ -513,16 +514,17 @@ export function MapView2D() {
                         strokeWidth={1.5}
                       />
                       {status !== 'working' && (
-                        <text className="hex-flag" x={cx + r * 0.8} y={cy - r * 0.8 + 3.5}>
-                          {badge.icon}
-                        </text>
+                        <IconUse
+                          id={badge.art}
+                          x={cx + r * 0.8}
+                          y={cy - r * 0.8}
+                          size={10}
+                        />
                       )}
                     </g>
                   )}
                   {cold && (
-                    <text className="hex-flag" x={cx - r * 0.8} y={cy - r * 0.8 + 3.5}>
-                      ❄
-                    </text>
+                    <IconUse id="snowflake" x={cx - r * 0.8} y={cy - r * 0.8} size={11} />
                   )}
                 </g>
               )

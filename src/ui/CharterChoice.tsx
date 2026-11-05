@@ -3,6 +3,7 @@ import { CHARTERS } from '../game/content/charters'
 import { useGameStore } from '../game/store'
 import type { PendingChoice } from '../game/types'
 import { Icon } from './Icon'
+import { charterArt } from '../game/content/art'
 
 /**
  * The Queen's one-time charter: a run-shaping perk, breathing room with the
@@ -14,7 +15,9 @@ export function CharterChoice({ choice }: { choice: PendingChoice }) {
   return (
     <div className="modal modal-charter">
       <header>
-        <span className="modal-icon">👑</span>
+        <span className="modal-icon">
+          <Icon id="reputation" emoji="👑" />
+        </span>
         <div>
           <h2>The Queen's Charter</h2>
           <small>
@@ -34,7 +37,9 @@ export function CharterChoice({ choice }: { choice: PendingChoice }) {
               className={`option charter-${def.family}`}
               onClick={() => chooseOption(id)}
             >
-              <span className="option-icon">{def.icon}</span>
+              <span className="option-icon">
+                <Icon id={charterArt(def)} emoji={def.icon} />
+              </span>
               <strong>{def.name}</strong>
               <em className="rarity-tag">{FAMILY_LABEL[def.family]}</em>
               <small>{def.description}</small>

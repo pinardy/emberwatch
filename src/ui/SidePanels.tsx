@@ -13,6 +13,7 @@ import { RaceSparkline } from './RaceSparkline'
 import type { ResourceId } from '../game/types'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
+import { cornerstoneArt, ongoingArt } from '../game/content/art'
 
 export function OrdersPanel() {
   const run = useRun()
@@ -66,7 +67,7 @@ export function OrdersPanel() {
           disabled={(run.stock.amber ?? 0) < sootheCost(run) || run.impatience < 1}
           onClick={() => soothe()}
         >
-          🕊️ Soothe the Queen — {sootheCost(run)} <Icon of={RESOURCES.amber} label="amber" /> (
+          <Icon id="dove" emoji="🕊️" /> Soothe the Queen — {sootheCost(run)} <Icon of={RESOURCES.amber} label="amber" /> (
           <Icon id="impatience" label="impatience" /> −1)
         </button>
       </section>
@@ -82,7 +83,9 @@ export function OrdersPanel() {
             if (!def) return null
             return (
               <div className={`cornerstone-chip rarity-${def.rarity}`} key={id}>
-                <span>{def.icon}</span>
+                <span>
+                  <Icon id={cornerstoneArt(def)} emoji={def.icon} />
+                </span>
                 <div>
                   <strong>{def.name}</strong>
                   <small>{def.description}</small>
@@ -107,7 +110,9 @@ export function OrdersPanel() {
           <div className="chip-column">
             {pacts.map((effect) => (
               <div className="cornerstone-chip rarity-rare" key={effect.id}>
-                <span>{effect.icon}</span>
+                <span>
+                  <Icon id={ongoingArt(effect)} emoji={effect.icon} />
+                </span>
                 <div>
                   <strong>{effect.name}</strong>
                   <small>{effect.description}</small>
@@ -180,14 +185,14 @@ export function TradePanel() {
         ) : !caravan.here ? (
           <p className="muted">
             {wandering ? 'Wandering traders find you without a Trading Post. ' : ''}
-            🐫 The next caravan arrives in about{' '}
+            <Icon id="camel" emoji="🐫" /> The next caravan arrives in about{' '}
             <strong>{Math.max(1, Math.ceil(caravan.timer / 60))} min</strong>. Stock up
             on whatever it might want.
           </p>
         ) : (
           <>
             <p className="panel-hint">
-              🐫 In town for {Math.ceil(caravan.timer)}s — paying double for{' '}
+              <Icon id="camel" emoji="🐫" /> In town for {Math.ceil(caravan.timer)}s — paying double for{' '}
               <strong>
                 <Icon of={RESOURCES[caravan.wants]} /> {RESOURCES[caravan.wants]?.name}
               </strong>

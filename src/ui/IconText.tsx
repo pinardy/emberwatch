@@ -1,7 +1,20 @@
 import type { ReactNode } from 'react'
 import type { IconId } from '../art/icons'
+import {
+  charterArt,
+  conditionArt,
+  cornerstoneArt,
+  gladeEventArt,
+  ongoingArt,
+  runModifierArt,
+  threatArt,
+} from '../game/content/art'
 import { BUILDING_LIST } from '../game/content/buildings'
+import { CHARTER_LIST } from '../game/content/charters'
+import { CORNERSTONE_LIST } from '../game/content/cornerstones'
+import { GLADE_EVENT_LIST } from '../game/content/gladeEvents'
 import { RESOURCE_LIST } from '../game/content/resources'
+import { ALL_RUN_MODIFIER_LIST } from '../game/content/runModifiers'
 import { SPECIES_LIST } from '../game/content/species'
 import { Icon } from './Icon'
 
@@ -11,8 +24,10 @@ import { Icon } from './Icon'
  * hold. Rather than change the engine's text, `IconText` swaps in drawn icons
  * where a glyph's meaning is certain:
  *
- * - a resource, building or species glyph immediately followed by that
- *   thing's name ("2 🪵 Wood", "🏮 Brazier");
+ * - a glyph immediately followed by the name of the thing it stands for —
+ *   a resource, building, species, cornerstone, glade event, threat, pact,
+ *   lingering condition, land or charter ("2 🪵 Wood", "🐺 The Wolf Pack
+ *   strikes");
  * - a small set of glyphs at the very start of a line, where the sim uses
  *   them as a headline icon ("🔥 Hearth wood runs out…").
  *
@@ -34,6 +49,17 @@ function addNamed(glyph: string, name: string, art: IconId | undefined) {
 for (const d of RESOURCE_LIST) addNamed(d.icon, d.name, d.art)
 for (const d of BUILDING_LIST) addNamed(d.icon, d.name, d.art)
 for (const d of SPECIES_LIST) addNamed(d.icon, d.name, d.art)
+for (const d of CORNERSTONE_LIST) addNamed(d.icon, d.name, cornerstoneArt(d))
+for (const d of GLADE_EVENT_LIST) {
+  addNamed(d.icon, d.name, gladeEventArt(d))
+  for (const o of d.options) {
+    if (o.threat) addNamed(o.threat.icon, o.threat.name, threatArt(o.threat))
+    if (o.ongoing) addNamed(o.ongoing.icon, o.ongoing.name, ongoingArt({ id: '', name: o.ongoing.name }))
+    if (o.condition) addNamed(o.condition.icon, o.condition.name, conditionArt(o.condition))
+  }
+}
+for (const d of ALL_RUN_MODIFIER_LIST) addNamed(d.icon, d.name, runModifierArt(d))
+for (const d of CHARTER_LIST) addNamed(d.icon, d.name, charterArt(d))
 
 /** Headline glyphs at the start of a line, as the sim and HUD use them. */
 export const LEADING_GLYPH_ART: Record<string, IconId> = {
@@ -51,6 +77,21 @@ export const LEADING_GLYPH_ART: Record<string, IconId> = {
   '🥊': 'brawling',
   '🍵': 'treatment',
   '🛤': 'road',
+  '🚪': 'door',
+  '🍽': 'plate',
+  '🛏': 'bed',
+  '🔨': 'tool',
+  '📯': 'horn',
+  '❄': 'snowflake',
+  '⚡': 'lightning',
+  '🎲': 'die',
+  '🕊': 'dove',
+  '🐫': 'camel',
+  '📐': 'setSquare',
+  '🔍': 'magnifier',
+  '🌫': 'fog',
+  '📅': 'calendar',
+  '🪦': 'grave',
 }
 
 const GLYPHS = [...new Set([...NAMED.keys(), ...Object.keys(LEADING_GLYPH_ART)])].sort(

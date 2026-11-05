@@ -4,7 +4,8 @@ import { useCursor } from '@react-three/drei'
 import * as THREE from 'three'
 import { BUILDINGS } from '../../game/content/buildings'
 import { footprintOf } from '../../game/engine/actions'
-import { DEPOSIT_ART } from '../../game/content/art'
+import type { IconId } from '../../art/icons'
+import { DEPOSIT_ART, STATUS_BADGE_ART } from '../../game/content/art'
 import { DEPOSIT_INFO } from '../../game/engine/mapgen'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, DepositId, Vec2, WorldDeposit } from '../../game/types'
@@ -282,7 +283,7 @@ export const BuildingNode = memo(function BuildingNode({
         <LabelSprite text={`⬆ ${Math.round(upgrade * 10) * 10}%`} y={0.85} size={0.6} />
       )}
       {showBadge && badge && (
-        <BadgeSprite icon={badge.icon} color={badge.color} x={badgeX} y={badgeY} size={badgeSize} />
+        <BadgeSprite icon={badge.icon} art={badge.art} color={badge.color} x={badgeX} y={badgeY} size={badgeSize} />
       )}
 
       {cold && (
@@ -293,6 +294,7 @@ export const BuildingNode = memo(function BuildingNode({
           </mesh>
           <BadgeSprite
             icon="❄"
+            art={STATUS_BADGE_ART.cold}
             color="#5f8fd4"
             x={far ? (showBadge ? -0.9 : 0) : -0.4}
             y={badgeY}
@@ -309,7 +311,8 @@ export const BuildingNode = memo(function BuildingNode({
 })
 
 /** Pulsing warning over a glade with an active threat. */
-export function ThreatMarker({ pos }: { pos: Vec2 }) {
+/** `art` is the threat's own framed icon; the plain warning sign stands in without it. */
+export function ThreatMarker({ pos, art }: { pos: Vec2; art?: IconId }) {
   const sprite = useRef<THREE.Group>(null)
   useFrame(({ clock }) => {
     if (REDUCED_MOTION) return
@@ -322,7 +325,7 @@ export function ThreatMarker({ pos }: { pos: Vec2 }) {
   return (
     <group position={[pos.x, 0, pos.y]} raycast={NO_RAYCAST}>
       <group ref={sprite} position={[0, 2.6, 0]}>
-        <IconSprite icon="⚠️" art="dangerous" y={0} size={1.1} />
+        <IconSprite icon="⚠️" art={art ?? 'dangerous'} y={0} size={1.1} />
       </group>
     </group>
   )

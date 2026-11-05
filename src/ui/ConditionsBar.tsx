@@ -3,6 +3,8 @@ import { describeTimedGoal } from '../game/engine/structure'
 import { useGameStore, useRun } from '../game/store'
 import type { ActiveCondition, ConditionOutcome } from '../game/types'
 import { clockText } from './DecreeCard'
+import { conditionArt } from '../game/content/art'
+import { Icon } from './Icon'
 
 /**
  * Lingering glade conditions and the live royal decree, shown beside the
@@ -26,7 +28,9 @@ export function ConditionsBar() {
           onClick={() => setPanel('orders')}
           title="Open the Queen's orders"
         >
-          <span className="condition-icon">📯</span>
+          <span className="condition-icon">
+            <Icon id="horn" emoji="📯" />
+          </span>
           <span className="condition-text">
             <strong>
               {decreeDef.name}
@@ -47,7 +51,9 @@ export function ConditionsBar() {
             onClick={() => glade && focusCamera(glade.center)}
             title={glade ? `Left behind at ${glade.name}` : undefined}
           >
-            <span className="condition-icon">{condition.icon}</span>
+            <span className="condition-icon">
+              <Icon id={conditionArt(condition)} emoji={condition.icon} />
+            </span>
             <span className="condition-text">
               <strong>
                 {condition.name}

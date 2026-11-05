@@ -1,4 +1,4 @@
-import { DEPOSIT_ART, GLADE_ART, NEED_ART } from '../game/content/art'
+import { DEPOSIT_ART, GLADE_ART, NEED_ART, VILLAGER_TRAIT_ART } from '../game/content/art'
 import { BUILDINGS } from '../game/content/buildings'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
@@ -510,7 +510,7 @@ function WorkerSection({
                 <strong>{villager.name}</strong>
                 {trait && (
                   <span className="worker-trait" title={`${trait.name}: ${trait.description}`}>
-                    {trait.icon}
+                    <Icon id={VILLAGER_TRAIT_ART[trait.id]} emoji={trait.icon} />
                     <span className="sr-only"> {trait.name}</span>
                   </span>
                 )}
@@ -578,7 +578,15 @@ function WorkerSection({
                         <Icon of={SPECIES[v.species]} />
                       </span>
                       <strong>{v.name}</strong>
-                      <small>{trait ? `${trait.icon} ${trait.name}` : SPECIES[v.species].name}</small>
+                      <small>
+                        {trait ? (
+                          <>
+                            <Icon id={VILLAGER_TRAIT_ART[trait.id]} emoji={trait.icon} /> {trait.name}
+                          </>
+                        ) : (
+                          SPECIES[v.species].name
+                        )}
+                      </small>
                       <MultiplierTag mult={mult} />
                       {rank === 0 && candidates.length > 1 && <span className="best-tag">★ best</span>}
                     </button>

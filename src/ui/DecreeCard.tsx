@@ -36,7 +36,9 @@ export function DecreeCard() {
   return (
     <div className={`order-card decree-card ${urgent ? 'is-urgent' : ''}`}>
       <div className="row-between">
-        <strong>📯 {def.name}</strong>
+        <strong>
+          <Icon id="horn" emoji="📯" /> {def.name}
+        </strong>
         <span className="order-reward">
           <Icon id="reputation" label="reputation" /> +{def.reputationReward + mods.decreeReputation}
           {def.reward?.amber ? (

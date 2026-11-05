@@ -4,6 +4,8 @@ import {
   MAX_EDICT,
   edictLabel,
 } from '../game/content/meta'
+import { edictArt } from '../game/content/art'
+import { Icon } from './Icon'
 
 /**
  * The Queen's Edict ladder. Each rung adds its own condition on top of every
@@ -32,11 +34,11 @@ export function EdictPicker({
         const body = (
           <>
             <strong>
-              {def ? `${def.icon} ` : '🕊️ '}
+              {def ? <Icon id={edictArt(level)} emoji={def.icon} /> : <Icon id="dove" emoji="🕊️" />}{' '}
               {edictLabel(level)}
             </strong>
             <small>{def ? `${def.name}: ${def.description}` : 'The standard terms.'}</small>
-            <em>{locked ? '🔒 Win the rung below' : bonus > 0 ? `+${bonus}% supplies` : 'Base supplies'}</em>
+            <em>{locked ? <><Icon id="lock" emoji="🔒" /> Win the rung below</> : bonus > 0 ? `+${bonus}% supplies` : 'Base supplies'}</em>
           </>
         )
         const className = `edict-step ${picked ? 'is-picked' : ''} ${locked ? 'is-locked' : ''}`

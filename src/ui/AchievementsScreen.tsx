@@ -8,6 +8,8 @@ import {
 import { useGameStore } from '../game/store'
 import type { AchievementState } from '../game/types'
 import './replay.css'
+import { achievementArt } from '../game/content/art'
+import { Icon } from './Icon'
 
 function rewardText(def: AchievementDef): string | null {
   const parts: string[] = []
@@ -29,7 +31,7 @@ export function AchievementCard({ def, state }: { def: AchievementDef; state: Ac
   return (
     <li className={`achievement-card ${earned ? 'is-earned' : 'is-locked'}`}>
       <span className="achievement-icon" aria-hidden>
-        {def.icon}
+        <Icon id={achievementArt(def)} emoji={def.icon} />
       </span>
       <div className="achievement-body">
         <strong>{def.name}</strong>
@@ -56,7 +58,9 @@ export function AchievementCard({ def, state }: { def: AchievementDef; state: Ac
         )}
         {reward && <small className="achievement-reward">{reward}</small>}
       </div>
-      <em className="achievement-status">{earned ? `✓ ${earnedOn(at)}` : '🔒'}</em>
+      <em className="achievement-status">
+        {earned ? `✓ ${earnedOn(at)}` : <Icon id="lock" emoji="🔒" label="Locked" />}
+      </em>
     </li>
   )
 }
