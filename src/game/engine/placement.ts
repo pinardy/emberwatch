@@ -5,6 +5,7 @@ import { adjacencyHints, adjacencyStatusAt, type AdjacencyStatus } from './adjac
 import { gladeAt } from './mapgen'
 import { depositsInRangeOf, terrainEffectsFor } from './production'
 import { homesWithin, isWarmAt } from './queries'
+import { describeRoadLink, roadLinkPreview, type RoadLink } from './roads'
 
 /**
  * Everything the placement ghost has to say about a spot, computed once and
@@ -24,6 +25,11 @@ export interface PlacementPreview {
   warm: boolean | null
   /** Warmth sources only: homes its radius would cover. */
   warms: number | null
+  /**
+   * Workplaces only, once any road exists: how the spot sits on the road
+   * network and the work bonus that earns. Null otherwise.
+   */
+  road: RoadLink | null
   /** Ready-to-show hint fragments, in priority order. */
   parts: string[]
 }
@@ -75,6 +81,10 @@ export function describePlacement(s: RunState, defId: string, pos: Vec2): Placem
   const ground = terrainHint(defId, terrain)
   if (ground) parts.push(ground)
 
+  const road = roadLinkPreview(s, defId, pos)
+  const roadHint = describeRoadLink(road)
+  if (roadHint) parts.push(roadHint)
+
   let warm: boolean | null = null
   if ((def?.housing ?? 0) > 0 && def?.category === 'housing') {
     warm = isWarmAt(s, pos)
@@ -87,5 +97,5 @@ export function describePlacement(s: RunState, defId: string, pos: Vec2): Placem
     parts.push(`🔥 Warms ${warms} home${warms === 1 ? '' : 's'}`)
   }
 
-  return { reach, adjacency, terrain, terrainEffects, warm, warms, parts }
+  return { reach, adjacency, terrain, terrainEffects, warm, warms, road, parts }
 }

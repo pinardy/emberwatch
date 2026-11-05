@@ -152,6 +152,8 @@ export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptio
     obstacles,
     buildings: { [hearth.id]: hearth },
     villagers,
+    roads: [],
+    roadCounter: 0,
     stock,
     storageCap: BASE_STORAGE + (BUILDINGS.ancientHearth.storage ?? 0),
     reputation: 0,

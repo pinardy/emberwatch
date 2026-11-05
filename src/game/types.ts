@@ -432,6 +432,19 @@ export interface BuildingInstance {
   upgradeProgress?: number
 }
 
+/**
+ * A straight stretch of road between two points. Roads are laid instantly for
+ * a little wood, run over cleared ground only, and never through obstacles or
+ * deposits. Their connectivity (which workplaces reach the hearth or a
+ * warehouse, and how directly) is derived — see `engine/roads.ts` — and never
+ * stored here.
+ */
+export interface RoadSegment {
+  id: string
+  a: Vec2
+  b: Vec2
+}
+
 // ---------------------------------------------------------------------------
 // Season cycle
 // ---------------------------------------------------------------------------
@@ -883,6 +896,14 @@ export interface RunState {
   obstacles: Obstacle[]
   buildings: Record<string, BuildingInstance>
   villagers: Record<string, Villager>
+  /**
+   * Roads laid by the player. Absent on saves from before roads existed,
+   * which read as none — and with no roads every building works exactly as
+   * it always did (the road bonus is purely additive).
+   */
+  roads?: RoadSegment[]
+  /** Next road id; absent on saves from before roads. */
+  roadCounter?: number
 
   stock: ResourceBag
   /** Cached: base storage + warehouses + cornerstones. */
