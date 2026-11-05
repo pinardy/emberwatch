@@ -216,7 +216,7 @@ function neededServices(s: RunState): ServiceNeed[] {
 function slotPressure(s: RunState): number {
   let slots = 0
   for (const b of Object.values(s.buildings)) {
-    if (b.built) slots += workerSlotsOf(b)
+    if (b.built && !saturated(s, b)) slots += workerSlotsOf(b)
   }
   return slots / Math.max(1, population(s))
 }

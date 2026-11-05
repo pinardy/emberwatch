@@ -111,10 +111,34 @@ export const RESOLVE_PER_FOOD_VARIETY = 1.2
 export const FOOD_VARIETY_CAP = 6
 /**
  * Resolve lost per point of hostility. Hostility is meant to be a tightening
- * squeeze, not an unpayable tax — at the practical late-run ceiling (~70) this
- * costs 7 resolve, which good service coverage can outrun.
+ * squeeze, not an unpayable tax: in the first year it costs a couple of
+ * points, as it always has.
  */
 export const RESOLVE_PER_HOSTILITY = 0.1
+/**
+ * Past this much hostility the forest has closed in, and every further point
+ * costs `RESOLVE_PER_HOSTILITY_LATE` more on top. A settlement crosses it once
+ * it starts clearing glades in earnest: a newcomer following the first-steps
+ * checklist meets its first Storm at hostility ~10-15 and feels nothing, an
+ * expanding one at ~25 loses two points, and the squeeze tightens from there:
+ * at hostility 50 resolve drops 12 instead of 5, at 70 it drops 18. That is
+ * more than one served need is worth, so a species with half its needs met
+ * sinks to within a few points of its threshold and earns little reputation,
+ * while one with both served still clears it — the late game rewards serving
+ * people, not idling.
+ *
+ * Tuned against the balance harness: with the old flat 0.1 the competent bot
+ * won 92% of the fixed seeds (96% once its labour bug was fixed), against a
+ * 95% ceiling; this brings it to ~80% on fixed and fresh seeds alike.
+ */
+export const HOSTILITY_SQUEEZE_THRESHOLD = 15
+export const RESOLVE_PER_HOSTILITY_LATE = 0.2
+
+/** Resolve every species loses to the forest at `hostility`. */
+export function hostilityResolvePenalty(hostility: number): number {
+  const over = Math.max(0, hostility - HOSTILITY_SQUEEZE_THRESHOLD)
+  return hostility * RESOLVE_PER_HOSTILITY + over * RESOLVE_PER_HOSTILITY_LATE
+}
 /**
  * Resolve penalty while the settlement is starving, at full hunger. Hunger
  * ramps in: the first missed meal costs `STARVING_MIN_SEVERITY` of this, and the
@@ -363,8 +387,17 @@ export const BRAZIER_FOOTPRINT = 0.4
 export const DECREE_FIRST_DELAY = YEAR_SECONDS
 /** Seconds between one decree ending (met or missed) and the next. */
 export const DECREE_INTERVAL = 200
-/** Impatience when a decree's deadline passes unmet. */
+/** Impatience when a decree's deadline passes unmet, with no strikes standing. */
 export const DECREE_MISS_IMPATIENCE = 1.5
+/**
+ * Extra impatience on a missed decree for every earlier miss still standing.
+ * The Queen forgives one lapse; she does not forgive a habit. Meeting a decree
+ * clears one strike, so a settlement that recovers is not punished forever.
+ * The balance bot ignores decrees and usually wins before a second miss, so
+ * this moves its win rate by about a point; it is aimed at long runs that
+ * let every decree lapse.
+ */
+export const DECREE_MISS_ESCALATION = 1
 /**
  * Decrees are only drawn from goals the settlement has not already mostly
  * met, so a deadline is a real push rather than a free payout.

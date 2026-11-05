@@ -123,6 +123,11 @@ export type SpeciesTraitEffect =
   | { kind: 'buildRate'; percent: number }
   /** Despair accumulates slower for this species (percent reduction). */
   | { kind: 'slowDespair'; percent: number }
+  /**
+   * This species counts `need` as at least `ratio` met (0..1) even with no
+   * venue serving it; a venue still has to cover the rest.
+   */
+  | { kind: 'needFloor'; need: ServiceNeed; ratio: number }
 
 export interface SpeciesTrait {
   name: string
@@ -962,6 +967,11 @@ export interface RunState {
   decree: RoyalDecree | null
   /** Seconds until the next decree while none is live. */
   decreeTimer: number
+  /**
+   * Decrees lapsed and not yet made good: each one makes the next miss cost
+   * more, and each decree met forgives one. Absent on older saves (reads as 0).
+   */
+  decreeStrikes?: number
   /** Whether the mid-run charter has been offered, and which was chosen. */
   charterOffered: boolean
   charter: string | null

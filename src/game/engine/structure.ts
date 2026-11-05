@@ -17,6 +17,7 @@ import {
   DECREE_FIRST_DELAY,
   DECREE_INTERVAL,
   DECREE_MAX_START_PROGRESS,
+  DECREE_MISS_ESCALATION,
   DECREE_MISS_IMPATIENCE,
   IMPATIENCE_PER_VILLAGER_LOST,
 } from './balance'
@@ -140,6 +141,17 @@ export function goalFeasible(goal: OrderGoal, s: RunState): boolean {
 // Royal decrees
 // ---------------------------------------------------------------------------
 
+/**
+ * Impatience the live decree will cost if it lapses now: the base penalty,
+ * plus the escalation for every earlier miss not yet made good, scaled by
+ * cornerstones and map modifiers. Shared by the sim and the decree card.
+ */
+export function decreeMissImpatience(s: RunState): number {
+  const strikes = s.decreeStrikes ?? 0
+  const base = DECREE_MISS_IMPATIENCE + DECREE_MISS_ESCALATION * strikes
+  return base * computeModifiers(s).decreeMissPenalty
+}
+
 /** Counts down to the next decree, and runs the live one against its deadline. */
 export function stepDecree(s: RunState, dt: number): void {
   const decree = s.decree
@@ -165,6 +177,7 @@ export function stepDecree(s: RunState, dt: number): void {
     if (def.reward) {
       s.stats.resourcesProduced += grant(s.stock, def.reward, s.storageCap, storageUsed(s))
     }
+    s.decreeStrikes = Math.max(0, (s.decreeStrikes ?? 0) - 1)
     recordEvent(s, 'decreeMet', def.name)
     feats(s).decreesMet++
     pushLog(
@@ -179,8 +192,9 @@ export function stepDecree(s: RunState, dt: number): void {
 
   decree.timeLeft -= dt
   if (decree.timeLeft <= 0) {
-    const penalty = DECREE_MISS_IMPATIENCE * computeModifiers(s).decreeMissPenalty
+    const penalty = decreeMissImpatience(s)
     if (penalty > 0) addImpatience(s, penalty)
+    s.decreeStrikes = (s.decreeStrikes ?? 0) + 1
     recordEvent(s, 'decreeMissed', def.name)
     pushLog(s, `📯 The decree lapsed unmet — ${def.name}. The Queen is displeased.`, 'bad')
     s.decree = null
