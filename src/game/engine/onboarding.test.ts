@@ -172,6 +172,7 @@ describe('a new player following the checklist', () => {
       ['human', 'beaver', 'lizard'],
       ['human', 'fox', 'harpy'],
       ['beaver', 'lizard', 'harpy'],
+      ['beaver', 'lizard', 'fox'],
     ]
     for (const species of trios) {
       for (const seed of [1, 42, 777, 4242, 31337, 90210]) {

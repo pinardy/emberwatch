@@ -861,11 +861,18 @@ function playRun(
   }
 }
 
-/** One trio from the starting species and two that need a charter. */
+/**
+ * One trio from the starting species and three that need a charter. The
+ * fourth, beaver/lizard/fox, was the weakest of all ten possible trios when
+ * it was added (lizards' and foxes' deep needs, brawling and rest, both sat
+ * behind the weaver at the end of the draft), so the parity check now
+ * covers it.
+ */
 const TRIOS: SpeciesId[][] = [
   ['human', 'beaver', 'lizard'],
   ['human', 'fox', 'harpy'],
   ['beaver', 'lizard', 'harpy'],
+  ['beaver', 'lizard', 'fox'],
 ]
 
 const ALL_SEEDS = [
