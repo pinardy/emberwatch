@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST, STARTING_BLUEPRINTS } from '../content/buildings'
 import { CHARTERS } from '../content/charters'
+import { CORNERSTONE_LIST } from '../content/cornerstones'
+import { cornerstonePool } from './citadel'
 import { DECREES, DECREE_LIST } from '../content/decrees'
 import { GLADE_EVENTS, GLADE_EVENT_LIST } from '../content/gladeEvents'
 import { ORDER_LIST, evaluateGoal } from '../content/orders'
@@ -128,8 +130,8 @@ const SEED = 123456
  * exactly what a player does before the clock starts.
  *
  * These tests pin the core rules, so the run draws no map modifiers (they
- * have their own tests); otherwise a seed's draw could change a rule under
- * test, e.g. Wandering Traders bringing caravans without a post.
+ * have their own tests below); otherwise a seed's draw could change a rule
+ * under test, e.g. Wandering Traders bringing caravans without a post.
  */
 function newRun(): RunState {
   const state = createRun({ seed: SEED, species: ['human', 'beaver', 'lizard'], modifiers: [] })
@@ -462,6 +464,16 @@ describe('glade clearing', () => {
 })
 
 describe('orders', () => {
+  it('newer orders are reachable from the starting blueprints', () => {
+    // Orders never expire, so an unreachable one would clog a slot all run.
+    const state = newRun()
+    for (const id of ['produced_wood_250', 'glades_9', 'glades_12']) {
+      const def = ORDER_LIST.find((d) => d.id === id)
+      expect(def, id).toBeDefined()
+      expect(goalFeasible(def!.goal, state), id).toBe(true)
+    }
+  })
+
   it('evaluates every order goal without throwing', () => {
     const state = newRun()
     for (const def of ORDER_LIST) {
@@ -887,6 +899,76 @@ describe('glade event content invariants', () => {
         expect(option.threat.interval).toBeGreaterThan(0)
         expect(Object.keys(option.threat.appease).length).toBeGreaterThan(0)
       }
+    }
+  })
+
+  it('threats are the greedy path: they always come with loot', () => {
+    for (const def of GLADE_EVENT_LIST) {
+      for (const option of def.options) {
+        if (!option.threat) continue
+        expect(Object.keys(option.gain ?? {}).length, `${def.id}: ${option.label}`).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('ongoing effects are paid for up front', () => {
+    for (const def of GLADE_EVENT_LIST) {
+      for (const option of def.options) {
+        if (!option.ongoing) continue
+        const paid = Object.keys(option.cost ?? {}).length > 0 || (option.foodCost ?? 0) > 0
+        expect(paid, `${def.id}: ${option.label}`).toBe(true)
+        expect(option.ongoing.effects.length).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('every required resource is also what the option spends', () => {
+    for (const def of GLADE_EVENT_LIST) {
+      for (const option of def.options) {
+        for (const id of Object.keys(option.requires ?? {})) {
+          expect(option.cost, `${def.id}: ${option.label}`).toHaveProperty(id)
+        }
+      }
+    }
+  })
+
+  it('has unique event ids and enough of both kinds to fill a map', () => {
+    const ids = GLADE_EVENT_LIST.map((d) => d.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(GLADE_EVENT_LIST.filter((d) => d.kind === 'dangerous').length).toBeGreaterThanOrEqual(20)
+    expect(GLADE_EVENT_LIST.filter((d) => d.kind === 'forbidden').length).toBeGreaterThanOrEqual(10)
+  })
+})
+
+describe('cornerstone content invariants', () => {
+  it('has unique ids, and every effect actually moves the modifiers', () => {
+    const ids = CORNERSTONE_LIST.map((d) => d.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    const neutral = JSON.stringify(computeModifiers(newRun()))
+    for (const def of CORNERSTONE_LIST) {
+      expect(def.effects.length, def.id).toBeGreaterThan(0)
+      const state = newRun()
+      state.cornerstones = [def.id]
+      expect(JSON.stringify(computeModifiers(state)), def.id).not.toBe(neutral)
+    }
+  })
+
+  it("only drafts a species' own cornerstone when that species answered the call", () => {
+    const state = newRun()
+    expect(state.speciesPool).toEqual(['human', 'beaver', 'lizard'])
+    const pool = cornerstonePool(state).map((c) => c.id)
+    expect(pool).toContain('lizardRites')
+    expect(pool).not.toContain('harpyAeries')
+    expect(pool).not.toContain('foxDens')
+    for (const def of CORNERSTONE_LIST.filter((c) => c.species)) {
+      // Each species cornerstone really is about its species.
+      expect(def.effects.some((e) => e.kind === 'resolveFlat' && e.species === def.species), def.id).toBe(true)
+    }
+  })
+
+  it('offers every rarity in the open draft pool', () => {
+    for (const rarity of ['common', 'rare', 'epic'] as const) {
+      expect(CORNERSTONE_LIST.filter((d) => d.rarity === rarity && !d.citadelLocked).length).toBeGreaterThan(5)
     }
   })
 })

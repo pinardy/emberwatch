@@ -17,7 +17,11 @@ export const BASE_DRAFT_OPTIONS = 3
 /** Cornerstones that may be drafted this run: the open pool plus any the Citadel admitted. */
 export function cornerstonePool(s: RunState): CornerstoneDef[] {
   const admitted = s.citadel?.cornerstones ?? []
-  return CORNERSTONE_LIST.filter((c) => !c.citadelLocked || admitted.includes(c.id))
+  return CORNERSTONE_LIST.filter(
+    (c) =>
+      (!c.citadelLocked || admitted.includes(c.id)) &&
+      (!c.species || s.speciesPool.includes(c.species)),
+  )
 }
 
 export function blueprintDraftSize(s: RunState): number {

@@ -453,6 +453,11 @@ export interface CornerstoneDef {
    * `content/meta.ts`). Runs record what they unlocked in `RunState.citadel`.
    */
   citadelLocked?: boolean
+  /**
+   * A species' own cornerstone: only drafted when that species answered the
+   * call, so a settlement without lizards is never offered Lizard Rites.
+   */
+  species?: SpeciesId
 }
 
 /**

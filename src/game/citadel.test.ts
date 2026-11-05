@@ -371,7 +371,12 @@ describe('cornerstone pool', () => {
       for (const id of choice.options) expect(locked).not.toContain(id)
       takeChoice(s, choice.options[0])
     }
-    expect(s.cornerstones.length).toBe(CORNERSTONE_LIST.length - locked.length)
+    // Species cornerstones are only offered when that species is present.
+    const absent = CORNERSTONE_LIST.filter(
+      (c) => !c.citadelLocked && c.species && !s.speciesPool.includes(c.species),
+    )
+    expect(absent.length).toBeGreaterThan(0)
+    expect(s.cornerstones.length).toBe(CORNERSTONE_LIST.length - locked.length - absent.length)
   })
 
   it('admits exactly the cornerstones the Citadel unlocked', () => {
