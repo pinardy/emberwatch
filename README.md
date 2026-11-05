@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 360 tests: simulation, forecasts, Citadel, balance harness, UI
+npm test           # 519 tests: simulation, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -96,7 +96,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs eighteen test files:
+`npm test` runs twenty-five test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), and clears glades. It plays 24 seeds for each of three species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
