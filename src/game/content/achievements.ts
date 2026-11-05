@@ -354,6 +354,11 @@ export const ACHIEVEMENTS: Record<string, AchievementDef> = Object.fromEntries(
   defs.map((d) => [d.id, d]),
 )
 
+/** How many achievements are earned (ignores ids no longer in the list). */
+export function achievementCount(state: AchievementState): number {
+  return defs.filter((d) => state.unlocked[d.id] !== undefined).length
+}
+
 /** Titles any achievement can grant. */
 export function isAchievementTitle(title: string): boolean {
   return defs.some((d) => d.reward?.title === title)

@@ -6,13 +6,10 @@ import {
   type AutoPauseHit,
   type RunWatch,
 } from './autoPause'
-import {
-  META_UPGRADES,
-  bankRun,
-  defaultMeta,
-  purchaseUpgrade,
-  supplyReward,
-} from './content/meta'
+import { earnedTitles } from './content/achievements'
+import { dailyExpedition, utcDateKey } from './content/daily'
+import { META_UPGRADES, defaultMeta, purchaseUpgrade } from './content/meta'
+import { settleRun, type RunSettlement } from './progression'
 import {
   addClearer,
   assignWorker,
@@ -36,6 +33,7 @@ import {
   takeChoice,
 } from './engine/events'
 import { randomSeed } from './engine/rng'
+import type { LandChoice } from './engine/runModifiers'
 import { unassign } from './engine/society'
 import { tick } from './engine/tick'
 import { buyOffer, sellResource } from './engine/trade'
@@ -66,7 +64,7 @@ let simCarry = 0
  */
 let watched: { run: RunState; snapshot: RunWatch } | null = null
 
-export type Screen = 'menu' | 'setup' | 'game' | 'citadel'
+export type Screen = 'menu' | 'setup' | 'game' | 'citadel' | 'achievements' | 'daily'
 export type SidePanel = 'build' | 'villagers' | 'orders' | 'log' | 'trade' | null
 
 interface GameStore {
@@ -93,7 +91,9 @@ interface GameStore {
   // --- lifecycle -----------------------------------------------------------
   boot: () => void
   /** `edict` is clamped to the highest Queen's Edict the Citadel has earned. */
-  startRun: (seed?: number, species?: SpeciesId[], edict?: number) => void
+  startRun: (seed?: number, species?: SpeciesId[], edict?: number, land?: LandChoice) => void
+  /** Sets out on today's (UTC) daily expedition: fixed map, trio and edict, no Citadel upgrades. */
+  startDaily: (now?: number) => void
   abandonRun: () => void
   finishRun: () => void
   goToScreen: (screen: Screen) => void
@@ -135,8 +135,23 @@ interface GameStore {
   recallAll: () => void
   dismissNotice: () => void
   buyUpgrade: (id: string) => void
+  /** Wears an earned achievement title on the menu, or none. */
+  setTitle: (title: string | null) => void
   updateSettings: (patch: Partial<Settings>) => void
   saveNow: () => void
+}
+
+/** The notice shown once a run is banked. */
+function settlementNotice(settled: RunSettlement, unlockedEdict: boolean): string {
+  const parts = [`Run banked: +${settled.runSupplies} Citadel supplies.`]
+  if (unlockedEdict) parts.push("A harsher Queen's Edict is unlocked.")
+  if (settled.achievements.length > 0) {
+    const names = settled.achievements.map((a) => `${a.icon} ${a.name}`).join(', ')
+    const bonus =
+      settled.achievementSupplies > 0 ? ` (+${settled.achievementSupplies} supplies)` : ''
+    parts.push(`Achievement${settled.achievements.length > 1 ? 's' : ''}: ${names}${bonus}.`)
+  }
+  return parts.join(' ')
 }
 
 /** Wraps a command that returns an error string, surfacing it as a notice. */
@@ -170,13 +185,38 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ meta: loadMeta(), settings: loadSettings() })
   },
 
-  startRun: (seed, species, edict) => {
+  startRun: (seed, species, edict, land) => {
     const meta = get().meta
     const run = createRun({
       seed: seed ?? randomSeed(),
       meta,
       species,
       edict: Math.min(edict ?? 0, meta.edictUnlocked),
+      land,
+    })
+    saveRun(run)
+    set({
+      run,
+      screen: 'game',
+      version: get().version + 1,
+      speed: 1,
+      buildMode: null,
+      selectedBuilding: null,
+      selectedDeposit: null,
+      selectedGlade: null,
+      panel: 'build',
+      notice: null,
+    })
+  },
+
+  startDaily: (now) => {
+    const day = dailyExpedition(utcDateKey(now ?? Date.now()))
+    // No `meta`: the daily is the same fair challenge for every Citadel.
+    const run = createRun({
+      seed: day.seed,
+      species: day.species,
+      edict: day.edict,
+      daily: day.date,
     })
     saveRun(run)
     set({
@@ -207,24 +247,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ run: null, screen: 'menu', speed: 0, version: get().version + 1 })
   },
 
-  /** Banks the reward for a finished run and returns to the Citadel. */
+  /**
+   * Banks a finished run (supplies, the ledger, a daily's result and any
+   * achievements) and returns to the Citadel, or to the daily page.
+   */
   finishRun: () => {
     const { run, meta } = get()
     if (!run || run.phase === 'playing') return
-    const reward = supplyReward(run)
-    const next = bankRun(meta, run)
+    const settled = settleRun(meta, run)
+    const next = settled.meta
     const unlockedEdict = next.edictUnlocked > meta.edictUnlocked
     saveMeta(next)
     saveRun(null)
     set({
       meta: next,
       run: null,
-      screen: 'citadel',
+      // A daily returns to its own page, where the result can be shared.
+      screen: run.daily ? 'daily' : 'citadel',
       speed: 0,
       version: get().version + 1,
-      notice: unlockedEdict
-        ? `Run banked: +${reward} Citadel supplies. A harsher Queen's Edict is unlocked.`
-        : `Run banked: +${reward} Citadel supplies.`,
+      notice: settlementNotice(settled, unlockedEdict),
     })
   },
 
@@ -386,6 +428,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     saveMeta(result.meta)
     set({ meta: result.meta, notice: `${def.name} unlocked.` })
+  },
+
+  setTitle: (title) => {
+    const meta = get().meta
+    if (title !== null && !earnedTitles(meta.achievements).includes(title)) return
+    const next = { ...meta, title }
+    saveMeta(next)
+    set({ meta: next })
   },
 
   updateSettings: (patch) => {

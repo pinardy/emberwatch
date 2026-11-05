@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { useGameStore } from './game/store'
+import { AchievementsScreen } from './ui/AchievementsScreen'
 import { CitadelScreen } from './ui/CitadelScreen'
+import { DailyScreen } from './ui/DailyScreen'
 import { GameScreen } from './ui/GameScreen'
 import { MenuScreen } from './ui/MenuScreen'
 import { SetupScreen } from './ui/SetupScreen'
@@ -20,6 +22,8 @@ export default function App() {
       {screen === 'setup' && <SetupScreen />}
       {screen === 'citadel' && <CitadelScreen />}
       {screen === 'game' && <GameScreen />}
+      {screen === 'achievements' && <AchievementsScreen />}
+      {screen === 'daily' && <DailyScreen />}
       <UpdatePrompt />
     </>
   )

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { loadRun } from '../game/persistence'
 import { useGameStore } from '../game/store'
+import { ACHIEVEMENT_LIST, achievementCount } from '../game/content/achievements'
+import { DailyMenuEntry } from './DailyScreen'
 import { AutoPauseFields, PauseOnBlurField } from './SettingsFields'
 
 export function MenuScreen() {
@@ -48,6 +50,10 @@ export function MenuScreen() {
           </button>
           <button type="button" onClick={() => goToScreen('citadel')}>
             🏛️ The Citadel ({meta.citadelSupplies} supplies)
+          </button>
+          <DailyMenuEntry />
+          <button type="button" onClick={() => goToScreen('achievements')}>
+            🏅 Achievements ({achievementCount(meta.achievements)}/{ACHIEVEMENT_LIST.length})
           </button>
         </div>
 
@@ -118,6 +124,7 @@ export function MenuScreen() {
         </details>
 
         <p className="menu-foot muted">
+          {meta.title && <span className="menu-title">Viceroy {meta.title} · </span>}
           {meta.runsWon} won · {meta.runsLost} lost
         </p>
       </div>
