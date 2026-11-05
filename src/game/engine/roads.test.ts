@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { loadRun, saveRun } from '../persistence'
+import { parseSaveFile, saveFileText } from '../saveFile'
 import type { BuildingInstance, RunState, Vec2 } from '../types'
 import { placeBuilding } from './actions'
 import { ROAD_WORK_BONUS, TICK_SECONDS } from './balance'
@@ -348,6 +349,29 @@ describe('old saves', () => {
     expect(loaded.stock).toEqual(raw.stock)
     expect(loaded.producedTotals).toEqual(raw.producedTotals)
     expect(loaded.reputation + loaded.reputationProgress).toBe(raw.reputation + raw.reputationProgress)
+  })
+
+  it('import from a file with their roads, and refuse a file whose roads are damaged', () => {
+    const run = openRun()
+    const mill = addBuilding(run, 'lumberMill', { x: 6, y: 0 })
+    placeRoad(run, mill.pos, HEARTH)
+    const imported = parseSaveFile(saveFileText(run))
+    expect(imported.ok).toBe(true)
+    if (imported.ok) expect(imported.run.roads).toEqual(run.roads)
+
+    const legacy = JSON.parse(saveFileText(run))
+    delete legacy.run.roads
+    delete legacy.run.roadCounter
+    const old = parseSaveFile(JSON.stringify(legacy))
+    expect(old.ok && old.run.roads).toEqual([])
+
+    for (const roads of [[null], [{ id: 'r', a: { x: 0 }, b: { x: 1, y: 1 } }], 'x', [{ a: { x: 0, y: 0 }, b: { x: 1, y: 1 } }]]) {
+      const bad = JSON.parse(saveFileText(run))
+      bad.run.roads = roads
+      const result = parseSaveFile(JSON.stringify(bad))
+      expect(result.ok, JSON.stringify(roads)).toBe(false)
+      if (!result.ok) expect(result.error).toMatch(/roads are damaged/)
+    }
   })
 
   it('round-trip roads through a save, rebuilding the graph on load', () => {
