@@ -225,7 +225,7 @@ export function DailyScreen() {
                       <td className={r.won ? 'is-good' : 'is-bad'}>
                         {r.won ? (
                           <>
-                            <Icon id="reputation" /> Held
+                            <Icon id="reputation" emoji="👑" /> Held
                           </>
                         ) : (
                           '🌫️ Lost'

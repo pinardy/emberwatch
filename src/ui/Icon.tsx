@@ -1,6 +1,50 @@
-import { memo, type ReactElement } from 'react'
-import { ICONS, isIconId, matrixAttr, toneColor, type IconId } from '../art/icons'
+import { memo, useEffect, useSyncExternalStore, type ReactElement } from 'react'
+import type { IconId } from '../art/icons'
 import './icons.css'
+
+/*
+ * The icon registry (all the path data) is its own chunk, kept out of the
+ * startup bundle: only the menu ships eagerly, and it barely shows an icon.
+ * The lazy screens fetch it alongside their own code (see `lazyScreens.tsx`),
+ * so the game never renders without it; on the menu an icon shows its emoji
+ * for the moment before the registry lands, then redraws.
+ */
+type Registry = typeof import('../art/icons')
+let registry: Registry | null = null
+let pending: Promise<Registry> | null = null
+const listeners = new Set<() => void>()
+
+/** Fetches the icon registry; safe to call any number of times. */
+export function loadIcons(): Promise<Registry> {
+  pending ??= import('../art/icons').then(
+    (m) => {
+      registry = m
+      for (const listener of listeners) listener()
+      return m
+    },
+    (error: unknown) => {
+      pending = null // let a later attempt retry
+      throw error
+    },
+  )
+  return pending
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+const getRegistry = () => registry
+
+function useRegistry(): Registry | null {
+  const reg = useSyncExternalStore(subscribe, getRegistry, getRegistry)
+  useEffect(() => {
+    if (!reg) void loadIcons().catch(() => undefined)
+  }, [reg])
+  return reg
+}
 
 /**
  * One of Emberwatch's drawn icons, inline as SVG. It sizes itself in `em`, so
@@ -25,11 +69,12 @@ export interface IconProps {
 }
 
 export function Icon({ id, of, emoji, label, className }: IconProps) {
+  const reg = useRegistry()
   const art = id ?? of?.art
   const a11y = label
     ? ({ role: 'img', 'aria-label': label } as const)
     : ({ 'aria-hidden': true } as const)
-  if (art && isIconId(art)) {
+  if (art && reg?.isIconId(art)) {
     return (
       <svg
         className={className ? `icon ${className}` : 'icon'}
@@ -40,7 +85,7 @@ export function Icon({ id, of, emoji, label, className }: IconProps) {
         data-icon={art}
         {...a11y}
       >
-        {shapesOf(art)}
+        {shapesOf(reg, art)}
       </svg>
     )
   }
@@ -56,7 +101,8 @@ export function Icon({ id, of, emoji, label, className }: IconProps) {
 /** The paths of each icon, built once and reused by every render. */
 const shapeCache = new Map<IconId, ReactElement[]>()
 
-export function shapesOf(id: IconId): ReactElement[] {
+function shapesOf(reg: Registry, id: IconId): ReactElement[] {
+  const { ICONS, matrixAttr, toneColor } = reg
   let hit = shapeCache.get(id)
   if (!hit) {
     hit = ICONS[id].map((s, i) => (
@@ -86,6 +132,8 @@ export function iconSymbolId(id: IconId): string {
  * Memoised on the id list, so it renders once per map, not per tick.
  */
 export const IconSymbols = memo(function IconSymbols({ ids }: { ids: readonly IconId[] }) {
+  const reg = useRegistry()
+  if (!reg) return null
   return (
     <defs>
       {ids.map((id) => (
@@ -97,7 +145,7 @@ export const IconSymbols = memo(function IconSymbols({ ids }: { ids: readonly Ic
           strokeLinejoin="round"
           overflow="visible"
         >
-          {shapesOf(id)}
+          {shapesOf(reg, id)}
         </symbol>
       ))}
     </defs>

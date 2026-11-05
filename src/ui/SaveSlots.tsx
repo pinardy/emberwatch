@@ -39,8 +39,8 @@ export function SlotOneLiner({ meta }: { meta: SlotMeta }) {
       {meta.species.map((id) => (
         <Icon key={id} of={SPECIES[id]} />
       ))}{' '}
-      {slotWhen(meta)} · <Icon id="reputation" label="reputation" /> {Math.floor(meta.reputation)}/
-      {meta.maxReputation} · <Icon id="impatience" label="impatience" /> {Math.floor(meta.impatience)}/
+      {slotWhen(meta)} · <Icon id="reputation" emoji="👑" label="reputation" /> {Math.floor(meta.reputation)}/
+      {meta.maxReputation} · <Icon id="impatience" emoji="⏳" label="impatience" /> {Math.floor(meta.impatience)}/
       {meta.maxImpatience}
     </>
   )

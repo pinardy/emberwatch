@@ -85,5 +85,5 @@ export function tokenizeIconText(text: string): (string | { art: IconId; glyph: 
 export function IconText({ text }: { text: string }): ReactNode {
   const parts = tokenizeIconText(text)
   if (parts.length === 1 && typeof parts[0] === 'string') return text
-  return parts.map((p, i) => (typeof p === 'string' ? p : <Icon key={i} id={p.art} />))
+  return parts.map((p, i) => (typeof p === 'string' ? p : <Icon key={i} id={p.art} emoji={p.glyph} />))
 }
