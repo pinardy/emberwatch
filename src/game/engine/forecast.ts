@@ -1,11 +1,25 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
 import type { BuildingInstance, ResourceBag, ResourceId, RunState, Season } from '../types'
-import { COMPLEX_FOOD_MULTIPLIER, HEARTH_FUEL_PER_SECOND, SEASON_LENGTH } from './balance'
+import {
+  COMPLEX_FOOD_MULTIPLIER,
+  HEARTH_FUEL_PER_SECOND,
+  IMPATIENCE_OVERTIME_BASE,
+  SEASON_LENGTH,
+  SEASON_ORDER,
+} from './balance'
 import { computeModifiers, seasonLengthFor, type Modifiers } from './modifiers'
 import { countOutputs, seasonMultiplier, workRate } from './production'
 import { activeRecipe, canAfford, storageUsed } from './queries'
-import { hearthFuelRate, impatienceRate, mealsPerSecond, stormFuelPerSecond } from './society'
+import {
+  QUEEN_DEADLINE_SECONDS,
+  deadlineOvertimeRate,
+  hearthFuelRate,
+  impatienceRate,
+  mealsPerSecond,
+  secondsPastDeadline,
+  stormFuelPerSecond,
+} from './society'
 import { hostilityRate } from './tick'
 import { recipesOf } from './upgrades'
 
@@ -211,6 +225,77 @@ export function meterRates(
     impatiencePerMinute: impatienceRate(s, mods) * 60,
     hostilityPerMinute: hostilityRate(s, mods.hostilityRate) * 60,
   }
+}
+
+// ---------------------------------------------------------------------------
+// The Queen's deadline
+// ---------------------------------------------------------------------------
+
+/** Seconds in `year` at this run's season lengths (Long Storms, Early Frost). */
+export function yearLengthFor(year: number, mods: Modifiers): number {
+  return SEASON_ORDER.reduce((sum, season) => sum + seasonLengthFor(season, year, mods), 0)
+}
+
+export interface DeadlineForecast {
+  /** Seconds until the deadline; 0 once it has passed. */
+  secondsLeft: number
+  /** Seconds since it passed; 0 before. */
+  secondsPast: number
+  passed: boolean
+  /**
+   * Within a year of the deadline (a year at this run's season lengths) and
+   * not yet past it: the HUD counts down and the warning strip speaks up.
+   */
+  imminent: boolean
+  /** Extra impatience per minute the deadline adds right now (0 before it). */
+  overtimePerMinute: number
+  /** What it adds per minute the moment it passes; it steepens from there. */
+  startPerMinute: number
+  /**
+   * Where in the calendar the deadline lands at the current season lengths,
+   * or null once it has passed. Year 5's first Drizzle at standard lengths;
+   * Long Storms pull it into Year 4's Storm.
+   */
+  landsIn: { year: number; season: Season } | null
+}
+
+/**
+ * The Queen's deadline as the HUD shows it. The countdown and the overtime
+ * come from the functions the tick uses, so the number on screen is the one
+ * that will bite; only the calendar placement is a projection (a cornerstone
+ * that changes season lengths later can move it).
+ */
+export function deadlineForecast(s: RunState, mods: Modifiers): DeadlineForecast {
+  const secondsPast = secondsPastDeadline(s)
+  const secondsLeft = Math.max(0, QUEEN_DEADLINE_SECONDS - s.clock)
+  const passed = secondsLeft <= 0
+  return {
+    secondsLeft,
+    secondsPast,
+    passed,
+    imminent: !passed && secondsLeft <= yearLengthFor(s.season.year, mods),
+    overtimePerMinute: deadlineOvertimeRate(s) * 60,
+    startPerMinute: IMPATIENCE_OVERTIME_BASE * 60,
+    landsIn: passed ? null : deadlineLandsIn(s, secondsLeft, mods),
+  }
+}
+
+/** Walks the coming seasons, at the lengths the tick will give them. */
+function deadlineLandsIn(
+  s: RunState,
+  secondsLeft: number,
+  mods: Modifiers,
+): { year: number; season: Season } {
+  let { year, season } = s.season
+  let remaining = secondsLeft - Math.max(0, s.season.length - s.season.elapsed)
+  // A deadline on a season boundary belongs to the season that starts there.
+  for (let guard = 0; remaining >= 0 && guard < 100; guard++) {
+    const next = SEASON_ORDER[(SEASON_ORDER.indexOf(season) + 1) % SEASON_ORDER.length]
+    if (next === 'drizzle') year++
+    season = next
+    remaining -= seasonLengthFor(season, year, mods)
+  }
+  return { year, season }
 }
 
 // ---------------------------------------------------------------------------
