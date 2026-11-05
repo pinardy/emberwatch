@@ -1,3 +1,4 @@
+import { feats } from './feats'
 import type { RunState, Season } from '../types'
 import {
   BASE_STORAGE,
@@ -81,6 +82,7 @@ export function tick(s: RunState, dt: number): void {
   stepCaravan(s, dt, mods)
 
   s.coldHearth = stepHearth(s, dt, hearthFuelRate(s.season.season, mods))
+  if (s.coldHearth) feats(s).hearthWentCold = true
   // Braziers draw on the same woodpile, after the hearth. Said once a Storm,
   // however often a thin woodpile makes them gutter.
   if (stepBraziers(s, dt, mods.hearthFuel * mods.brazierFuel) > 0) {

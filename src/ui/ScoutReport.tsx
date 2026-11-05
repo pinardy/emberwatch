@@ -1,0 +1,25 @@
+import { scoutedEvent } from '../game/engine/citadel'
+import type { RunState } from '../game/types'
+import './replay.css'
+
+/**
+ * The Scouts' Report (a Citadel upgrade): names what waits in a glade of the
+ * first ring before anyone clears it. Renders nothing without the upgrade or
+ * outside the first ring.
+ */
+export function ScoutReport({ run, gladeId }: { run: RunState; gladeId: string }) {
+  const report = scoutedEvent(run, gladeId)
+  if (report === undefined) return null
+  return (
+    <p className="scout-report">
+      🔍 <strong>Scouts' report:</strong>{' '}
+      {report === null ? (
+        'nothing waiting here but trees.'
+      ) : (
+        <>
+          {report.icon} {report.name}: {report.description}
+        </>
+      )}
+    </p>
+  )
+}
