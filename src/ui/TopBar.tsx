@@ -20,6 +20,9 @@ import { SPECIES } from '../game/content/species'
 import { useGameStore, useRun } from '../game/store'
 import { SPEED_OPTIONS } from '../game/engine/balance'
 import type { RunState, SpeciesId } from '../game/types'
+import type { IconId } from '../art/icons'
+import { METER_ART, SEASON_ART } from '../game/content/art'
+import { Icon } from './Icon'
 import { AutoPauseFields, PauseOnBlurField } from './SettingsFields'
 import { useEscapeLayer } from './useGameLoop'
 
@@ -68,6 +71,8 @@ const IMPATIENCE_CRITICAL_SHARE = 0.8
 interface StatusAlert {
   id: string
   icon: string
+  /** Drawn icon; `icon` is the emoji fallback. */
+  art?: IconId
   text: string
   severity: 'danger' | 'caution'
 }
@@ -142,7 +147,9 @@ export function TopBar() {
     untilStorm,
   })
   const dangers = alerts.filter((a) => a.severity === 'danger').length
-  const alertIcons = [...new Set(alerts.map((a) => a.icon))].slice(0, 2)
+  const alertIcons = alerts
+    .filter((a, i) => alerts.findIndex((b) => b.icon === a.icon) === i)
+    .slice(0, 2)
   const statusLabel = [
     'Settlement status',
     `${idle} idle`,
@@ -175,7 +182,9 @@ export function TopBar() {
               untilStorm !== null ? `. Storm in ${formatDuration(untilStorm)}` : ''
             }`}
           >
-            <span>{info.icon}</span>
+            <span>
+              <Icon id={SEASON_ART[run.season.season]} />
+            </span>
           </div>
           <div className="season-text">
             <strong>{info.name}</strong>
@@ -184,7 +193,7 @@ export function TopBar() {
             </small>
             {untilStorm !== null && (
               <small className={`season-next ${untilStorm <= 60 ? 'is-warn' : ''}`}>
-                {SEASON_INFO.storm.icon} Storm in {formatDuration(untilStorm)}
+                <Icon id={SEASON_ART.storm} /> Storm in {formatDuration(untilStorm)}
               </small>
             )}
           </div>
@@ -209,6 +218,7 @@ export function TopBar() {
         <Meter
           label="Reputation"
           icon="👑"
+          art={METER_ART.reputation}
           value={run.reputation}
           max={run.maxReputation}
           fraction={run.reputationProgress}
@@ -219,6 +229,7 @@ export function TopBar() {
         <Meter
           label="Impatience"
           icon="⏳"
+          art={METER_ART.impatience}
           value={run.impatience}
           max={run.maxImpatience}
           fraction={run.impatienceProgress}
@@ -234,6 +245,7 @@ export function TopBar() {
         <Meter
           label="Hostility"
           icon="🌩️"
+          art={METER_ART.hostility}
           value={Math.floor(run.hostility)}
           max={MAX_HOSTILITY}
           fraction={run.hostility - Math.floor(run.hostility)}
@@ -311,9 +323,9 @@ export function TopBar() {
           aria-label={statusLabel}
           title={statusLabel}
         >
-          {alertIcons.map((icon) => (
-            <span key={icon} className="status-toggle-alert" aria-hidden>
-              {icon}
+          {alertIcons.map((a) => (
+            <span key={a.icon} className="status-toggle-alert" aria-hidden>
+              <Icon id={a.art} emoji={a.icon} />
             </span>
           ))}
           <span className="status-toggle-idle" aria-hidden>
@@ -334,11 +346,12 @@ export function TopBar() {
         >
           {/* The season line only shows where the top bar has no room for it. */}
           <p className="status-season" aria-hidden>
-            {info.icon} {info.name} · Year {run.season.year} · {seasonLeft} left
+            <Icon id={SEASON_ART[run.season.season]} /> {info.name} · Year {run.season.year} ·{' '}
+            {seasonLeft} left
             {untilStorm !== null && (
               <span className={untilStorm <= 60 ? 'is-warn' : ''}>
                 {' '}
-                · {SEASON_INFO.storm.icon} in {formatDuration(untilStorm)}
+                · <Icon id={SEASON_ART.storm} /> in {formatDuration(untilStorm)}
               </span>
             )}
           </p>
@@ -346,7 +359,7 @@ export function TopBar() {
             <ul className="status-alerts">
               {alerts.map((a) => (
                 <li key={a.id} className={`is-${a.severity}`}>
-                  {a.icon} {a.text}
+                  <Icon id={a.art} emoji={a.icon} /> {a.text}
                 </li>
               ))}
             </ul>
@@ -362,14 +375,16 @@ export function TopBar() {
             title={hearthTitle(hearth, storm, run.coldHearth)}
             aria-label={`Hearth fuel: ${run.coldHearth ? 'out' : formatDuration(hearth.runway)}`}
           >
-            <span>🔥</span>
+            <span>
+              <Icon id="ancientHearth" />
+            </span>
             <strong>
               {(hearthDanger || hearthCaution) && <em className="stat-alert">!</em>}
               {run.coldHearth ? 'Out' : formatDuration(hearth.runway)}
             </strong>
             {!storm && !run.coldHearth && (
               <small className="hearth-storm">
-                {SEASON_INFO.storm.icon}
+                <Icon id={SEASON_ART.storm} />
                 {formatDuration(hearth.stormRunway)}
               </small>
             )}
@@ -387,7 +402,9 @@ export function TopBar() {
                   1,
                 )} (heading for ${b.target.toFixed(1)}). Earns reputation above ${b.threshold}.`}
               >
-                <span>{SPECIES[b.species].icon}</span>
+                <span>
+                  <Icon of={SPECIES[b.species]} />
+                </span>
                 <strong
                   className={
                     b.current < 0 ? 'is-bad' : b.current >= b.threshold ? 'is-good' : ''
@@ -430,13 +447,14 @@ function statusAlerts(input: {
   const { run } = input
   const out: StatusAlert[] = []
   if (run.coldHearth) {
-    out.push({ id: 'hearth', icon: '🔥', text: 'The hearth is out', severity: 'danger' })
+    out.push({ id: 'hearth', icon: '🔥', art: 'ancientHearth', text: 'The hearth is out', severity: 'danger' })
   } else if (input.hearthDanger) {
-    out.push({ id: 'hearth', icon: '🔥', text: 'Hearth wood is running out', severity: 'danger' })
+    out.push({ id: 'hearth', icon: '🔥', art: 'ancientHearth', text: 'Hearth wood is running out', severity: 'danger' })
   } else if (input.hearthCaution) {
     out.push({
       id: 'hearth',
       icon: '🔥',
+      art: 'ancientHearth',
       text: 'Not enough wood for the Storm',
       severity: 'caution',
     })
@@ -456,6 +474,7 @@ function statusAlerts(input: {
     out.push({
       id: 'impatience',
       icon: '⏳',
+      art: METER_ART.impatience,
       text: "The Queen's patience is nearly gone",
       severity: 'danger',
     })
@@ -468,6 +487,7 @@ function statusAlerts(input: {
       out.push({
         id: `resolve-${b.species}`,
         icon: SPECIES[b.species].icon,
+        art: SPECIES[b.species].art,
         text: `${SPECIES[b.species].name} resolve is below zero`,
         severity: 'caution',
       })
@@ -477,6 +497,7 @@ function statusAlerts(input: {
     out.push({
       id: 'storm',
       icon: SEASON_INFO.storm.icon,
+      art: SEASON_ART.storm,
       text: `The Storm arrives in ${formatDuration(input.untilStorm)}`,
       severity: 'caution',
     })
@@ -506,6 +527,7 @@ function hearthTitle(
 interface MeterProps {
   label: string
   icon: string
+  art?: IconId
   value: number
   max: number
   /** Progress toward the next whole point, 0..1. */
@@ -524,6 +546,7 @@ interface MeterProps {
 function Meter({
   label,
   icon,
+  art,
   value,
   max,
   fraction,
@@ -538,7 +561,9 @@ function Meter({
   return (
     <div className={`meter meter-${tone} ${critical ? 'is-critical' : ''}`} title={hint}>
       <div className="meter-head">
-        <span>{icon}</span>
+        <span>
+          <Icon id={art} emoji={icon} />
+        </span>
         <span className="meter-label">
           {label}
           {rate && <small className="meter-rate"> {rate}</small>}

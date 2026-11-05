@@ -1,6 +1,8 @@
+import { NEED_ART } from '../game/content/art'
 import { NEED_LABELS, SPECIES } from '../game/content/species'
 import { draftAppeal } from '../game/engine/events'
 import type { RunState, ServiceNeed, SpeciesId } from '../game/types'
+import { Icon } from './Icon'
 import './draft-appeal.css'
 
 /** "Humans and Beavers", "Humans, Beavers and Foxes". */
@@ -47,12 +49,18 @@ function NeedChip({
       title={summary}
       data-testid="draft-need"
     >
-      <span aria-hidden>{label?.icon} </span>
+      <span aria-hidden>
+        <Icon id={NEED_ART[need]} emoji={label?.icon} />{' '}
+      </span>
       {supplies ? `Supplies ${name}` : name}
       {species.length > 0 ? (
         <>
           {' '}
-          <span aria-hidden>({species.map((sp) => SPECIES[sp].icon).join('')})</span>
+          <span aria-hidden>
+            ({species.map((sp) => (
+              <Icon key={sp} of={SPECIES[sp]} />
+            ))})
+          </span>
           <span className="sr-only">, {who}</span>
         </>
       ) : (

@@ -4,6 +4,7 @@ import { SPECIES } from '../game/content/species'
 import { RESOLVE_LEAVE_THRESHOLD } from '../game/engine/balance'
 import { COL, describeOutcome, inStorm, raceAt, stormPeriods } from '../game/engine/timeline'
 import type { RunState, SpeciesId, TimelineEvent } from '../game/types'
+import { Icon } from './Icon'
 
 /*
  * The end-of-run timeline: why the run ended, not just how. Two views share
@@ -451,7 +452,7 @@ export function RunTimelineChart({ run }: { run: RunState }) {
         return (
           <g key={sp}>
             <text className="tl-row-title" x={PAD_LEFT} y={rowTop(r) - 5}>
-              {def.icon} {def.name}
+              <Icon of={def} /> {def.name}
               {gone.length > 0 && <tspan className="tl-row-note"> · {gone.length} lost</tspan>}
             </text>
             {leave >= lo && (

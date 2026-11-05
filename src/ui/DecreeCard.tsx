@@ -4,6 +4,7 @@ import { DECREE_MISS_IMPATIENCE } from '../game/engine/balance'
 import { computeModifiers } from '../game/engine/modifiers'
 import { describeTimedGoal } from '../game/engine/structure'
 import { useRun } from '../game/store'
+import { Icon } from './Icon'
 
 /** Seconds as m:ss. */
 export function clockText(seconds: number): string {
@@ -38,8 +39,13 @@ export function DecreeCard() {
       <div className="row-between">
         <strong>📯 {def.name}</strong>
         <span className="order-reward">
-          👑 +{def.reputationReward + mods.decreeReputation}
-          {def.reward?.amber ? ` · ${RESOURCES.amber.icon} ${def.reward.amber}` : ''}
+          <Icon id="reputation" label="reputation" /> +{def.reputationReward + mods.decreeReputation}
+          {def.reward?.amber ? (
+            <>
+              {' · '}
+              <Icon of={RESOURCES.amber} label="amber" /> {def.reward.amber}
+            </>
+          ) : null}
         </span>
       </div>
       <small>{describeTimedGoal(def.goal)}</small>

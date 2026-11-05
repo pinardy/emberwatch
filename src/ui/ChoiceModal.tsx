@@ -12,6 +12,7 @@ import { DialogTip } from './TipsCoach'
 import { CharterChoice } from './CharterChoice'
 import { RunModifierList } from './RunModifierList'
 import { DraftAppealChips } from './DraftAppealChips'
+import { Icon } from './Icon'
 
 /**
  * Blocking modal for the three things that interrupt play: cornerstone picks,
@@ -57,14 +58,18 @@ export function ChoiceModal() {
                     {option.cost && <Effect label="Cost" bag={option.cost} tone="bad" />}
                     {option.gain && <Effect label="Gain" bag={option.gain} tone="good" />}
                     {option.reputation ? (
-                      <span className="is-good">👑 +{option.reputation}</span>
+                      <span className="is-good">
+                        <Icon id="reputation" label="reputation" /> +{option.reputation}
+                      </span>
                     ) : null}
                     {option.impatience ? (
-                      <span className="is-bad">⏳ +{option.impatience}</span>
+                      <span className="is-bad">
+                        <Icon id="impatience" label="impatience" /> +{option.impatience}
+                      </span>
                     ) : null}
                     {option.hostility ? (
                       <span className={option.hostility > 0 ? 'is-bad' : 'is-good'}>
-                        🌩️ {option.hostility > 0 ? '+' : ''}
+                        <Icon id="hostility" label="hostility" /> {option.hostility > 0 ? '+' : ''}
                         {option.hostility}
                       </span>
                     ) : null}
@@ -177,7 +182,9 @@ export function ChoiceModal() {
                 className="option"
                 onClick={() => chooseOption(id)}
               >
-                <span className="option-icon">{def.icon}</span>
+                <span className="option-icon">
+                  <Icon of={def} />
+                </span>
                 <strong>{def.name}</strong>
                 <small>{def.description}</small>
                 <div className="option-effects">
@@ -209,9 +216,13 @@ function RerollButton() {
         disabled={(run.stock.amber ?? 0) < cost}
         onClick={reroll}
       >
-        {freeRerollsLeft(run) > 0
-          ? `🎲 Reroll the offer — free (${freeRerollsLeft(run)} left)`
-          : `🎲 Reroll the offer — ${cost} ${RESOURCES.amber.icon}`}
+        {freeRerollsLeft(run) > 0 ? (
+          `🎲 Reroll the offer — free (${freeRerollsLeft(run)} left)`
+        ) : (
+          <>
+            🎲 Reroll the offer — {cost} <Icon of={RESOURCES.amber} label="amber" />
+          </>
+        )}
       </button>
     </footer>
   )
@@ -233,7 +244,7 @@ function Effect({
       {label}:{' '}
       {entries.map(([id, amount]) => (
         <span key={id}>
-          {RESOURCES[id as keyof typeof RESOURCES]?.icon}
+          <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
           {amount}{' '}
         </span>
       ))}

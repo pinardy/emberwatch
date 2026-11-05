@@ -14,6 +14,8 @@ import { ResourceBar } from './ResourceBar'
 import { LogPanel, OrdersPanel, TradePanel } from './SidePanels'
 import { TipsCoach } from './TipsCoach'
 import { describeStrike, describeWhileActive } from './threatText'
+import { Icon } from './Icon'
+import { IconText } from './IconText'
 import { TopBar } from './TopBar'
 import { useAudioCues } from './useAudioCues'
 import { PANEL_KEY_LABEL, useGameLoop, useHotkeys } from './useGameLoop'
@@ -171,7 +173,7 @@ function ThreatBar() {
                   </span>
                 </strong>
                 <small className="threat-strike">
-                  Every {threat.interval}s: {describeStrike(threat)}
+                  Every {threat.interval}s: <IconText text={describeStrike(threat)} />
                 </small>
                 {standing && (
                   <small className="threat-standing">While loose: {standing}</small>
@@ -188,7 +190,10 @@ function ThreatBar() {
               Appease:{' '}
               {Object.entries(threat.appease).map(([id, amount]) => (
                 <span key={id}>
-                  {RESOURCES[id as keyof typeof RESOURCES]?.icon}
+                  <Icon
+                    of={RESOURCES[id as keyof typeof RESOURCES]}
+                    label={RESOURCES[id as keyof typeof RESOURCES]?.name}
+                  />
                   {amount}{' '}
                 </span>
               ))}
@@ -221,7 +226,7 @@ function Warnings() {
     <div className="warnings" role="status" aria-live="polite">
       {warnings.slice(0, 4).map((warning) => (
         <div key={warning.id} className={`warning is-${warning.severity}`}>
-          {warning.text}
+          <IconText text={warning.text} />
         </div>
       ))}
     </div>
