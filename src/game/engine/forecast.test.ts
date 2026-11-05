@@ -17,8 +17,9 @@ import { idleVillagers, storageUsed } from './queries'
 import { tick } from './tick'
 import type { BuildingInstance, RunState } from '../types'
 
+/** Baseline seasons and rates: the seed's map modifiers are tested elsewhere. */
 function newRun(): RunState {
-  const state = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'] })
+  const state = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'], modifiers: [] })
   while (state.pendingChoices.length > 0) takeChoice(state, state.pendingChoices[0].options[0])
   return state
 }

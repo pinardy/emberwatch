@@ -64,6 +64,8 @@ function run(opts: { upgrades?: string[]; edict?: number } = {}): RunState {
   return createRun({
     seed: SEED,
     species: [...SPECIES],
+    // Citadel and edict effects are measured against an unmodified land.
+    modifiers: [],
     meta: opts.upgrades ? metaWith(opts.upgrades) : undefined,
     edict: opts.edict,
   })

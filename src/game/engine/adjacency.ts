@@ -1,5 +1,6 @@
 import { BUILDINGS, CATEGORY_LABELS } from '../content/buildings'
 import type { AdjacencyBonus, BuildingDef, BuildingInstance, RunState, Vec2 } from '../types'
+import type { Modifiers } from './modifiers'
 import { ADJACENCY_RANGE } from './balance'
 import { dist } from './geometry'
 
@@ -101,10 +102,15 @@ function sumPercent(statuses: AdjacencyStatus[], effect: 'speed' | 'capacity'): 
  * grounds, a cookhouse beside the farm). Bonuses from different partners add
  * up. A linear scan over a few dozen buildings, cheap enough to read every tick.
  */
-export function adjacencyMultiplier(s: RunState, b: BuildingInstance): number {
+export function adjacencyMultiplier(
+  s: RunState,
+  b: BuildingInstance,
+  mods?: Modifiers,
+): number {
   const def = BUILDINGS[b.defId]
   if (!def?.adjacency) return 1
-  return 1 + sumPercent(adjacencyStatus(s, b), 'speed') / 100
+  const boost = mods?.adjacencyBoost ?? 1
+  return 1 + (sumPercent(adjacencyStatus(s, b), 'speed') * boost) / 100
 }
 
 /**

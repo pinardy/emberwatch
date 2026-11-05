@@ -21,7 +21,6 @@ import type {
 import {
   BASE_STORAGE,
   OPENING_BLUEPRINT_PICKS,
-  SEASON_LENGTH,
   STARTING_STOCK,
   STARTING_VILLAGERS,
   MAX_IMPATIENCE,
@@ -32,7 +31,9 @@ import { offerBlueprint, offerCornerstone } from './events'
 import { defaultDecreeState } from './structure'
 import { defaultCaravan } from './trade'
 import { generateMap } from './mapgen'
+import { computeModifiers, seasonLengthFor } from './modifiers'
 import { makeRng } from './rng'
+import { applyRunModifiers, drawRunModifiers, mapgenHooksFor, runModifierDefs } from './runModifiers'
 
 export interface NewRunOptions {
   seed: number
@@ -41,18 +42,26 @@ export interface NewRunOptions {
   species?: SpeciesId[]
   /** Queen's Edict difficulty level (0 = none). Clamped to the ladder. */
   edict?: number
+  /**
+   * Override the map modifiers (ids in `RUN_MODIFIERS`); by default they are
+   * drawn from the seed. Tests and the balance harness force them.
+   */
+  modifiers?: string[]
 }
 
 /** A settlement never starts with fewer villagers than this, whatever the edict. */
 const MIN_STARTING_VILLAGERS = 3
 
-export function createRun({ seed, meta, species, edict }: NewRunOptions): RunState {
+export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptions): RunState {
   const rng = makeRng(seed, 0)
   // Citadel upgrades and the chosen edict, folded into plain numbers.
   const loadout = citadelLoadout(meta?.upgrades ?? [])
   const edictLevel = clampEdict(edict)
   const edictMods = edictModifiers(edictLevel)
-  const { world, glades, deposits, obstacles } = generateMap(rng)
+  // The land's character comes from the seed (its own RNG stream), and shapes
+  // the map before anything is placed on it.
+  const runModifiers = modifiers ?? drawRunModifiers(seed)
+  const { world, glades, deposits, obstacles } = generateMap(rng, mapgenHooksFor(runModifiers))
 
   const available = meta
     ? [...new Set([...STARTING_SPECIES, ...meta.unlockedSpecies])]
@@ -131,7 +140,7 @@ export function createRun({ seed, meta, species, edict }: NewRunOptions): RunSta
     seed,
     rngCursor: rng.cursor(),
     phase: 'playing',
-    season: { year: 1, season: 'drizzle', elapsed: 0, length: SEASON_LENGTH.drizzle },
+    season: { year: 1, season: 'drizzle', elapsed: 0, length: 0 },
     clock: 0,
     world,
     glades,
@@ -186,6 +195,7 @@ export function createRun({ seed, meta, species, edict }: NewRunOptions): RunSta
     ordersSeen: [],
     orderCounter: 0,
     edict: edictLevel,
+    runModifiers: [],
     citadel: loadout.perks,
     stats: {
       resourcesProduced: 0,
@@ -195,6 +205,11 @@ export function createRun({ seed, meta, species, edict }: NewRunOptions): RunSta
       ordersCompleted: 0,
     },
   }
+
+  // --- the land's modifiers --------------------------------------------------
+  applyRunModifiers(state, runModifiers)
+  // Season-length effects reach the opening Drizzle too (an early frost).
+  state.season.length = seasonLengthFor('drizzle', 1, computeModifiers(state))
 
   // --- opening orders -------------------------------------------------------
   for (let i = 0; i < 3; i++) drawOrder(state)
@@ -207,6 +222,14 @@ export function createRun({ seed, meta, species, edict }: NewRunOptions): RunSta
   // The Viceroy's Signet adds a cornerstone pick to the opening.
   if (loadout.startCornerstoneChoice) offerCornerstone(state)
 
+  const land = runModifierDefs(state.runModifiers)
+  if (land.length > 0) {
+    pushLog(
+      state,
+      `The lay of the land: ${land.map((d) => `${d.icon} ${d.name}`).join(', ')}.`,
+      'info',
+    )
+  }
   pushLog(
     state,
     `Year 1, Drizzle. You are the Viceroy of ${glades.glade0.name}. Build, feed, and keep them from leaving.`,

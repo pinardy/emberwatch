@@ -487,6 +487,77 @@ export type CornerstoneEffect =
   | { kind: 'tradePrices'; percent: number }
   /** Flat resolve for all species, but only while the Storm rages. */
   | { kind: 'stormResolve'; amount: number }
+  // --- seasons, caravans, decrees and placement (run modifiers & later perks)
+  /**
+   * Length of a season (percent; negative = shorter). `firstYearOnly` limits
+   * it to Year 1 — an early frost, not a changed climate.
+   */
+  | { kind: 'seasonLength'; season: Season; percent: number; firstYearOnly?: boolean }
+  /** Every workplace works faster (or slower) during one season. */
+  | { kind: 'seasonProduction'; season: Season; percent: number }
+  /** Caravans call even without a Trading Post. */
+  | { kind: 'caravanWithoutPost' }
+  /** Time between caravan visits (percent; positive = rarer). */
+  | { kind: 'caravanInterval'; percent: number }
+  /** Extra reputation paid by every completed order. */
+  | { kind: 'orderReputation'; amount: number }
+  /** Extra reputation paid by every royal decree met in time. */
+  | { kind: 'decreeReputation'; amount: number }
+  /** Time allowed to meet a royal decree (percent; positive = longer). */
+  | { kind: 'decreeTime'; percent: number }
+  /** Impatience when a decree lapses unmet (percent; negative = milder). */
+  | { kind: 'decreeMissPenalty'; percent: number }
+  /** Wood braziers burn in the Storm (percent; -100 = none). */
+  | { kind: 'brazierFuel'; percent: number }
+  /** Strength of favourable terrain effects (percent; positive = stronger). */
+  | { kind: 'terrainBoost'; percent: number }
+  /** Strength of unfavourable terrain effects (percent; -100 = ignored). */
+  | { kind: 'terrainPenalty'; percent: number }
+  /** Strength of adjacency work-speed bonuses (percent; positive = stronger). */
+  | { kind: 'adjacencyBoost'; percent: number }
+
+// ---------------------------------------------------------------------------
+// Run modifiers ("forest mysteries")
+// ---------------------------------------------------------------------------
+
+/**
+ * Hooks a run modifier hands to map generation. Every field is optional and
+ * neutral when absent, so an empty hook set generates exactly the map the seed
+ * would have produced without modifiers.
+ */
+export interface MapgenHooks {
+  /** Multiplies how often glade themes of this terrain are drawn. */
+  themeWeights?: Partial<Record<TerrainId, number>>
+  /**
+   * Scales the world's count of each deposit kind outside the settlement
+   * glade: 1.5 adds half again (in glades that already carry that kind), 0.5
+   * removes half. Applied after everything else is placed.
+   */
+  depositScale?: Partial<Record<DepositId, number>>
+  /** Multiplies the odds that a ring glade rolls as a small (safe) glade. */
+  smallGladeOdds?: number
+  /** Multiplies the loot of glades of each kind. */
+  rewardScale?: Partial<Record<GladeKind, number>>
+}
+
+export interface RunModifierDef {
+  id: string
+  name: string
+  icon: string
+  /** How it reads at a glance: a boon, a bane, or a trade-off. */
+  tone: 'boon' | 'bane' | 'mixed'
+  description: string
+  /** Changes to the map this run generates. */
+  mapgen?: MapgenHooks
+  /** Run-long effects, recorded in `RunState.ongoing` like a pact. */
+  effects?: CornerstoneEffect[]
+  /** Impatience the Queen starts the run with. */
+  startImpatience?: number
+  /** Extra goods in the opening stockpile. */
+  startStock?: ResourceBag
+  /** Modifier ids never drawn alongside this one. */
+  excludes?: string[]
+}
 
 export interface GladeEventOptionDef {
   label: string
@@ -781,6 +852,8 @@ export interface RunState {
 
   /** Queen's Edict difficulty level this run was founded under (0 = none). */
   edict: number
+  /** Map modifiers drawn from the seed for this run (ids in `RUN_MODIFIERS`). */
+  runModifiers: string[]
   /** Citadel upgrades that keep acting during the run (drafts, events). */
   citadel: CitadelPerks
 
@@ -831,6 +904,8 @@ export interface MetaHistoryEntry {
   edict?: number
   /** Supplies the run paid out (absent on pre-v2 entries). */
   supplies?: number
+  /** Map modifiers the run was drawn (absent on older entries). */
+  modifiers?: string[]
 }
 
 export interface MetaState {

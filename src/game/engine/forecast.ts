@@ -1,8 +1,8 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
 import type { BuildingInstance, ResourceId, RunState } from '../types'
-import { COMPLEX_FOOD_MULTIPLIER, HEARTH_FUEL_PER_SECOND, SEASON_LENGTH } from './balance'
-import type { Modifiers } from './modifiers'
+import { COMPLEX_FOOD_MULTIPLIER, HEARTH_FUEL_PER_SECOND } from './balance'
+import { computeModifiers, seasonLengthFor, type Modifiers } from './modifiers'
 import { countOutputs, seasonMultiplier, workRate } from './production'
 import { activeRecipe, storageUsed } from './queries'
 import { hearthFuelRate, impatienceRate, mealsPerSecond, stormFuelPerSecond } from './society'
@@ -24,7 +24,7 @@ export function secondsUntilStorm(s: RunState): number | null {
   const left = Math.max(0, s.season.length - s.season.elapsed)
   if (s.season.season === 'storm') return null
   if (s.season.season === 'clearance') return left
-  return left + SEASON_LENGTH.clearance
+  return left + seasonLengthFor('clearance', s.season.year, computeModifiers(s))
 }
 
 export interface HearthForecast {
@@ -47,14 +47,19 @@ export interface HearthForecast {
 export function hearthForecast(s: RunState, mods: Modifiers): HearthForecast {
   const wood = s.stock.wood ?? 0
   // In the Storm every lit brazier draws on the same woodpile as the hearth.
-  const stormRate = stormFuelPerSecond(s, HEARTH_FUEL_PER_SECOND, mods.hearthFuel)
+  const stormRate = stormFuelPerSecond(
+    s,
+    HEARTH_FUEL_PER_SECOND,
+    mods.hearthFuel,
+    mods.hearthFuel * mods.brazierFuel,
+  )
   const rate = s.season.season === 'storm' ? stormRate : hearthFuelRate(s.season.season, mods)
   const untilStorm = secondsUntilStorm(s)
   let needed: number
   if (untilStorm === null) {
     needed = Math.max(0, s.season.length - s.season.elapsed) * stormRate
   } else {
-    needed = untilStorm * rate + SEASON_LENGTH.storm * stormRate
+    needed = untilStorm * rate + seasonLengthFor('storm', s.season.year, mods) * stormRate
   }
   return {
     wood,

@@ -67,6 +67,8 @@ export function loadRun(): RunState | null {
   // Saves from before the Citadel tree and the Queen's Edicts.
   run.edict ??= 0
   run.citadel = { ...emptyCitadelPerks(), ...(run.citadel ?? {}) }
+  // Saves from before run modifiers: the land had no particular character.
+  if (!Array.isArray(run.runModifiers)) run.runModifiers = []
   return run
 }
 

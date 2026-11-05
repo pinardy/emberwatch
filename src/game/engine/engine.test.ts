@@ -126,16 +126,20 @@ const SEED = 123456
  * A run ready to be simulated. `createRun` deliberately opens on the blueprint
  * draft and the sim halts until it is answered, so we take the first option —
  * exactly what a player does before the clock starts.
+ *
+ * These tests pin the core rules, so the run draws no map modifiers (they
+ * have their own tests); otherwise a seed's draw could change a rule under
+ * test, e.g. Wandering Traders bringing caravans without a post.
  */
 function newRun(): RunState {
-  const state = createRun({ seed: SEED, species: ['human', 'beaver', 'lizard'] })
+  const state = createRun({ seed: SEED, species: ['human', 'beaver', 'lizard'], modifiers: [] })
   drainChoices(state)
   return state
 }
 
 /** A run left exactly as `createRun` produced it, drafts still pending. */
 function freshRun(): RunState {
-  return createRun({ seed: SEED, species: ['human', 'beaver', 'lizard'] })
+  return createRun({ seed: SEED, species: ['human', 'beaver', 'lizard'], modifiers: [] })
 }
 
 /**
