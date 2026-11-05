@@ -37,7 +37,7 @@ export const RoadLayer2D = memo(function RoadLayer2D({
           y1={r.a.y * scale}
           x2={r.b.x * scale}
           y2={r.b.y * scale}
-          stroke="#7d6a4f"
+          stroke="#8f7a58"
           strokeWidth={width}
           strokeLinecap="round"
         />
@@ -49,8 +49,8 @@ export const RoadLayer2D = memo(function RoadLayer2D({
           y1={r.a.y * scale}
           x2={r.b.x * scale}
           y2={r.b.y * scale}
-          stroke="#a08a68"
-          strokeWidth={width * 0.45}
+          stroke="#b59d74"
+          strokeWidth={width * 0.5}
           strokeLinecap="round"
         />
       ))}

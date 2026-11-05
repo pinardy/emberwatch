@@ -375,8 +375,9 @@ export function roadLinkPreview(s: RunState, defId: string, pos: Vec2): RoadLink
 // Laying and lifting roads
 // ---------------------------------------------------------------------------
 
+/** Wood for a stretch: `ROAD_WOOD_PER_UNIT` a pace, rounded, at least 1. */
 export function roadCost(length: number): ResourceBag {
-  return { wood: Math.max(1, Math.ceil(length * ROAD_WOOD_PER_UNIT - 1e-9)) }
+  return { wood: Math.max(1, Math.round(length * ROAD_WOOD_PER_UNIT)) }
 }
 
 /** Why a road may not start (or bend) at `p`, or null if it may. */

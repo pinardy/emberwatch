@@ -55,13 +55,9 @@ export function RoadBanner() {
   const touch = window.matchMedia?.('(pointer: coarse)').matches ?? false
   const tap = touch ? 'tap' : 'click'
   let text: string
-  if (erase) text = `${tap} a road to lift it — its wood comes back`
-  else if (!anchor) text = `${tap} where the road starts — a building, a road, or open ground`
-  else {
-    text = `${tap} the next bend (up to ${ROAD_MAX_LENGTH} paces) · ${
-      touch ? 'Done' : 'right-click, Esc or Done'
-    } ends the road`
-  }
+  if (erase) text = `${tap} a road to lift it, wood back`
+  else if (!anchor) text = `${tap} a building, a road or open ground to start`
+  else text = `${tap} each bend, ${ROAD_MAX_LENGTH} paces at most${touch ? '' : ' · Esc ends'}`
   const store = useGameStore.getState
   return (
     <div className="build-banner road-banner">

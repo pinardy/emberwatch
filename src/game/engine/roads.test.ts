@@ -229,8 +229,10 @@ describe('laying roads', () => {
   it('charges wood by length and hands it all back when lifted', () => {
     const run = openRun()
     run.stock.wood = 20
-    expect(roadCost(4.2)).toEqual({ wood: 5 })
-    expect(placeRoad(run, { x: 1, y: 0 }, { x: 5.2, y: 0 })).toBeNull()
+    expect(roadCost(4.2)).toEqual({ wood: 4 })
+    expect(roadCost(4.6)).toEqual({ wood: 5 })
+    expect(roadCost(0.4)).toEqual({ wood: 1 })
+    expect(placeRoad(run, { x: 1, y: 0 }, { x: 5.6, y: 0 })).toBeNull()
     expect(run.stock.wood).toBe(15)
     expect(run.roads).toHaveLength(1)
     expect(removeRoad(run, run.roads![0].id)).toBeNull()

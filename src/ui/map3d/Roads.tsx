@@ -19,8 +19,9 @@ import { useStaticGeometry } from './staticGeometry'
 const ROAD_Y = 0.045
 const JOINT_SEGMENTS = 10
 
+// Packed gravel: lighter and more solid than the worn dirt of `Paths`.
 const ROAD_MAT = new THREE.MeshStandardMaterial({
-  color: '#8c7556',
+  color: '#b59d74',
   roughness: 1,
   polygonOffset: true,
   polygonOffsetFactor: -2,
@@ -84,7 +85,7 @@ function RoadMesh({ roads, roadsKey }: { roads: RoadSegment[]; roadsKey: string 
 }
 
 /** A flat bar between two points, for the ghost. */
-function Bar({ a, b, color, width = 0.36, y = 0.07 }: { a: Vec2; b: Vec2; color: string; width?: number; y?: number }) {
+function Bar({ a, b, color, width = 0.36, y = 0.09 }: { a: Vec2; b: Vec2; color: string; width?: number; y?: number }) {
   const dx = b.x - a.x
   const dz = b.y - a.y
   const length = Math.hypot(dx, dz)
@@ -93,18 +94,27 @@ function Bar({ a, b, color, width = 0.36, y = 0.07 }: { a: Vec2; b: Vec2; color:
     <group position={[(a.x + b.x) / 2, y, (a.y + b.y) / 2]} rotation={[0, -Math.atan2(dz, dx), 0]} raycast={NO_RAYCAST}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={NO_RAYCAST}>
         <planeGeometry args={[length, width]} />
-        <meshBasicMaterial color={color} transparent opacity={0.7} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial color={color} transparent opacity={0.8} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
     </group>
   )
 }
 
-function Marker({ p, color, radius = 0.22 }: { p: Vec2; color: string; radius?: number }) {
+function Marker({ p, color, radius = 0.22, beacon = false }: { p: Vec2; color: string; radius?: number; beacon?: boolean }) {
   return (
-    <mesh position={[p.x, 0.08, p.y]} rotation={[-Math.PI / 2, 0, 0]} raycast={NO_RAYCAST}>
-      <ringGeometry args={[radius * 0.55, radius, 24]} />
-      <meshBasicMaterial color={color} transparent opacity={0.95} side={THREE.DoubleSide} depthWrite={false} />
-    </mesh>
+    <group position={[p.x, 0, p.y]} raycast={NO_RAYCAST}>
+      <mesh position={[0, 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={NO_RAYCAST}>
+        <ringGeometry args={[radius * 0.55, radius, 24]} />
+        <meshBasicMaterial color={color} transparent opacity={0.95} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      {/* A thin post, so a road's end shows even inside a building it snapped to. */}
+      {beacon && (
+        <mesh position={[0, 1.1, 0]} raycast={NO_RAYCAST}>
+          <cylinderGeometry args={[0.05, 0.05, 2.2, 8]} />
+          <meshBasicMaterial color={color} transparent opacity={0.85} />
+        </mesh>
+      )}
+    </group>
   )
 }
 
@@ -137,7 +147,7 @@ export function RoadGhost3D({
   const color = preview?.ok ? '#6fbf72' : '#c05050'
   return (
     <>
-      {anchor && <Marker p={anchor} color={GOLD} radius={0.3} />}
+      {anchor && <Marker p={anchor} color={GOLD} radius={0.3} beacon />}
       {preview?.from && <Bar a={preview.from} b={preview.to} color={color} />}
       {lifting && <Bar a={lifting.a} b={lifting.b} color="#c05050" width={0.5} />}
       {preview && (

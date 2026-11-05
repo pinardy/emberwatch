@@ -372,7 +372,7 @@ export const CHARTER_REPUTATION = 10
 // Roads (new feature — kept apart from the core pacing numbers above)
 // ---------------------------------------------------------------------------
 
-/** Wood per world unit of road, rounded up per stretch (at least 1). */
+/** Wood per world unit (pace) of road, rounded per stretch (at least 1). */
 export const ROAD_WOOD_PER_UNIT = 1
 /** Longest single stretch; longer roads need a bend (another click). */
 export const ROAD_MAX_LENGTH = 10
