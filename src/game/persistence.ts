@@ -1,4 +1,5 @@
 import { defaultAutoPause, migrateAutoPause, type AutoPauseSettings } from './autoPause'
+import { defaultFeats } from './content/achievements'
 import { defaultMeta, emptyCitadelPerks, migrateMeta } from './content/meta'
 import { defaultDecreeState } from './engine/structure'
 import { createTimeline } from './engine/timeline'
@@ -135,6 +136,8 @@ export function migrateRun(raw: unknown): RunState | null {
   // it always did (the road bonus is purely additive), so nothing weakens.
   if (!Array.isArray(run.roads)) run.roads = []
   run.roadCounter ??= run.roads.length
+  // Saves from before achievements: nothing remarkable recorded yet.
+  run.feats = { ...defaultFeats(), ...(run.feats ?? {}) }
   return run
 }
 

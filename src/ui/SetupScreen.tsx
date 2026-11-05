@@ -7,11 +7,13 @@ import {
   WORK_TAG_LABELS,
 } from '../game/content/species'
 import { parseSeed, randomSeed } from '../game/engine/rng'
-import { drawRunModifiers } from '../game/engine/runModifiers'
+import { citadelLoadout } from '../game/content/meta'
+import { landFor, type LandChoice } from '../game/engine/runModifiers'
 import { listSlots, type SlotId } from '../game/saveSlots'
 import { useGameStore } from '../game/store'
 import type { SpeciesId } from '../game/types'
 import { EdictPicker } from './EdictPicker'
+import { LandOptions } from './LandOptions'
 import { RunModifierList } from './RunModifierList'
 import { SlotPicker } from './SaveSlots'
 import { useConfirm } from './useConfirm'
@@ -69,17 +71,20 @@ export function SetupScreen() {
     setHint(null)
   }
 
-  // The land's modifiers follow from the seed alone, so a typed seed previews them.
+  // The land's modifiers follow from the seed (and the Citadel's land
+  // upgrades, if any), so a typed seed previews them.
+  const powers = useMemo(() => citadelLoadout(meta.upgrades), [meta.upgrades])
+  const [landChoice, setLandChoice] = useState<LandChoice>({})
   const previewSeed = seedText.trim() ? parseSeed(seedText) : null
   const land = useMemo(
-    () => (previewSeed === null ? [] : drawRunModifiers(previewSeed)),
-    [previewSeed],
+    () => (previewSeed === null ? [] : landFor(previewSeed, powers, landChoice)),
+    [previewSeed, powers, landChoice],
   )
 
   const start = () => {
     if (!slot) return
     const seed = seedText.trim() ? parseSeed(seedText) : randomSeed()
-    startRun(seed, chosen, edict, slot)
+    startRun(seed, chosen, edict, landChoice, slot)
   }
   const replace = useConfirm(`replace-${slot}`, start)
   const allFull = slots.every((s) => s.meta)
@@ -178,6 +183,14 @@ export function SetupScreen() {
             ) : (
               <RunModifierList ids={land} />
             )}
+            <LandOptions
+              powers={powers}
+              choice={landChoice}
+              onChange={setLandChoice}
+              ensureSeed={() => {
+                if (!seedText.trim()) setSeedText(String(randomSeed()))
+              }}
+            />
           </div>
         </section>
 

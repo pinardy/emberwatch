@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS } from '../content/orders'
-import { RUN_MODIFIER_LIST } from '../content/runModifiers'
+import { ALL_RUN_MODIFIER_LIST } from '../content/runModifiers'
 import { SPECIES } from '../content/species'
 import { EDIBLE } from '../content/resources'
 import type { BuildingInstance, ResourceId, RunState, ServiceNeed, SpeciesId, Vec2 } from '../types'
@@ -985,7 +985,8 @@ describe('balance harness', () => {
       seeds.map((seed, i) => playRun(seed, TRIOS[i % TRIOS.length], { modifiers }))
     const baseline = sweep([])
     const lines = [summarise('no modifier', baseline)]
-    const results = RUN_MODIFIER_LIST.map((def) => {
+    // The Citadel-locked lands too: an upgrade can put any of them in play.
+    const results = ALL_RUN_MODIFIER_LIST.map((def) => {
       const reports = sweep([def.id])
       lines.push(summarise(def.id, reports))
       return { id: def.id, reports }

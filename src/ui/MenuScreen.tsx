@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { latestSlot, listSlots } from '../game/saveSlots'
 import { useGameStore } from '../game/store'
+import { ACHIEVEMENT_LIST, achievementCount } from '../game/content/achievements'
+import { DailyMenuEntry } from './DailyScreen'
 import { slotOneLiner } from './SaveSlots'
 import { AutoPauseFields, PauseOnBlurField } from './SettingsFields'
 
@@ -58,6 +60,10 @@ export function MenuScreen() {
           </button>
           <button type="button" onClick={() => goToScreen('citadel')}>
             🏛️ The Citadel ({meta.citadelSupplies} supplies)
+          </button>
+          <DailyMenuEntry />
+          <button type="button" onClick={() => goToScreen('achievements')}>
+            🏅 Achievements ({achievementCount(meta.achievements)}/{ACHIEVEMENT_LIST.length})
           </button>
         </div>
 
@@ -128,6 +134,7 @@ export function MenuScreen() {
         </details>
 
         <p className="menu-foot muted">
+          {meta.title && <span className="menu-title">Viceroy {meta.title} · </span>}
           {meta.runsWon} won · {meta.runsLost} lost
         </p>
       </div>
