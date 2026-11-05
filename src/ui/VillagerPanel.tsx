@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../game/content/buildings'
+import { displayName, workerSlotsOf } from '../game/engine/upgrades'
 import { NEED_LABELS, SPECIES, VILLAGER_TRAITS } from '../game/content/species'
 import { computeModifiers } from '../game/engine/modifiers'
 import {
@@ -258,13 +259,14 @@ function openSlotsFor(run: RunState, v: Villager) {
     .filter((b) => b.id !== v.assignment)
     .flatMap((b) => {
       const def = BUILDINGS[b.defId]
-      if (!def || !b.built || def.workerSlots <= 0) return []
-      if (b.workers.length >= def.workerSlots) return []
+      const slots = workerSlotsOf(b)
+      if (!def || !b.built || slots <= 0) return []
+      if (b.workers.length >= slots) return []
       return [
         {
           id: b.id,
           mult: workerMultiplier(v, def.tags, season),
-          label: `${def.icon} ${def.name} (${b.workers.length}/${def.workerSlots}) · ${
+          label: `${def.icon} ${displayName(b)} (${b.workers.length}/${slots}) · ${
             run.glades[b.gladeId]?.name ?? ''
           }`,
         },

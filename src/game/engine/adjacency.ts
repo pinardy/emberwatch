@@ -3,6 +3,7 @@ import type { AdjacencyBonus, BuildingDef, BuildingInstance, RunState, Vec2 } fr
 import type { Modifiers } from './modifiers'
 import { ADJACENCY_RANGE } from './balance'
 import { dist } from './geometry'
+import { baseServiceCapacity } from './upgrades'
 
 /**
  * Neighbourhood rules. A building can list several adjacency bonuses; each is
@@ -114,13 +115,15 @@ export function adjacencyMultiplier(
 }
 
 /**
- * A service's effective capacity: its base, raised by the homes around it and
- * its supplier next door. Rounded down so the number players see is whole.
+ * A service's effective capacity: its base (with any upgrade tiers), raised by
+ * the homes around it and its supplier next door. The neighbourhood percent
+ * applies to the upgraded base, so a hall in a good spot gains the most.
+ * Rounded down so the number players see is whole.
  */
 export function serviceCapacity(s: RunState, b: BuildingInstance): number {
   const def = BUILDINGS[b.defId]
   if (!def?.service) return 0
-  const base = def.service.capacity
+  const base = baseServiceCapacity(b)
   if (!def.adjacency) return base
   return Math.floor(base * (1 + sumPercent(adjacencyStatus(s, b), 'capacity') / 100))
 }

@@ -83,6 +83,7 @@ export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptio
     workers: [],
     activeRecipeId: '',
     recipeProgress: 0,
+    tier: 0,
     paused: false,
     depositsInRange: {},
   }

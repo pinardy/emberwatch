@@ -23,10 +23,13 @@ import {
   shade,
   showsWarmthRing,
   terrainColor,
+  tierMark,
+  upgradeFraction,
   type MapBuildingStatus,
 } from './mapShared'
 import {
   buildingKey,
+  buildingViews,
   clearedKey,
   depositKey,
   forestKey,
@@ -307,5 +310,67 @@ describe('glade border geometry', () => {
         expect(x > 0.8 && x < 1.2).toBe(false)
       }
     }
+  })
+})
+
+describe('building upgrade tiers on the map', () => {
+  it('marks a tier with stars and an upgrade with its progress', () => {
+    const run = newRun()
+    const home = addBuilding(run, 'shelter')
+    expect(tierMark(home)).toBe('')
+    expect(upgradeFraction(home)).toBeNull()
+    home.upgradeProgress = 6
+    expect(upgradeFraction(home)).toBeCloseTo(0.5)
+    delete home.upgradeProgress
+    home.tier = 2
+    expect(tierMark(home)).toBe('★★')
+    // Saves from before upgrades carry no tier at all.
+    delete home.tier
+    expect(tierMark(home)).toBe('')
+  })
+
+  it('an insulated home is never shown cold', () => {
+    const run = newRun()
+    run.season.season = 'storm'
+    const far = addBuilding(run, 'shelter', { pos: { x: 60, y: 60 } })
+    expect(isColdHousing(run, far)).toBe(true)
+    far.tier = 1
+    expect(isColdHousing(run, far)).toBe(false)
+    expect(isColdHousing(run, far, warmthSources(run))).toBe(false)
+  })
+
+  it('a tier change moves the building key, and only that building view', () => {
+    const run = newRun()
+    const a = addBuilding(run, 'warehouse', { pos: { x: 2.5, y: 2.5 } })
+    addBuilding(run, 'shelter', { pos: { x: -2.5, y: 2.5 } })
+    const key = buildingKey(run)
+    const views = buildingViews(run)
+    a.tier = 1
+    expect(buildingKey(run)).not.toBe(key)
+    const after = buildingViews(run)
+    // The memoised node re-renders on changed props; every other view's props
+    // are equal, so only this node re-renders.
+    const strip = (v: (typeof views)[number]) => ({ ...v, building: v.building.id })
+    for (let i = 0; i < views.length; i++) {
+      if (views[i].building.id === a.id) {
+        expect(after[i].tier).toBe(1)
+        expect(strip(after[i])).not.toEqual(strip(views[i]))
+      } else {
+        expect(strip(after[i])).toEqual(strip(views[i]))
+      }
+    }
+  })
+
+  it('stays stable across ticks while nothing upgrades, and tracks an upgrade under way', () => {
+    const run = newRun()
+    const home = addBuilding(run, 'shelter', { pos: { x: 2.5, y: -2.5 }, tier: 1 })
+    const key = buildingKey(run)
+    for (let i = 0; i < 16; i++) tick(run, TICK_SECONDS)
+    expect(buildingKey(run)).toBe(key)
+    home.upgradeProgress = 0
+    expect(buildingKey(run)).not.toBe(key)
+    const started = buildingKey(run)
+    for (let i = 0; i < 16; i++) tick(run, TICK_SECONDS)
+    expect(buildingKey(run)).not.toBe(started)
   })
 })

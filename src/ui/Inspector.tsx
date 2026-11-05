@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NEED_LABELS, SPECIES, VILLAGER_TRAITS } from '../game/content/species'
 import {
   demolishRefund,
-  demolishRefundShare,
+  demolishRefundPercent,
   isReachable,
   rushCost,
 } from '../game/engine/actions'
@@ -25,7 +25,7 @@ import { terrainOf } from '../game/engine/production'
 import { workerMultiplier } from '../game/engine/traits'
 import { useGameStore, useRun } from '../game/store'
 import { BuildingStatusLine } from './BuildingStatusLine'
-import { GLADE_KIND_STYLE } from './mapShared'
+import { GLADE_KIND_STYLE, tierMark } from './mapShared'
 import type {
   BuildingDef,
   BuildingInstance,
@@ -35,6 +35,13 @@ import type {
   Villager,
 } from '../game/types'
 import { useConfirm } from './useConfirm'
+import { UpgradeSection } from './UpgradeSection'
+import {
+  displayName,
+  isInsulated,
+  warmthRadiusOf,
+  workerSlotsOf,
+} from '../game/engine/upgrades'
 
 /**
  * Context panel for whatever the player last tapped: a building, a deposit,
@@ -116,7 +123,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
   const mods = computeModifiers(run)
   const recipes = availableRecipes(building)
-  const active = def.recipes.find((r) => r.id === building.activeRecipeId)
+  const active = recipes.find((r) => r.id === building.activeRecipeId)
   const idle = idleVillagers(run).length
   const adjacency = adjacencyStatus(run, building)
   const terrain = terrainOf(run, building)
@@ -124,15 +131,21 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
   // Unbuilt sites are cancelled, not demolished: the refund slides from all of
   // the materials (untouched) towards half (finished).
   const removeLabel = building.built ? 'Demolish' : 'Cancel construction'
-  const refundShare = Math.round(demolishRefundShare(building) * 100)
+  // Share of everything spent on it (base cost and any upgrade tiers).
+  const refundShare = Math.round(demolishRefundPercent(building) * 100)
 
   return (
     <div className="inspector-body">
       <header className="inspector-head">
         <span className="inspector-icon">{def.icon}</span>
         <div>
-          <strong>{def.name}</strong>
+          <strong>{displayName(building)}</strong>
           <small>
+            {tierMark(building) && (
+              <span className="tier-stars" aria-label={`Tier ${building.tier}`}>
+                {tierMark(building)}{' '}
+              </span>
+            )}
             {run.glades[building.gladeId]?.name}
             {building.paused ? ' · paused' : ''}
           </small>
@@ -163,7 +176,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
         </>
       ) : (
         <>
-          {def.workerSlots > 0 && (
+          {workerSlotsOf(building) > 0 && (
             <WorkerSection run={run} building={building} def={def} />
           )}
 
@@ -241,9 +254,9 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
               <h4>Warmth</h4>
               <p className="muted">
                 {building.unlit ? '❄ Cold — no wood to burn.' : '🔥 Lit.'} Keeps{' '}
-                {homesWithin(run, building.pos, def.warmth.radius).length} home
-                {homesWithin(run, building.pos, def.warmth.radius).length === 1 ? '' : 's'} within{' '}
-                {def.warmth.radius} warm during the Storm, burning{' '}
+                {homesWithin(run, building.pos, warmthRadiusOf(building)).length} home
+                {homesWithin(run, building.pos, warmthRadiusOf(building)).length === 1 ? '' : 's'} within{' '}
+                {warmthRadiusOf(building)} warm during the Storm, burning{' '}
                 {def.warmth.fuelPerSecond.toFixed(3)} wood/s while it rages.
               </p>
             </section>
@@ -253,9 +266,11 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             <section className="inspector-section">
               <h4>Warmth</h4>
               <p className="muted">
-                {isWarmAt(run, building.pos)
-                  ? '🔥 Warm — inside the reach of the hearth or a lit brazier.'
-                  : '❄ Cold in the Storm — beyond every fire. A brazier nearby would warm it.'}
+                {isInsulated(building)
+                  ? '🔥 Warm — insulated by its upgrade, it needs no fire nearby.'
+                  : isWarmAt(run, building.pos)
+                    ? '🔥 Warm — inside the reach of the hearth or a lit brazier.'
+                    : '❄ Cold in the Storm — beyond every fire. A brazier nearby would warm it.'}
               </p>
             </section>
           )}
@@ -284,6 +299,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
               </div>
             </section>
           )}
+          <UpgradeSection run={run} building={building} />
         </>
       )}
 
@@ -408,8 +424,9 @@ function WorkerSection({
     .map((v) => ({ v, mult: workerMultiplier(v, def.tags, season) }))
     .sort((a, b) => b.mult - a.mult || a.v.name.localeCompare(b.v.name))
   const best = candidates[0]
-  const full = building.workers.length >= def.workerSlots
-  const slots = Array.from({ length: def.workerSlots }, (_, i) => building.workers[i] ?? null)
+  const slotCount = workerSlotsOf(building)
+  const full = building.workers.length >= slotCount
+  const slots = Array.from({ length: slotCount }, (_, i) => building.workers[i] ?? null)
   const replacing = picking ? run.villagers[picking] : undefined
 
   const choose = (villagerId: string) => {
@@ -422,7 +439,7 @@ function WorkerSection({
     <section className="inspector-section" aria-label="Workers">
       <div className="row-between">
         <h4>
-          Workers {building.workers.length}/{def.workerSlots}
+          Workers {building.workers.length}/{slotCount}
         </h4>
         <button
           type="button"
@@ -657,3 +674,4 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
     </div>
   )
 }
+

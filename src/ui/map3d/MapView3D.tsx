@@ -483,7 +483,7 @@ const BuildingLayer = memo(function BuildingLayer({
   const ghostDef = buildMode ? BUILDINGS[buildMode] : undefined
   return (
     <>
-      {buildingViews(run).map(({ building, progress, workers, status, cold, lit }) => {
+      {buildingViews(run).map(({ building, progress, workers, status, cold, lit, tier, upgrade }) => {
         // Buildings that pair with the blueprint in hand, in either direction.
         const partnerHint =
           !!ghostDef && building.built && !!BUILDINGS[building.defId] && pairsWith(ghostDef.id, building.defId)
@@ -499,6 +499,8 @@ const BuildingLayer = memo(function BuildingLayer({
             workers={workers}
             status={status}
             lit={lit}
+            tier={tier}
+            upgrade={upgrade}
           />
         )
       })}

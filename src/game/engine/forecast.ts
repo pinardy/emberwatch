@@ -7,6 +7,7 @@ import { countOutputs, seasonMultiplier, workRate } from './production'
 import { activeRecipe, canAfford, storageUsed } from './queries'
 import { hearthFuelRate, impatienceRate, mealsPerSecond, stormFuelPerSecond } from './society'
 import { hostilityRate } from './tick'
+import { recipesOf } from './upgrades'
 
 /**
  * Forward-looking, read-only numbers for the HUD: how long until the Storm,
@@ -244,7 +245,9 @@ export function buildingStatus(
   if (!def) return { kind: 'none' }
   if (!b.built) return { kind: 'construction' }
   const recipe = activeRecipe(b)
-  if (!recipe || def.recipes.length === 0) return { kind: 'none' }
+  // Tier-aware: an upgrade's recipes, ratios and speed are all folded in by
+  // `activeRecipe` and `workRate`, so the status matches what the tick does.
+  if (!recipe || recipesOf(b).length === 0) return { kind: 'none' }
   if (b.paused) return { kind: 'paused' }
   if (b.workers.length === 0) return { kind: 'noWorkers' }
 

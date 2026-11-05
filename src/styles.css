@@ -3582,6 +3582,56 @@ button.is-armed {
   display: block;
 }
 
+/* --- building upgrades ---------------------------------------------------- */
+
+.tier-stars {
+  color: var(--gold);
+  letter-spacing: 0.05em;
+}
+
+.upgrade-section p {
+  margin-bottom: 4px;
+}
+
+.upgrade-cost {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.upgrade-afford {
+  font-size: 12px;
+}
+
+.upgrade-effects {
+  margin: 2px 0 8px 18px;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.upgrade-effects li::marker {
+  color: var(--gold);
+}
+
+.build-tags .tag-upgrade {
+  color: var(--gold);
+}
+
+.tier-mark {
+  font-size: 9px;
+  text-anchor: middle;
+  fill: var(--gold);
+  stroke: rgba(9, 13, 16, 0.85);
+  stroke-width: 2px;
+  paint-order: stroke;
+  pointer-events: none;
+  font-family: var(--font-ui);
+}
+
+.upgrade-bar {
+  fill: #8fc4e8;
+
 /* ---- Run modifiers: the lay of the land ------------------------------------ */
 
 .land-chip.tone-boon {
