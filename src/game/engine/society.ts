@@ -359,17 +359,28 @@ export function impatienceRate(s: RunState, mods: Modifiers): number {
     rate += (s.hostility - IMPATIENCE_HOSTILITY_THRESHOLD) * IMPATIENCE_PER_HOSTILITY_OVER
   }
   // The deadline is not softened by cornerstones: it is what ends every run.
+  return rate * mods.impatienceRate + deadlineOvertimeRate(s)
+}
+
+/**
+ * Extra impatience per second the Queen's deadline adds right now: nothing
+ * before it, then a base rate that steepens with every second past it.
+ */
+export function deadlineOvertimeRate(s: RunState): number {
   const overtime = secondsPastDeadline(s)
-  const overtimeRate =
-    overtime > 0 ? IMPATIENCE_OVERTIME_BASE + overtime * IMPATIENCE_OVERTIME_RAMP : 0
-  return rate * mods.impatienceRate + overtimeRate
+  return overtime > 0 ? IMPATIENCE_OVERTIME_BASE + overtime * IMPATIENCE_OVERTIME_RAMP : 0
 }
 
 export function stepImpatience(s: RunState, dt: number, mods: Modifiers): void {
   addImpatience(s, impatienceRate(s, mods) * dt)
 }
 
-/** Game-clock second at which the Queen's deadline year begins. */
+/**
+ * Game-clock second at which the Queen's deadline falls: the start of
+ * `QUEEN_DEADLINE_YEAR` at standard season lengths. It is a fixed point on the
+ * clock, so modifiers that stretch or shorten seasons move it within the
+ * calendar (Long Storms land it in Year 4's Storm), never in time.
+ */
 export const QUEEN_DEADLINE_SECONDS = (QUEEN_DEADLINE_YEAR - 1) * YEAR_SECONDS
 
 /** Seconds since the Queen's deadline passed (0 before it). */

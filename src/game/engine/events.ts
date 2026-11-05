@@ -122,7 +122,30 @@ export function optionAffordable(stock: ResourceBag, option: GladeEventOptionDef
   return true
 }
 
-function edibleTotal(stock: ResourceBag): number {
+/**
+ * Why an option cannot be chosen, in words: "Needs 10 food — you have 6".
+ * Null when the stockpile can pay. Mirrors `optionAffordable`.
+ */
+export function describeOptionShortfall(
+  stock: ResourceBag,
+  option: GladeEventOptionDef,
+): string | null {
+  const parts: string[] = []
+  if (option.foodCost) {
+    const have = Math.floor(edibleTotal(stock))
+    if (have < option.foodCost) parts.push(`${option.foodCost} food — you have ${have}`)
+  }
+  for (const [id, amount] of Object.entries(option.requires ?? {})) {
+    const have = Math.floor(stock[id as ResourceId] ?? 0)
+    if (have < (amount ?? 0)) {
+      parts.push(`${amount} ${resourceName(id as ResourceId)} — you have ${have}`)
+    }
+  }
+  return parts.length > 0 ? `Needs ${parts.join('; ')}` : null
+}
+
+/** Units of food of any kind in the stockpile: what a `foodCost` is paid from. */
+export function edibleTotal(stock: ResourceBag): number {
   let sum = 0
   for (const id of EDIBLE) sum += stock[id] ?? 0
   return sum
