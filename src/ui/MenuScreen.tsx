@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { loadRun } from '../game/persistence'
+import { useMemo } from 'react'
+import { latestSlot, listSlots } from '../game/saveSlots'
 import { useGameStore } from '../game/store'
+import { slotOneLiner } from './SaveSlots'
 import { AutoPauseFields, PauseOnBlurField } from './SettingsFields'
 
 export function MenuScreen() {
@@ -8,13 +9,16 @@ export function MenuScreen() {
   const resumeSaved = useGameStore((s) => s.resumeSaved)
   const meta = useGameStore((s) => s.meta)
   const run = useGameStore((s) => s.run)
+  const version = useGameStore((s) => s.version)
   const settings = useGameStore((s) => s.settings)
   const updateSettings = useGameStore((s) => s.updateSettings)
-  const [hasSave, setHasSave] = useState(false)
 
-  useEffect(() => {
-    setHasSave(loadRun() !== null)
-  }, [run])
+  // The most recently played slot, for "Continue".
+  const latest = useMemo(() => {
+    const id = latestSlot()
+    return id ? (listSlots().find((s) => s.id === id) ?? null) : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run, version])
 
   return (
     <div className="screen menu-screen">
@@ -34,9 +38,12 @@ export function MenuScreen() {
               ▶ Back to the settlement
             </button>
           )}
-          {!run && hasSave && (
-            <button type="button" className="primary" onClick={resumeSaved}>
-              ▶ Continue saved settlement
+          {!run && latest?.meta && (
+            <button type="button" className="primary" onClick={() => resumeSaved(latest.id)}>
+              ▶ Continue
+              <small className="menu-sub">
+                {latest.label} · {slotOneLiner(latest.meta)}
+              </small>
             </button>
           )}
           <button
@@ -45,6 +52,9 @@ export function MenuScreen() {
             onClick={() => goToScreen('setup')}
           >
             🌱 New settlement
+          </button>
+          <button type="button" onClick={() => goToScreen('saves')}>
+            📂 Saved settlements
           </button>
           <button type="button" onClick={() => goToScreen('citadel')}>
             🏛️ The Citadel ({meta.citadelSupplies} supplies)

@@ -41,13 +41,20 @@ import { tick } from './engine/tick'
 import { buyOffer, sellResource } from './engine/trade'
 import {
   loadMeta,
-  loadRun,
   loadSettings,
   saveMeta,
-  saveRun,
   saveSettings,
   type Settings,
 } from './persistence'
+import {
+  SLOT_LABELS,
+  deleteSlot,
+  freeSlot,
+  latestSlot,
+  loadSlot,
+  saveToSlot,
+  type SlotId,
+} from './saveSlots'
 import type { MetaState, ResourceId, RunState, SpeciesId, Vec2 } from './types'
 
 /** Fewest simulated seconds a single frame may consume, at any speed. */
@@ -86,12 +93,20 @@ let simCarry = 0
  */
 let watched: { run: RunState; snapshot: RunWatch } | null = null
 
-export type Screen = 'menu' | 'setup' | 'game' | 'citadel'
+/**
+ * Whether the last save failed, so a full disk is reported once rather than
+ * every autosave, and again only after a save has worked in between.
+ */
+let saveFailing = false
+
+export type Screen = 'menu' | 'setup' | 'game' | 'citadel' | 'saves'
 export type SidePanel = 'build' | 'villagers' | 'orders' | 'log' | 'trade' | null
 
 interface GameStore {
   screen: Screen
   run: RunState | null
+  /** The save slot the current run autosaves to. */
+  activeSlot: SlotId | null
   meta: MetaState
   settings: Settings
 
@@ -112,12 +127,23 @@ interface GameStore {
 
   // --- lifecycle -----------------------------------------------------------
   boot: () => void
-  /** `edict` is clamped to the highest Queen's Edict the Citadel has earned. */
-  startRun: (seed?: number, species?: SpeciesId[], edict?: number) => void
+  /**
+   * `edict` is clamped to the highest Queen's Edict the Citadel has earned.
+   * Without a `slot` the run takes the first free one; with every slot full
+   * it refuses rather than overwrite a run (the setup screen asks which).
+   */
+  startRun: (seed?: number, species?: SpeciesId[], edict?: number, slot?: SlotId) => void
   abandonRun: () => void
   finishRun: () => void
   goToScreen: (screen: Screen) => void
-  resumeSaved: () => void
+  /** Loads a slot (the most recently played one by default) and plays it. */
+  resumeSaved: (slot?: SlotId) => void
+  /** Deletes a slot; deleting the slot being played drops that run too. */
+  deleteSave: (slot: SlotId) => void
+  /** Copies the current run into another slot; play continues in its own. */
+  saveCopy: (slot: SlotId) => void
+  /** Writes an already-validated imported run into a slot. Returns an error or null. */
+  importRun: (run: RunState, slot: SlotId) => string | null
 
   // --- loop ----------------------------------------------------------------
   advance: (realSeconds: number) => void
@@ -174,6 +200,7 @@ function runCommand(
 export const useGameStore = create<GameStore>((set, get) => ({
   screen: 'menu',
   run: null,
+  activeSlot: null,
   meta: defaultMeta(),
   settings: loadSettings(),
   version: 0,
@@ -190,17 +217,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ meta: loadMeta(), settings: loadSettings() })
   },
 
-  startRun: (seed, species, edict) => {
+  startRun: (seed, species, edict, slot) => {
     const meta = get().meta
+    // Whatever was being played is safe in its own slot before anything else.
+    get().saveNow()
+    const target = slot ?? freeSlot()
+    if (!target) {
+      set({
+        screen: 'setup',
+        notice: 'Every save slot holds a settlement. Choose one to replace, or delete one first.',
+      })
+      return
+    }
     const run = createRun({
       seed: seed ?? randomSeed(),
       meta,
       species,
       edict: Math.min(edict ?? 0, meta.edictUnlocked),
     })
-    saveRun(run)
+    saveFailing = false
+    const saved = saveToSlot(target, run)
+    if (!saved.ok) saveFailing = true
     set({
       run,
+      activeSlot: target,
       screen: 'game',
       version: get().version + 1,
       speed: 1,
@@ -209,22 +249,75 @@ export const useGameStore = create<GameStore>((set, get) => ({
       selectedDeposit: null,
       selectedGlade: null,
       panel: 'build',
+      notice: saved.ok ? null : saved.message,
+    })
+  },
+
+  resumeSaved: (slot) => {
+    const id = slot ?? latestSlot()
+    if (id && id === get().activeSlot && get().run) {
+      set({ screen: 'game', notice: null })
+      return
+    }
+    const run = id ? loadSlot(id) : null
+    if (!id || !run) {
+      set({ notice: 'No saved settlement found.' })
+      return
+    }
+    // The run being left behind is saved to its own slot first.
+    get().saveNow()
+    saveFailing = false
+    set({
+      run,
+      activeSlot: id,
+      screen: 'game',
+      version: get().version + 1,
+      speed: 0,
+      panel: 'build',
+      buildMode: null,
+      selectedBuilding: null,
+      selectedDeposit: null,
+      selectedGlade: null,
       notice: null,
     })
   },
 
-  resumeSaved: () => {
-    const run = loadRun()
-    if (!run) {
-      set({ notice: 'No saved settlement found.' })
-      return
+  deleteSave: (slot) => {
+    deleteSlot(slot)
+    if (slot === get().activeSlot) {
+      set({ run: null, activeSlot: null, speed: 0, version: get().version + 1 })
     }
-    set({ run, screen: 'game', version: get().version + 1, speed: 0, panel: 'build' })
+    set({ version: get().version + 1, notice: `${SLOT_LABELS[slot]} deleted.` })
+  },
+
+  saveCopy: (slot) => {
+    const { run, activeSlot } = get()
+    if (!run || slot === activeSlot) return
+    const saved = saveToSlot(slot, run)
+    set({
+      version: get().version + 1,
+      notice: saved.ok ? `Copy saved to ${SLOT_LABELS[slot]}.` : saved.message,
+    })
+  },
+
+  importRun: (run, slot) => {
+    const saved = saveToSlot(slot, run)
+    if (!saved.ok) {
+      set({ notice: saved.message })
+      return saved.message
+    }
+    // Importing over the slot being played replaces that run outright.
+    if (slot === get().activeSlot) {
+      set({ run: null, activeSlot: null, speed: 0 })
+    }
+    set({ version: get().version + 1, notice: `Imported into ${SLOT_LABELS[slot]}.` })
+    return null
   },
 
   abandonRun: () => {
-    saveRun(null)
-    set({ run: null, screen: 'menu', speed: 0, version: get().version + 1 })
+    const slot = get().activeSlot
+    if (slot) deleteSlot(slot)
+    set({ run: null, activeSlot: null, screen: 'menu', speed: 0, version: get().version + 1 })
   },
 
   /** Banks the reward for a finished run and returns to the Citadel. */
@@ -235,10 +328,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const next = bankRun(meta, run)
     const unlockedEdict = next.edictUnlocked > meta.edictUnlocked
     saveMeta(next)
-    saveRun(null)
+    // The banked run is over: its slot is free for the next settlement.
+    const slot = get().activeSlot
+    if (slot) deleteSlot(slot)
     set({
       meta: next,
       run: null,
+      activeSlot: null,
       screen: 'citadel',
       speed: 0,
       version: get().version + 1,
@@ -373,13 +469,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   chooseOption: (optionId) =>
     runCommand(set, get, (run) => {
       takeChoice(run, optionId)
-      saveRun(run)
+      get().saveNow()
       return null
     }),
   chooseEventOption: (index) =>
     runCommand(set, get, (run) => {
       resolveGladeEvent(run, index)
-      saveRun(run)
+      get().saveNow()
       return null
     }),
   reroll: () => runCommand(set, get, (run) => rerollChoice(run)),
@@ -417,7 +513,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   saveNow: () => {
     const run = get().run
-    if (run) saveRun(run)
+    if (!run) return
+    let slot = get().activeSlot
+    if (!slot) {
+      // A run that never had a slot (set up directly) claims a free one.
+      slot = freeSlot()
+      if (!slot) return
+      set({ activeSlot: slot })
+    }
+    const saved = saveToSlot(slot, run)
+    if (saved.ok) {
+      saveFailing = false
+    } else if (!saveFailing) {
+      saveFailing = true
+      set({ notice: saved.message })
+    }
   },
 }))
 
