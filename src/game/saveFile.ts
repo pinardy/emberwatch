@@ -112,7 +112,8 @@ export function runProblem(run: unknown): string | null {
   ]) {
     if (!finite(run[field])) return `its ${field} is not a number`
   }
-  if (!['playing', 'won', 'lost'].includes(run.phase as string)) return 'its phase is unknown'
+  if (!['playing', 'won', 'lost'].includes(run.phase as string))
+    return 'its phase is unknown'
   const season = run.season
   if (
     !isRec(season) ||
@@ -138,7 +139,11 @@ export function runProblem(run: unknown): string | null {
         known(TERRAIN, g.terrain) &&
         strings(g.neighbors),
     ],
-    ['deposits', run.deposits, (d) => typeof d.id === 'string' && isVec(d.pos) && finite(d.radius)],
+    [
+      'deposits',
+      run.deposits,
+      (d) => typeof d.id === 'string' && isVec(d.pos) && finite(d.radius),
+    ],
     [
       'buildings',
       run.buildings,
@@ -167,7 +172,10 @@ export function runProblem(run: unknown): string | null {
   for (const [id, amount] of Object.entries(run.stock)) {
     if (!known(RESOURCES, id) || !finite(amount)) return 'its stockpile is damaged'
   }
-  if (!Array.isArray(run.obstacles) || !run.obstacles.every((o) => isRec(o) && isVec(o.pos))) {
+  if (
+    !Array.isArray(run.obstacles) ||
+    !run.obstacles.every((o) => isRec(o) && isVec(o.pos))
+  ) {
     return 'its obstacles are damaged'
   }
   if (
@@ -177,15 +185,20 @@ export function runProblem(run: unknown): string | null {
   ) {
     return 'its species are unknown'
   }
-  if (!strings(run.unlockedBuildings) || !run.unlockedBuildings.every((b) => known(BUILDINGS, b))) {
+  if (
+    !strings(run.unlockedBuildings) ||
+    !run.unlockedBuildings.every((b) => known(BUILDINGS, b))
+  ) {
     return 'its blueprints are unknown'
   }
   for (const field of ['resolve', 'despair']) {
     const table = run[field]
-    if (!isRec(table) || !Object.values(table).every(finite)) return `its ${field} is damaged`
+    if (!isRec(table) || !Object.values(table).every(finite))
+      return `its ${field} is damaged`
   }
   for (const field of ['orders', 'pendingChoices', 'log']) {
-    if (!Array.isArray(run[field]) || !run[field].every(isRec)) return `its ${field} are damaged`
+    if (!Array.isArray(run[field]) || !run[field].every(isRec))
+      return `its ${field} are damaged`
   }
   if (!strings(run.cornerstones)) return 'its cornerstones are damaged'
   if (!isRec(run.stats)) return 'its stats are missing'
@@ -200,9 +213,13 @@ const KEEP_SAFE = 'Nothing was changed.'
  * cannot be. Never throws, whatever the input.
  */
 export function parseSaveFile(text: string): ImportResult {
-  const fail = (why: string): ImportResult => ({ ok: false, error: `${why} ${KEEP_SAFE}` })
+  const fail = (why: string): ImportResult => ({
+    ok: false,
+    error: `${why} ${KEEP_SAFE}`,
+  })
   if (typeof text !== 'string') return fail('The file is empty.')
-  if (text.length > MAX_SAVE_FILE_BYTES) return fail('The file is far too large to be a save.')
+  if (text.length > MAX_SAVE_FILE_BYTES)
+    return fail('The file is far too large to be a save.')
   if (text.trim() === '') return fail('The file is empty.')
 
   let data: unknown

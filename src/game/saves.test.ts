@@ -173,7 +173,10 @@ describe('save slot index', () => {
       },
     })
     expect(listSlots().every((s) => s.meta === null)).toBe(true)
-    expect(saveToSlot('auto', newRun())).toMatchObject({ ok: false, reason: 'unavailable' })
+    expect(saveToSlot('auto', newRun())).toMatchObject({
+      ok: false,
+      reason: 'unavailable',
+    })
   })
 })
 
@@ -344,7 +347,9 @@ describe('export and import', () => {
     const result = parseSaveFile(text)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(JSON.parse(JSON.stringify(result.run))).toEqual(JSON.parse(JSON.stringify(run)))
+    expect(JSON.parse(JSON.stringify(result.run))).toEqual(
+      JSON.parse(JSON.stringify(run)),
+    )
     // Same seed and cursor: both copies play out identically.
     for (let i = 0; i < 200; i++) {
       tick(run, 0.125)
@@ -388,17 +393,41 @@ describe('export and import', () => {
     ['JSON null', 'null', /not an Emberwatch save/],
     ['a JSON array', '[1,2,3]', /not an Emberwatch save/],
     ['a bare number', '42', /not an Emberwatch save/],
-    ['another format', JSON.stringify({ format: 'something-else', version: 1 }), /not an Emberwatch save/],
-    ['a missing version', JSON.stringify({ ...valid(), version: undefined }), /version stamp/],
-    ['a fractional version', JSON.stringify({ ...valid(), version: 1.5 }), /version stamp/],
-    ['a newer version', JSON.stringify({ ...valid(), version: SAVE_FILE_VERSION + 1 }), /newer version/],
-    ['no run', JSON.stringify({ ...valid(), run: undefined }), /damaged: it holds no run/],
+    [
+      'another format',
+      JSON.stringify({ format: 'something-else', version: 1 }),
+      /not an Emberwatch save/,
+    ],
+    [
+      'a missing version',
+      JSON.stringify({ ...valid(), version: undefined }),
+      /version stamp/,
+    ],
+    [
+      'a fractional version',
+      JSON.stringify({ ...valid(), version: 1.5 }),
+      /version stamp/,
+    ],
+    [
+      'a newer version',
+      JSON.stringify({ ...valid(), version: SAVE_FILE_VERSION + 1 }),
+      /newer version/,
+    ],
+    [
+      'no run',
+      JSON.stringify({ ...valid(), run: undefined }),
+      /damaged: it holds no run/,
+    ],
     ['a run that is a string', JSON.stringify({ ...valid(), run: 'run' }), /damaged/],
     ['a missing world', withRun((r) => delete r.world), /world/],
     ['a string seed', withRun((r) => (r.seed = '42')), /seed/],
     ['a NaN-ish clock', withRun((r) => (r.clock = null)), /clock/],
     ['an unknown phase', withRun((r) => (r.phase = 'paused')), /phase/],
-    ['an unknown season', withRun((r) => ((r.season as { season: string }).season = 'winter')), /season/],
+    [
+      'an unknown season',
+      withRun((r) => ((r.season as { season: string }).season = 'winter')),
+      /season/,
+    ],
     ['no glades', withRun((r) => (r.glades = {})), /no glades/],
     [
       'a broken glade polygon',
@@ -424,9 +453,21 @@ describe('export and import', () => {
       }),
       /villagers/,
     ],
-    ['a foreign resource', withRun((r) => ((r.stock as Record<string, unknown>).gold = 5)), /stockpile/],
-    ['a string amount', withRun((r) => ((r.stock as Record<string, unknown>).wood = '5')), /stockpile/],
-    ['an unknown blueprint', withRun((r) => (r.unlockedBuildings = ['deathStar'])), /blueprints/],
+    [
+      'a foreign resource',
+      withRun((r) => ((r.stock as Record<string, unknown>).gold = 5)),
+      /stockpile/,
+    ],
+    [
+      'a string amount',
+      withRun((r) => ((r.stock as Record<string, unknown>).wood = '5')),
+      /stockpile/,
+    ],
+    [
+      'an unknown blueprint',
+      withRun((r) => (r.unlockedBuildings = ['deathStar'])),
+      /blueprints/,
+    ],
     ['an empty species pool', withRun((r) => (r.speciesPool = [])), /species/],
     ['a non-array log', withRun((r) => (r.log = 'log')), /log/],
   ])('rejects %s with a clear message', (_name, text, message) => {
@@ -447,7 +488,19 @@ describe('export and import', () => {
   it('never throws, whatever field is mangled', () => {
     const base = valid()
     const run = base.run as Record<string, unknown>
-    const junk: unknown[] = [null, 0, -1, 1e308, '', 'x', [], {}, [null], { a: null }, true]
+    const junk: unknown[] = [
+      null,
+      0,
+      -1,
+      1e308,
+      '',
+      'x',
+      [],
+      {},
+      [null],
+      { a: null },
+      true,
+    ]
     for (const key of Object.keys(run)) {
       for (const value of junk) {
         const text = JSON.stringify({ ...base, run: { ...run, [key]: value } })
@@ -487,8 +540,14 @@ describe('hostile save files', () => {
     const file = valid()
     const text = JSON.stringify(file)
       // Into the run, its citadel perks (spread by migrateRun), a building and the envelope.
-      .replace('"run":{', '"__proto__":{"polluted":true},"run":{"__proto__":{"polluted":true},')
-      .replace('"citadel":{', '"citadel":{"__proto__":{"isAdmin":true},"constructor":{"prototype":{"isAdmin":true}},')
+      .replace(
+        '"run":{',
+        '"__proto__":{"polluted":true},"run":{"__proto__":{"polluted":true},',
+      )
+      .replace(
+        '"citadel":{',
+        '"citadel":{"__proto__":{"isAdmin":true},"constructor":{"prototype":{"isAdmin":true}},',
+      )
     expect(text).toContain('"citadel":{"__proto__"')
     const result = parseSaveFile(text)
     expect(result.ok).toBe(true)

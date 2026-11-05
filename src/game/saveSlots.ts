@@ -172,7 +172,11 @@ export interface SlotSummary {
 /** Every slot in load-screen order, with its metadata when it holds a run. */
 export function listSlots(): SlotSummary[] {
   const index = loadIndex()
-  return SLOT_IDS.map((id) => ({ id, label: SLOT_LABELS[id], meta: index.slots[id] ?? null }))
+  return SLOT_IDS.map((id) => ({
+    id,
+    label: SLOT_LABELS[id],
+    meta: index.slots[id] ?? null,
+  }))
 }
 
 /** The most recently saved slot, for "Continue". */
@@ -194,7 +198,9 @@ export function loadSlot(id: SlotId): RunState | null {
   return loadRun(slotKey(id))
 }
 
-export type SaveResult = { ok: true } | { ok: false; reason: WriteFailure; message: string }
+export type SaveResult =
+  | { ok: true }
+  | { ok: false; reason: WriteFailure; message: string }
 
 const SAVE_MESSAGES: Record<WriteFailure, string> = {
   quota:

@@ -318,6 +318,17 @@ describe('app shell', () => {
     fireEvent.keyDown(window, { key: '6', code: 'Digit6' })
     fireEvent.keyDown(window, { key: '0', code: 'Digit0' })
     expect(useGameStore.getState().speed).toBe(2)
+
+    // The phone bar folds the speeds behind a toggle naming the current one;
+    // picking a speed there closes it again.
+    const toggle = screen.getByRole('button', { name: 'Game speed: 2×' })
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(group.className).toMatch(/is-open/)
+    fireEvent.click(within(group).getByRole('button', { name: '5×' }))
+    expect(useGameStore.getState().speed).toBe(5)
+    expect(group.className).not.toMatch(/is-open/)
+    expect(screen.getByRole('button', { name: 'Game speed: 5×' })).toBeTruthy()
   })
 
   it('never fast-forwards a long-stalled frame, even at top speed', () => {

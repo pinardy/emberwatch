@@ -9,7 +9,7 @@ import { useGameStore } from '../game/store'
 
 function seedSlot(id: (typeof SLOT_IDS)[number], seed: number, savedAt: number) {
   const run = createRun({ seed, meta: defaultMeta() })
-  run.season.year = seed % 5 + 1
+  run.season.year = (seed % 5) + 1
   expect(saveToSlot(id, run, savedAt).ok).toBe(true)
   return run
 }
@@ -70,10 +70,14 @@ describe('new settlement', () => {
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
     const picker = screen.getByRole('radiogroup', { name: 'Save slot' })
     // The run in progress is shown in its slot, and a free one is preselected.
-    expect(within(picker).getByLabelText(/Autosave/).closest('label')!.textContent).toMatch(
-      /Playing now/,
+    expect(
+      within(picker)
+        .getByLabelText(/Autosave/)
+        .closest('label')!.textContent,
+    ).toMatch(/Playing now/)
+    expect((within(picker).getByLabelText(/Slot 1/) as HTMLInputElement).checked).toBe(
+      true,
     )
-    expect((within(picker).getByLabelText(/Slot 1/) as HTMLInputElement).checked).toBe(true)
     fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
     expect(useGameStore.getState().activeSlot).toBe('1')
     expect(loadSlot('auto')!.seed).toBe(first.seed)
@@ -84,7 +88,9 @@ describe('new settlement', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
     expect(screen.getByText(/Every slot holds a settlement/)).toBeTruthy()
-    const blocked = screen.getByRole('button', { name: /Choose a save slot/ }) as HTMLButtonElement
+    const blocked = screen.getByRole('button', {
+      name: /Choose a save slot/,
+    }) as HTMLButtonElement
     expect(blocked.disabled).toBe(true)
 
     fireEvent.click(screen.getByLabelText(/Slot 2/))

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   downloadSaveFile,
   parseSaveFile,
@@ -6,11 +6,26 @@ import {
   saveFileText,
   type ImportResult,
 } from '../game/saveFile'
-import { listSlots, loadSlot, slotMeta, type SlotId, type SlotSummary } from '../game/saveSlots'
+import {
+  listSlots,
+  loadSlot,
+  slotMeta,
+  type SlotId,
+  type SlotSummary,
+} from '../game/saveSlots'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { SlotDetails, SlotPicker } from './SaveSlots'
 import { useConfirm } from './useConfirm'
+
+/** Brings a freshly shown block into view; the screen scrolls inside its card. */
+function useRevealOnChange(trigger: unknown) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (trigger) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+  }, [trigger])
+  return ref
+}
 
 /** The run a slot holds: the live one for the slot being played. */
 function slotRun(id: SlotId): RunState | null {
@@ -49,7 +64,9 @@ function SlotCard({
   const canSaveHere = !!run && !playing
 
   return (
-    <li className={`slot-card ${slot.meta ? '' : 'is-empty'} ${playing ? 'is-playing' : ''}`}>
+    <li
+      className={`slot-card ${slot.meta ? '' : 'is-empty'} ${playing ? 'is-playing' : ''}`}
+    >
       <header className="slot-head">
         <h3>{slot.label}</h3>
         {playing && <span className="slot-badge">Playing now</span>}
@@ -101,20 +118,22 @@ function SlotCard({
             aria-label={
               slot.meta && copy.armed
                 ? `Replace ${slot.label}? Tap again`
-                : `Save current run to ${slot.label}`
+                : `Save a copy of the current run to ${slot.label}`
             }
             onClick={slot.meta ? copy.trigger : () => saveCopy(slot.id)}
           >
             {slot.meta && copy.armed
               ? `Replace ${slot.label}? Tap again`
-              : `💾 Save current run here`}
+              : '💾 Save a copy here'}
           </button>
         )}
         {slot.meta && (
           <button
             type="button"
             className={`danger ${del.armed ? 'is-armed' : ''}`}
-            aria-label={del.armed ? `Delete ${slot.label}? Tap again` : `Delete ${slot.label}`}
+            aria-label={
+              del.armed ? `Delete ${slot.label}? Tap again` : `Delete ${slot.label}`
+            }
             onClick={del.trigger}
           >
             {del.armed
@@ -138,6 +157,7 @@ function ImportPanel({ slots }: { slots: SlotSummary[] }) {
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [target, setTarget] = useState<SlotId | null>(null)
+  const outcome = useRevealOnChange(result)
 
   const accept = (next: ImportResult) => {
     setResult(next)
@@ -207,38 +227,40 @@ function ImportPanel({ slots }: { slots: SlotSummary[] }) {
           </button>
         </div>
       )}
-      {result && !result.ok && (
-        <p className="slot-error" role="alert">
-          {result.error}
-        </p>
-      )}
-      {result?.ok && (
-        <div className="import-preview">
-          <SlotDetails meta={slotMeta(result.run, 0)} compact />
-          <SlotPicker
-            slots={slots}
-            value={target}
-            onChange={setTarget}
-            name="import-slot"
-            label="Import into"
-            activeSlot={activeSlot}
-          />
-          <button
-            type="button"
-            className={replacing && confirm.armed ? 'primary is-armed' : 'primary'}
-            disabled={!target}
-            onClick={replacing ? confirm.trigger : commit}
-          >
-            {!target
-              ? 'Choose a slot'
-              : replacing && confirm.armed
-                ? `Replace ${targetSlot?.label}? Tap again`
-                : replacing
-                  ? `Import, replacing ${targetSlot?.label}`
-                  : `Import into ${targetSlot?.label}`}
-          </button>
-        </div>
-      )}
+      <div ref={outcome} className="reveal">
+        {result && !result.ok && (
+          <p className="slot-error" role="alert">
+            {result.error}
+          </p>
+        )}
+        {result?.ok && (
+          <div className="import-preview">
+            <SlotDetails meta={slotMeta(result.run, 0)} compact />
+            <SlotPicker
+              slots={slots}
+              value={target}
+              onChange={setTarget}
+              name="import-slot"
+              label="Import into"
+              activeSlot={activeSlot}
+            />
+            <button
+              type="button"
+              className={replacing && confirm.armed ? 'primary is-armed' : 'primary'}
+              disabled={!target}
+              onClick={replacing ? confirm.trigger : commit}
+            >
+              {!target
+                ? 'Choose a slot'
+                : replacing && confirm.armed
+                  ? `Replace ${targetSlot?.label}? Tap again`
+                  : replacing
+                    ? `Import, replacing ${targetSlot?.label}`
+                    : `Import into ${targetSlot?.label}`}
+            </button>
+          </div>
+        )}
+      </div>
     </section>
   )
 }
@@ -254,9 +276,13 @@ export function SavesScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [version, notice],
   )
-  const [textOut, setTextOut] = useState<{ label: string; text: string; copied: boolean } | null>(
-    null,
-  )
+  const [textOut, setTextOut] = useState<{
+    label: string
+    text: string
+    copied: boolean
+  } | null>(null)
+
+  const textBox = useRevealOnChange(textOut)
 
   const copyText = (label: string, text: string) => {
     setTextOut({ label, text, copied: false })
@@ -288,7 +314,11 @@ export function SavesScreen() {
         </ul>
 
         {textOut && (
-          <section className="setup-section text-out" aria-label="Save as text">
+          <section
+            className="setup-section text-out reveal"
+            aria-label="Save as text"
+            ref={textBox}
+          >
             <h3>{textOut.label} as text</h3>
             <p className="muted" role="status">
               {textOut.copied

@@ -32,9 +32,16 @@ export function slotOneLiner(meta: SlotMeta): string {
 }
 
 /** The metadata block shown on the load screen and in slot pickers. */
-export function SlotDetails({ meta, compact = false }: { meta: SlotMeta; compact?: boolean }) {
+export function SlotDetails({
+  meta,
+  compact = false,
+}: {
+  meta: SlotMeta
+  compact?: boolean
+}) {
   const edict = EDICTS.find((d) => d.level === meta.edict)
-  const outcome = meta.phase === 'won' ? ' · 🏆 Won' : meta.phase === 'lost' ? ' · Lost' : ''
+  const outcome =
+    meta.phase === 'won' ? ' · 🏆 Won' : meta.phase === 'lost' ? ' · Lost' : ''
   return (
     <div className="slot-details">
       <div className="slot-line">

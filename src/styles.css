@@ -481,6 +481,26 @@ code {
   font-weight: 700;
 }
 
+/* The phone bar's folded speed control; desktop shows the group itself. */
+.speed-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 58px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.speed-toggle .speed-chevron {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.speed-toggle.is-open {
+  border-color: var(--gold);
+}
+
 .topbar-meters {
   grid-area: meters;
   display: grid;
@@ -862,6 +882,32 @@ code {
   /* Sound lives in the settings popover here. */
   .topbar .sound-btn {
     display: none;
+  }
+
+  /* Six speeds do not fit beside the tools: they fold into a dropdown
+     that keeps every button a full finger wide. */
+  .speed-toggle {
+    display: inline-flex;
+  }
+
+  .speed-anchor .speed-group {
+    display: none;
+  }
+
+  .speed-anchor .speed-group.is-open {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 30;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    animation: fade-in 120ms ease;
+  }
+
+  .speed-anchor .speed-group.is-open button {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .topbar .topbar-meters {

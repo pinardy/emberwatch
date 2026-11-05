@@ -155,7 +155,12 @@
 .paste-box textarea,
 .text-out textarea {
   width: 100%;
-  font: 12px/1.4 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font:
+    12px/1.4 ui-monospace,
+    'SF Mono',
+    Menlo,
+    Consolas,
+    monospace;
   color: inherit;
   background: var(--bg-deep);
   border: 1px solid var(--line);
@@ -175,4 +180,17 @@
   .slot-option {
     min-height: 44px;
   }
+}
+
+/* Revealed blocks clear the card's sticky footer when scrolled into view. */
+.reveal {
+  scroll-margin-bottom: 90px;
+}
+
+/* An armed primary action still reads as destructive, hovered or not. */
+button.primary.is-armed,
+button.primary.is-armed:hover:not(:disabled) {
+  background: #5a2622;
+  border-color: var(--bad);
+  color: #ffe9e4;
 }

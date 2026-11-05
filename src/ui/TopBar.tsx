@@ -72,7 +72,7 @@ interface StatusAlert {
   severity: 'danger' | 'caution'
 }
 
-type Popover = 'status' | 'settings' | null
+type Popover = 'status' | 'settings' | 'speed' | null
 
 export function TopBar() {
   const run = useRun()
@@ -88,6 +88,7 @@ export function TopBar() {
   const [popover, setPopover] = useState<Popover>(null)
   const statusRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
+  const speedRef = useRef<HTMLDivElement>(null)
   // Modifiers and resolve walk the whole settlement: once per sim step only.
   const derived = useMemo(() => {
     if (!run) return null
@@ -107,7 +108,11 @@ export function TopBar() {
   useEffect(() => {
     if (!popover) return
     const onPointer = (e: PointerEvent) => {
-      const host = popover === 'status' ? statusRef.current : settingsRef.current
+      const host = {
+        status: statusRef.current,
+        settings: settingsRef.current,
+        speed: speedRef.current,
+      }[popover]
       if (host && !host.contains(e.target as Node)) setPopover(null)
     }
     document.addEventListener('pointerdown', onPointer)
@@ -190,18 +195,45 @@ export function TopBar() {
           </div>
         </div>
 
-        <div className="speed-group" role="group" aria-label="Game speed">
-          {SPEED_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={speed === option ? 'is-active' : ''}
-              onClick={() => setSpeed(option)}
-              title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
-            >
-              {option === 0 ? '⏸' : `${option}×`}
-            </button>
-          ))}
+        <div className="topbar-anchor speed-anchor" ref={speedRef}>
+          {/* Phones fold the six speeds behind this; desktop hides it. */}
+          <button
+            type="button"
+            className={`speed-toggle ${speed === 0 ? 'is-paused' : ''} ${
+              popover === 'speed' ? 'is-open' : ''
+            }`}
+            onClick={() => toggle('speed')}
+            aria-expanded={popover === 'speed'}
+            aria-controls="speed-group"
+            aria-label={`Game speed: ${speed === 0 ? 'paused' : `${speed}×`}`}
+            title="Game speed"
+          >
+            {speed === 0 ? '⏸' : `${speed}×`}
+            <span className="speed-chevron" aria-hidden>
+              ▾
+            </span>
+          </button>
+          <div
+            id="speed-group"
+            className={`speed-group ${popover === 'speed' ? 'is-open' : ''}`}
+            role="group"
+            aria-label="Game speed"
+          >
+            {SPEED_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={speed === option ? 'is-active' : ''}
+                onClick={() => {
+                  setSpeed(option)
+                  if (popover === 'speed') setPopover(null)
+                }}
+                title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
+              >
+                {option === 0 ? '⏸' : `${option}×`}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
