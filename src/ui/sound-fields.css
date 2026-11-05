@@ -1,0 +1,62 @@
+/* The mute switch and volume mixer (menu settings and the in-game popover). */
+
+.sound-fields {
+  margin: 0 0 4px;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.sound-fields legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sound-fields label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+  cursor: pointer;
+  clear: both;
+}
+
+.sound-fields input[type='checkbox'] {
+  accent-color: var(--gold);
+  flex-shrink: 0;
+}
+
+.sound-fields .volume-slider {
+  display: grid;
+  grid-template-columns: 7.5em minmax(0, 1fr) 3.2em;
+  gap: 8px;
+}
+
+.sound-fields .volume-name {
+  color: var(--muted);
+}
+
+.sound-fields input[type='range'] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--gold);
+}
+
+.sound-fields output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+@media (pointer: coarse) {
+  .sound-fields label {
+    min-height: 44px;
+    padding: 2px 0;
+  }
+}

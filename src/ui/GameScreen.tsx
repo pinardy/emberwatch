@@ -6,8 +6,8 @@ import { BuildPanel } from './BuildPanel'
 import { ChoiceModal } from './ChoiceModal'
 import { ConditionsBar } from './ConditionsBar'
 import { EventToasts, useLogUnread } from './EventToasts'
-import { EndModal } from './EndModal'
 import { Inspector } from './Inspector'
+import { EndModal } from './lazyScreens'
 import { MapView } from './MapView'
 import { ResourceBar } from './ResourceBar'
 import { LogPanel, OrdersPanel, TradePanel } from './SidePanels'
@@ -135,7 +135,8 @@ export function GameScreen() {
       </main>
 
       <ChoiceModal />
-      <EndModal />
+      {/* The summary and its chart are a separate chunk, fetched in idle time. */}
+      {run.phase !== 'playing' && <EndModal />}
     </div>
   )
 }

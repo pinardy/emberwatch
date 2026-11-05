@@ -132,6 +132,9 @@ export default defineConfig({
           name: 'ui',
           environment: 'jsdom',
           include: ['src/**/*.test.tsx'],
+          // Lazy screens are loaded up front so UI tests can click straight
+          // through them; LazyScreens.test.tsx covers the cold, suspending path.
+          setupFiles: ['src/test/setup-ui.ts'],
           exclude: testExclude,
         },
       },

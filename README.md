@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 434 tests: simulation, roads, forecasts, Citadel, balance harness, UI
+npm test           # 561 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -75,7 +75,11 @@ src/
                         #   chart; never touches the RNG
     store.ts            # zustand store + the game loop's entry point
   ui/                   # React components; read the sim, never contain rules
-                        # (audio.ts synthesises all cues & rain — no assets)
+                        # (audio.ts synthesises all cues & rain through a
+                        # volume mixer; music.ts is the generative score,
+                        # loaded on demand — no assets)
+    lazyScreens.tsx     #   setup, Citadel, game and end-of-run screens as
+                        #   lazy chunks, preloaded once the menu is idle
     MapView.tsx         #   picks the map renderer: 3D by default, 2D fallback
     MapView2D.tsx       #   SVG vector map of the same world (no-WebGL, tests)
     villagerRoutes.ts   #   walking villagers for both maps: routes derived
@@ -98,7 +102,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs nineteen test files:
+`npm test` runs twenty-eight test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), joins its workplaces to the hearth by road when it has wood to spare, and clears glades. It plays 24 seeds for each of three species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
@@ -121,10 +125,14 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, building badges, warmth, roads and villagers, and that static geometry is not rebuilt on every tick.
 - **`roads.test.ts`** — the road graph and its bonus (directness, junctions, warehouse hubs), the rules for laying roads, the cache that keeps the per-tick cost a lookup, and old saves without roads.
 - **`villagerRoutes.test.ts`** — the walking villagers' routes: a pure function of the run, following roads where they run and walking straight where they do not.
+- **`audio.test.ts`**, **`music.test.ts`** and **`SoundSettings.test.tsx`** — sound, against a small fake `AudioContext` (`src/test/fakeAudio.ts`): no context before a user gesture, each volume bus wired into the master at its saved level, mute, ducking, older settings migrating to the default levels, and the sliders in both settings panels. For the score: seasonal palettes, a seeded composer that stays in key and does not loop, look-ahead scheduling, the crossfade on a change of season, and holding while paused or hidden.
+- **`LazyScreens.test.tsx`** — the lazily loaded screens from cold: each shows its loading state, then renders, and all are preloaded in idle time. The other UI tests preload them first (`src/test/setup-ui.ts`) and click straight through.
 
 ## PWA
 
 `vite-plugin-pwa` generates the manifest and a Workbox service worker precaching the whole app shell, so after one load the game runs fully offline — there is no server component. Runs autosave to `localStorage` every 8 seconds, on tab hide, and on page unload; the game pauses itself when the tab is backgrounded rather than fast-forwarding on return.
+
+Only the menu ships in the startup chunk (about 185 kB minified, 60 kB gzipped, plus React). The setup, Citadel, saves, achievements and game screens, the end-of-run summary with its timeline chart, the 3D map (three.js) and the music engine are separate chunks: the screens are preloaded in idle time once the menu is up and then render without a loading state, the 3D map loads when it is shown, and the music engine loads only when music is audible. The service worker precaches every chunk.
 
 **Save slots.** There are four run slots — Autosave plus Slots 1–3 — listed on the menu's *Saved settlements* screen with their species, edict, season, reputation, impatience, modifiers, seed and when they were last played. Each run autosaves to its own slot; *Continue* resumes the most recently played one. A new settlement takes a free slot and only replaces a run when the player picks that slot and confirms. The Autosave slot keeps the original `emberwatch.run.v1` key, so a save from before slots simply appears there; a small index (`emberwatch.slots.v1`) holds the metadata and is rebuilt from the slots whenever it disagrees with them (`src/game/saveSlots.ts`). A save that no longer fits in storage leaves the previous one intact and says so once.
 
@@ -179,7 +187,7 @@ npm 10 crashes ("Cannot read properties of null (reading 'edgesOut')") when it r
 
 ## Known scope limits
 
-- Art is emoji throughout; there are no sprites. Audio is synthesised in WebAudio (season stings, event cues, a rain loop that follows the season) — no recorded assets.
+- Art is emoji throughout; there are no sprites. Audio is synthesised in WebAudio (season stings, event cues, a rain loop that follows the season, and a generative ambient score) — no recorded assets. Master, music, effects and rain each have a volume slider. The score is on at a low level (30%) by default: pads and sparse motifs in D dorian for the Drizzle, G lydian for the Clearance and a lower A aeolian with a drone for the Storm, darkened while a threat is loose or the Queen's impatience passes 70%, crossfaded at each change of season, ducked under event cues and held while paused or hidden. It schedules notes on the audio clock about once a second, with no per-frame work.
 - Meta progression is an upgrade tree and a difficulty ladder, with no world map campaign. Edicts were sanity-checked against the balance bot (it wins less often as the ladder climbs) but are not asserted by the harness.
 - ~30 buildings, 34 glade events, 40+ cornerstones and 12 map modifiers — enough for the loop to have real decisions, well short of Against the Storm's catalogue.
 - Buildings have circular footprints and free placement. Roads are straight stretches with no traffic; villagers walk them for show, while the simulation stays assignment-based.

@@ -1,12 +1,15 @@
 import { useEffect } from 'react'
 import { useGameStore } from './game/store'
-import { AchievementsScreen } from './ui/AchievementsScreen'
-import { CitadelScreen } from './ui/CitadelScreen'
 import { DailyScreen } from './ui/DailyScreen'
-import { GameScreen } from './ui/GameScreen'
+import {
+  AchievementsScreen,
+  CitadelScreen,
+  GameScreen,
+  SavesScreen,
+  SetupScreen,
+  preloadScreensWhenIdle,
+} from './ui/lazyScreens'
 import { MenuScreen } from './ui/MenuScreen'
-import { SavesScreen } from './ui/SavesScreen'
-import { SetupScreen } from './ui/SetupScreen'
 import { UpdatePrompt } from './ui/UpdatePrompt'
 
 export default function App() {
@@ -16,6 +19,9 @@ export default function App() {
   useEffect(() => {
     boot()
   }, [boot])
+
+  // Only the menu ships in the startup chunk; fetch the rest once it is up.
+  useEffect(() => preloadScreensWhenIdle(), [])
 
   return (
     <>
