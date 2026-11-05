@@ -1,5 +1,6 @@
 import { Component, Suspense, lazy, useRef } from 'react'
 import type { ComponentType, ReactNode } from 'react'
+import { loadIcons } from './Icon'
 import './lazy-screens.css'
 
 /*
@@ -26,8 +27,9 @@ function lazyScreen(load: Loader, fallback: ReactNode): LazyScreen {
   let loaded: ComponentType | null = null
   let pending: Promise<ComponentType> | null = null
   const preload = () => {
-    pending ??= load().then(
-      (component) => (loaded = component),
+    // Every lazy screen draws icons, so their registry arrives with the code.
+    pending ??= Promise.all([load(), loadIcons()]).then(
+      ([component]) => (loaded = component),
       (error: unknown) => {
         pending = null // let a later attempt retry
         throw error

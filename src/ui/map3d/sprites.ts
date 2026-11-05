@@ -1,12 +1,16 @@
 import * as THREE from 'three'
+import { ICONS, toneColor, type IconId } from '../../art/icons'
 
 /**
- * Canvas-baked textures for the 3D map. Emoji and short strings (worker
+ * Canvas-baked textures for the 3D map. Drawn icons, emoji and short strings (worker
  * counts, deposit amounts) are drawn once per distinct value and cached, so
  * sprites cost a texture lookup instead of a DOM node each.
  */
 
 const cache = new Map<string, THREE.CanvasTexture>()
+
+/** Textures baked so far — tests read this to prove nothing re-bakes per tick. */
+export const textureStats = { created: 0 }
 
 function bake(key: string, draw: (ctx: CanvasRenderingContext2D, size: number) => void): THREE.CanvasTexture {
   const hit = cache.get(key)
@@ -17,6 +21,7 @@ function bake(key: string, draw: (ctx: CanvasRenderingContext2D, size: number) =
   canvas.height = size
   const ctx = canvas.getContext('2d')!
   draw(ctx, size)
+  textureStats.created++
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   texture.anisotropy = 4
@@ -33,6 +38,54 @@ export function emojiTexture(emoji: string): THREE.CanvasTexture {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.55)'
     ctx.shadowBlur = size * 0.09
     ctx.fillText(emoji, size / 2, size / 2 + size * 0.04)
+  })
+}
+
+/** Light ink for the `currentColor` tone, which has no text to inherit here. */
+const SPRITE_CURRENT = '#dfe6e3'
+
+/**
+ * A drawn icon rasterised once: the registry's path data is replayed onto the
+ * texture's canvas through `Path2D` (the same strings the SVG renders). A
+ * first pass lays a soft dark rim under every shape — the halo the emoji
+ * sprites had, without a blur filter or a second canvas, both of which are
+ * slow under software WebGL.
+ */
+export function iconTexture(id: IconId): THREE.CanvasTexture {
+  return bake(`i:${id}`, (ctx, size) => {
+    const scale = (size * 0.72) / 24 // the footprint the emoji glyphs had
+    const offset = (size - 24 * scale) / 2
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    const shapes = ICONS[id].map((shape) => ({ shape, path: new Path2D(shape.d) }))
+    const place = (m?: readonly number[]) => {
+      ctx.setTransform(scale, 0, 0, scale, offset, offset)
+      if (m) ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5])
+    }
+    // Halo: each shape's silhouette, widened, in translucent ink.
+    ctx.globalAlpha = 0.45
+    ctx.fillStyle = ctx.strokeStyle = 'rgb(0, 0, 0)'
+    for (const { shape, path } of shapes) {
+      place(shape.m)
+      ctx.lineWidth = (shape.w ?? 1.3) + 2.2
+      if (shape.fill) ctx.fill(path)
+      ctx.stroke(path)
+    }
+    for (const { shape, path } of shapes) {
+      place(shape.m)
+      ctx.globalAlpha = shape.o ?? 1
+      if (shape.fill) {
+        ctx.fillStyle = toneColor(shape.fill, SPRITE_CURRENT)
+        ctx.fill(path)
+      }
+      if (shape.stroke) {
+        ctx.strokeStyle = toneColor(shape.stroke, SPRITE_CURRENT)
+        ctx.lineWidth = shape.w ?? 1.3
+        ctx.stroke(path)
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalAlpha = 1
   })
 }
 

@@ -13,6 +13,7 @@ import { useGameStore } from '../game/store'
 import type { BuildingInstance, RunState } from '../game/types'
 import { Cost } from './BuildPanel'
 import { tierMark } from './mapShared'
+import { Icon } from './Icon'
 
 /**
  * The Inspector's upgrade block: what the next tier is, what it costs (and
@@ -67,7 +68,7 @@ export function UpgradeSection({ run, building }: { run: RunState; building: Bui
           disabled={amber < cost}
           onClick={() => rush(building.id)}
         >
-          ⚡ Rush upgrade for {cost} {RESOURCES.amber.icon}
+          ⚡ Rush upgrade for {cost} <Icon of={RESOURCES.amber} label="amber" />
           {amber < cost ? ` (${cost - amber} amber short)` : ''}
         </button>
       </section>

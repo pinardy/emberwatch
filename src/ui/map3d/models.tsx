@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { HEARTH_STYLES } from '../../game/content/meta'
 import type { BuildingCategory, DepositId } from '../../game/types'
-import { badgeTexture, emojiTexture, labelTexture } from './sprites'
+import type { IconId } from '../../art/icons'
+import { badgeTexture, emojiTexture, iconTexture, labelTexture } from './sprites'
 
 /**
  * Low-poly props shared across the 3D scene: geometries and materials are
@@ -141,8 +142,22 @@ export function hash01(key: string, salt: number): number {
   return (h >>> 0) / 4294967296
 }
 
-export function IconSprite({ icon, y, size }: { icon: string; y: number; size: number }) {
-  const map = useMemo(() => emojiTexture(icon), [icon])
+/**
+ * A floating icon: the drawn `art` when there is one, else the emoji `icon`.
+ * Either way the texture is baked once per id and shared by every sprite.
+ */
+export function IconSprite({
+  icon,
+  art,
+  y,
+  size,
+}: {
+  icon: string
+  art?: IconId
+  y: number
+  size: number
+}) {
+  const map = useMemo(() => (art ? iconTexture(art) : emojiTexture(icon)), [art, icon])
   return (
     <sprite position={[0, y, 0]} scale={[size, size, 1]} raycast={NO_RAYCAST}>
       <spriteMaterial map={map} transparent depthWrite={false} />

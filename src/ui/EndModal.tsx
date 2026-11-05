@@ -9,6 +9,7 @@ import { Overlay } from './ChoiceModal'
 import { EndExtras } from './EndExtras'
 import { RunModifierList } from './RunModifierList'
 import { RunTimelineChart } from './RunTimeline'
+import { Icon } from './Icon'
 
 export function EndModal() {
   const run = useRun()
@@ -30,7 +31,7 @@ export function EndModal() {
     <Overlay>
       <div className={`modal modal-end ${won ? 'is-won' : 'is-lost'}`}>
         <header>
-          <span className="modal-icon">{won ? '👑' : '🌫️'}</span>
+          <span className="modal-icon">{won ? <Icon id="reputation" /> : '🌫️'}</span>
           <div>
             <h2>{won ? 'The settlement holds' : 'The settlement is lost'}</h2>
             <small>

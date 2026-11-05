@@ -11,6 +11,8 @@ import { DecreeCard } from './DecreeCard'
 import { RunModifierList } from './RunModifierList'
 import { RaceSparkline } from './RaceSparkline'
 import type { ResourceId } from '../game/types'
+import { Icon } from './Icon'
+import { IconText } from './IconText'
 
 export function OrdersPanel() {
   const run = useRun()
@@ -38,7 +40,7 @@ export function OrdersPanel() {
               <div className="row-between">
                 <strong>{def.name}</strong>
                 <span className="order-reward">
-                  👑 +{orderReputation(run, def.reputationReward)}
+                  <Icon id="reputation" label="reputation" /> +{orderReputation(run, def.reputationReward)}
                 </span>
               </div>
               <small>{describeGoal(def.goal)}</small>
@@ -64,7 +66,8 @@ export function OrdersPanel() {
           disabled={(run.stock.amber ?? 0) < sootheCost(run) || run.impatience < 1}
           onClick={() => soothe()}
         >
-          🕊️ Soothe the Queen — {sootheCost(run)} {RESOURCES.amber.icon} (⏳ −1)
+          🕊️ Soothe the Queen — {sootheCost(run)} <Icon of={RESOURCES.amber} label="amber" /> (
+          <Icon id="impatience" label="impatience" /> −1)
         </button>
       </section>
 
@@ -131,7 +134,9 @@ export function LogPanel() {
               <span className="log-when">
                 Y{entry.year} {entry.season.slice(0, 3)}
               </span>
-              <span>{entry.text}</span>
+              <span>
+                <IconText text={entry.text} />
+              </span>
             </li>
           ))}
         </ul>
@@ -164,7 +169,7 @@ export function TradePanel() {
         <div className="row-between">
           <h3>Caravan</h3>
           <span className="chip">
-            {RESOURCES.amber.icon} {Math.floor(amber)}
+            <Icon of={RESOURCES.amber} label="amber" /> {Math.floor(amber)}
           </span>
         </div>
         {!available ? (
@@ -184,7 +189,7 @@ export function TradePanel() {
             <p className="panel-hint">
               🐫 In town for {Math.ceil(caravan.timer)}s — paying double for{' '}
               <strong>
-                {RESOURCES[caravan.wants]?.icon} {RESOURCES[caravan.wants]?.name}
+                <Icon of={RESOURCES[caravan.wants]} /> {RESOURCES[caravan.wants]?.name}
               </strong>
               .
             </p>
@@ -200,7 +205,9 @@ export function TradePanel() {
                     disabled={offer.sold || amber < price}
                     onClick={() => buyLot(index)}
                   >
-                    <span>{RESOURCES[offer.resource]?.icon}</span>
+                    <span>
+                      <Icon of={RESOURCES[offer.resource]} />
+                    </span>
                     <strong>
                       {offer.amount} {RESOURCES[offer.resource]?.name}
                     </strong>
@@ -224,7 +231,9 @@ export function TradePanel() {
                     className={`trade-card ${wanted ? 'is-wanted' : ''}`}
                     onClick={() => sell(resource.id as ResourceId)}
                   >
-                    <span>{resource.icon}</span>
+                    <span>
+                      <Icon of={resource} />
+                    </span>
                     <strong>
                       {TRADE_LOT} {resource.name}
                     </strong>

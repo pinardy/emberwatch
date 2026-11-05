@@ -1,0 +1,16 @@
+/* Drawn icons (src/art/icons.ts). They size in em so they sit where emoji
+   glyphs used to, at whatever size the surrounding text sets. */
+.icon {
+  display: inline-block;
+  width: 1.25em;
+  height: 1.25em;
+  vertical-align: -0.28em;
+  flex: none;
+  overflow: visible;
+}
+
+/* Content without drawn art keeps its emoji. */
+.icon-emoji {
+  display: inline-block;
+  line-height: 1;
+}

@@ -2,6 +2,7 @@ import { BUILDINGS } from '../game/content/buildings'
 import { CHARTERS } from '../game/content/charters'
 import { useGameStore } from '../game/store'
 import type { PendingChoice } from '../game/types'
+import { Icon } from './Icon'
 
 /**
  * The Queen's one-time charter: a run-shaping perk, breathing room with the
@@ -39,7 +40,7 @@ export function CharterChoice({ choice }: { choice: PendingChoice }) {
               <small>{def.description}</small>
               {def.grantsBlueprint && blueprint && (
                 <small className="is-good">
-                  Grants: {blueprint.icon} {blueprint.name}
+                  Grants: <Icon of={blueprint} /> {blueprint.name}
                 </small>
               )}
             </button>

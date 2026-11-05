@@ -15,6 +15,9 @@ import { useGameStore, useRun } from '../game/store'
 import type { RunState, Villager } from '../game/types'
 import { formatMultiplier } from './Inspector'
 import { useConfirm } from './useConfirm'
+import { Icon } from './Icon'
+import { IconText } from './IconText'
+import { NEED_ART } from '../game/content/art'
 
 /** Where the player diagnoses "why is resolve dropping?". */
 export function VillagerPanel() {
@@ -41,7 +44,9 @@ export function VillagerPanel() {
           return (
             <div className="species-card" key={b.species}>
               <div className="species-head">
-                <span className="species-icon">{def.icon}</span>
+                <span className="species-icon">
+                  <Icon of={def} />
+                </span>
                 <div>
                   <strong>
                     {def.name} <small>×{count}</small>
@@ -91,7 +96,7 @@ export function VillagerPanel() {
                       <b className="need-state" aria-hidden>
                         {met ? '✓' : ratio > 0 ? '◐' : '✕'}
                       </b>
-                      {NEED_LABELS[need].icon} {NEED_LABELS[need].name}
+                      <Icon id={NEED_ART[need]} /> {NEED_LABELS[need].name}
                       <span className="sr-only">
                         {met ? ' met' : ratio > 0 ? ' partly met' : ' unmet'}
                       </span>
@@ -196,7 +201,9 @@ function VillagerRow({ run, villager: v }: { run: RunState; villager: Villager }
 
   const body = (
     <>
-      <span aria-hidden>{SPECIES[v.species].icon}</span>
+      <span aria-hidden>
+        <Icon of={SPECIES[v.species]} />
+      </span>
       <strong>
         {v.name}
         {trait && (
@@ -208,7 +215,7 @@ function VillagerRow({ run, villager: v }: { run: RunState; villager: Villager }
       </strong>
       <small>
         {assignment ? '' : '💤 '}
-        {label}
+        <IconText text={label} />
       </small>
     </>
   )
