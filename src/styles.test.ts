@@ -1,5 +1,3 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -9,13 +7,12 @@ import { describe, expect, it } from 'vitest'
  * nesting of every stylesheet in the app balanced.
  */
 
-function cssFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name)
-    if (statSync(path).isDirectory()) return cssFiles(path)
-    return path.endsWith('.css') ? [path] : []
-  })
-}
+/** Every stylesheet under src/, read as text by Vite at test time. */
+const STYLESHEETS = import.meta.glob('./**/*.css', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>
 
 /** Strips comments and quoted strings, which may legitimately contain braces. */
 function codeOnly(css: string): string {
@@ -41,18 +38,15 @@ function braceProblem(css: string): string | null {
 }
 
 describe('stylesheets', () => {
-  const files = cssFiles(join(process.cwd(), 'src'))
+  const files = Object.entries(STYLESHEETS)
 
   it('finds the app stylesheets', () => {
-    expect(files.length).toBeGreaterThan(0)
+    expect(files.map(([name]) => name)).toContain('./styles.css')
   })
 
-  it.each(files.map((f) => [f.slice(process.cwd().length + 1), f]))(
-    '%s has balanced braces',
-    (_name, file) => {
-      expect(braceProblem(readFileSync(file, 'utf8'))).toBeNull()
-    },
-  )
+  it.each(files)('%s has balanced braces', (_name, css) => {
+    expect(braceProblem(css)).toBeNull()
+  })
 
   it('reports an unclosed block, the failure it guards against', () => {
     expect(braceProblem('.a {\n  color: red;\n\n.b { color: blue; }\n')).toMatch(/line 1/)
