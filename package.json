@@ -8,6 +8,7 @@
     "dev": "vite",
     "icons": "node scripts/generate-icons.mjs",
     "prebuild": "node scripts/generate-icons.mjs",
+    "build:artifact": "npm run build && node scripts/artifact-page.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",

@@ -7,7 +7,7 @@ const isTest = process.env.VITEST === 'true'
 
 /*
  * Where the app is served from. The default relative base works from any
- * directory for dev, tests and `vite preview`; the GitHub Pages build sets
+ * directory for dev, tests and `vite preview`; a build served from a sub-path sets
  * BASE_PATH=/roguelite-game/ so asset URLs, the manifest link and the service
  * worker's scope are all anchored to the project-site sub-path.
  */
