@@ -11,7 +11,9 @@ afterEach(cleanup)
 
 /** A run played for `seconds`, answering every choice, then decided. */
 function playedRun(seconds: number, phase: 'won' | 'lost'): RunState {
-  const s = createRun({ seed: 4242, species: ['human', 'fox', 'harpy'] })
+  // Base season pacing: the seed's map modifiers (an Early Frost) would bring
+  // a second Storm into the window. Modifiers have their own tests.
+  const s = createRun({ seed: 4242, species: ['human', 'fox', 'harpy'], modifiers: [] })
   for (let t = 0; t < seconds; t += 0.125) {
     while (s.pendingChoices.length > 0) {
       const choice = s.pendingChoices[0]

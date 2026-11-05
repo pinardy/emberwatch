@@ -10,7 +10,6 @@ import {
   newcomerInterval,
   QUEEN_DEADLINE_YEAR,
   SEASON_INFO,
-  SEASON_LENGTH,
   SEASON_ORDER,
 } from './balance'
 import { pushLog } from './createRun'
@@ -21,7 +20,7 @@ import {
   stepOrders,
   stepThreats,
 } from './events'
-import { computeModifiers } from './modifiers'
+import { computeModifiers, seasonLengthFor, type Modifiers } from './modifiers'
 import { stepProduction } from './production'
 import { computeStorageCap, population, totalHousing } from './queries'
 import { checkCharter, stepConditions, stepDecree } from './structure'
@@ -57,18 +56,18 @@ export function tick(s: RunState, dt: number): void {
   s.storageCap = computeStorageCap(s, BASE_STORAGE + mods.globalStorage)
   s.clock += dt
 
-  advanceSeason(s, dt)
+  advanceSeason(s, dt, mods)
 
   stepProduction(s, dt, mods)
   stepClearing(s, dt, mods)
   stepThreats(s, dt)
   stepConditions(s, dt)
-  stepCaravan(s, dt)
+  stepCaravan(s, dt, mods)
 
   s.coldHearth = stepHearth(s, dt, hearthFuelRate(s.season.season, mods))
   // Braziers draw on the same woodpile, after the hearth. Said once a Storm,
   // however often a thin woodpile makes them gutter.
-  if (stepBraziers(s, dt, mods.hearthFuel) > 0) {
+  if (stepBraziers(s, dt, mods.hearthFuel * mods.brazierFuel) > 0) {
     const said = s.log.some(
       (e) => e.text === BRAZIER_COLD_LOG && e.year === s.season.year && e.season === 'storm',
     )
@@ -118,7 +117,7 @@ function stepHostility(s: RunState, dt: number, rateMultiplier: number): void {
   s.hostility = Math.min(MAX_HOSTILITY, Math.max(0, s.hostility + gain))
 }
 
-function advanceSeason(s: RunState, dt: number): void {
+function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
   s.season.elapsed += dt
   if (s.season.elapsed < s.season.length) return
 
@@ -127,7 +126,7 @@ function advanceSeason(s: RunState, dt: number): void {
   const next = SEASON_ORDER[(index + 1) % SEASON_ORDER.length] as Season
   if (next === 'drizzle') s.season.year++
   s.season.season = next
-  s.season.length = SEASON_LENGTH[next]
+  s.season.length = seasonLengthFor(next, s.season.year, mods)
 
   if (next === 'storm') {
     recordEvent(s, 'storm')

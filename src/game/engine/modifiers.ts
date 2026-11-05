@@ -1,5 +1,6 @@
 import { CORNERSTONES } from '../content/cornerstones'
-import type { BuildingTag, CornerstoneEffect, RunState, SpeciesId } from '../types'
+import { SEASON_LENGTH } from './balance'
+import type { BuildingTag, CornerstoneEffect, RunState, Season, SpeciesId } from '../types'
 
 /**
  * Flattened effects from cornerstones, event-granted ongoing effects, and any
@@ -33,7 +34,39 @@ export interface Modifiers {
   tradePrices: number
   /** Flat resolve for everyone, applied only during the Storm. */
   stormResolve: number
+  /** Multiplier on each season's length, every year. */
+  seasonLength: Record<Season, number>
+  /** Further multiplier on each season's length in Year 1 only. */
+  firstYearSeasonLength: Record<Season, number>
+  /** Additive work-speed bonus for every workplace, per season. */
+  seasonProduction: Record<Season, number>
+  /** Caravans call without a Trading Post. */
+  caravanWithoutPost: boolean
+  /** Multiplier on the time between caravan visits. */
+  caravanInterval: number
+  /** Extra reputation per completed order. */
+  orderReputation: number
+  /** Extra reputation per decree met in time. */
+  decreeReputation: number
+  /** Multiplier on a decree's time limit. */
+  decreeTime: number
+  /** Multiplier on the impatience a missed decree costs. */
+  decreeMissPenalty: number
+  /** Multiplier on the wood braziers burn. */
+  brazierFuel: number
+  /** Multiplier on favourable terrain percentages. */
+  terrainBoost: number
+  /** Multiplier on unfavourable terrain percentages (0 = ignored). */
+  terrainPenalty: number
+  /** Multiplier on adjacency work-speed bonuses. */
+  adjacencyBoost: number
 }
+
+const perSeason = (value: number): Record<Season, number> => ({
+  drizzle: value,
+  clearance: value,
+  storm: value,
+})
 
 export function emptyModifiers(): Modifiers {
   return {
@@ -55,6 +88,19 @@ export function emptyModifiers(): Modifiers {
     gladeLoot: 1,
     tradePrices: 1,
     stormResolve: 0,
+    seasonLength: perSeason(1),
+    firstYearSeasonLength: perSeason(1),
+    seasonProduction: perSeason(0),
+    caravanWithoutPost: false,
+    caravanInterval: 1,
+    orderReputation: 0,
+    decreeReputation: 0,
+    decreeTime: 1,
+    decreeMissPenalty: 1,
+    brazierFuel: 1,
+    terrainBoost: 1,
+    terrainPenalty: 1,
+    adjacencyBoost: 1,
   }
 }
 
@@ -116,7 +162,52 @@ function foldEffect(m: Modifiers, e: CornerstoneEffect): void {
     case 'stormResolve':
       m.stormResolve += e.amount
       break
+    case 'seasonLength': {
+      const table = e.firstYearOnly ? m.firstYearSeasonLength : m.seasonLength
+      // Seasons never shrink below a third of their length.
+      table[e.season] = Math.max(0.35, table[e.season] * (1 + e.percent / 100))
+      break
+    }
+    case 'seasonProduction':
+      m.seasonProduction[e.season] += e.percent / 100
+      break
+    case 'caravanWithoutPost':
+      m.caravanWithoutPost = true
+      break
+    case 'caravanInterval':
+      m.caravanInterval = Math.max(0.25, m.caravanInterval * (1 + e.percent / 100))
+      break
+    case 'orderReputation':
+      m.orderReputation += e.amount
+      break
+    case 'decreeReputation':
+      m.decreeReputation += e.amount
+      break
+    case 'decreeTime':
+      m.decreeTime = Math.max(0.25, m.decreeTime * (1 + e.percent / 100))
+      break
+    case 'decreeMissPenalty':
+      m.decreeMissPenalty = Math.max(0, m.decreeMissPenalty * (1 + e.percent / 100))
+      break
+    case 'brazierFuel':
+      m.brazierFuel = Math.max(0, m.brazierFuel * (1 + e.percent / 100))
+      break
+    case 'terrainBoost':
+      m.terrainBoost = Math.max(0, m.terrainBoost * (1 + e.percent / 100))
+      break
+    case 'terrainPenalty':
+      m.terrainPenalty = Math.max(0, m.terrainPenalty * (1 + e.percent / 100))
+      break
+    case 'adjacencyBoost':
+      m.adjacencyBoost = Math.max(0, m.adjacencyBoost * (1 + e.percent / 100))
+      break
   }
+}
+
+/** Length of `season` in `year` once season-length effects apply. */
+export function seasonLengthFor(season: Season, year: number, m: Modifiers): number {
+  const firstYear = year === 1 ? m.firstYearSeasonLength[season] : 1
+  return SEASON_LENGTH[season] * m.seasonLength[season] * firstYear
 }
 
 export function computeModifiers(s: RunState): Modifiers {
