@@ -5,6 +5,7 @@ import { describeBonus, partnerIcon } from '../game/engine/adjacency'
 import { canAfford } from '../game/engine/queries'
 import { useGameStore, useRun } from '../game/store'
 import type { BuildingCategory, ResourceBag } from '../game/types'
+import { RoadCard } from './RoadTool'
 
 const ORDER: BuildingCategory[] = [
   'housing',
@@ -99,6 +100,7 @@ export function BuildPanel() {
           </section>
         )
       })}
+      <RoadCard />
     </div>
   )
 }

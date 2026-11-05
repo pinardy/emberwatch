@@ -164,6 +164,10 @@ export function migrateRun(raw: unknown): RunState | null {
   if (!Array.isArray(run.runModifiers)) run.runModifiers = []
   // Saves from before the run timeline start an empty one where they resume.
   run.timeline ??= createTimeline(run)
+  // Saves from before roads have none. With no roads every building works as
+  // it always did (the road bonus is purely additive), so nothing weakens.
+  if (!Array.isArray(run.roads)) run.roads = []
+  run.roadCounter ??= run.roads.length
   // Saves from before achievements: nothing remarkable recorded yet.
   run.feats = { ...defaultFeats(), ...(run.feats ?? {}) }
   return run

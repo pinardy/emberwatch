@@ -22,6 +22,7 @@ import { terrainHint } from '../game/engine/placement'
 import { homesWithin, isWarmAt } from '../game/engine/queries'
 import { TERRAIN } from '../game/content/terrain'
 import { terrainOf } from '../game/engine/production'
+import { benefitsFromRoad, describeRoadLink, roadLinkOf } from '../game/engine/roads'
 import { workerMultiplier } from '../game/engine/traits'
 import { useGameStore, useRun } from '../game/store'
 import { BuildingStatusLine } from './BuildingStatusLine'
@@ -273,6 +274,13 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
                     ? '🔥 Warm — inside the reach of the hearth or a lit brazier.'
                     : '❄ Cold in the Storm — beyond every fire. A brazier nearby would warm it.'}
               </p>
+            </section>
+          )}
+
+          {benefitsFromRoad(def) && (
+            <section className="inspector-section">
+              <h4>Road</h4>
+              <p className="muted">{describeRoadLink(roadLinkOf(run, building))}</p>
             </section>
           )}
 
