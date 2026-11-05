@@ -189,6 +189,14 @@ describe('the score in the mix', () => {
     for (const osc of notes) expect(osc.reaches(g.effects)).toBe(false)
   })
 
+  it('starts the score when it is first wanted, if the page has had a gesture', async () => {
+    // As when the game mounts after the click on "Set out": no rain or cue yet.
+    vi.stubGlobal('navigator', { userActivation: { hasBeenActive: true } })
+    setMusicMood({ season: 'clearance', tense: false })
+    await musicReady()
+    expect(graph().musicEngine?.playing).toBe(true)
+  })
+
   it('does not load the engine while music is at zero or sound is muted', async () => {
     unlockAudio()
     setVolume({ ...defaultVolume(), music: 0 })

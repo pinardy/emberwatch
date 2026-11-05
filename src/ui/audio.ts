@@ -449,14 +449,15 @@ export function setMusicHeld(held: boolean): void {
  * muted or turned down to nothing.
  */
 function syncMusic(): void {
-  if (!graph) return
   if (musicMood === null || musicHeld || !audible(volume.music)) {
     musicEngine?.pause()
     return
   }
+  // Wanting the score is reason enough to open the context, after a gesture.
+  const g = ensureContext()
+  if (!g) return
   if (!musicEngine) {
     if (!musicLoading) {
-      const g = graph
       musicLoading = import('./music')
         .then((m) => {
           if (graph === g) musicEngine = m.createMusicEngine(g.ctx, g.duck)

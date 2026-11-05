@@ -75,11 +75,11 @@ export const PALETTES: Record<Season, Palette> = {
     barSeconds: 8,
     cutoff: 1500,
     padWave: 'triangle',
-    padGain: 0.07,
+    padGain: 0.052,
     detuneCents: 4,
     motifChance: 0.45,
     motifOctave: 12,
-    motifGain: 0.06,
+    motifGain: 0.05,
     drone: false,
   },
   clearance: {
@@ -89,7 +89,7 @@ export const PALETTES: Record<Season, Palette> = {
     barSeconds: 7,
     cutoff: 2600,
     padWave: 'sine',
-    padGain: 0.075,
+    padGain: 0.055,
     detuneCents: 3,
     motifChance: 0.6,
     motifOctave: 12,
@@ -103,7 +103,7 @@ export const PALETTES: Record<Season, Palette> = {
     barSeconds: 10,
     cutoff: 800,
     padWave: 'sawtooth',
-    padGain: 0.045,
+    padGain: 0.036,
     detuneCents: 7,
     motifChance: 0.25,
     motifOctave: 12,
@@ -124,6 +124,8 @@ export function paletteFor(mood: MusicMood): Palette {
     ...base,
     cutoff: Math.round(base.cutoff * 0.7),
     detuneCents: base.detuneCents + 6,
+    // The drone joins underneath; the pads give way so tension is not louder.
+    padGain: base.padGain * 0.8,
     motifChance: base.motifChance * 0.6,
     barSeconds: base.barSeconds * 1.15,
     drone: true,
@@ -207,7 +209,7 @@ export class Composer {
       gain: palette.padGain * 0.6,
     })
     if (palette.drone) {
-      notes.push({ voice: 'drone', at: 0, dur: padDur, midi: palette.root - 12, gain: palette.padGain * 0.7 })
+      notes.push({ voice: 'drone', at: 0, dur: padDur, midi: palette.root - 12, gain: palette.padGain * 0.6 })
     }
 
     if (this.rng() < palette.motifChance) notes.push(...this.motif(palette, degrees, length))
