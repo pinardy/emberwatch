@@ -9,7 +9,7 @@ import { caravanAvailable, hasTradingPost, offerPrice, sellPrice } from '../game
 import { useGameStore, useRun } from '../game/store'
 import { DecreeCard } from './DecreeCard'
 import { RunModifierList } from './RunModifierList'
-import { RaceSparkline } from './RunTimeline'
+import { RaceSparkline } from './RaceSparkline'
 import type { ResourceId } from '../game/types'
 import { Icon } from './Icon'
 import { IconText } from './IconText'

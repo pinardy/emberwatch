@@ -195,6 +195,10 @@ export const BuildingNode = memo(function BuildingNode({
   upgrade?: number
 }) {
   const def = BUILDINGS[building.defId]
+  // A cosmetic Citadel flame; read once per hearth, not per tick.
+  const flame = useGameStore((s) =>
+    building.defId === 'ancientHearth' ? s.run?.citadel?.hearthStyle : undefined,
+  )
   const [hovered, setHovered] = useState(false)
   useCursor(hovered)
 
@@ -256,7 +260,7 @@ export const BuildingNode = memo(function BuildingNode({
       <group ref={body}>
         {building.built ? (
           <>
-            <BuildingModel category={def.category} scale={scale} defId={building.defId} lit={litProp ?? !building.unlit} />
+            <BuildingModel category={def.category} scale={scale} defId={building.defId} lit={litProp ?? !building.unlit} flame={flame} />
             <TierTrim tier={tier} scale={scale} />
             {upgrade >= 0 && <UpgradeScaffold scale={scale} />}
           </>

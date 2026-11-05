@@ -1,14 +1,13 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { RESOURCES } from '../game/content/resources'
-import { collectWarnings } from '../game/engine/diagnostics'
 import { canAfford } from '../game/engine/queries'
 import { useGameStore, useRun, type SidePanel } from '../game/store'
 import { BuildPanel } from './BuildPanel'
 import { ChoiceModal } from './ChoiceModal'
 import { ConditionsBar } from './ConditionsBar'
 import { EventToasts, useLogUnread } from './EventToasts'
-import { EndModal } from './EndModal'
 import { Inspector } from './Inspector'
+import { EndModal } from './lazyScreens'
 import { MapView } from './MapView'
 import { ResourceBar } from './ResourceBar'
 import { LogPanel, OrdersPanel, TradePanel } from './SidePanels'
@@ -20,6 +19,7 @@ import { TopBar } from './TopBar'
 import { useAudioCues } from './useAudioCues'
 import { PANEL_KEY_LABEL, useGameLoop, useHotkeys } from './useGameLoop'
 import { VillagerPanel } from './VillagerPanel'
+import { Warnings } from './Warnings'
 import './hud-feedback.css'
 
 const TABS: { id: Exclude<SidePanel, null>; label: string; icon: string }[] = [
@@ -137,7 +137,8 @@ export function GameScreen() {
       </main>
 
       <ChoiceModal />
-      <EndModal />
+      {/* The summary and its chart are a separate chunk, fetched in idle time. */}
+      {run.phase !== 'playing' && <EndModal />}
     </div>
   )
 }
@@ -205,30 +206,3 @@ function ThreatBar() {
   )
 }
 
-/** Persistent nudges for the things that quietly ruin a settlement. */
-function Warnings() {
-  const run = useRun()
-  const version = useGameStore((s) => s.version)
-  // Diagnostics walk every building; do it once per sim step, not per render.
-  const warnings = useMemo(() => {
-    if (!run) return []
-    const all = collectWarnings(run)
-    // Dangers first, so the cap below never hides the worst news.
-    return [
-      ...all.filter((w) => w.severity === 'danger'),
-      ...all.filter((w) => w.severity !== 'danger'),
-    ]
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, version])
-  if (!run) return null
-  // The live region stays mounted even when empty so new warnings are announced.
-  return (
-    <div className="warnings" role="status" aria-live="polite">
-      {warnings.slice(0, 4).map((warning) => (
-        <div key={warning.id} className={`warning is-${warning.severity}`}>
-          <IconText text={warning.text} />
-        </div>
-      ))}
-    </div>
-  )
-}

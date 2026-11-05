@@ -8,6 +8,7 @@ import { useGameStore, useRun } from '../game/store'
 import type { BuildingCategory, ResourceBag } from '../game/types'
 import { Icon } from './Icon'
 import { PartnerIcon } from './PartnerIcon'
+import { RoadCard } from './RoadTool'
 
 const ORDER: BuildingCategory[] = [
   'housing',
@@ -102,6 +103,7 @@ export function BuildPanel() {
           </section>
         )
       })}
+      <RoadCard />
     </div>
   )
 }

@@ -28,6 +28,7 @@ import {
   spend,
   storageUsed,
 } from './queries'
+import { invalidateRoadNetwork } from './roads'
 import { unassign } from './society'
 import { clearMultiplier } from './traits'
 import {
@@ -125,6 +126,7 @@ export function placeBuilding(s: RunState, defId: string, pos: Vec2): ActionErro
   if (usable.length > 0) instance.activeRecipeId = usable[0].id
 
   s.buildings[id] = instance
+  invalidateRoadNetwork(s)
   return null
 }
 
@@ -287,6 +289,7 @@ export function demolishBuilding(s: RunState, buildingId: string): ActionError {
   grant(s.stock, demolishRefund(building), s.storageCap, storageUsed(s))
 
   delete s.buildings[buildingId]
+  invalidateRoadNetwork(s)
   return null
 }
 

@@ -6,6 +6,9 @@ import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { gladeFillGeometry, mapStats, useStaticGeometry } from './map3d/staticGeometry'
 import { useMapOverlays } from './mapShared'
+import { roadKey } from './map3d/layerKeys'
+import { roadGeometry } from './map3d/Roads'
+import { ROAD_TOOL, placeRoad } from '../game/engine/roads'
 
 /**
  * Map renderer checks that need a DOM: static geometry survives sim ticks,
@@ -78,6 +81,87 @@ describe('static map geometry', () => {
     })
     unmount()
     expect(disposed).toBe(true)
+  })
+})
+
+/** Lays a short road out from the hearth wherever the ground allows. */
+function laySomeRoad(run: RunState): void {
+  run.stock.wood = Math.max(run.stock.wood ?? 0, 40)
+  for (let i = 0; i < 16; i++) {
+    const angle = (i / 16) * Math.PI * 2
+    const at = (r: number) => ({ x: Math.cos(angle) * r, y: Math.sin(angle) * r })
+    if (placeRoad(run, at(1.2), at(2.8)) === null) return
+  }
+  throw new Error('no clear ground for a road beside the hearth')
+}
+
+function tickSome(n = 10) {
+  act(() => {
+    const store = useGameStore.getState()
+    store.setSpeed(1)
+    for (let i = 0; i < n; i++) useGameStore.getState().advance(0.25)
+  })
+}
+
+describe('roads and villagers on the maps', () => {
+  it('road geometry is built once and survives sim ticks', () => {
+    useGameStore.getState().startRun(77)
+    const store = useGameStore.getState()
+    for (const choice of [...currentRun().pendingChoices]) store.chooseOption(choice.options[0])
+    laySomeRoad(currentRun())
+    const created = mapStats.geometriesCreated
+    const { result, rerender } = renderHook(() => {
+      useGameStore((s) => s.version)
+      const run = currentRun()
+      return useStaticGeometry(() => roadGeometry(run.roads ?? []), [roadKey(run)])
+    })
+    const first = result.current
+    tickSome()
+    rerender()
+    expect(useGameStore.getState().version).toBeGreaterThan(2)
+    expect(result.current).toBe(first)
+    expect(mapStats.geometriesCreated).toBe(created + 1)
+  })
+
+  it('draws roads and a dot per villager, and keeps them across ticks', () => {
+    startGame()
+    act(() => laySomeRoad(currentRun()))
+    tickSome(2)
+    const lines = document.querySelectorAll('g.roads-2d line')
+    expect(lines.length).toBeGreaterThan(0)
+    const dots = Array.from(document.querySelectorAll('circle.villager-dot'))
+    expect(dots.length).toBe(Object.keys(currentRun().villagers).length)
+    // Placed on mount, before any animation frame.
+    expect(dots[0].getAttribute('cx')).not.toBeNull()
+    tickSome()
+    // Memoised layers: the same DOM nodes, not re-created per tick.
+    expect(document.querySelectorAll('g.roads-2d line')[0]).toBe(lines[0])
+    expect(document.querySelectorAll('circle.villager-dot')[0]).toBe(dots[0])
+  })
+
+  it('lays a road with clicks through the store and ends it with Esc', () => {
+    startGame()
+    act(() => useGameStore.getState().setBuildMode(ROAD_TOOL))
+    expect(screen.getByText(/Laying a road/)).toBeTruthy()
+    const run = currentRun()
+    run.stock.wood = 60
+    const before = run.roads?.length ?? 0
+    // Start on the hearth (snaps to its centre), then bend out to clear ground.
+    act(() => useGameStore.getState().place({ x: 0.3, y: 0.2 }))
+    expect(useGameStore.getState().roadAnchor).toEqual({ x: 0, y: 0 })
+    let laid = false
+    for (let i = 0; i < 16 && !laid; i++) {
+      const angle = (i / 16) * Math.PI * 2
+      act(() => useGameStore.getState().place({ x: Math.cos(angle) * 2.6, y: Math.sin(angle) * 2.6 }))
+      laid = (currentRun().roads?.length ?? 0) > before
+    }
+    expect(laid).toBe(true)
+    expect(useGameStore.getState().roadAnchor).not.toBeNull()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(useGameStore.getState().roadAnchor).toBeNull()
+    expect(useGameStore.getState().buildMode).toBe(ROAD_TOOL)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(useGameStore.getState().buildMode).toBeNull()
   })
 })
 

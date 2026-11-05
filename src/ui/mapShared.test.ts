@@ -36,10 +36,14 @@ import {
   gladeSurfaceKey,
   miniMapKey,
   pathKey,
+  roadKey,
   threatKey,
   villagerKey,
+  villagerRouteKey,
   warmthKey,
 } from './map3d/layerKeys'
+import { assignWorker, findPlacement, placeBuilding } from '../game/engine/actions'
+import { placeRoad, roadNetwork, roadStats } from '../game/engine/roads'
 import { gladeEdgeGeometry } from './map3d/staticGeometry'
 
 function newRun(): RunState {
@@ -74,6 +78,16 @@ function addBuilding(run: RunState, defId: string, patch: Partial<BuildingInstan
   }
   run.buildings[b.id] = b
   return b
+}
+
+/** Lays a short road out from the hearth wherever the ground allows. */
+function laySomeRoad(run: RunState): void {
+  for (let i = 0; i < 16; i++) {
+    const angle = (i / 16) * Math.PI * 2
+    const at = (r: number) => ({ x: Math.cos(angle) * r, y: Math.sin(angle) * r })
+    if (placeRoad(run, at(1.2), at(2.6)) === null) return
+  }
+  throw new Error('no clear ground for a road beside the hearth')
 }
 
 describe('glade visual language', () => {
@@ -241,6 +255,57 @@ describe('3D layer keys', () => {
     for (let i = 0; i < 40; i++) tick(run, TICK_SECONDS)
     expect(run.clock).toBeGreaterThan(4)
     expect(keys()).toEqual(before)
+  })
+
+  it('stay stable across ticks with roads laid and villagers walking them', () => {
+    const run = newRun()
+    // A staffed workplace joined to the hearth by road, villagers at work.
+    run.stock.wood = 200
+    const spot = findPlacement(run, 'woodcuttersCamp')!
+    expect(placeBuilding(run, 'woodcuttersCamp', spot)).toBeNull()
+    const camp = Object.values(run.buildings).find((b) => b.defId === 'woodcuttersCamp')!
+    camp.built = true
+    run.stats.buildingsBuilt++
+    expect(assignWorker(run, camp.id)).toBeNull()
+    const hearth = Object.values(run.buildings).find((b) => b.defId === 'ancientHearth')!
+    // Straight to the hearth if the way is clear, else a short spur by it.
+    if (placeRoad(run, camp.pos, hearth.pos) !== null) laySomeRoad(run)
+    expect(run.roads!.length).toBeGreaterThan(0)
+    const net = roadNetwork(run)
+    const built = roadStats.networksBuilt
+
+    const keys = () => ({
+      roads: roadKey(run),
+      routes: villagerRouteKey(run),
+      villagers: villagerKey(run),
+      paths: pathKey(run),
+      glades: gladeSurfaceKey(run),
+      forest: forestKey(run),
+      cleared: clearedKey(run),
+      warmth: warmthKey(run),
+      minimap: miniMapKey(run),
+    })
+    const before = keys()
+    for (let i = 0; i < 80; i++) tick(run, TICK_SECONDS)
+    expect(run.clock).toBeGreaterThan(9)
+    expect(keys()).toEqual(before)
+    // …and the road graph behind them was not rebuilt by the ticks either.
+    expect(roadNetwork(run)).toBe(net)
+    expect(roadStats.networksBuilt).toBe(built)
+  })
+
+  it('move the road and route keys when a road is laid or a villager is reassigned', () => {
+    const run = newRun()
+    run.stock.wood = 50
+    const roads = roadKey(run)
+    const routes = villagerRouteKey(run)
+    laySomeRoad(run)
+    expect(roadKey(run)).not.toBe(roads)
+    expect(villagerRouteKey(run)).not.toBe(routes)
+    const laid = villagerRouteKey(run)
+    const villager = Object.values(run.villagers)[0]
+    villager.assignment = villager.assignment ? null : 'clearing:glade1'
+    expect(villagerRouteKey(run)).not.toBe(laid)
   })
 
   it('change when a brazier goes out or is lit again', () => {

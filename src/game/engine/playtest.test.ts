@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS } from '../content/orders'
-import { RUN_MODIFIER_LIST } from '../content/runModifiers'
+import { ALL_RUN_MODIFIER_LIST } from '../content/runModifiers'
 import { SPECIES } from '../content/species'
 import { EDIBLE } from '../content/resources'
 import type { BuildingInstance, ResourceId, RunState, ServiceNeed, SpeciesId, Vec2 } from '../types'
@@ -17,7 +17,7 @@ import {
   setRecipe,
   upgradeBuilding,
 } from './actions'
-import { GLADES_PER_REPUTATION } from './balance'
+import { GLADES_PER_REPUTATION, ROAD_MAX_LENGTH } from './balance'
 import { createRun } from './createRun'
 import { computeModifiers } from './modifiers'
 import { resolveBreakdowns } from './society'
@@ -42,6 +42,14 @@ import {
   totalHousing,
 } from './queries'
 import { dist } from './geometry'
+import {
+  benefitsFromRoad,
+  canPlaceRoad,
+  placeRoad,
+  roadCost,
+  roadLinkOf,
+  roadNetwork,
+} from './roads'
 import { tick } from './tick'
 import { baseServiceCapacity, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 
@@ -101,6 +109,9 @@ interface BotReport {
   modifiers: string
   /** Orders still open at the end, with progress — stuck ones explain slow runs. */
   openOrders: string
+  /** Road stretches laid, and workplaces joined to a hub by road at the end. */
+  roads: number
+  roadLinked: number
 }
 
 /** Snapshot of resolve versus the threshold each species must beat. */
@@ -322,6 +333,90 @@ function warmSprawl(s: RunState): boolean {
   const pos = findPlacement(s, 'brazier', target.pos)
   if (!pos || dist(pos, target.pos) > reach) return false
   return placeBuilding(s, 'brazier', pos) === null
+}
+
+/** Wood the bot keeps in hand before it spends any on roads. */
+const ROAD_WOOD_RESERVE = 35
+
+/**
+ * Joins one unconnected workplace to the road network per decision: a road
+ * from its door to the nearest point that already leads to a hub (the hearth,
+ * a warehouse, or a connected road end), bending once around a crag or a
+ * deposit when the straight line is blocked. Only with wood to spare, and
+ * never at the cost of the Storm's fuel. Staffed workplaces nearest the
+ * network go first — the cheapest bonus on offer.
+ */
+function layRoads(s: RunState): boolean {
+  const wood = s.stock.wood ?? 0
+  if (wood < ROAD_WOOD_RESERVE + 2) return false
+  if (s.season.season === 'storm' && wood < 80) return false
+  const net = roadNetwork(s)
+  const targets: Vec2[] = [
+    ...net.hubs.map((h) => h.pos),
+    ...net.nodes.filter((_, i) => net.hubDistance[i] < Infinity),
+  ]
+  const nearest = (p: Vec2) => Math.min(...targets.map((t) => dist(p, t)))
+  const memo = roadFailed.get(s) ?? new Set<string>()
+  roadFailed.set(s, memo)
+  const candidates = Object.values(s.buildings)
+    .filter(
+      (b) =>
+        b.built &&
+        b.workers.length > 0 &&
+        benefitsFromRoad(BUILDINGS[b.defId]) &&
+        !roadLinkOf(s, b).connected &&
+        !memo.has(`${b.id}:${s.stats.gladesCleared}`),
+    )
+    .sort((a, b) => nearest(a.pos) - nearest(b.pos))
+  const building = candidates[0]
+  if (!building) return false
+  const from = building.pos
+  const ordered = [...targets].sort((a, b) => dist(from, a) - dist(from, b)).slice(0, 4)
+  for (const to of ordered) {
+    for (const route of routesBetween(from, to)) {
+      const pieces = splitRoute(route)
+      const cost = pieces.reduce((sum, [a, b]) => sum + (roadCost(dist(a, b)).wood ?? 0), 0)
+      if (wood - cost < ROAD_WOOD_RESERVE) continue
+      if (pieces.some(([a, b]) => canPlaceRoad(s, a, b) !== null)) continue
+      for (const [a, b] of pieces) placeRoad(s, a, b)
+      return true
+    }
+  }
+  memo.add(`${building.id}:${s.stats.gladesCleared}`)
+  return false
+}
+
+const roadFailed = new WeakMap<RunState, Set<string>>()
+
+/** A straight line, then a bend either side of it at two widths. */
+function routesBetween(a: Vec2, b: Vec2): Vec2[][] {
+  const length = dist(a, b)
+  if (length < 0.5) return []
+  const nx = -(b.y - a.y) / length
+  const ny = (b.x - a.x) / length
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+  const routes: Vec2[][] = [[a, b]]
+  for (const k of [1.2, -1.2, 2.4, -2.4]) {
+    routes.push([a, { x: mid.x + nx * k, y: mid.y + ny * k }, b])
+  }
+  return routes
+}
+
+/** Breaks a polyline into stretches no longer than a road may be. */
+function splitRoute(points: Vec2[]): [Vec2, Vec2][] {
+  const out: [Vec2, Vec2][] = []
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]
+    const b = points[i]
+    const n = Math.max(1, Math.ceil(dist(a, b) / ROAD_MAX_LENGTH))
+    for (let k = 0; k < n; k++) {
+      out.push([
+        { x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n },
+        k === n - 1 ? b : { x: a.x + ((b.x - a.x) * (k + 1)) / n, y: a.y + ((b.y - a.y) * (k + 1)) / n },
+      ])
+    }
+  }
+  return out
 }
 
 /** Stands up service venues and the chains that supply them. */
@@ -699,6 +794,7 @@ function playRun(
       // Threats compound; a competent player pays them off when they can.
       for (const threat of [...s.threats]) appeaseThreat(s, threat.id)
       build(s, economyOnly)
+      layRoads(s)
       explore(s)
       tuneRecipes(s)
       staff(s)
@@ -748,6 +844,8 @@ function playRun(
     upgrades: Object.values(s.buildings).reduce((sum, b) => sum + tierOf(b), 0),
     modifiers: s.runModifiers.join(','),
     openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),
+    roads: s.roads?.length ?? 0,
+    roadLinked: Object.values(s.buildings).filter((b) => roadLinkOf(s, b).percent > 0).length,
   }
 }
 
@@ -799,13 +897,14 @@ function summarise(label: string, reports: BotReport[]): string {
     `${label.padEnd(20)} won ${wins.length}/${reports.length} lost ${losses.length} stall ${stalls.length} early-collapse ${reports.filter(isEarlyCollapse).length}` +
     ` · avg win ${mean(wins.map((r) => r.exactMinutes)).toFixed(1)}min · longest ${Math.max(...reports.map((r) => r.exactMinutes)).toFixed(1)}min` +
     ` · rep in wins: orders ${src('orders')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')}` +
-    ` · upgrades/run ${mean(reports.map((r) => r.upgrades)).toFixed(1)}`
+    ` · upgrades/run ${mean(reports.map((r) => r.upgrades)).toFixed(1)}` +
+    ` · roads/run ${mean(reports.map((r) => r.roads)).toFixed(1)} linked ${mean(reports.map((r) => r.roadLinked)).toFixed(1)}`
   )
 }
 
 function logRun(seed: number, r: BotReport): void {
   console.log(
-    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
+    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
       `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}`,
   )
 }
@@ -886,7 +985,8 @@ describe('balance harness', () => {
       seeds.map((seed, i) => playRun(seed, TRIOS[i % TRIOS.length], { modifiers }))
     const baseline = sweep([])
     const lines = [summarise('no modifier', baseline)]
-    const results = RUN_MODIFIER_LIST.map((def) => {
+    // The Citadel-locked lands too: an upgrade can put any of them in play.
+    const results = ALL_RUN_MODIFIER_LIST.map((def) => {
       const reports = sweep([def.id])
       lines.push(summarise(def.id, reports))
       return { id: def.id, reports }

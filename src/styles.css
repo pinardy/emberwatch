@@ -481,6 +481,26 @@ code {
   font-weight: 700;
 }
 
+/* The phone bar's folded speed control; desktop shows the group itself. */
+.speed-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 58px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.speed-toggle .speed-chevron {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.speed-toggle.is-open {
+  border-color: var(--gold);
+}
+
 .topbar-meters {
   grid-area: meters;
   display: grid;
@@ -565,6 +585,29 @@ code {
   border: 1px solid var(--line);
   border-radius: 20px;
   font-size: 12px;
+}
+
+/* --- The Queen's deadline, under the impatience meter --------------------- */
+
+.meter-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--warn);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deadline-note.is-urgent,
+.deadline-note.is-passed {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.deadline-note-short {
+  display: none;
 }
 
 /* --- Impatience close to the brim reads as urgent at a glance ------------ */
@@ -864,6 +907,32 @@ code {
     display: none;
   }
 
+  /* Six speeds do not fit beside the tools: they fold into a dropdown
+     that keeps every button a full finger wide. */
+  .speed-toggle {
+    display: inline-flex;
+  }
+
+  .speed-anchor .speed-group {
+    display: none;
+  }
+
+  .speed-anchor .speed-group.is-open {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 30;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    animation: fade-in 120ms ease;
+  }
+
+  .speed-anchor .speed-group.is-open button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .topbar .topbar-meters {
     gap: 6px;
   }
@@ -885,6 +954,24 @@ code {
 
   .topbar .meter-track {
     height: 6px;
+  }
+
+  /* The short deadline note shows; the long one stays for screen readers. */
+  .deadline-note-short {
+    display: inline;
+  }
+
+  .deadline-note-long {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .topbar .meter-note {
+    font-size: 10px;
   }
 
   .status-toggle {
@@ -1811,6 +1898,20 @@ code {
   line-height: 1.4;
 }
 
+/* An option out of reach stays faded, but its reason reads at full strength. */
+.option:disabled {
+  opacity: 1;
+}
+
+.option:disabled > :not(.option-shortfall) {
+  opacity: 0.45;
+}
+
+.option small.option-shortfall {
+  color: var(--bad);
+  font-weight: 600;
+}
+
 .option-icon {
   font-size: 26px;
   line-height: 1;
@@ -1950,7 +2051,17 @@ code {
   pointer-events: none;
 }
 
-.warnings:empty {
+.warnings:not(:has(.warning)) {
+  display: none;
+}
+
+.warnings-list {
+  display: grid;
+  gap: 5px;
+}
+
+/* Phones only: the strip folds to its most urgent warning there. */
+.warnings-toggle {
   display: none;
 }
 
@@ -2930,27 +3041,53 @@ button.is-armed {
     max-width: 100%;
   }
 
-  /* Warnings join the column, one line each, at most two rows, dangers
-     first; the rest is clipped rather than crowding the inspector. */
+  /* Warnings join the column. The most urgent one (dangers come first) shows
+     in full, advice and all; the rest fold behind a "+N more" toggle beside
+     it, and stay in the live region for screen readers. */
   .hud-stack > .warnings {
     margin-top: 0;
     width: auto;
-    max-height: 56px;
-    overflow: hidden;
-    /* Clip whole rows: auto rows would shrink every pill to a sliver. */
-    grid-auto-rows: max-content;
-  }
-
-  .hud-stack > .warnings > .warning.is-danger {
-    order: -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 6px;
   }
 
   .warning {
     font-size: 12px;
+    line-height: 1.35;
     padding: 4px 10px;
-    white-space: nowrap;
+    border-radius: 14px;
+    text-align: left;
+  }
+
+  .warnings:not(.is-expanded) .warning:not(:first-child) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
     overflow: hidden;
-    text-overflow: ellipsis;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* Opened, the whole strip reads in full and scrolls if it must. */
+  .warnings.is-expanded .warnings-list {
+    max-height: min(32vh, 240px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    pointer-events: auto;
+  }
+
+  .warnings-toggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: rgba(18, 26, 32, 0.94);
+    pointer-events: auto;
   }
 
   .hud-stack > .notice {
@@ -3022,14 +3159,10 @@ button.is-armed {
   }
 
   /* While the player inspects something, the tip and toasts wait (toasts
-     stay in the Log, with its badge) and warnings keep to one row. */
+     stay in the Log, with its badge); warnings stay folded to the top one. */
   .hud-stack:has(.inspector) > .tip-coach,
   .hud-stack:has(.inspector) > .event-toasts {
     display: none;
-  }
-
-  .hud-stack:has(.inspector) > .warnings {
-    max-height: 26px;
   }
 }
 
@@ -3631,6 +3764,7 @@ button.is-armed {
 
 .upgrade-bar {
   fill: #8fc4e8;
+}
 
 /* ---- Run modifiers: the lay of the land ------------------------------------ */
 
@@ -3708,6 +3842,7 @@ button.is-armed {
 .setup-land h4 {
   margin: 0 0 6px;
   font-size: 13px;
+}
 
 /* ==========================================================================
    Run timeline — the end-screen chart and the Orders panel sparkline
@@ -4075,4 +4210,26 @@ button.is-armed {
   .run-timeline {
     padding: 10px 8px 8px;
   }
+}
+
+/* ==========================================================================
+   Road tool banner: more controls than a blueprint's, so it wraps on phones
+   instead of running off the side of the map.
+   ========================================================================== */
+
+.build-banner.road-banner {
+  /* Above the minimap (30) and glade plates, so Done stays tappable. */
+  z-index: 31;
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 6px;
+  width: max-content;
+  max-width: calc(100% - 20px);
+  white-space: normal;
+  text-align: center;
+}
+
+.build-banner.road-banner button[aria-pressed='true'] {
+  border-color: var(--gold);
+  color: var(--gold);
 }

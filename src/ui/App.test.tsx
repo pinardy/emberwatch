@@ -12,7 +12,7 @@ import { drawRunModifiers } from '../game/engine/runModifiers'
 import { pushLog } from '../game/engine/createRun'
 import { CHARTER_REPUTATION, REWARD_MILESTONES } from '../game/engine/balance'
 import { addCondition, issueDecree } from '../game/engine/structure'
-import { useGameStore } from '../game/store'
+import { MAX_FRAME_REAL_SECONDS, frameBudget, useGameStore } from '../game/store'
 import type { BuildingInstance, RunState } from '../game/types'
 import { CONFIRM_WINDOW_MS } from './useConfirm'
 
@@ -276,6 +276,15 @@ describe('app shell', () => {
       [60, 1],
       [144, 1],
       [60, 3],
+      [60, 4],
+      [144, 4],
+      [60, 5],
+      [144, 5],
+      // A struggling device: every frame is as long as the loop allows, so
+      // the per-frame budget, not the frame count, decides whether 5× holds.
+      [2, 5],
+      [3, 5],
+      [8, 4],
     ] as const) {
       const clockBefore = currentRun().clock
       act(() => {
@@ -286,6 +295,58 @@ describe('app shell', () => {
       const simulated = currentRun().clock - clockBefore
       expect(simulated).toBeGreaterThanOrEqual(10 * speed - 0.125 - 1e-9)
       expect(simulated).toBeLessThanOrEqual(10 * speed + 0.125 + 1e-9)
+    }
+  })
+
+  it('offers every speed in the top bar and on the number keys', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+
+    const group = screen.getByRole('group', { name: 'Game speed' })
+    for (const speed of [4, 5]) {
+      fireEvent.click(within(group).getByRole('button', { name: `${speed}×` }))
+      expect(useGameStore.getState().speed).toBe(speed)
+    }
+    for (const key of ['1', '4', '5', '2']) {
+      fireEvent.keyDown(window, { key, code: `Digit${key}` })
+      expect(useGameStore.getState().speed).toBe(Number(key))
+    }
+    // Keys past the top speed do nothing.
+    fireEvent.keyDown(window, { key: '6', code: 'Digit6' })
+    fireEvent.keyDown(window, { key: '0', code: 'Digit0' })
+    expect(useGameStore.getState().speed).toBe(2)
+
+    // The phone bar folds the speeds behind a toggle naming the current one;
+    // picking a speed there closes it again.
+    const toggle = screen.getByRole('button', { name: 'Game speed: 2×' })
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(group.className).toMatch(/is-open/)
+    fireEvent.click(within(group).getByRole('button', { name: '5×' }))
+    expect(useGameStore.getState().speed).toBe(5)
+    expect(group.className).not.toMatch(/is-open/)
+    expect(screen.getByRole('button', { name: 'Game speed: 5×' })).toBeTruthy()
+  })
+
+  it('never fast-forwards a long-stalled frame, even at top speed', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    takeOpeningDraft()
+
+    for (const speed of [1, 5] as const) {
+      const clockBefore = currentRun().clock
+      act(() => {
+        useGameStore.getState().setSpeed(speed)
+        // A tab that slept for a minute hands the store one enormous frame.
+        useGameStore.getState().advance(60)
+      })
+      const simulated = currentRun().clock - clockBefore
+      expect(simulated).toBeLessThanOrEqual(frameBudget(speed) + 1e-9)
+      // A minute away costs at most a few seconds of the world, at any speed.
+      expect(simulated).toBeLessThanOrEqual(5 * MAX_FRAME_REAL_SECONDS + 0.125 + 1e-9)
     }
   })
 
@@ -826,6 +887,26 @@ describe('auto-pause', () => {
     runUntilPaused(2)
     expect(useGameStore.getState().speed).toBe(1)
     expect(currentRun().clock).toBeGreaterThan(clock)
+  })
+
+  it('pauses on the very tick at top speed, however long the frame', () => {
+    startPlaying()
+    enable('storm')
+    act(() => {
+      const season = currentRun().season
+      season.season = 'clearance'
+      season.elapsed = season.length - 0.2
+    })
+    act(() => {
+      useGameStore.getState().setSpeed(5)
+      // One long frame at 5× owes about twenty ticks; the pause must cut it short.
+      useGameStore.getState().advance(MAX_FRAME_REAL_SECONDS)
+    })
+    expect(useGameStore.getState().speed).toBe(0)
+    expect(currentRun().season.season).toBe('storm')
+    // Stopped within a tick of the Storm, not at the end of the frame.
+    expect(currentRun().season.elapsed).toBeLessThanOrEqual(0.125 + 1e-9)
+    expect(useGameStore.getState().notice).toBe('Paused: the Storm has begun.')
   })
 
   it('does not fight a pause the player chose', () => {

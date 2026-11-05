@@ -10,6 +10,7 @@ import { pairsWith } from '../../game/engine/adjacency'
 import { HEARTH_WARMTH_RADIUS } from '../../game/engine/balance'
 import { describePlacement } from '../../game/engine/placement'
 import { warmthSources } from '../../game/engine/queries'
+import { ROAD_TOOL, describeRoadTool } from '../../game/engine/roads'
 import { useGameStore } from '../../game/store'
 import type { Glade, RunState, Vec2 } from '../../game/types'
 import { Atmosphere } from './Atmosphere'
@@ -18,6 +19,7 @@ import { FellingForest, ForestCover } from './ForestCover'
 import { onGhostRequest } from './ghostBus'
 import { MiniMap } from './MiniMap'
 import { Paths } from './Paths'
+import { RoadGhost3D, RoadLayer, type RoadCursor } from './Roads'
 import { Smoke } from './Smoke'
 import { Villagers } from './Villagers'
 import { Icon } from '../Icon'
@@ -165,10 +167,21 @@ interface CursorState {
 function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | null }) {
   const [cursor, setCursor] = useState<CursorState | null>(null)
   const def = buildMode ? BUILDINGS[buildMode] : undefined
+  // The road tool has a ghost of its own: a stretch from the last point.
+  const roadMode = buildMode === ROAD_TOOL
+  const [roadCursor, setRoadCursor] = useState<RoadCursor | null>(null)
+  const evaluateRoad = useCallback(
+    (pos: Vec2, pending = false): RoadCursor => {
+      const { roadAnchor, roadErase } = useGameStore.getState()
+      return { pos, pending, preview: describeRoadTool(run, roadAnchor, pos, roadErase) }
+    },
+    [run],
+  )
 
   useEffect(() => {
     if (!buildMode) setCursor(null)
-  }, [buildMode])
+    if (!roadMode) setRoadCursor(null)
+  }, [buildMode, roadMode])
 
   const evaluate = useCallback(
     (pos: Vec2): CursorState => {
@@ -182,14 +195,17 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
   // Taps on deposits/buildings during touch build-mode land here too.
   useEffect(() => {
     if (!buildMode) return
-    return onGhostRequest((pos) => setCursor({ ...evaluate(pos), pending: true }))
-  }, [buildMode, evaluate])
+    return onGhostRequest((pos) =>
+      roadMode ? setRoadCursor(evaluateRoad(pos, true)) : setCursor({ ...evaluate(pos), pending: true }),
+    )
+  }, [buildMode, roadMode, evaluate, evaluateRoad])
 
   const handleMove = (e: ThreeEvent<PointerEvent>) => {
     if (!buildMode) return
     // Touch has no hover: the ghost is aimed by taps, not by finger drags.
     if (e.pointerType === 'touch') return
-    setCursor(evaluate({ x: e.point.x, y: e.point.z }))
+    if (roadMode) setRoadCursor(evaluateRoad({ x: e.point.x, y: e.point.z }))
+    else setCursor(evaluate({ x: e.point.x, y: e.point.z }))
   }
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -199,12 +215,14 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
     if (state.buildMode) {
       // Touch: first tap aims the ghost; its ✓ button places.
       if ((e.nativeEvent as PointerEvent).pointerType === 'touch') {
-        setCursor({ ...evaluate(pos), pending: true })
+        if (roadMode) setRoadCursor(evaluateRoad(pos, true))
+        else setCursor({ ...evaluate(pos), pending: true })
         return
       }
       state.place(pos)
       // The spot just filled up (or errored) — refresh the ghost in place.
-      if (useGameStore.getState().buildMode) setCursor(evaluate(pos))
+      if (roadMode) setRoadCursor(evaluateRoad(pos))
+      else if (useGameStore.getState().buildMode) setCursor(evaluate(pos))
       return
     }
     state.clearSelection()
@@ -214,6 +232,12 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
     if (!cursor?.pending) return
     useGameStore.getState().place(cursor.pos)
     setCursor(null)
+  }
+
+  const confirmRoad = () => {
+    if (!roadCursor?.pending) return
+    useGameStore.getState().place(roadCursor.pos)
+    setRoadCursor(null)
   }
 
   const radius = buildMode ? footprintOf(buildMode) : 0
@@ -237,6 +261,15 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
         <planeGeometry args={[run.world.width + 24, run.world.height + 24]} />
         <meshStandardMaterial color="#0d1418" roughness={1} />
       </mesh>
+
+      {roadMode && (
+        <RoadGhost3D
+          run={run}
+          cursor={roadCursor}
+          onConfirm={confirmRoad}
+          onCancel={() => setRoadCursor(null)}
+        />
+      )}
 
       {buildMode && def && cursor && (
         <>
@@ -703,7 +736,7 @@ export function MapView3D() {
         rightClick.current = null
         if (moved > 6) return
         const state = useGameStore.getState()
-        if (state.buildMode) state.setBuildMode(null)
+        if (state.buildMode) state.cancelBuildStep()
         else state.clearSelection()
       }}
     >
@@ -739,6 +772,7 @@ export function MapView3D() {
         <Paths run={run} />
 
         <GladeLayer run={run} />
+        <RoadLayer run={run} />
         <ForestLayer run={run} />
 
         {showWarmth && <WarmthLayer run={run} />}
