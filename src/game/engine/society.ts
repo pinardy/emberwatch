@@ -48,7 +48,7 @@ import {
   totalHousing,
   warmHousing,
 } from './queries'
-import { despairRate, ignoresColdHearth, mealMultiplier } from './traits'
+import { despairRate, ignoresColdHearth, mealMultiplier, needFloor } from './traits'
 import { recordEvent } from './timeline'
 
 /**
@@ -244,9 +244,11 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
     const needRatio: Record<string, number> = {}
     let satisfied = 0
     for (const need of def.needs) {
-      const ratio = coverage[need].active
+      const served = coverage[need].active
         ? Math.min(1, coverage[need].capacity / required)
         : 0
+      // Some species meet part of a need among themselves (harpies teach).
+      const ratio = Math.max(served, needFloor(sp, need))
       needRatio[need] = ratio
       needDetail[need] = ratio >= 1
       satisfied += ratio
