@@ -24,7 +24,13 @@ export const DAILY_EDICT = 2
 export const DAILY_HISTORY_LIMIT = 400
 
 /** Every species, in a stable order: dailies ignore the player's charters. */
-export const DAILY_SPECIES_POOL: readonly SpeciesId[] = ['human', 'beaver', 'lizard', 'harpy', 'fox']
+export const DAILY_SPECIES_POOL: readonly SpeciesId[] = [
+  'human',
+  'beaver',
+  'lizard',
+  'harpy',
+  'fox',
+]
 
 /** Salt for the species stream, so the trio does not track the map RNG. */
 const SPECIES_STREAM = 0x64617973

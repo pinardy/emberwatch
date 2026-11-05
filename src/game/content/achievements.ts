@@ -453,7 +453,8 @@ export function migrateAchievementState(raw: unknown): AchievementState {
   const r = raw as Record<string, unknown>
   if (r.unlocked && typeof r.unlocked === 'object') {
     for (const [id, at] of Object.entries(r.unlocked as Record<string, unknown>)) {
-      if (ACHIEVEMENTS[id]) out.unlocked[id] = typeof at === 'number' && Number.isFinite(at) ? at : 0
+      if (ACHIEVEMENTS[id])
+        out.unlocked[id] = typeof at === 'number' && Number.isFinite(at) ? at : 0
     }
   }
   if (r.progress && typeof r.progress === 'object') {
@@ -461,7 +462,9 @@ export function migrateAchievementState(raw: unknown): AchievementState {
       const spec = ACHIEVEMENTS[id]?.progress
       if (!spec) continue
       if (spec.mode === 'distinct' && Array.isArray(value)) {
-        out.progress[id] = [...new Set(value.filter((v): v is string => typeof v === 'string'))].sort()
+        out.progress[id] = [
+          ...new Set(value.filter((v): v is string => typeof v === 'string')),
+        ].sort()
       } else if (spec.mode !== 'distinct' && typeof value === 'number' && Number.isFinite(value)) {
         out.progress[id] = Math.max(0, value)
       }

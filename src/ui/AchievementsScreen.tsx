@@ -80,8 +80,8 @@ export function AchievementsScreen() {
           </span>
         </header>
         <p className="muted">
-          Judged when a run is banked, won or lost. A few send supplies to the Citadel or grant
-          a title to wear; the rest are for the ledger.
+          Judged when a run is banked, won or lost. A few send supplies to the Citadel or grant a
+          title to wear; the rest are for the ledger.
         </p>
 
         <label className="title-picker">

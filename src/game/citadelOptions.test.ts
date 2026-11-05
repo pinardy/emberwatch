@@ -88,9 +88,9 @@ describe('new Citadel upgrades: content', () => {
       expect(m.upgrades).toContain(id)
     }
     // And never out of order.
-    expect(purchaseUpgrade({ ...defaultMeta(), citadelSupplies: 99 }, 'chosenGround').error).toMatch(
-      /Requires/,
-    )
+    expect(
+      purchaseUpgrade({ ...defaultMeta(), citadelSupplies: 99 }, 'chosenGround').error,
+    ).toMatch(/Requires/)
   })
 
   it('only admits real, Citadel-locked modifiers and names a real hearth style', () => {
@@ -111,7 +111,9 @@ describe('new Citadel upgrades: content', () => {
       }
       expect(RUN_MODIFIER_LIST).not.toContain(def)
     }
-    expect(ALL_RUN_MODIFIER_LIST).toHaveLength(RUN_MODIFIER_LIST.length + CITADEL_RUN_MODIFIER_LIST.length)
+    expect(ALL_RUN_MODIFIER_LIST).toHaveLength(
+      RUN_MODIFIER_LIST.length + CITADEL_RUN_MODIFIER_LIST.length,
+    )
   })
 })
 
@@ -133,7 +135,12 @@ describe('runs with none of the new upgrades play exactly as before', () => {
     expect(loadout.landRerolls).toBe(0)
     expect(loadout.chooseModifier).toBe(false)
     const a = createRun({ seed: 515, species: [...TRIO], meta: meta(...OLD_UPGRADES) })
-    const b = createRun({ seed: 515, species: [...TRIO], meta: meta(...OLD_UPGRADES), land: { reroll: true, chosen: 'illOmens' } })
+    const b = createRun({
+      seed: 515,
+      species: [...TRIO],
+      meta: meta(...OLD_UPGRADES),
+      land: { reroll: true, chosen: 'illOmens' },
+    })
     expect(b).toEqual(a)
     expect(a.runModifiers).toEqual(drawRunModifiers(515))
   })
@@ -162,7 +169,8 @@ describe('Uncharted Lands and the Frontier Charter', () => {
     for (let seed = 0; seed < 600; seed++) {
       const ids = drawRunModifiers(seed, { unlocked })
       ids.forEach((id) => seen.add(id))
-      if (ids.length === 2) expect(modifiersClash(RUN_MODIFIERS[ids[0]], RUN_MODIFIERS[ids[1]])).toBe(false)
+      if (ids.length === 2)
+        expect(modifiersClash(RUN_MODIFIERS[ids[0]], RUN_MODIFIERS[ids[1]])).toBe(false)
       expect(ids).not.toContain('wildFrontier')
     }
     expect(seen.has('amberSprings')).toBe(true)
@@ -232,7 +240,12 @@ describe('Chosen Ground', () => {
 
 describe("Scouts' Report", () => {
   it('names the event in each first-ring glade, and nothing elsewhere', () => {
-    const s = createRun({ seed: 1234, species: [...TRIO], meta: meta('scoutsReport'), modifiers: [] })
+    const s = createRun({
+      seed: 1234,
+      species: [...TRIO],
+      meta: meta('scoutsReport'),
+      modifiers: [],
+    })
     expect(s.citadel.scoutReport).toBe(true)
     const ring = s.glades.glade0.neighbors
     for (const id of ring) {
@@ -249,8 +262,18 @@ describe("Scouts' Report", () => {
   })
 
   it('says nothing without the upgrade, and does not change the map', () => {
-    const plain = createRun({ seed: 1234, species: [...TRIO], modifiers: [], meta: prereqsOf('scoutsReport') })
-    const scouted = createRun({ seed: 1234, species: [...TRIO], meta: meta('scoutsReport'), modifiers: [] })
+    const plain = createRun({
+      seed: 1234,
+      species: [...TRIO],
+      modifiers: [],
+      meta: prereqsOf('scoutsReport'),
+    })
+    const scouted = createRun({
+      seed: 1234,
+      species: [...TRIO],
+      meta: meta('scoutsReport'),
+      modifiers: [],
+    })
     for (const id of plain.glades.glade0.neighbors) expect(scoutedEvent(plain, id)).toBeUndefined()
     expect(scouted.glades).toEqual(plain.glades)
     expect(scouted.rngCursor).toBe(plain.rngCursor)
@@ -259,8 +282,18 @@ describe("Scouts' Report", () => {
 
 describe('Charter Office', () => {
   it('adds one more perk to the charter without consuming randomness', () => {
-    const base = createRun({ seed: 77, species: [...TRIO], modifiers: [], meta: prereqsOf('charterOffice') })
-    const office = createRun({ seed: 77, species: [...TRIO], modifiers: [], meta: meta('charterOffice') })
+    const base = createRun({
+      seed: 77,
+      species: [...TRIO],
+      modifiers: [],
+      meta: prereqsOf('charterOffice'),
+    })
+    const office = createRun({
+      seed: 77,
+      species: [...TRIO],
+      modifiers: [],
+      meta: meta('charterOffice'),
+    })
     expect(office.citadel.charterOptions).toBe(1)
     base.pendingChoices = []
     office.pendingChoices = []
@@ -279,7 +312,12 @@ describe('Charter Office', () => {
 describe('Gilded Hearth', () => {
   it('is cosmetic: it sets the flame and changes nothing else', () => {
     const base = createRun({ seed: 31, species: [...TRIO], modifiers: [] })
-    const gilded = createRun({ seed: 31, species: [...TRIO], modifiers: [], meta: meta('gildedHearth') })
+    const gilded = createRun({
+      seed: 31,
+      species: [...TRIO],
+      modifiers: [],
+      meta: meta('gildedHearth'),
+    })
     expect(gilded.citadel.hearthStyle).toBe('sapphire')
     expect({ ...gilded, citadel: base.citadel }).toEqual(base)
   })

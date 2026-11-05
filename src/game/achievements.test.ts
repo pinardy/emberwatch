@@ -22,7 +22,14 @@ import { tick } from './engine/tick'
 import { loadRun, saveRun } from './persistence'
 import { settleRun } from './progression'
 import { useGameStore } from './store'
-import type { ActiveThreat, AchievementState, BuildingInstance, MetaState, RunState, SpeciesId } from './types'
+import type {
+  ActiveThreat,
+  AchievementState,
+  BuildingInstance,
+  MetaState,
+  RunState,
+  SpeciesId,
+} from './types'
 
 const TRIO: SpeciesId[] = ['human', 'beaver', 'lizard']
 const CTX: AchievementContext = { dailyStreak: 0 }
@@ -126,9 +133,15 @@ describe('single-run predicates', () => {
   it('decrees and threats come from in-run feats, and old runs default to none', () => {
     expect(check('byRoyalDecree', lost({ feats: undefined }))).toBe(false)
     expect(check('byRoyalDecree', lost({ feats: { ...defaultFeats(), decreesMet: 1 } }))).toBe(true)
-    expect(check('queensFavourite', lost({ feats: { ...defaultFeats(), decreesMet: 4 } }))).toBe(false)
-    expect(check('queensFavourite', lost({ feats: { ...defaultFeats(), decreesMet: 5 } }))).toBe(true)
-    expect(check('paidInFull', lost({ feats: { ...defaultFeats(), threatsAppeased: 1 } }))).toBe(true)
+    expect(check('queensFavourite', lost({ feats: { ...defaultFeats(), decreesMet: 4 } }))).toBe(
+      false,
+    )
+    expect(check('queensFavourite', lost({ feats: { ...defaultFeats(), decreesMet: 5 } }))).toBe(
+      true,
+    )
+    expect(check('paidInFull', lost({ feats: { ...defaultFeats(), threatsAppeased: 1 } }))).toBe(
+      true,
+    )
     expect(check('paidInFull', lost())).toBe(false)
   })
 
@@ -185,7 +198,9 @@ describe('single-run predicates', () => {
 
   it('Kept the Flame: a win past a Storm with the hearth never cold', () => {
     expect(check('keptTheFlame', won())).toBe(true)
-    expect(check('keptTheFlame', won({ feats: { ...defaultFeats(), hearthWentCold: true } }))).toBe(false)
+    expect(check('keptTheFlame', won({ feats: { ...defaultFeats(), hearthWentCold: true } }))).toBe(
+      false,
+    )
     const early = won()
     early.season.year = 1
     expect(check('keptTheFlame', early)).toBe(false)
@@ -292,7 +307,13 @@ describe('banking achievements', () => {
     useGameStore.getState().setTitle('the Exacting')
     expect(useGameStore.getState().meta.title).toBeNull()
     useGameStore.setState({
-      meta: { ...meta, achievements: { ...meta.achievements, unlocked: { ...meta.achievements.unlocked, exactingCrown: 1 } } },
+      meta: {
+        ...meta,
+        achievements: {
+          ...meta.achievements,
+          unlocked: { ...meta.achievements.unlocked, exactingCrown: 1 },
+        },
+      },
     })
     expect(earnedTitles(useGameStore.getState().meta.achievements)).toContain('the Exacting')
     useGameStore.getState().setTitle('the Exacting')
@@ -311,8 +332,24 @@ describe('meta migration to v3', () => {
     upgrades: ['unlockFox', 'surveyorsNotes'],
     edictUnlocked: 5,
     history: [
-      { seed: 1, won: true, years: 4, reputation: 20, at: 50, edict: 4, species: ['human', 'fox', 'lizard'] },
-      { seed: 2, won: true, years: 4, reputation: 20, at: 40, edict: 0, species: ['human', 'beaver', 'lizard'] },
+      {
+        seed: 1,
+        won: true,
+        years: 4,
+        reputation: 20,
+        at: 50,
+        edict: 4,
+        species: ['human', 'fox', 'lizard'],
+      },
+      {
+        seed: 2,
+        won: true,
+        years: 4,
+        reputation: 20,
+        at: 40,
+        edict: 0,
+        species: ['human', 'beaver', 'lizard'],
+      },
       { seed: 3, won: false, years: 3, reputation: 9, at: 30, edict: 4 },
     ],
   }
@@ -337,7 +374,15 @@ describe('meta migration to v3', () => {
   it('credits what the ledger proves, and pays nothing for it', () => {
     const meta = migrateMeta(structuredClone(v2))
     const got = Object.keys(meta.achievements.unlocked)
-    expect(got).toEqual(expect.arrayContaining(['firstEmbers', 'seasonedViceroy', 'firstWin', 'underEdict', 'bitterTerms']))
+    expect(got).toEqual(
+      expect.arrayContaining([
+        'firstEmbers',
+        'seasonedViceroy',
+        'firstWin',
+        'underEdict',
+        'bitterTerms',
+      ]),
+    )
     expect(got).not.toContain('exactingCrown')
     expect(progressCount(meta.achievements, 'seasonedViceroy')).toBe(11)
     expect(meta.achievements.progress.everyRung).toEqual(['0', '4'])
@@ -346,12 +391,18 @@ describe('meta migration to v3', () => {
   })
 
   it('backfills nothing for an empty save, so a fresh migrate equals a fresh meta', () => {
-    expect(backfillAchievements({ runsWon: 0, runsLost: 0, history: [] })).toEqual(emptyAchievementState())
+    expect(backfillAchievements({ runsWon: 0, runsLost: 0, history: [] })).toEqual(
+      emptyAchievementState(),
+    )
     expect(migrateMeta({ version: 2 })).toEqual(defaultMeta())
   })
 
   it('is idempotent on a v3 save and drops unknown or malformed entries', () => {
-    const settled = settleRun(migrateMeta(structuredClone(v2)), won({ daily: '2026-11-05' }), 9).meta
+    const settled = settleRun(
+      migrateMeta(structuredClone(v2)),
+      won({ daily: '2026-11-05' }),
+      9,
+    ).meta
     const withTitle: MetaState = { ...settled, title: 'the Shepherd' }
     expect(migrateMeta(structuredClone(withTitle))).toEqual(withTitle)
     const odd = migrateAchievementState({

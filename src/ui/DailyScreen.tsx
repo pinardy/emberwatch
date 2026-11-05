@@ -66,7 +66,11 @@ export function ShareLine({ text }: { text: string }) {
         {copied === 'copied' ? '✓ Copied' : '📋 Copy'}
       </button>
       <span className="sr-only" role="status">
-        {copied === 'copied' ? 'Copied to the clipboard.' : copied === 'select' ? 'Text selected — copy it by hand.' : ''}
+        {copied === 'copied'
+          ? 'Copied to the clipboard.'
+          : copied === 'select'
+            ? 'Text selected — copy it by hand.'
+            : ''}
       </span>
     </div>
   )
@@ -136,9 +140,9 @@ export function DailyScreen() {
           </p>
         )}
         <p className="muted">
-          One map a day, the same for everyone: the date picks the seed, the settlers and the
-          land. It is played under {edictLabel(DAILY_EDICT)} with none of your Citadel upgrades,
-          so every viceroy faces the same challenge. A new expedition is posted at 00:00 UTC — in{' '}
+          One map a day, the same for everyone: the date picks the seed, the settlers and the land.
+          It is played under {edictLabel(DAILY_EDICT)} with none of your Citadel upgrades, so every
+          viceroy faces the same challenge. A new expedition is posted at 00:00 UTC — in{' '}
           {formatCountdown(msUntilNextDaily())}.
         </p>
 
@@ -186,7 +190,9 @@ export function DailyScreen() {
               <ShareLine text={dailyShareText(result, streak)} />
             </>
           ) : (
-            <p className="muted">Not attempted yet. Finish a run — won or lost — to post a result.</p>
+            <p className="muted">
+              Not attempted yet. Finish a run — won or lost — to post a result.
+            </p>
           )}
         </section>
 
@@ -212,7 +218,9 @@ export function DailyScreen() {
                       <td>
                         <time dateTime={r.date}>{r.date}</time>
                       </td>
-                      <td className={r.won ? 'is-good' : 'is-bad'}>{r.won ? '👑 Held' : '🌫️ Lost'}</td>
+                      <td className={r.won ? 'is-good' : 'is-bad'}>
+                        {r.won ? '👑 Held' : '🌫️ Lost'}
+                      </td>
                       <td>{r.years}</td>
                       <td>{runMinutes(r.seconds)} min</td>
                       <td>{r.villagersLost}</td>

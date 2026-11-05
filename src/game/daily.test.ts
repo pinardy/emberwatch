@@ -47,7 +47,11 @@ function result(date: string, patch: Partial<DailyResult> = {}): DailyResult {
 }
 
 /** A finished daily run for `date`, without playing it. */
-function finishedDaily(date: string, phase: 'won' | 'lost', patch: Partial<RunState> = {}): RunState {
+function finishedDaily(
+  date: string,
+  phase: 'won' | 'lost',
+  patch: Partial<RunState> = {},
+): RunState {
   const day = dailyExpedition(date)
   const run = createRun({ seed: day.seed, species: day.species, edict: day.edict, daily: date })
   run.phase = phase
@@ -68,7 +72,13 @@ describe('the daily seed', () => {
     const instant = Date.UTC(2026, 10, 5, 23, 30)
     const keys: string[] = []
     const localHours = new Set<number>()
-    for (const tz of ['UTC', 'Pacific/Kiritimati', 'America/Los_Angeles', 'Asia/Kolkata', 'Pacific/Pago_Pago']) {
+    for (const tz of [
+      'UTC',
+      'Pacific/Kiritimati',
+      'America/Los_Angeles',
+      'Asia/Kolkata',
+      'Pacific/Pago_Pago',
+    ]) {
       env.TZ = tz
       keys.push(utcDateKey(new Date(instant)))
       localHours.add(new Date(instant).getHours())
@@ -134,7 +144,13 @@ describe('the daily seed', () => {
     const day = dailyExpedition('2026-11-05')
     const rich = {
       ...defaultMeta(),
-      upgrades: ['deeperStores', 'surveyorsNotes', 'unchartedLands', 'secondSurvey', 'gildedHearth'],
+      upgrades: [
+        'deeperStores',
+        'surveyorsNotes',
+        'unchartedLands',
+        'secondSurvey',
+        'gildedHearth',
+      ],
       edictUnlocked: 7,
     }
     useGameStore.setState({ meta: rich })
@@ -155,7 +171,10 @@ describe('the daily seed', () => {
 
 describe('daily bookkeeping', () => {
   it('keeps the best attempt for a day and counts every attempt', () => {
-    let ledger = recordDaily(emptyDailyLedger(), result('2026-11-05', { won: false, reputation: 9 }))
+    let ledger = recordDaily(
+      emptyDailyLedger(),
+      result('2026-11-05', { won: false, reputation: 9 }),
+    )
     ledger = recordDaily(ledger, result('2026-11-05', { won: true, seconds: 1500 }))
     ledger = recordDaily(ledger, result('2026-11-05', { won: true, seconds: 1700 }))
     const day = dailyResultFor(ledger, '2026-11-05')!
@@ -168,9 +187,9 @@ describe('daily bookkeeping', () => {
   it('ranks wins by time then losses, and losses by reputation then endurance', () => {
     expect(betterDaily(result('d', { won: true }), result('d', { won: false }))).toBe(true)
     expect(betterDaily(result('d', { seconds: 900 }), result('d', { seconds: 1000 }))).toBe(true)
-    expect(
-      betterDaily(result('d', { villagersLost: 0 }), result('d', { villagersLost: 2 })),
-    ).toBe(true)
+    expect(betterDaily(result('d', { villagersLost: 0 }), result('d', { villagersLost: 2 }))).toBe(
+      true,
+    )
     const loss = (reputation: number, seconds: number) =>
       result('d', { won: false, reputation, seconds })
     expect(betterDaily(loss(12, 600), loss(8, 2000))).toBe(true)
@@ -228,7 +247,13 @@ describe('daily bookkeeping', () => {
     )
     expect(
       dailyShareText(
-        result('2026-11-05', { won: false, years: 5, reputation: 12, seconds: 30 * 60, villagersLost: 2 }),
+        result('2026-11-05', {
+          won: false,
+          years: 5,
+          reputation: 12,
+          seconds: 30 * 60,
+          villagersLost: 2,
+        }),
         3,
       ),
     ).toBe('Emberwatch Daily 2026-11-05 — fell in Y5, 12 reputation, 30 min, 2 lost · 3-day streak')
@@ -246,7 +271,11 @@ describe('daily bookkeeping', () => {
       bestStreak: 'x',
     })
     expect(ledger.results.map((r) => r.date)).toEqual(['2026-11-05', '2026-11-04'])
-    expect(ledger.results[0]).toMatchObject({ won: false, attempts: 1, seed: dailySeed('2026-11-05') })
+    expect(ledger.results[0]).toMatchObject({
+      won: false,
+      attempts: 1,
+      seed: dailySeed('2026-11-05'),
+    })
     expect(ledger.results[1]).toMatchObject({ won: true, years: 3, seconds: 900 })
     expect(ledger.bestStreak).toBe(2)
     expect(migrateDailyLedger(undefined)).toEqual(emptyDailyLedger())
