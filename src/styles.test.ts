@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -7,12 +9,25 @@ import { describe, expect, it } from 'vitest'
  * nesting of every stylesheet in the app balanced.
  */
 
-/** Every stylesheet under src/, read as text by Vite at test time. */
-const STYLESHEETS = import.meta.glob('./**/*.css', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>
+/**
+ * Every stylesheet under src/, read from disk. (Vitest skips CSS processing,
+ * so importing CSS, even with `?raw`, would hand back empty strings.) This
+ * file is typechecked by tsconfig.node.json for the Node types.
+ */
+const SRC = join(import.meta.dirname, '.')
+
+function cssFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name: string) => {
+    const path = join(dir, name)
+    if (statSync(path).isDirectory()) return cssFiles(path)
+    return path.endsWith('.css') ? [path] : []
+  })
+}
+
+const STYLESHEETS: [string, string][] = cssFiles(SRC).map((file) => [
+  relative(SRC, file),
+  readFileSync(file, 'utf8'),
+])
 
 /** Strips comments and quoted strings, which may legitimately contain braces. */
 function codeOnly(css: string): string {
@@ -38,10 +53,13 @@ function braceProblem(css: string): string | null {
 }
 
 describe('stylesheets', () => {
-  const files = Object.entries(STYLESHEETS)
+  const files = STYLESHEETS
 
-  it('finds the app stylesheets', () => {
-    expect(files.map(([name]) => name)).toContain('./styles.css')
+  it('reads the real app stylesheets', () => {
+    expect(files.map(([name]) => name)).toContain('styles.css')
+    // An empty read would make every check below pass vacuously.
+    for (const [name, css] of files) expect(css.length, name).toBeGreaterThan(0)
+    expect(files.find(([name]) => name === 'styles.css')![1]).toMatch(/\{/)
   })
 
   it.each(files)('%s has balanced braces', (_name, css) => {
