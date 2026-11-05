@@ -16,6 +16,7 @@ import {
 } from '../game/engine/queries'
 import { useGameStore, useRun } from '../game/store'
 import type { ResourceCategory } from '../game/types'
+import { Icon } from './Icon'
 
 const CATEGORY_ORDER: ResourceCategory[] = [
   'material',
@@ -100,7 +101,9 @@ export function ResourceBar() {
           <div className="resource-group" key={group.category}>
             {group.items.map(([id, amount]) => (
               <div className="resource" key={id} title={RESOURCES[id]?.name}>
-                <span>{RESOURCES[id]?.icon}</span>
+                <span>
+                  <Icon of={RESOURCES[id]} />
+                </span>
                 <strong>{Math.floor(amount)}</strong>
               </div>
             ))}

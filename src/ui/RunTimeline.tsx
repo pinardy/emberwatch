@@ -1,9 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
-import { SPECIES } from '../game/content/species'
+import { SPECIES, speciesSingular } from '../game/content/species'
 import { RESOLVE_LEAVE_THRESHOLD } from '../game/engine/balance'
 import { COL, describeOutcome, inStorm, raceAt, stormPeriods } from '../game/engine/timeline'
 import type { RunState, SpeciesId, TimelineEvent } from '../game/types'
+import { Icon } from './Icon'
+import { linePath } from './RaceSparkline'
+
+// The live sparkline moved to its own module; re-exported for existing callers.
+export { RaceSparkline } from './RaceSparkline'
 
 /*
  * The end-of-run timeline: why the run ended, not just how. Two views share
@@ -49,10 +54,7 @@ const MARKER_LABEL: Record<MarkerKind, string> = {
 // ---------------------------------------------------------------------------
 
 function singular(sp: string | undefined): string {
-  const name = SPECIES[sp as SpeciesId]?.name ?? 'Villagers'
-  if (name.endsWith('ies')) return `${name.slice(0, -3)}y`
-  if (name.endsWith('xes')) return name.slice(0, -2)
-  return name.slice(0, -1)
+  return sp && sp in SPECIES ? speciesSingular(sp as SpeciesId) : 'Villager'
 }
 
 export function eventLabel(e: TimelineEvent): string {
@@ -148,10 +150,6 @@ function useElementWidth(fallback: number) {
     return () => ro.disconnect()
   }, [])
   return [ref, width] as const
-}
-
-function linePath(points: [number, number][]): string {
-  return points.map(([px, py], i) => `${i ? 'L' : 'M'}${px.toFixed(1)} ${py.toFixed(1)}`).join('')
 }
 
 function Marker({ kind, x, y }: { kind: MarkerKind; x: number; y: number }) {
@@ -451,7 +449,7 @@ export function RunTimelineChart({ run }: { run: RunState }) {
         return (
           <g key={sp}>
             <text className="tl-row-title" x={PAD_LEFT} y={rowTop(r) - 5}>
-              {def.icon} {def.name}
+              <Icon of={def} /> {def.name}
               {gone.length > 0 && <tspan className="tl-row-note"> · {gone.length} lost</tspan>}
             </text>
             {leave >= lo && (
@@ -741,41 +739,3 @@ export function RunTimelineChart({ run }: { run: RunState }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// The live sparkline (Orders panel)
-// ---------------------------------------------------------------------------
-
-const SPARK_W = 84
-const SPARK_H = 20
-
-/** A tiny live view of the race, for the Orders panel header. */
-export function RaceSparkline({ run }: { run: RunState }) {
-  const tl = run.timeline
-  const samples = tl?.samples ?? []
-  if (!tl || samples.length < 2) return null
-  const t0 = samples[0][COL.clock]
-  const t1 = samples[samples.length - 1][COL.clock]
-  if (t1 - t0 < 1) return null
-  const fallback: [number, number] = [run.maxReputation, run.maxImpatience]
-  const x = (t: number) => 1 + ((t - t0) / (t1 - t0)) * (SPARK_W - 2)
-  const y = (p: number) => 2 + (1 - p) * (SPARK_H - 4)
-  const race = samples.map((smp) => raceAt(tl, smp, fallback))
-  const rep = linePath(samples.map((smp, i) => [x(smp[COL.clock]), y(race[i].reputation)]))
-  const imp = linePath(samples.map((smp, i) => [x(smp[COL.clock]), y(race[i].impatience)]))
-  const last = race[race.length - 1]
-  const label = `The race so far: reputation ${Math.round(last.reputation * 100)}% of its goal, impatience ${Math.round(last.impatience * 100)}%.`
-  return (
-    <svg
-      className="race-spark"
-      width={SPARK_W}
-      height={SPARK_H}
-      viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
-      role="img"
-      aria-label={label}
-    >
-      <title>{label}</title>
-      <path className="tl-line is-impatience" d={imp} />
-      <path className="tl-line is-reputation" d={rep} />
-    </svg>
-  )
-}

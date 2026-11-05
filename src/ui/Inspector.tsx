@@ -1,3 +1,4 @@
+import { DEPOSIT_ART, GLADE_ART, NEED_ART } from '../game/content/art'
 import { BUILDINGS } from '../game/content/buildings'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
@@ -15,25 +16,29 @@ import { availableRecipes, idleVillagers } from '../game/engine/queries'
 import {
   adjacencyStatus,
   describeBonus,
-  partnerIcon,
   serviceCapacity,
 } from '../game/engine/adjacency'
 import { terrainHint } from '../game/engine/placement'
 import { homesWithin, isWarmAt } from '../game/engine/queries'
 import { TERRAIN } from '../game/content/terrain'
 import { terrainOf } from '../game/engine/production'
+import { benefitsFromRoad, describeRoadLink, roadLinkOf } from '../game/engine/roads'
 import { workerMultiplier } from '../game/engine/traits'
 import { useGameStore, useRun } from '../game/store'
 import { BuildingStatusLine } from './BuildingStatusLine'
+import { Icon } from './Icon'
+import { PartnerIcon } from './PartnerIcon'
 import { GLADE_KIND_STYLE, tierMark } from './mapShared'
 import type {
   BuildingDef,
   BuildingInstance,
+  DepositId,
   Recipe,
   ResourceBag,
   RunState,
   Villager,
 } from '../game/types'
+import { ScoutReport } from './ScoutReport'
 import { useConfirm } from './useConfirm'
 import { UpgradeSection } from './UpgradeSection'
 import {
@@ -42,6 +47,7 @@ import {
   warmthRadiusOf,
   workerSlotsOf,
 } from '../game/engine/upgrades'
+import { IconText } from './IconText'
 
 /**
  * Context panel for whatever the player last tapped: a building, a deposit,
@@ -73,7 +79,9 @@ export function Inspector() {
       <div className="inspector">
         <div className="inspector-body">
           <header className="inspector-head">
-            <span className="inspector-icon">{DEPOSIT_INFO[deposit.kind].icon}</span>
+            <span className="inspector-icon">
+              <Icon id={DEPOSIT_ART[deposit.kind]} />
+            </span>
             <div>
               <strong>{DEPOSIT_INFO[deposit.kind].name}</strong>
               <small>{run.glades[deposit.gladeId]?.name}</small>
@@ -137,7 +145,9 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
   return (
     <div className="inspector-body">
       <header className="inspector-head">
-        <span className="inspector-icon">{def.icon}</span>
+        <span className="inspector-icon">
+          <Icon of={def} />
+        </span>
         <div>
           <strong>{displayName(building)}</strong>
           <small>
@@ -171,7 +181,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             disabled={(run.stock.amber ?? 0) < rushCost(run, building.id)}
             onClick={() => useGameStore.getState().rush(building.id)}
           >
-            ⚡ Rush for {rushCost(run, building.id)} {RESOURCES.amber.icon}
+            ⚡ Rush for {rushCost(run, building.id)} <Icon of={RESOURCES.amber} label="amber" />
           </button>
         </>
       ) : (
@@ -221,7 +231,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             <section className="inspector-section">
               <h4>Service</h4>
               <p className="muted">
-                {NEED_LABELS[def.service.need].icon} Satisfies{' '}
+                <Icon id={NEED_ART[def.service.need]} /> Satisfies{' '}
                 {NEED_LABELS[def.service.need].name} for up to{' '}
                 {serviceCapacity(run, building)} villagers
                 {serviceCapacity(run, building) > def.service.capacity
@@ -241,7 +251,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
               <h4>Adjacency</h4>
               {adjacency.map((status, i) => (
                 <p key={i} className="muted">
-                  {status.percent > 0 ? '✅' : '▫'} {partnerIcon(status.bonus)}{' '}
+                  {status.percent > 0 ? '✅' : '▫'} <PartnerIcon bonus={status.bonus} />{' '}
                   {describeBonus(status.bonus)}
                   {status.percent > 0 ? ` — active, +${status.percent}%.` : ' — not adjacent.'}
                 </p>
@@ -275,11 +285,23 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             </section>
           )}
 
+          {benefitsFromRoad(def) && (
+            <section className="inspector-section">
+              <h4>Road</h4>
+              <p className="muted">
+                <IconText text={describeRoadLink(roadLinkOf(run, building)) ?? ''} />
+              </p>
+            </section>
+          )}
+
           {terrain && def.category !== 'hearth' && (
             <section className="inspector-section">
               <h4>Ground</h4>
               <p className="muted">
-                {ground ?? `${TERRAIN[terrain].icon} ${TERRAIN[terrain].name}: no effect on this building.`}
+                <Icon of={TERRAIN[terrain]} />{' '}
+                {ground
+                  ? ground.slice(TERRAIN[terrain].icon.length + 1)
+                  : `${TERRAIN[terrain].name}: no effect on this building.`}
               </p>
             </section>
           )}
@@ -290,7 +312,11 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
               <div className="chip-row">
                 {Object.entries(building.depositsInRange).map(([id, tiles]) => (
                   <span key={id} className="chip">
-                    {DEPOSIT_INFO[id as keyof typeof DEPOSIT_INFO].icon} ×{tiles?.length ?? 0}
+                    <Icon
+                      id={DEPOSIT_ART[id as DepositId]}
+                      label={DEPOSIT_INFO[id as DepositId].name}
+                    />{' '}
+                    ×{tiles?.length ?? 0}
                   </span>
                 ))}
                 {Object.keys(building.depositsInRange).length === 0 && (
@@ -377,7 +403,7 @@ function BagLabel({ bag }: { bag: ResourceBag }) {
     <span className="bag-label">
       {entries.map(([id, amount]) => (
         <span key={id} title={RESOURCES[id as keyof typeof RESOURCES]?.name}>
-          {RESOURCES[id as keyof typeof RESOURCES]?.icon}
+          <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
           {amount}
         </span>
       ))}
@@ -478,7 +504,9 @@ function WorkerSection({
           return (
             <li key={villager.id} className="worker-slot">
               <span className="worker-who" title={multiplierReason(villager, def)}>
-                <span aria-hidden>{SPECIES[villager.species].icon}</span>
+                <span aria-hidden>
+                  <Icon of={SPECIES[villager.species]} />
+                </span>
                 <strong>{villager.name}</strong>
                 {trait && (
                   <span className="worker-trait" title={`${trait.name}: ${trait.description}`}>
@@ -546,7 +574,9 @@ function WorkerSection({
                       title={multiplierReason(v, def)}
                       onClick={() => choose(v.id)}
                     >
-                      <span aria-hidden>{SPECIES[v.species].icon}</span>
+                      <span aria-hidden>
+                        <Icon of={SPECIES[v.species]} />
+                      </span>
                       <strong>{v.name}</strong>
                       <small>{trait ? `${trait.icon} ${trait.name}` : SPECIES[v.species].name}</small>
                       <MultiplierTag mult={mult} />
@@ -571,18 +601,18 @@ export function RecipeLabel({ recipe }: { recipe: Recipe }) {
       {inputs.length > 0 ? (
         inputs.map(([id, amount]) => (
           <span key={id}>
-            {RESOURCES[id as keyof typeof RESOURCES]?.icon}
+            <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
             {amount}
           </span>
         ))
       ) : (
-        <span>{recipe.requiresDeposit ? DEPOSIT_INFO[recipe.requiresDeposit].icon : '—'}</span>
+        <span>{recipe.requiresDeposit ? <Icon id={DEPOSIT_ART[recipe.requiresDeposit]} /> : '—'}</span>
       )}
       <em>→</em>
       {outputs.length > 0 ? (
         outputs.map(([id, amount]) => (
           <span key={id}>
-            {RESOURCES[id as keyof typeof RESOURCES]?.icon}
+            <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
             {amount}
           </span>
         ))
@@ -612,7 +642,9 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
     <div className="inspector">
       <div className="inspector-body">
         <header className="inspector-head">
-          <span className="inspector-icon">{GLADE_KIND_STYLE[glade.kind].icon}</span>
+          <span className="inspector-icon">
+            <Icon id={GLADE_ART[glade.kind]} />
+          </span>
           <div>
             <strong>{glade.name}</strong>
             <small>{GLADE_KIND_STYLE[glade.kind].title}</small>
@@ -658,7 +690,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
               <div className="chip-row">
                 {Object.entries(glade.reward).map(([id, amount]) => (
                   <span key={id} className="chip">
-                    {RESOURCES[id as keyof typeof RESOURCES]?.icon} {amount}
+                    <Icon of={RESOURCES[id as keyof typeof RESOURCES]} /> {amount}
                   </span>
                 ))}
               </div>
@@ -667,6 +699,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
                   ⚠ Something is waiting here. Clearing it will force a decision.
                 </p>
               )}
+              <ScoutReport run={run} gladeId={gladeId} />
             </section>
           </>
         )}

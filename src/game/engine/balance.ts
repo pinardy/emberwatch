@@ -340,7 +340,13 @@ export const BUILD_RATE_PER_VILLAGER = 1.1
 /** Glade clearing rate per assigned villager. */
 export const CLEAR_RATE_PER_VILLAGER = 1
 
-export const SPEED_OPTIONS = [0, 1, 2, 3] as const
+/**
+ * Pause plus five speeds, one hotkey each (1–5). 5× tops out the ladder rather
+ * than 6×: it keeps every speed on its own digit, a Storm still lasts long
+ * enough at 5× to react to, and a tick costs well under a millisecond, so even
+ * 40 ticks a second leave a frame nearly all of its time for rendering.
+ */
+export const SPEED_OPTIONS = [0, 1, 2, 3, 4, 5] as const
 export type GameSpeed = (typeof SPEED_OPTIONS)[number]
 
 /** Base stockpile capacity before any warehouses. */
@@ -400,3 +406,31 @@ export const DECREE_MAX_START_PROGRESS = 0.6
 
 /** Reputation at which the Queen grants her one-time charter. */
 export const CHARTER_REPUTATION = 10
+
+// ---------------------------------------------------------------------------
+// Roads (new feature — kept apart from the core pacing numbers above)
+// ---------------------------------------------------------------------------
+
+/** Wood per world unit (pace) of road, rounded per stretch (at least 1). */
+export const ROAD_WOOD_PER_UNIT = 1
+/** Longest single stretch; longer roads need a bend (another click). */
+export const ROAD_MAX_LENGTH = 10
+/** Shortest stretch worth laying. */
+export const ROAD_MIN_LENGTH = 0.4
+/** Half the road's width: obstacles and deposits must clear it. */
+export const ROAD_HALF_WIDTH = 0.15
+/**
+ * A road "reaches" a building when it passes within this distance of the
+ * building's footprint (measured from the edge, so a road that runs to the
+ * door counts).
+ */
+export const ROAD_REACH = 0.4
+/** The road tool snaps clicks to road ends and buildings within this range. */
+export const ROAD_SNAP = 0.5
+/**
+ * Work-speed bonus, in percent, for a workplace joined by road to the hearth
+ * or a warehouse — the full amount for a road as direct as the crow flies,
+ * scaled by straight-line ÷ road distance for a winding one. Purely additive:
+ * a settlement without roads works exactly as before.
+ */
+export const ROAD_WORK_BONUS = 15

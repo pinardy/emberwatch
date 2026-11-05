@@ -4,6 +4,7 @@ import {
   BRAZIER_WARMTH_RADIUS,
 } from '../engine/balance'
 import type { AdjacencyBonus, BuildingDef } from '../types'
+import { BUILDING_ART } from './art'
 import { BUILDING_UPGRADES } from './upgrades'
 
 /**
@@ -648,6 +649,8 @@ const defs: BuildingDef[] = [
 // Upgrade tiers are declared in `content/upgrades.ts` and attached here, so
 // every def carries its own `upgrades` like any other field.
 for (const def of defs) def.upgrades ??= BUILDING_UPGRADES[def.id]
+// Drawn icons are mapped in `content/art.ts`, alongside the emoji fallback.
+for (const def of defs) def.art ??= BUILDING_ART[def.id]
 
 export const BUILDINGS: Record<string, BuildingDef> = Object.fromEntries(
   defs.map((d) => [d.id, d]),

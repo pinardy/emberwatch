@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { IMPATIENCE_HOSTILITY_THRESHOLD, SEASON_INFO } from '../game/engine/balance'
 import { MAX_HOSTILITY } from '../game/engine/tick'
 import {
   RUNWAY_WARNING_SECONDS,
+  deadlineForecast,
   formatDuration,
   hearthForecast,
   meterRates,
   secondsUntilStorm,
+  type DeadlineForecast,
 } from '../game/engine/forecast'
 import { computeModifiers } from '../game/engine/modifiers'
 import {
@@ -20,7 +22,10 @@ import { SPECIES } from '../game/content/species'
 import { useGameStore, useRun } from '../game/store'
 import { SPEED_OPTIONS } from '../game/engine/balance'
 import type { RunState, SpeciesId } from '../game/types'
-import { AutoPauseFields, PauseOnBlurField } from './SettingsFields'
+import type { IconId } from '../art/icons'
+import { METER_ART, SEASON_ART } from '../game/content/art'
+import { Icon } from './Icon'
+import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
 import { useEscapeLayer } from './useGameLoop'
 
 interface Float {
@@ -68,11 +73,13 @@ const IMPATIENCE_CRITICAL_SHARE = 0.8
 interface StatusAlert {
   id: string
   icon: string
+  /** Drawn icon; `icon` is the emoji fallback. */
+  art?: IconId
   text: string
   severity: 'danger' | 'caution'
 }
 
-type Popover = 'status' | 'settings' | null
+type Popover = 'status' | 'settings' | 'speed' | null
 
 export function TopBar() {
   const run = useRun()
@@ -88,6 +95,7 @@ export function TopBar() {
   const [popover, setPopover] = useState<Popover>(null)
   const statusRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
+  const speedRef = useRef<HTMLDivElement>(null)
   // Modifiers and resolve walk the whole settlement: once per sim step only.
   const derived = useMemo(() => {
     if (!run) return null
@@ -97,6 +105,7 @@ export function TopBar() {
       rates: meterRates(run, mods),
       hearth: hearthForecast(run, mods),
       departures: secondsUntilDeparture(run),
+      deadline: deadlineForecast(run, mods),
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run, version])
@@ -107,7 +116,11 @@ export function TopBar() {
   useEffect(() => {
     if (!popover) return
     const onPointer = (e: PointerEvent) => {
-      const host = popover === 'status' ? statusRef.current : settingsRef.current
+      const host = {
+        status: statusRef.current,
+        settings: settingsRef.current,
+        speed: speedRef.current,
+      }[popover]
       if (host && !host.contains(e.target as Node)) setPopover(null)
     }
     document.addEventListener('pointerdown', onPointer)
@@ -122,7 +135,7 @@ export function TopBar() {
   const pop = population(run)
   const housing = totalHousing(run)
   const idle = idleVillagers(run).length
-  const { breakdowns, rates, hearth, departures } = derived
+  const { breakdowns, rates, hearth, departures, deadline } = derived
   const untilStorm = secondsUntilStorm(run)
   const storm = run.season.season === 'storm'
   const hearthDanger = run.coldHearth || hearth.runway < RUNWAY_WARNING_SECONDS
@@ -142,7 +155,9 @@ export function TopBar() {
     untilStorm,
   })
   const dangers = alerts.filter((a) => a.severity === 'danger').length
-  const alertIcons = [...new Set(alerts.map((a) => a.icon))].slice(0, 2)
+  const alertIcons = alerts
+    .filter((a, i) => alerts.findIndex((b) => b.icon === a.icon) === i)
+    .slice(0, 2)
   const statusLabel = [
     'Settlement status',
     `${idle} idle`,
@@ -175,7 +190,9 @@ export function TopBar() {
               untilStorm !== null ? `. Storm in ${formatDuration(untilStorm)}` : ''
             }`}
           >
-            <span>{info.icon}</span>
+            <span>
+              <Icon id={SEASON_ART[run.season.season]} />
+            </span>
           </div>
           <div className="season-text">
             <strong>{info.name}</strong>
@@ -184,24 +201,51 @@ export function TopBar() {
             </small>
             {untilStorm !== null && (
               <small className={`season-next ${untilStorm <= 60 ? 'is-warn' : ''}`}>
-                {SEASON_INFO.storm.icon} Storm in {formatDuration(untilStorm)}
+                <Icon id={SEASON_ART.storm} /> Storm in {formatDuration(untilStorm)}
               </small>
             )}
           </div>
         </div>
 
-        <div className="speed-group" role="group" aria-label="Game speed">
-          {SPEED_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={speed === option ? 'is-active' : ''}
-              onClick={() => setSpeed(option)}
-              title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
-            >
-              {option === 0 ? '⏸' : `${option}×`}
-            </button>
-          ))}
+        <div className="topbar-anchor speed-anchor" ref={speedRef}>
+          {/* Phones fold the six speeds behind this; desktop hides it. */}
+          <button
+            type="button"
+            className={`speed-toggle ${speed === 0 ? 'is-paused' : ''} ${
+              popover === 'speed' ? 'is-open' : ''
+            }`}
+            onClick={() => toggle('speed')}
+            aria-expanded={popover === 'speed'}
+            aria-controls="speed-group"
+            aria-label={`Game speed: ${speed === 0 ? 'paused' : `${speed}×`}`}
+            title="Game speed"
+          >
+            {speed === 0 ? '⏸' : `${speed}×`}
+            <span className="speed-chevron" aria-hidden>
+              ▾
+            </span>
+          </button>
+          <div
+            id="speed-group"
+            className={`speed-group ${popover === 'speed' ? 'is-open' : ''}`}
+            role="group"
+            aria-label="Game speed"
+          >
+            {SPEED_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={speed === option ? 'is-active' : ''}
+                onClick={() => {
+                  setSpeed(option)
+                  if (popover === 'speed') setPopover(null)
+                }}
+                title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
+              >
+                {option === 0 ? '⏸' : `${option}×`}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -209,6 +253,7 @@ export function TopBar() {
         <Meter
           label="Reputation"
           icon="👑"
+          art={METER_ART.reputation}
           value={run.reputation}
           max={run.maxReputation}
           fraction={run.reputationProgress}
@@ -219,6 +264,7 @@ export function TopBar() {
         <Meter
           label="Impatience"
           icon="⏳"
+          art={METER_ART.impatience}
           value={run.impatience}
           max={run.maxImpatience}
           fraction={run.impatienceProgress}
@@ -227,13 +273,17 @@ export function TopBar() {
           rate={`+${rates.impatiencePerMinute.toFixed(2)}/min`}
           hint={`You lose if this fills. Grows ${rates.impatiencePerMinute.toFixed(
             2,
-          )} per minute right now — faster each year, once hostility passes ${IMPATIENCE_HOSTILITY_THRESHOLD}, and with every villager who leaves.`}
+          )} per minute right now — faster each year, once hostility passes ${IMPATIENCE_HOSTILITY_THRESHOLD}, and with every villager who leaves.${deadlineHint(
+            deadline,
+          )}`}
           floats={impFloats}
           pulseKey={run.impatience}
+          note={<DeadlineNote deadline={deadline} />}
         />
         <Meter
           label="Hostility"
           icon="🌩️"
+          art={METER_ART.hostility}
           value={Math.floor(run.hostility)}
           max={MAX_HOSTILITY}
           fraction={run.hostility - Math.floor(run.hostility)}
@@ -269,7 +319,7 @@ export function TopBar() {
             type="button"
             className={`icon-btn settings-btn ${popover === 'settings' ? 'is-open' : ''}`}
             onClick={() => toggle('settings')}
-            title="Game settings: sound and auto-pause"
+            title="Game settings: sound, volume and auto-pause"
             aria-label="Game settings"
             aria-expanded={popover === 'settings'}
             aria-controls="game-settings"
@@ -283,14 +333,7 @@ export function TopBar() {
               role="group"
               aria-label="Game settings"
             >
-              <label>
-                <input
-                  type="checkbox"
-                  checked={sound}
-                  onChange={(e) => updateSettings({ sound: e.target.checked })}
-                />
-                Sound & rain ambience
-              </label>
+              <SoundFields />
               <PauseOnBlurField />
               <AutoPauseFields />
             </div>
@@ -311,9 +354,9 @@ export function TopBar() {
           aria-label={statusLabel}
           title={statusLabel}
         >
-          {alertIcons.map((icon) => (
-            <span key={icon} className="status-toggle-alert" aria-hidden>
-              {icon}
+          {alertIcons.map((a) => (
+            <span key={a.icon} className="status-toggle-alert" aria-hidden>
+              <Icon id={a.art} emoji={a.icon} />
             </span>
           ))}
           <span className="status-toggle-idle" aria-hidden>
@@ -334,11 +377,12 @@ export function TopBar() {
         >
           {/* The season line only shows where the top bar has no room for it. */}
           <p className="status-season" aria-hidden>
-            {info.icon} {info.name} · Year {run.season.year} · {seasonLeft} left
+            <Icon id={SEASON_ART[run.season.season]} /> {info.name} · Year {run.season.year} ·{' '}
+            {seasonLeft} left
             {untilStorm !== null && (
               <span className={untilStorm <= 60 ? 'is-warn' : ''}>
                 {' '}
-                · {SEASON_INFO.storm.icon} in {formatDuration(untilStorm)}
+                · <Icon id={SEASON_ART.storm} /> in {formatDuration(untilStorm)}
               </span>
             )}
           </p>
@@ -346,7 +390,7 @@ export function TopBar() {
             <ul className="status-alerts">
               {alerts.map((a) => (
                 <li key={a.id} className={`is-${a.severity}`}>
-                  {a.icon} {a.text}
+                  <Icon id={a.art} emoji={a.icon} /> {a.text}
                 </li>
               ))}
             </ul>
@@ -362,14 +406,16 @@ export function TopBar() {
             title={hearthTitle(hearth, storm, run.coldHearth)}
             aria-label={`Hearth fuel: ${run.coldHearth ? 'out' : formatDuration(hearth.runway)}`}
           >
-            <span>🔥</span>
+            <span>
+              <Icon id="ancientHearth" />
+            </span>
             <strong>
               {(hearthDanger || hearthCaution) && <em className="stat-alert">!</em>}
               {run.coldHearth ? 'Out' : formatDuration(hearth.runway)}
             </strong>
             {!storm && !run.coldHearth && (
               <small className="hearth-storm">
-                {SEASON_INFO.storm.icon}
+                <Icon id={SEASON_ART.storm} />
                 {formatDuration(hearth.stormRunway)}
               </small>
             )}
@@ -387,7 +433,9 @@ export function TopBar() {
                   1,
                 )} (heading for ${b.target.toFixed(1)}). Earns reputation above ${b.threshold}.`}
               >
-                <span>{SPECIES[b.species].icon}</span>
+                <span>
+                  <Icon of={SPECIES[b.species]} />
+                </span>
                 <strong
                   className={
                     b.current < 0 ? 'is-bad' : b.current >= b.threshold ? 'is-good' : ''
@@ -430,13 +478,14 @@ function statusAlerts(input: {
   const { run } = input
   const out: StatusAlert[] = []
   if (run.coldHearth) {
-    out.push({ id: 'hearth', icon: '🔥', text: 'The hearth is out', severity: 'danger' })
+    out.push({ id: 'hearth', icon: '🔥', art: 'ancientHearth', text: 'The hearth is out', severity: 'danger' })
   } else if (input.hearthDanger) {
-    out.push({ id: 'hearth', icon: '🔥', text: 'Hearth wood is running out', severity: 'danger' })
+    out.push({ id: 'hearth', icon: '🔥', art: 'ancientHearth', text: 'Hearth wood is running out', severity: 'danger' })
   } else if (input.hearthCaution) {
     out.push({
       id: 'hearth',
       icon: '🔥',
+      art: 'ancientHearth',
       text: 'Not enough wood for the Storm',
       severity: 'caution',
     })
@@ -456,6 +505,7 @@ function statusAlerts(input: {
     out.push({
       id: 'impatience',
       icon: '⏳',
+      art: METER_ART.impatience,
       text: "The Queen's patience is nearly gone",
       severity: 'danger',
     })
@@ -468,6 +518,7 @@ function statusAlerts(input: {
       out.push({
         id: `resolve-${b.species}`,
         icon: SPECIES[b.species].icon,
+        art: SPECIES[b.species].art,
         text: `${SPECIES[b.species].name} resolve is below zero`,
         severity: 'caution',
       })
@@ -477,11 +528,68 @@ function statusAlerts(input: {
     out.push({
       id: 'storm',
       icon: SEASON_INFO.storm.icon,
+      art: SEASON_ART.storm,
       text: `The Storm arrives in ${formatDuration(input.untilStorm)}`,
       severity: 'caution',
     })
   }
   return out
+}
+
+/** Tooltip sentence on the impatience meter about the Queen's deadline. */
+function deadlineHint(deadline: DeadlineForecast): string {
+  if (deadline.passed) {
+    return ` The Queen's deadline has passed: it adds ${deadline.overtimePerMinute.toFixed(
+      2,
+    )} per minute of that, and more every minute.`
+  }
+  if (!deadline.imminent) return ''
+  const where = deadline.landsIn
+    ? ` (Year ${deadline.landsIn.year}, ${SEASON_INFO[deadline.landsIn.season].name})`
+    : ''
+  return ` The Queen's deadline falls in ${formatDuration(
+    deadline.secondsLeft,
+  )}${where}; from then her impatience climbs ${deadline.startPerMinute.toFixed(
+    2,
+  )} per minute faster, and steeper every minute.`
+}
+
+/**
+ * The deadline under the impatience meter: a countdown through its last year,
+ * then the overtime it adds. Phones get the short form.
+ */
+function DeadlineNote({ deadline }: { deadline: DeadlineForecast }) {
+  if (deadline.passed) {
+    const rate = `+${deadline.overtimePerMinute.toFixed(2)}/min`
+    return (
+      <small className="meter-note deadline-note is-passed">
+        <span aria-hidden>
+          <Icon id={METER_ART.reputation} />{' '}
+        </span>
+        <span className="deadline-note-long">Deadline passed · {rate}</span>
+        <span className="deadline-note-short" aria-hidden>
+          Past +{deadline.overtimePerMinute.toFixed(2)}/m
+        </span>
+      </small>
+    )
+  }
+  if (!deadline.imminent) return null
+  const left = formatDuration(deadline.secondsLeft)
+  return (
+    <small
+      className={`meter-note deadline-note ${
+        deadline.secondsLeft <= RUNWAY_WARNING_SECONDS ? 'is-urgent' : ''
+      }`}
+    >
+      <span aria-hidden>
+          <Icon id={METER_ART.reputation} />{' '}
+        </span>
+      <span className="deadline-note-long">Queen's deadline in {left}</span>
+      <span className="deadline-note-short" aria-hidden>
+        in {left}
+      </span>
+    </small>
+  )
 }
 
 function hearthTitle(
@@ -506,6 +614,7 @@ function hearthTitle(
 interface MeterProps {
   label: string
   icon: string
+  art?: IconId
   value: number
   max: number
   /** Progress toward the next whole point, 0..1. */
@@ -519,11 +628,14 @@ interface MeterProps {
   floats?: Float[]
   /** Changing this key replays the pulse animation (impatience ticking up). */
   pulseKey?: number
+  /** A line under the bar (the Queen's deadline on the impatience meter). */
+  note?: ReactNode
 }
 
 function Meter({
   label,
   icon,
+  art,
   value,
   max,
   fraction,
@@ -533,12 +645,15 @@ function Meter({
   rate,
   floats,
   pulseKey,
+  note,
 }: MeterProps) {
   const pct = ((value + Math.min(1, Math.max(0, fraction))) / max) * 100
   return (
     <div className={`meter meter-${tone} ${critical ? 'is-critical' : ''}`} title={hint}>
       <div className="meter-head">
-        <span>{icon}</span>
+        <span>
+          <Icon id={art} emoji={icon} />
+        </span>
         <span className="meter-label">
           {label}
           {rate && <small className="meter-rate"> {rate}</small>}
@@ -562,6 +677,7 @@ function Meter({
       >
         <div className="meter-fill" style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
+      {note}
       {floats && floats.length > 0 && (
         <div className="floaters" aria-hidden>
           {floats.map((f) => (

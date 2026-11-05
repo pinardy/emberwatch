@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import type { IconId } from '../art/icons'
+import { BUILDING_ART, DEPOSIT_ART, GLADE_ART } from '../game/content/art'
 import { BUILDINGS } from '../game/content/buildings'
 import { canPlaceBuilding, footprintOf } from '../game/engine/actions'
-import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { describePlacement } from '../game/engine/placement'
 import { warmthSources } from '../game/engine/queries'
+import { ROAD_TOOL, describeRoadTool, type RoadPreview } from '../game/engine/roads'
 import { displayName, workerSlotsOf } from '../game/engine/upgrades'
 import { useGameStore, useRun } from '../game/store'
 import type { GladeKind } from '../game/types'
@@ -15,7 +17,6 @@ import {
   buildingStatusKind,
   gladeAccessText,
   gladeFill,
-  gladeKindLabel,
   gladeLook,
   gladePlateInfo,
   isColdHousing,
@@ -30,6 +31,21 @@ import {
   type StatusContext,
 } from './mapShared'
 import { panDirectionOf } from './usePanKeys'
+import { RoadGhost2D, RoadLayer2D, VillagerDots2D } from './MapLayers2D'
+import { RoadBanner } from './RoadTool'
+import { roadKey, villagerRouteKey } from './map3d/layerKeys'
+import { IconSymbols, IconUse } from './Icon'
+
+/** Every icon the 2D map stamps, defined once as `<symbol>`s. */
+const MAP_SYMBOLS: IconId[] = [
+  ...new Set([
+    ...Object.values(DEPOSIT_ART),
+    ...Object.values(GLADE_ART),
+    ...Object.values(BUILDING_ART).filter((id): id is IconId => id !== undefined),
+  ]),
+]
+/** Smallest icon on the 2D map, in SVG units (the old emoji were 18px text). */
+const MAP_ICON = 22
 
 /** Pixels per world unit inside the SVG coordinate system. */
 const S = 30
@@ -63,6 +79,8 @@ export function MapView2D() {
     screen: { x: number; y: number }
     ok: boolean
     hint: string | null
+    /** Road tool: the stretch it would lay or lift. */
+    road?: RoadPreview
   } | null>(null)
 
   useEffect(() => {
@@ -131,7 +149,21 @@ export function MapView2D() {
 
   const onPointerMove = (e: React.PointerEvent) => {
     // Mouse hover aims the build ghost; touch keeps tap-to-place.
-    if (buildMode && run && e.pointerType !== 'touch' && !drag.current) {
+    if (buildMode === ROAD_TOOL && run && e.pointerType !== 'touch' && !drag.current) {
+      const pos = toWorld(e)
+      const wrap = svgRef.current?.parentElement?.getBoundingClientRect()
+      if (pos && wrap) {
+        const { roadAnchor, roadErase } = useGameStore.getState()
+        const road = describeRoadTool(run, roadAnchor, pos, roadErase)
+        setGhost({
+          pos: road.to,
+          screen: { x: e.clientX - wrap.left, y: e.clientY - wrap.top },
+          ok: road.ok,
+          hint: road.reason ?? (road.parts.length > 0 ? road.parts.join(' · ') : null),
+          road,
+        })
+      }
+    } else if (buildMode && run && e.pointerType !== 'touch' && !drag.current) {
       const pos = toWorld(e)
       const wrap = svgRef.current?.parentElement?.getBoundingClientRect()
       if (pos && wrap) {
@@ -200,9 +232,21 @@ export function MapView2D() {
     if (!pos) return
     if (state.buildMode) {
       state.place(pos)
+      if (state.buildMode === ROAD_TOOL) refreshRoadGhost()
       return
     }
     state.clearSelection()
+  }
+
+  /** After a road click the anchor moved: redraw the ghost from it. */
+  const refreshRoadGhost = () => {
+    const { run: current, roadAnchor, roadErase } = useGameStore.getState()
+    if (!current) return
+    setGhost((g) => {
+      if (!g) return g
+      const road = describeRoadTool(current, roadAnchor, g.pos, roadErase)
+      return { ...g, ok: road.ok, hint: road.reason ?? road.parts.join(' · '), road }
+    })
   }
 
   if (!run) return null
@@ -227,9 +271,17 @@ export function MapView2D() {
         onPointerCancel={onPointerUp}
         onPointerLeave={() => setGhost(null)}
         onClick={onMapClick}
+        onContextMenu={(e) => {
+          // Right-click ends the road being laid, then puts the tool away.
+          if (!useGameStore.getState().buildMode) return
+          e.preventDefault()
+          useGameStore.getState().cancelBuildStep()
+          setGhost(null)
+        }}
         role="application"
         aria-label="Settlement map"
       >
+        <IconSymbols ids={MAP_SYMBOLS} />
         <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
           <g ref={worldRef}>
             {/* The forest beyond the world's edge. */}
@@ -291,6 +343,8 @@ export function MapView2D() {
                 />
               ))}
 
+            <RoadLayer2D run={run} scale={S} roadsKey={roadKey(run)} />
+
             {/* Obstacles on cleared ground. */}
             {run.obstacles.map((o) =>
               run.glades[o.gladeId]?.cleared ? (
@@ -329,9 +383,12 @@ export function MapView2D() {
                     className="deposit-disc"
                     style={{ stroke: DEPOSIT_TINT[d.kind], strokeOpacity: 0.7 }}
                   />
-                  <text className="hex-icon" x={cx} y={cy + 6}>
-                    {DEPOSIT_INFO[d.kind].icon}
-                  </text>
+                  <IconUse
+                    id={DEPOSIT_ART[d.kind]}
+                    x={cx}
+                    y={cy}
+                    size={Math.max(MAP_ICON, d.radius * S * 1.1)}
+                  />
                   {d.amount !== null && (
                     <text className="hex-sub" x={cx} y={cy + d.radius * S + 10}>
                       {d.amount}
@@ -340,6 +397,9 @@ export function MapView2D() {
                 </g>
               )
             })}
+
+            {/* Villagers walk beneath the buildings, so they step out of doors. */}
+            <VillagerDots2D run={run} scale={S} routeKey={villagerRouteKey(run)} />
 
             {/* Buildings. */}
             {Object.values(run.buildings).map((b) => {
@@ -368,7 +428,13 @@ export function MapView2D() {
                       suppressClick.current = false
                       return
                     }
-                    useGameStore.getState().selectBuilding(b.id)
+                    // The road tool runs roads to (and from) buildings.
+                    const state = useGameStore.getState()
+                    if (state.buildMode === ROAD_TOOL) {
+                      state.place(toWorld(e) ?? b.pos)
+                      return
+                    }
+                    state.selectBuilding(b.id)
                   }}
                 >
                   <circle cx={cx} cy={cy} r={r} className="building-disc" />
@@ -383,9 +449,13 @@ export function MapView2D() {
                       pointerEvents="none"
                     />
                   )}
-                  <text className="hex-icon" x={cx} y={cy + 6}>
-                    {def.icon}
-                  </text>
+                  {def.art ? (
+                    <IconUse id={def.art} x={cx} y={cy} size={Math.max(MAP_ICON, r * 1.15)} />
+                  ) : (
+                    <text className="hex-icon" x={cx} y={cy + 6}>
+                      {def.icon}
+                    </text>
+                  )}
                   {!b.built && (
                     <>
                       <rect x={cx - 16} y={cy + r + 3} width={32} height={4} rx={2} className="build-bar-bg" />
@@ -490,6 +560,8 @@ export function MapView2D() {
               </g>
             )}
 
+            {buildMode === ROAD_TOOL && <RoadGhost2D run={run} preview={ghost?.road ?? null} scale={S} />}
+
             {/* Labels over undiscovered-but-known glades. */}
             {glades.map((glade) => {
               if (!glade.discovered || glade.cleared) return null
@@ -521,8 +593,20 @@ export function MapView2D() {
                     className="glade-plate"
                     style={reachable ? { stroke: kindStyle.edge, strokeOpacity: 0.85 } : undefined}
                   />
-                  <text y={-8} className="glade-kind" style={reachable ? { fill: kindStyle.edge } : undefined}>
-                    {gladeKindLabel(glade.kind)}
+                  {/* Kind icon and label, centred together as one line. */}
+                  <IconUse
+                    id={GLADE_ART[glade.kind]}
+                    x={-kindStyle.label.length * 2.8 - 1}
+                    y={-11}
+                    size={11}
+                  />
+                  <text
+                    x={6}
+                    y={-8}
+                    className="glade-kind"
+                    style={reachable ? { fill: kindStyle.edge } : undefined}
+                  >
+                    {kindStyle.label}
                   </text>
                   <text y={7} className="glade-name">
                     {glade.name}
@@ -596,6 +680,7 @@ export function MapView2D() {
 
 /** Shared banner for both renderers while a blueprint is in hand. */
 export function BuildBanner({ buildMode }: { buildMode: string }) {
+  if (buildMode === ROAD_TOOL) return <RoadBanner />
   // Touch screens have no Esc key and nothing to click with.
   const touch = window.matchMedia?.('(pointer: coarse)').matches ?? false
   return (

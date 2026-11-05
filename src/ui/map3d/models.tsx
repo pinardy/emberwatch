@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { HEARTH_STYLES } from '../../game/content/meta'
 import type { BuildingCategory, DepositId } from '../../game/types'
-import { badgeTexture, emojiTexture, labelTexture } from './sprites'
+import type { IconId } from '../../art/icons'
+import { badgeTexture, emojiTexture, iconTexture, labelTexture } from './sprites'
 
 /**
  * Low-poly props shared across the 3D scene: geometries and materials are
@@ -49,6 +51,18 @@ const FIRE_MAT = new THREE.MeshStandardMaterial({
   emissive: '#ff6a1a',
   emissiveIntensity: 1.6,
 })
+/** Hearth flames bought as Citadel cosmetics (`HEARTH_STYLES`), built on first use. */
+const HEARTH_FLAME_MATS = new Map<string, THREE.MeshStandardMaterial>()
+function hearthFlame(style: string | undefined): { mat: THREE.Material; light: string } {
+  const look = style ? HEARTH_STYLES[style] : undefined
+  if (!look || style === 'ember') return { mat: FIRE_MAT, light: '#ffab52' }
+  let mat = HEARTH_FLAME_MATS.get(style!)
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ color: look.flame, emissive: look.flame, emissiveIntensity: 1.6 })
+    HEARTH_FLAME_MATS.set(style!, mat)
+  }
+  return { mat, light: look.light }
+}
 export const GHOST_OK_MAT = new THREE.MeshStandardMaterial({
   color: '#6fbf72',
   transparent: true,
@@ -128,8 +142,22 @@ export function hash01(key: string, salt: number): number {
   return (h >>> 0) / 4294967296
 }
 
-export function IconSprite({ icon, y, size }: { icon: string; y: number; size: number }) {
-  const map = useMemo(() => emojiTexture(icon), [icon])
+/**
+ * A floating icon: the drawn `art` when there is one, else the emoji `icon`.
+ * Either way the texture is baked once per id and shared by every sprite.
+ */
+export function IconSprite({
+  icon,
+  art,
+  y,
+  size,
+}: {
+  icon: string
+  art?: IconId
+  y: number
+  size: number
+}) {
+  const map = useMemo(() => (art ? iconTexture(art) : emojiTexture(icon)), [art, icon])
   return (
     <sprite position={[0, y, 0]} scale={[size, size, 1]} raycast={NO_RAYCAST}>
       <spriteMaterial map={map} transparent depthWrite={false} />
@@ -375,6 +403,7 @@ export function BuildingModel({
   scale = 1,
   defId,
   lit,
+  flame,
 }: {
   category: BuildingCategory
   scale?: number
@@ -382,12 +411,15 @@ export function BuildingModel({
   defId?: string
   /** Warmth sources: whether the fire is burning. */
   lit?: boolean
+  /** The hearth's cosmetic flame style (`HEARTH_STYLES` id). */
+  flame?: string
 }) {
   const Special = defId ? SPECIAL_MODELS[defId] : undefined
   const body = (() => {
     if (Special) return <Special lit={lit} />
     switch (category) {
-      case 'hearth':
+      case 'hearth': {
+        const fire = hearthFlame(flame)
         return (
           <>
             <mesh
@@ -398,10 +430,11 @@ export function BuildingModel({
               castShadow
               raycast={NO_RAYCAST}
             />
-            <mesh geometry={FIRE_GEO} material={FIRE_MAT} position={[0, 0.3, 0]} raycast={NO_RAYCAST} />
-            <pointLight position={[0, 0.9, 0]} color="#ffab52" intensity={9} distance={7} decay={2} />
+            <mesh geometry={FIRE_GEO} material={fire.mat} position={[0, 0.3, 0]} raycast={NO_RAYCAST} />
+            <pointLight position={[0, 0.9, 0]} color={fire.light} intensity={9} distance={7} decay={2} />
           </>
         )
+      }
       case 'housing':
         return (
           <>

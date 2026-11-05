@@ -36,7 +36,14 @@ import { defaultCaravan } from './trade'
 import { generateMap } from './mapgen'
 import { computeModifiers, seasonLengthFor } from './modifiers'
 import { makeRng } from './rng'
-import { applyRunModifiers, drawRunModifiers, mapgenHooksFor, runModifierDefs } from './runModifiers'
+import { defaultFeats } from '../content/achievements'
+import {
+  applyRunModifiers,
+  landFor,
+  mapgenHooksFor,
+  runModifierDefs,
+  type LandChoice,
+} from './runModifiers'
 
 export interface NewRunOptions {
   seed: number
@@ -50,12 +57,31 @@ export interface NewRunOptions {
    * drawn from the seed. Tests and the balance harness force them.
    */
   modifiers?: string[]
+  /**
+   * Setup-screen choices about the land (Second Survey's re-roll, Chosen
+   * Ground's pick). Ignored unless the Citadel owns the matching upgrade.
+   */
+  land?: LandChoice
+  /**
+   * UTC date key of a daily expedition. Recorded on the run; the caller
+   * passes the day's seed, species and edict and no `meta`, so no Citadel
+   * upgrade applies.
+   */
+  daily?: string
 }
 
 /** A settlement never starts with fewer villagers than this, whatever the edict. */
 const MIN_STARTING_VILLAGERS = 3
 
-export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptions): RunState {
+export function createRun({
+  seed,
+  meta,
+  species,
+  edict,
+  modifiers,
+  land: landChoice,
+  daily,
+}: NewRunOptions): RunState {
   const rng = makeRng(seed, 0)
   // Citadel upgrades and the chosen edict, folded into plain numbers.
   const loadout = citadelLoadout(meta?.upgrades ?? [])
@@ -63,7 +89,7 @@ export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptio
   const edictMods = edictModifiers(edictLevel)
   // The land's character comes from the seed (its own RNG stream), and shapes
   // the map before anything is placed on it.
-  const runModifiers = modifiers ?? drawRunModifiers(seed)
+  const runModifiers = modifiers ?? landFor(seed, loadout, landChoice)
   const { world, glades, deposits, obstacles } = generateMap(rng, mapgenHooksFor(runModifiers))
 
   const available = meta
@@ -152,6 +178,8 @@ export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptio
     obstacles,
     buildings: { [hearth.id]: hearth },
     villagers,
+    roads: [],
+    roadCounter: 0,
     stock,
     storageCap: BASE_STORAGE + (BUILDINGS.ancientHearth.storage ?? 0),
     reputation: 0,
@@ -202,6 +230,7 @@ export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptio
     edict: edictLevel,
     runModifiers: [],
     citadel: loadout.perks,
+    feats: defaultFeats(),
     stats: {
       resourcesProduced: 0,
       gladesCleared: 0,
@@ -210,6 +239,8 @@ export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptio
       ordersCompleted: 0,
     },
   }
+
+  if (daily) state.daily = daily
 
   // --- the land's modifiers --------------------------------------------------
   applyRunModifiers(state, runModifiers)

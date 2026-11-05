@@ -4,14 +4,19 @@ import { CORNERSTONES } from '../game/content/cornerstones'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
 import { freeRerollsLeft, gladeEventOptions } from '../game/engine/citadel'
-import { optionAffordable, rerollCost } from '../game/engine/events'
+import {
+  describeOptionCost,
+  describeOptionShortfall,
+  optionAffordable,
+  rerollCost,
+} from '../game/engine/events'
 import { useGameStore, useRun } from '../game/store'
 import type { ResourceBag } from '../game/types'
-import { Cost } from './BuildPanel'
 import { DialogTip } from './TipsCoach'
 import { CharterChoice } from './CharterChoice'
 import { RunModifierList } from './RunModifierList'
 import { DraftAppealChips } from './DraftAppealChips'
+import { Icon } from './Icon'
 
 /**
  * Blocking modal for the three things that interrupt play: cornerstone picks,
@@ -43,6 +48,7 @@ export function ChoiceModal() {
           <div className="option-list">
             {gladeEventOptions(run, def).map((option, index) => {
               const affordable = optionAffordable(run.stock, option)
+              const shortfall = affordable ? null : describeOptionShortfall(run.stock, option)
               return (
                 <button
                   key={option.label}
@@ -54,17 +60,32 @@ export function ChoiceModal() {
                   <strong>{option.label}</strong>
                   <small>{option.description}</small>
                   <div className="option-effects">
-                    {option.cost && <Effect label="Cost" bag={option.cost} tone="bad" />}
+                    {(option.cost || !!option.foodCost) && (
+                      <Effect
+                        label="Cost"
+                        bag={option.cost ?? {}}
+                        food={option.foodCost}
+                        tone="bad"
+                        title={`Costs ${describeOptionCost(option)}${
+                          option.foodCost ? ', paid from your largest food stacks' : ''
+                        }`}
+                      />
+                    )}
                     {option.gain && <Effect label="Gain" bag={option.gain} tone="good" />}
                     {option.reputation ? (
-                      <span className="is-good">👑 +{option.reputation}</span>
+                      <span className="is-good">
+                        <Icon id="reputation" label="reputation" /> +{option.reputation}
+                      </span>
                     ) : null}
                     {option.impatience ? (
-                      <span className="is-bad">⏳ +{option.impatience}</span>
+                      <span className={option.impatience > 0 ? 'is-bad' : 'is-good'}>
+                        <Icon id="impatience" label="impatience" /> {option.impatience > 0 ? '+' : ''}
+                        {option.impatience}
+                      </span>
                     ) : null}
                     {option.hostility ? (
                       <span className={option.hostility > 0 ? 'is-bad' : 'is-good'}>
-                        🌩️ {option.hostility > 0 ? '+' : ''}
+                        <Icon id="hostility" label="hostility" /> {option.hostility > 0 ? '+' : ''}
                         {option.hostility}
                       </span>
                     ) : null}
@@ -90,11 +111,7 @@ export function ChoiceModal() {
                       </span>
                     ) : null}
                   </div>
-                  {!affordable && option.requires && (
-                    <small className="is-bad">
-                      Requires <Cost cost={option.requires} stock={run.stock} />
-                    </small>
-                  )}
+                  {shortfall && <small className="is-bad option-shortfall">{shortfall}</small>}
                 </button>
               )
             })}
@@ -177,7 +194,9 @@ export function ChoiceModal() {
                 className="option"
                 onClick={() => chooseOption(id)}
               >
-                <span className="option-icon">{def.icon}</span>
+                <span className="option-icon">
+                  <Icon of={def} />
+                </span>
                 <strong>{def.name}</strong>
                 <small>{def.description}</small>
                 <div className="option-effects">
@@ -209,9 +228,13 @@ function RerollButton() {
         disabled={(run.stock.amber ?? 0) < cost}
         onClick={reroll}
       >
-        {freeRerollsLeft(run) > 0
-          ? `🎲 Reroll the offer — free (${freeRerollsLeft(run)} left)`
-          : `🎲 Reroll the offer — ${cost} ${RESOURCES.amber.icon}`}
+        {freeRerollsLeft(run) > 0 ? (
+          `🎲 Reroll the offer — free (${freeRerollsLeft(run)} left)`
+        ) : (
+          <>
+            🎲 Reroll the offer — {cost} <Icon of={RESOURCES.amber} label="amber" />
+          </>
+        )}
       </button>
     </footer>
   )
@@ -220,20 +243,25 @@ function RerollButton() {
 function Effect({
   label,
   bag,
+  food,
   tone,
+  title,
 }: {
   label: string
   bag: ResourceBag
+  /** Units of any food (a glade event's `foodCost`), shown before the bag. */
+  food?: number
   tone: 'good' | 'bad'
+  title?: string
 }) {
   const entries = Object.entries(bag)
-  if (entries.length === 0) return null
+  if (entries.length === 0 && !food) return null
   return (
-    <span className={tone === 'good' ? 'is-good' : 'is-bad'}>
-      {label}:{' '}
+    <span className={tone === 'good' ? 'is-good' : 'is-bad'} title={title}>
+      {label}: {food ? <span>🍽️ {food} food </span> : null}
       {entries.map(([id, amount]) => (
         <span key={id}>
-          {RESOURCES[id as keyof typeof RESOURCES]?.icon}
+          <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
           {amount}{' '}
         </span>
       ))}

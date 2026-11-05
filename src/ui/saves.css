@@ -1,0 +1,196 @@
+/* Save slots: the load screen, slot pickers, import and export. */
+
+.menu-actions .menu-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.slot-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr));
+  gap: 10px;
+}
+
+.slot-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+
+.slot-card.is-empty {
+  background: transparent;
+  border-style: dashed;
+}
+
+.slot-card.is-playing {
+  border-color: var(--gold);
+}
+
+.slot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.slot-head h3 {
+  font-size: 16px;
+}
+
+.slot-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #1a1207;
+  font-weight: 700;
+}
+
+.slot-details {
+  display: grid;
+  gap: 3px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.slot-line {
+  overflow-wrap: anywhere;
+}
+
+.slot-race {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.slot-empty {
+  margin: 0;
+}
+
+.slot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.slot-error {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #5b2f2c;
+  border-radius: var(--radius-sm);
+  background: rgba(90, 38, 34, 0.35);
+  color: #f1c5bf;
+}
+
+.slot-ok {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid #3c5a43;
+  border-radius: var(--radius-sm);
+  background: rgba(60, 90, 67, 0.25);
+}
+
+.slot-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.slot-option {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.slot-option input {
+  margin-top: 3px;
+  accent-color: var(--gold);
+}
+
+.slot-option.is-picked {
+  border-color: var(--gold);
+  background: rgba(217, 180, 106, 0.08);
+}
+
+.slot-option-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.slot-option-body small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.slot-option.is-picked.is-taken .slot-option-body small {
+  color: var(--warn);
+}
+
+.paste-box,
+.text-out,
+.import-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.paste-box textarea,
+.text-out textarea {
+  width: 100%;
+  font:
+    12px/1.4 ui-monospace,
+    'SF Mono',
+    Menlo,
+    Consolas,
+    monospace;
+  color: inherit;
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  resize: vertical;
+}
+
+.paste-box button,
+.text-out button,
+.import-preview > button {
+  justify-self: start;
+}
+
+@media (pointer: coarse) {
+  .slot-actions button,
+  .slot-option {
+    min-height: 44px;
+  }
+}
+
+/* Revealed blocks clear the card's sticky footer when scrolled into view. */
+.reveal {
+  scroll-margin-bottom: 90px;
+}
+
+/* An armed primary action still reads as destructive, hovered or not. */
+button.primary.is-armed,
+button.primary.is-armed:hover:not(:disabled) {
+  background: #5a2622;
+  border-color: var(--bad);
+  color: #ffe9e4;
+}

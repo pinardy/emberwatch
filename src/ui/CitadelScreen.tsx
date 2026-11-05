@@ -10,6 +10,7 @@ import { SPECIES } from '../game/content/species'
 import { runModifierDefs } from '../game/engine/runModifiers'
 import { useGameStore } from '../game/store'
 import { EdictPicker } from './EdictPicker'
+import { Icon } from './Icon'
 
 /** Runs shown in the ledger; older ones stay in the save but off screen. */
 const LEDGER_ROWS = 10
@@ -38,7 +39,9 @@ export function CitadelScreen() {
           <span className="chip">
             🏗️ {owned}/{META_UPGRADE_LIST.length} upgrades
           </span>
-          <span className="chip">👑 {meta.runsWon} held</span>
+          <span className="chip">
+            <Icon id="reputation" /> {meta.runsWon} held
+          </span>
           <span className="chip">🌫️ {meta.runsLost} lost</span>
           <span className="chip">
             📜{' '}
@@ -125,11 +128,19 @@ export function CitadelScreen() {
                   {meta.history.slice(0, LEDGER_ROWS).map((entry) => (
                     <tr key={`${entry.seed}-${entry.at}`}>
                       <td className={entry.won ? 'is-good' : 'is-bad'}>
-                        {entry.won ? '👑 Held' : '🌫️ Lost'}
+                        {entry.won ? (
+                          <>
+                            <Icon id="reputation" /> Held
+                          </>
+                        ) : (
+                          '🌫️ Lost'
+                        )}
                       </td>
                       <td>
                         {entry.species?.length
-                          ? entry.species.map((id) => SPECIES[id]?.icon ?? id).join(' ')
+                          ? entry.species.map((id) => (
+                              <Icon key={id} of={SPECIES[id]} emoji={id} label={SPECIES[id]?.name ?? id} />
+                            ))
                           : '—'}
                       </td>
                       <td>{edictNumeral(entry.edict ?? 0)}</td>
@@ -155,6 +166,9 @@ export function CitadelScreen() {
         <footer className="modal-foot">
           <button type="button" onClick={() => goToScreen('menu')}>
             Back to menu
+          </button>
+          <button type="button" onClick={() => goToScreen('achievements')}>
+            🏅 Achievements
           </button>
           <button type="button" className="primary" onClick={() => goToScreen('setup')}>
             Found a new settlement

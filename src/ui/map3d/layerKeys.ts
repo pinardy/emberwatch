@@ -151,6 +151,27 @@ export function villagerKey(run: RunState): string {
   return key
 }
 
+/** Laid roads. Roads never move, so their ids are all a layer needs. */
+export function roadKey(run: RunState): string {
+  let key = ''
+  for (const r of run.roads ?? []) key += `${r.id},`
+  return key
+}
+
+/**
+ * Everything a walking villager's route is derived from: who exists and what
+ * they do, which buildings stand (homes, workplaces) or are going up (sites
+ * for idle builders), and the roads. Assignment and construction changes move
+ * it; ordinary ticks do not.
+ */
+export function villagerRouteKey(run: RunState): string {
+  let key = villagerKey(run) + '|'
+  for (const b of Object.values(run.buildings)) {
+    key += `${b.id}${b.built ? '' : '~'}${b.upgradeProgress !== undefined ? '^' : ''}:${b.tier ?? 0},`
+  }
+  return `${key}|${roadKey(run)}`
+}
+
 /** Live warmth sources: the hearth and every lit brazier, with their reach. */
 export function warmthKey(run: RunState): string {
   return warmthSources(run)

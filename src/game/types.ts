@@ -6,6 +6,8 @@
  * that keeps the sim testable and lets us snapshot it straight into storage.
  */
 
+import type { IconId } from '../art/icons'
+
 // ---------------------------------------------------------------------------
 // Resources
 // ---------------------------------------------------------------------------
@@ -60,8 +62,10 @@ export interface ResourceDef {
   id: ResourceId
   name: string
   category: ResourceCategory
-  /** Emoji stand-in for art. Keeps the build asset-free. */
+  /** Emoji stand-in for art, and the fallback wherever `art` is missing. */
   icon: string
+  /** Drawn icon (see `content/art.ts`); `icon` is the emoji fallback. */
+  art?: IconId
   /** Base amber value, used by the trader. */
   value: number
 }
@@ -87,6 +91,8 @@ export interface SpeciesDef {
   id: SpeciesId
   name: string
   icon: string
+  /** Drawn icon (see `content/art.ts`); `icon` is the emoji fallback. */
+  art?: IconId
   /** Colour used for charts and resolve bars. */
   color: string
   /** Resolve floor before any modifiers. */
@@ -189,6 +195,8 @@ export interface BuildingDef {
   id: string
   name: string
   icon: string
+  /** Drawn icon (see `content/art.ts`); `icon` is the emoji fallback. */
+  art?: IconId
   category: BuildingCategory
   tags: BuildingTag[]
   cost: ResourceBag
@@ -308,6 +316,8 @@ export interface TerrainDef {
   id: TerrainId
   name: string
   icon: string
+  /** Drawn icon (see `content/art.ts`); `icon` is the emoji fallback. */
+  art?: IconId
   blurb: string
   effects: TerrainEffect[]
 }
@@ -435,6 +445,19 @@ export interface BuildingInstance {
    * otherwise. The building keeps working at its current tier meanwhile.
    */
   upgradeProgress?: number
+}
+
+/**
+ * A straight stretch of road between two points. Roads are laid instantly for
+ * a little wood, run over cleared ground only, and never through obstacles or
+ * deposits. Their connectivity (which workplaces reach the hearth or a
+ * warehouse, and how directly) is derived — see `engine/roads.ts` — and never
+ * stored here.
+ */
+export interface RoadSegment {
+  id: string
+  a: Vec2
+  b: Vec2
 }
 
 // ---------------------------------------------------------------------------
@@ -621,6 +644,8 @@ export interface RunModifierDef {
   startStock?: ResourceBag
   /** Modifier ids never drawn alongside this one. */
   excludes?: string[]
+  /** Only drawn once a Citadel upgrade admits it to the pool. */
+  citadelLocked?: boolean
 }
 
 export interface GladeEventOptionDef {
@@ -888,6 +913,14 @@ export interface RunState {
   obstacles: Obstacle[]
   buildings: Record<string, BuildingInstance>
   villagers: Record<string, Villager>
+  /**
+   * Roads laid by the player. Absent on saves from before roads existed,
+   * which read as none — and with no roads every building works exactly as
+   * it always did (the road bonus is purely additive).
+   */
+  roads?: RoadSegment[]
+  /** Next road id; absent on saves from before roads. */
+  roadCounter?: number
 
   stock: ResourceBag
   /** Cached: base storage + warehouses + cornerstones. */
@@ -976,6 +1009,16 @@ export interface RunState {
   runModifiers: string[]
   /** Citadel upgrades that keep acting during the run (drafts, events). */
   citadel: CitadelPerks
+  /**
+   * UTC date key (`YYYY-MM-DD`) when this is that day's daily expedition.
+   * Absent on ordinary runs and on saves from before dailies existed.
+   */
+  daily?: string
+  /**
+   * Small in-run bookkeeping for achievements, set where the moment happens
+   * (never scanned per tick). Absent on older saves, which load with defaults.
+   */
+  feats?: RunFeats
 
   /** Order def ids already drawn, so we do not repeat them. */
   ordersSeen: string[]
@@ -1009,6 +1052,22 @@ export interface CitadelPerks {
   cornerstones: string[]
   /** Extra glade-event options (ids in `CITADEL_EVENT_OPTIONS`). */
   eventOptions: string[]
+  /** Scouts' Report: the Inspector names the events waiting in the first ring of glades. */
+  scoutReport?: boolean
+  /** Extra perks offered by the Queen's mid-run charter. */
+  charterOptions?: number
+  /** Cosmetic hearth flame (id in `HEARTH_STYLES`); absent = the plain ember. */
+  hearthStyle?: string
+}
+
+/** Achievement bookkeeping a run keeps as it goes (see `RunState.feats`). */
+export interface RunFeats {
+  /** The hearth ran out of wood during a Storm at least once. */
+  hearthWentCold: boolean
+  /** Royal decrees met in time. */
+  decreesMet: number
+  /** Threats paid off. */
+  threatsAppeased: number
 }
 
 export interface MetaHistoryEntry {
@@ -1026,6 +1085,40 @@ export interface MetaHistoryEntry {
   supplies?: number
   /** Map modifiers the run was drawn (absent on older entries). */
   modifiers?: string[]
+  /** UTC date key when the run was that day's daily expedition. */
+  daily?: string
+}
+
+/** The best finished attempt at one day's daily expedition. */
+export interface DailyResult {
+  /** UTC date key, `YYYY-MM-DD`. */
+  date: string
+  seed: number
+  won: boolean
+  /** Year the run ended in. */
+  years: number
+  reputation: number
+  villagersLost: number
+  /** Game seconds the run lasted. */
+  seconds: number
+  /** Finished attempts at this day, including this best one. */
+  attempts: number
+  /** Epoch ms the best attempt was banked. */
+  at: number
+}
+
+export interface DailyLedger {
+  /** One entry per day attempted, newest day first, capped. */
+  results: DailyResult[]
+  /** Longest run of consecutive UTC days with a finished daily. */
+  bestStreak: number
+}
+
+export interface AchievementState {
+  /** Achievement id -> epoch ms it was earned. */
+  unlocked: Record<string, number>
+  /** Multi-run progress: a running total or best (number), or distinct keys seen. */
+  progress: Record<string, number | string[]>
 }
 
 export interface MetaState {
@@ -1042,4 +1135,10 @@ export interface MetaState {
   edictUnlocked: number
   /** Newest first, capped. */
   history: MetaHistoryEntry[]
+  /** Local achievements and their multi-run progress. */
+  achievements: AchievementState
+  /** Daily expedition results and streaks. */
+  daily: DailyLedger
+  /** Cosmetic title earned from an achievement and worn on the menu, or null. */
+  title: string | null
 }

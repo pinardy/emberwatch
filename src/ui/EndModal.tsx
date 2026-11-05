@@ -6,8 +6,10 @@ import {
 } from '../game/content/meta'
 import { useGameStore, useRun } from '../game/store'
 import { Overlay } from './ChoiceModal'
+import { EndExtras } from './EndExtras'
 import { RunModifierList } from './RunModifierList'
 import { RunTimelineChart } from './RunTimeline'
+import { Icon } from './Icon'
 
 export function EndModal() {
   const run = useRun()
@@ -18,9 +20,10 @@ export function EndModal() {
   const won = run.phase === 'won'
   const breakdown = supplyBreakdown(run)
   const reward = breakdown.total
-  // Winning at the highest edict earned so far opens the next rung.
+  // Winning at the highest edict earned so far opens the next rung (a daily
+  // is played under a fixed edict, so it opens none).
   const opensEdict =
-    won && breakdown.edict >= edictUnlocked && breakdown.edict < MAX_EDICT
+    won && !run.daily && breakdown.edict >= edictUnlocked && breakdown.edict < MAX_EDICT
       ? breakdown.edict + 1
       : null
 
@@ -28,7 +31,7 @@ export function EndModal() {
     <Overlay>
       <div className={`modal modal-end ${won ? 'is-won' : 'is-lost'}`}>
         <header>
-          <span className="modal-icon">{won ? '👑' : '🌫️'}</span>
+          <span className="modal-icon">{won ? <Icon id="reputation" /> : '🌫️'}</span>
           <div>
             <h2>{won ? 'The settlement holds' : 'The settlement is lost'}</h2>
             <small>
@@ -116,6 +119,8 @@ export function EndModal() {
                 </p>
               )}
             </section>
+
+            <EndExtras run={run} />
           </div>
         </div>
 

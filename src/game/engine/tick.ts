@@ -1,3 +1,4 @@
+import { feats } from './feats'
 import type { RunState, Season } from '../types'
 import {
   BASE_STORAGE,
@@ -28,6 +29,7 @@ import { stepCaravan } from './trade'
 import { displayName } from './upgrades'
 import { recordEvent, stepTimeline } from './timeline'
 import {
+  QUEEN_DEADLINE_SECONDS,
   stepBraziers,
   stepDepartures,
   hearthFuelRate,
@@ -39,6 +41,10 @@ import {
 } from './society'
 
 export const MAX_HOSTILITY = 100
+
+/** The Queen's deadline log line: the toast and the Log both read it. */
+export const DEADLINE_PASSED_LOG =
+  "The Queen's deadline has passed. Her patience now drains faster every minute."
 
 const BRAZIER_COLD_LOG = 'A brazier has gone cold — the homes around it are freezing. It needs wood.'
 
@@ -59,6 +65,12 @@ export function tick(s: RunState, dt: number): void {
 
   advanceSeason(s, dt, mods)
 
+  // Said when the overtime actually starts, which season-length modifiers can
+  // move away from the start of a year.
+  if (s.clock >= QUEEN_DEADLINE_SECONDS && s.clock - dt < QUEEN_DEADLINE_SECONDS) {
+    pushLog(s, DEADLINE_PASSED_LOG, 'bad')
+  }
+
   const production = stepProduction(s, dt, mods)
   for (const id of production.upgraded) {
     const b = s.buildings[id]
@@ -70,6 +82,7 @@ export function tick(s: RunState, dt: number): void {
   stepCaravan(s, dt, mods)
 
   s.coldHearth = stepHearth(s, dt, hearthFuelRate(s.season.season, mods))
+  if (s.coldHearth) feats(s).hearthWentCold = true
   // Braziers draw on the same woodpile, after the hearth. Said once a Storm,
   // however often a thin woodpile makes them gutter.
   if (stepBraziers(s, dt, mods.hearthFuel * mods.brazierFuel) > 0) {
@@ -144,14 +157,12 @@ function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
   } else if (next === 'drizzle') {
     recordEvent(s, 'year', String(s.season.year))
     pushLog(s, `Year ${s.season.year} begins. The storm has passed.`, 'good')
-    if (s.season.year === QUEEN_DEADLINE_YEAR - 1) {
+    if (s.season.year === QUEEN_DEADLINE_YEAR - 1 && s.clock < QUEEN_DEADLINE_SECONDS) {
       pushLog(
         s,
-        `The Queen expects the settlement secured by Year ${QUEEN_DEADLINE_YEAR}. After that, her patience drains by the day.`,
+        `The Queen expects the settlement secured within the year. After that, her patience drains by the day.`,
         'bad',
       )
-    } else if (s.season.year === QUEEN_DEADLINE_YEAR) {
-      pushLog(s, `The Queen's deadline has passed. Her patience now drains faster every day.`, 'bad')
     }
   } else {
     pushLog(s, `${SEASON_INFO[next].name}. ${SEASON_INFO[next].blurb}`, 'info')

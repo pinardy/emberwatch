@@ -163,7 +163,12 @@ describe('blueprint draft', () => {
     const dialog = screen.getByRole('dialog')
     const chips = within(dialog).getAllByTestId('draft-need')
 
-    const venue = chips.find((c) => c.textContent?.startsWith('🍺 Luxury'))!
+    // The venue chip leads with the Luxury need's drawn icon, then its name.
+    const venue = chips.find(
+      (c) =>
+        c.querySelector('svg[data-icon]')?.getAttribute('data-icon') === 'luxury' &&
+        c.textContent?.trim().startsWith('Luxury'),
+    )!
     expect(venue).toBeTruthy()
     const supplier = chips.find((c) => c.textContent?.includes('Supplies Luxury'))!
     expect(supplier).toBeTruthy()
@@ -172,7 +177,9 @@ describe('blueprint draft', () => {
         // Text for screen readers and on hover, icons for the eye.
         expect(chip.textContent).toContain(`wanted by ${speciesNames(wanting)}`)
         expect(chip.getAttribute('title')).toContain(speciesNames(wanting))
-        for (const sp of wanting) expect(chip.textContent).toContain(SPECIES[sp].icon)
+        for (const sp of wanting) {
+          expect(chip.querySelector(`svg[data-icon="${SPECIES[sp].art}"]`)).not.toBeNull()
+        }
       } else {
         expect(chip.textContent).toContain('not wanted')
       }
