@@ -3,7 +3,7 @@ import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CORNERSTONES, RARITY_WEIGHTS } from '../content/cornerstones'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS, describeGoal, evaluateGoal } from '../content/orders'
-import { SPECIES, VILLAGER_TRAIT_LIST, villagerName } from '../content/species'
+import { SPECIES, VILLAGER_TRAIT_LIST, speciesSingular, villagerName } from '../content/species'
 import { EDIBLE, resourceName } from '../content/resources'
 import type {
   BuildingDef,
@@ -123,7 +123,30 @@ export function optionAffordable(stock: ResourceBag, option: GladeEventOptionDef
   return true
 }
 
-function edibleTotal(stock: ResourceBag): number {
+/**
+ * Why an option cannot be chosen, in words: "Needs 10 food — you have 6".
+ * Null when the stockpile can pay. Mirrors `optionAffordable`.
+ */
+export function describeOptionShortfall(
+  stock: ResourceBag,
+  option: GladeEventOptionDef,
+): string | null {
+  const parts: string[] = []
+  if (option.foodCost) {
+    const have = Math.floor(edibleTotal(stock))
+    if (have < option.foodCost) parts.push(`${option.foodCost} food — you have ${have}`)
+  }
+  for (const [id, amount] of Object.entries(option.requires ?? {})) {
+    const have = Math.floor(stock[id as ResourceId] ?? 0)
+    if (have < (amount ?? 0)) {
+      parts.push(`${amount} ${resourceName(id as ResourceId)} — you have ${have}`)
+    }
+  }
+  return parts.length > 0 ? `Needs ${parts.join('; ')}` : null
+}
+
+/** Units of food of any kind in the stockpile: what a `foodCost` is paid from. */
+export function edibleTotal(stock: ResourceBag): number {
   let sum = 0
   for (const id of EDIBLE) sum += stock[id] ?? 0
   return sum
@@ -185,7 +208,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
       removeVillager(s, victim.id)
       s.stats.villagersLost++
       recordEvent(s, 'lost', victim.species)
-      pushLog(s, `${victim.name} the ${SPECIES[victim.species].name.slice(0, -1)} is lost.`, 'bad')
+      pushLog(s, `${victim.name} the ${speciesSingular(victim.species)} is lost.`, 'bad')
     }
   }
   if (option.villagerGain) {
@@ -646,7 +669,7 @@ export function stepNewcomers(
     const id = addVillager(s)
     if (id) {
       const v = s.villagers[id]
-      pushLog(s, `${v.name} the ${SPECIES[v.species].name.slice(0, -1)} arrived at the hearth.`, 'good')
+      pushLog(s, `${v.name} the ${speciesSingular(v.species)} arrived at the hearth.`, 'good')
     }
   }
 }

@@ -6,7 +6,11 @@ import { createTimeline } from './engine/timeline'
 import { defaultCaravan } from './engine/trade'
 import type { MetaState, RunState } from './types'
 
-const RUN_KEY = 'emberwatch.run.v1'
+/**
+ * The original single run save. It is now the autosave slot's key (see
+ * `saveSlots.ts`), so a save from before slots is already in place.
+ */
+export const RUN_KEY = 'emberwatch.run.v1'
 const META_KEY = 'emberwatch.meta.v1'
 const SETTINGS_KEY = 'emberwatch.settings.v1'
 
@@ -33,7 +37,7 @@ export function defaultSettings(): Settings {
   }
 }
 
-function read<T>(key: string): T | null {
+export function read<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key)
     return raw ? (JSON.parse(raw) as T) : null
@@ -44,15 +48,59 @@ function read<T>(key: string): T | null {
 }
 
 function write(key: string, value: unknown): void {
+  writeChecked(key, value)
+}
+
+/** Why a write did not land: storage is full, or there is no storage at all. */
+export type WriteFailure = 'quota' | 'unavailable'
+
+/** True for the many spellings browsers use for "storage is full". */
+export function isQuotaError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  const e = error as { name?: string; code?: number }
+  return (
+    e.name === 'QuotaExceededError' ||
+    e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    e.code === 22 ||
+    e.code === 1014
+  )
+}
+
+/**
+ * Writes JSON and says whether it landed. A failed `setItem` leaves the old
+ * value untouched, so a save that does not fit never corrupts the last one.
+ */
+export function writeChecked(key: string, value: unknown): WriteFailure | null {
   try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Quota exceeded / private mode — fail quietly, the run stays in memory.
+    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
+    return null
+  } catch (error) {
+    // Quota exceeded / private mode — the run stays in memory either way.
+    return isQuotaError(error) ? 'quota' : 'unavailable'
   }
 }
 
-export function loadRun(): RunState | null {
-  const run = read<RunState>(RUN_KEY)
+export function removeKey(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Loads the run in the autosave slot (the original single save). */
+export function loadRun(key: string = RUN_KEY): RunState | null {
+  return migrateRun(read<unknown>(key))
+}
+
+/**
+ * Brings a parsed save up to the current shape, or returns null when it is
+ * not a run at all. Shared by local saves and imported files, so both get the
+ * same defaults for anything an older version did not write.
+ */
+export function migrateRun(raw: unknown): RunState | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const run = raw as RunState
   // Saves from the old tile-based world lack `world`/`deposits` and are
   // silently dropped — their layout no longer exists.
   if (!run || typeof run.seed !== 'number' || !run.world || !run.deposits) return null
@@ -89,16 +137,13 @@ export function loadRun(): RunState | null {
   return run
 }
 
-export function saveRun(run: RunState | null): void {
+/** Writes (or with null, clears) the autosave slot's run. */
+export function saveRun(run: RunState | null, key: string = RUN_KEY): WriteFailure | null {
   if (!run) {
-    try {
-      localStorage.removeItem(RUN_KEY)
-    } catch {
-      /* ignore */
-    }
-    return
+    removeKey(key)
+    return null
   }
-  write(RUN_KEY, run)
+  return writeChecked(key, run)
 }
 
 export function loadMeta(): MetaState {

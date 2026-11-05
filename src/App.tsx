@@ -5,6 +5,7 @@ import { CitadelScreen } from './ui/CitadelScreen'
 import { DailyScreen } from './ui/DailyScreen'
 import { GameScreen } from './ui/GameScreen'
 import { MenuScreen } from './ui/MenuScreen'
+import { SavesScreen } from './ui/SavesScreen'
 import { SetupScreen } from './ui/SetupScreen'
 import { UpdatePrompt } from './ui/UpdatePrompt'
 
@@ -21,6 +22,7 @@ export default function App() {
       {screen === 'menu' && <MenuScreen />}
       {screen === 'setup' && <SetupScreen />}
       {screen === 'citadel' && <CitadelScreen />}
+      {screen === 'saves' && <SavesScreen />}
       {screen === 'game' && <GameScreen />}
       {screen === 'achievements' && <AchievementsScreen />}
       {screen === 'daily' && <DailyScreen />}
