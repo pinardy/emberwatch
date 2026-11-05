@@ -493,6 +493,18 @@ function wantedRecipes(s: RunState): Map<string, Set<string>> {
   for (const need of neededServices(s)) {
     const chain = SERVICE_CHAIN[need]
     const set = out.get(chain.producer) ?? new Set<string>()
+    /*
+     * A recipe whose input comes off the same workshop (training gear is cut
+     * from fabric, both at the weaver) needs that recipe running too, ahead
+     * of it. Without this, a settlement that wanted brawling but not rest set
+     * its only weaver to gear and waited forever for fabric nobody wove.
+     */
+    const recipes = BUILDINGS[chain.producer]?.recipes ?? []
+    const target = recipes.find((r) => r.id === chain.recipe)
+    for (const input of Object.keys(target?.inputs ?? {})) {
+      const feeder = recipes.find((r) => r.id !== chain.recipe && input in r.outputs)
+      if (feeder) set.add(feeder.id)
+    }
     set.add(chain.recipe)
     out.set(chain.producer, set)
   }
