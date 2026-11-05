@@ -316,7 +316,13 @@ export const BUILD_RATE_PER_VILLAGER = 1.1
 /** Glade clearing rate per assigned villager. */
 export const CLEAR_RATE_PER_VILLAGER = 1
 
-export const SPEED_OPTIONS = [0, 1, 2, 3] as const
+/**
+ * Pause plus five speeds, one hotkey each (1–5). 5× tops out the ladder rather
+ * than 6×: it keeps every speed on its own digit, a Storm still lasts long
+ * enough at 5× to react to, and a tick costs well under a millisecond, so even
+ * 40 ticks a second leave a frame nearly all of its time for rendering.
+ */
+export const SPEED_OPTIONS = [0, 1, 2, 3, 4, 5] as const
 export type GameSpeed = (typeof SPEED_OPTIONS)[number]
 
 /** Base stockpile capacity before any warehouses. */
