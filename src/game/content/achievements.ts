@@ -119,7 +119,7 @@ const defs: AchievementDef[] = [
   },
   {
     id: 'firstWin',
-    name: 'The Settlement Holds',
+    name: 'Held for the Queen',
     icon: '👑',
     tier: 'early',
     description: 'Win a run.',

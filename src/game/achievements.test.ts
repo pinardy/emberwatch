@@ -117,7 +117,7 @@ describe('single-run predicates', () => {
     expect(earns(s)).toEqual([])
   })
 
-  it('First Embers for any finished run; The Settlement Holds only for a win', () => {
+  it('First Embers for any finished run; Held for the Queen only for a win', () => {
     expect(check('firstEmbers', lost())).toBe(true)
     expect(check('firstWin', lost())).toBe(false)
     expect(check('firstWin', won())).toBe(true)
@@ -303,7 +303,7 @@ describe('banking achievements', () => {
     useGameStore.getState().finishRun()
     const meta = useGameStore.getState().meta
     expect(meta.achievements.unlocked.firstWin).toBeGreaterThan(0)
-    expect(useGameStore.getState().notice).toContain('The Settlement Holds')
+    expect(useGameStore.getState().notice).toContain('Held for the Queen')
     useGameStore.getState().setTitle('the Exacting')
     expect(useGameStore.getState().meta.title).toBeNull()
     useGameStore.setState({
