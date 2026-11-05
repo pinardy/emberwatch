@@ -4,7 +4,7 @@ import { useGameStore } from '../game/store'
 import { ACHIEVEMENT_LIST, achievementCount } from '../game/content/achievements'
 import { DailyMenuEntry } from './DailyScreen'
 import { slotOneLiner } from './SaveSlots'
-import { AutoPauseFields, PauseOnBlurField } from './SettingsFields'
+import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
 
 export function MenuScreen() {
   const goToScreen = useGameStore((s) => s.goToScreen)
@@ -105,14 +105,7 @@ export function MenuScreen() {
 
         <details className="how-to settings-block">
           <summary>Settings</summary>
-          <label>
-            <input
-              type="checkbox"
-              checked={settings.sound}
-              onChange={(e) => updateSettings({ sound: e.target.checked })}
-            />
-            Sound & rain ambience
-          </label>
+          <SoundFields />
           <PauseOnBlurField />
           <label>
             <input

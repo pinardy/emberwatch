@@ -1,0 +1,7 @@
+/* Shown for the moment a lazily loaded screen's code is still arriving. */
+.screen-loading {
+  flex-direction: column;
+  gap: 12px;
+  color: var(--muted);
+  text-align: center;
+}
