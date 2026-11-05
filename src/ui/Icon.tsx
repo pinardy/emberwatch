@@ -19,8 +19,9 @@ const listeners = new Set<() => void>()
 
 /** Fetches the icon registry; safe to call any number of times. */
 export function loadIcons(): Promise<Registry> {
-  pending ??= import('../art/icons').then(
-    (m) => {
+  // The icon text helper learns the framed families' glyphs at the same time.
+  pending ??= Promise.all([import('../art/icons'), import('./iconTextFamilies')]).then(
+    ([m]) => {
       registry = m
       for (const listener of listeners) listener()
       return m

@@ -1,20 +1,7 @@
 import type { ReactNode } from 'react'
 import type { IconId } from '../art/icons'
-import {
-  charterArt,
-  conditionArt,
-  cornerstoneArt,
-  gladeEventArt,
-  ongoingArt,
-  runModifierArt,
-  threatArt,
-} from '../game/content/art'
 import { BUILDING_LIST } from '../game/content/buildings'
-import { CHARTER_LIST } from '../game/content/charters'
-import { CORNERSTONE_LIST } from '../game/content/cornerstones'
-import { GLADE_EVENT_LIST } from '../game/content/gladeEvents'
 import { RESOURCE_LIST } from '../game/content/resources'
-import { ALL_RUN_MODIFIER_LIST } from '../game/content/runModifiers'
 import { SPECIES_LIST } from '../game/content/species'
 import { Icon } from './Icon'
 
@@ -37,29 +24,29 @@ import { Icon } from './Icon'
 const VS16 = /️/g
 const strip = (s: string) => s.replace(VS16, '')
 
+/** The glyph matcher, rebuilt lazily after any registration. */
+let pattern: RegExp | null = null
+
 /** glyph → candidates `{ name, art }` it may stand for when a name follows. */
 const NAMED = new Map<string, { name: string; art: IconId }[]>()
-function addNamed(glyph: string, name: string, art: IconId | undefined) {
+
+/**
+ * Teaches `IconText` that `glyph` followed by `name` means `art`. The framed
+ * families (cornerstones, events, threats…) register themselves from
+ * `iconTextFamilies.ts`, which loads with the icon registry rather than at
+ * startup.
+ */
+export function addNamed(glyph: string, name: string, art: IconId | undefined) {
   if (!art) return
   const key = strip(glyph)
   const list = NAMED.get(key) ?? []
   list.push({ name: name.toLowerCase(), art })
   NAMED.set(key, list)
+  pattern = null
 }
 for (const d of RESOURCE_LIST) addNamed(d.icon, d.name, d.art)
 for (const d of BUILDING_LIST) addNamed(d.icon, d.name, d.art)
 for (const d of SPECIES_LIST) addNamed(d.icon, d.name, d.art)
-for (const d of CORNERSTONE_LIST) addNamed(d.icon, d.name, cornerstoneArt(d))
-for (const d of GLADE_EVENT_LIST) {
-  addNamed(d.icon, d.name, gladeEventArt(d))
-  for (const o of d.options) {
-    if (o.threat) addNamed(o.threat.icon, o.threat.name, threatArt(o.threat))
-    if (o.ongoing) addNamed(o.ongoing.icon, o.ongoing.name, ongoingArt({ id: '', name: o.ongoing.name }))
-    if (o.condition) addNamed(o.condition.icon, o.condition.name, conditionArt(o.condition))
-  }
-}
-for (const d of ALL_RUN_MODIFIER_LIST) addNamed(d.icon, d.name, runModifierArt(d))
-for (const d of CHARTER_LIST) addNamed(d.icon, d.name, charterArt(d))
 
 /** Headline glyphs at the start of a line, as the sim and HUD use them. */
 export const LEADING_GLYPH_ART: Record<string, IconId> = {
@@ -97,11 +84,18 @@ export const LEADING_GLYPH_ART: Record<string, IconId> = {
   '⛏': 'stonecuttersCamp',
 }
 
-const GLYPHS = [...new Set([...NAMED.keys(), ...Object.keys(LEADING_GLYPH_ART)])].sort(
-  (a, b) => b.length - a.length,
-)
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-const PATTERN = new RegExp(`(${GLYPHS.map(escape).join('|')})️?`, 'gu')
+
+/** Every known glyph, longest first, built on demand after any registration. */
+function glyphPattern(): RegExp {
+  if (!pattern) {
+    const glyphs = [...new Set([...NAMED.keys(), ...Object.keys(LEADING_GLYPH_ART)])].sort(
+      (a, b) => b.length - a.length,
+    )
+    pattern = new RegExp(`(${glyphs.map(escape).join('|')})️?`, 'gu')
+  }
+  return pattern
+}
 
 /** Split `text` into strings and icon ids. Exported for tests. */
 export function tokenizeIconText(
@@ -110,7 +104,7 @@ export function tokenizeIconText(
 ): (string | { art: IconId; glyph: string })[] {
   const out: (string | { art: IconId; glyph: string })[] = []
   let last = 0
-  for (const match of text.matchAll(PATTERN)) {
+  for (const match of text.matchAll(glyphPattern())) {
     const at = match.index ?? 0
     const glyph = match[0]
     const key = match[1]

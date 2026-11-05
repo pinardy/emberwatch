@@ -3,7 +3,7 @@ import { describeTimedGoal } from '../game/engine/structure'
 import { useGameStore, useRun } from '../game/store'
 import type { ActiveCondition, ConditionOutcome } from '../game/types'
 import { clockText } from './DecreeCard'
-import { conditionArt } from '../game/content/art'
+import { conditionArt } from '../game/content/artFamilies'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
 

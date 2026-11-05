@@ -6,7 +6,7 @@ import type { RunState } from '../game/types'
 import { ShareLine, describeDaily, isNewDailyBest } from './DailyScreen'
 import './replay.css'
 import { IconText } from './IconText'
-import { achievementArt } from '../game/content/art'
+import { achievementArt } from '../game/content/artFamilies'
 import { Icon } from './Icon'
 
 /**

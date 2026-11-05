@@ -13,7 +13,7 @@ import { RaceSparkline } from './RaceSparkline'
 import type { ResourceId } from '../game/types'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
-import { cornerstoneArt, ongoingArt } from '../game/content/art'
+import { cornerstoneArt, ongoingArt } from '../game/content/artFamilies'
 
 export function OrdersPanel() {
   const run = useRun()

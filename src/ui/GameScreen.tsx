@@ -21,7 +21,7 @@ import { PANEL_KEY_LABEL, useGameLoop, useHotkeys } from './useGameLoop'
 import { VillagerPanel } from './VillagerPanel'
 import { Warnings } from './Warnings'
 import './hud-feedback.css'
-import { TAB_ART, threatArt } from '../game/content/art'
+import { TAB_ART, threatArt } from '../game/content/artFamilies'
 
 const TABS: { id: Exclude<SidePanel, null>; label: string; icon: string }[] = [
   { id: 'build', label: 'Build', icon: '🔨' },

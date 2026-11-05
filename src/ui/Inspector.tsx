@@ -1,4 +1,5 @@
-import { DEPOSIT_ART, GLADE_ART, NEED_ART, VILLAGER_TRAIT_ART } from '../game/content/art'
+import { DEPOSIT_ART, GLADE_ART, NEED_ART } from '../game/content/art'
+import { VILLAGER_TRAIT_ART } from '../game/content/artFamilies'
 import { BUILDINGS } from '../game/content/buildings'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'

@@ -17,7 +17,7 @@ import { CharterChoice } from './CharterChoice'
 import { RunModifierList } from './RunModifierList'
 import { DraftAppealChips } from './DraftAppealChips'
 import { Icon } from './Icon'
-import { conditionArt, cornerstoneArt, gladeEventArt, ongoingArt, threatArt } from '../game/content/art'
+import { conditionArt, cornerstoneArt, gladeEventArt, ongoingArt, threatArt } from '../game/content/artFamilies'
 
 /**
  * Blocking modal for the three things that interrupt play: cornerstone picks,

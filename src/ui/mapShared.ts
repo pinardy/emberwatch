@@ -22,7 +22,7 @@ import type {
   Vec2,
 } from '../game/types'
 import type { IconId } from '../art/icons'
-import { STATUS_BADGE_ART } from '../game/content/art'
+import { STATUS_BADGE_ART } from '../game/content/artFamilies'
 
 /**
  * Pure helpers and tiny hooks shared by both map renderers (3D scene and the

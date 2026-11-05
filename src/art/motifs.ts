@@ -1,5 +1,6 @@
 import { circle, ellipse, poly, rays, rect, rotateAbout, scaleAbout, translate, mul } from './geometry'
-import { CLOUD, F, art, bar, f, l, leafShape, star, xf, type IconArt, type Shape } from './draw'
+import { F, art, bar, f, l, leafShape, star, xf, type IconArt, type Shape } from './draw'
+import { CLOUD } from './kit'
 
 /**
  * Motifs: the small single-subject drawings behind the larger families —

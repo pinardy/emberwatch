@@ -1,7 +1,7 @@
 import { scoutedEvent } from '../game/engine/citadel'
 import type { RunState } from '../game/types'
 import './replay.css'
-import { gladeEventArt } from '../game/content/art'
+import { gladeEventArt } from '../game/content/artFamilies'
 import { Icon } from './Icon'
 
 /**

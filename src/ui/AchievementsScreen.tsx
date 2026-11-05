@@ -8,7 +8,7 @@ import {
 import { useGameStore } from '../game/store'
 import type { AchievementState } from '../game/types'
 import './replay.css'
-import { achievementArt } from '../game/content/art'
+import { achievementArt } from '../game/content/artFamilies'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
 

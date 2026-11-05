@@ -11,7 +11,8 @@ import { runModifierDefs } from '../game/engine/runModifiers'
 import { useGameStore } from '../game/store'
 import { EdictPicker } from './EdictPicker'
 import { Icon } from './Icon'
-import { metaBranchArt, metaUpgradeArt, runModifierArt } from '../game/content/art'
+import { runModifierArt } from '../game/content/art'
+import { metaBranchArt, metaUpgradeArt } from '../game/content/artFamilies'
 
 /** Runs shown in the ledger; older ones stay in the save but off screen. */
 const LEDGER_ROWS = 10

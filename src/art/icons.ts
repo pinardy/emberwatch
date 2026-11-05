@@ -15,14 +15,10 @@ import { CORE_ICONS } from './core'
 import { FRAMES, framed, type FrameId } from './frames'
 import { MOTIFS } from './motifs'
 import {
-  CLOUD,
   F,
   FLAME,
-  MUG,
-  ROCK,
   art,
   bar,
-  conifer,
   f,
   l,
   leafShape,
@@ -32,6 +28,7 @@ import {
   type IconArt,
   type Shape,
 } from './draw'
+import { CLOUD, MUG, ROCK, conifer } from './kit'
 
 export { PALETTE, matrixAttr, toneColor, type IconArt, type Shape, type Tone } from './draw'
 

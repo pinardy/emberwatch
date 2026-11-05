@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IconId } from '../art/icons'
-import { BUILDING_ART, DEPOSIT_ART, GLADE_ART, STATUS_BADGE_ART } from '../game/content/art'
+import { BUILDING_ART, DEPOSIT_ART, GLADE_ART } from '../game/content/art'
+import { STATUS_BADGE_ART } from '../game/content/artFamilies'
 import { BUILDINGS } from '../game/content/buildings'
 import { canPlaceBuilding, footprintOf } from '../game/engine/actions'
 import { describePlacement } from '../game/engine/placement'

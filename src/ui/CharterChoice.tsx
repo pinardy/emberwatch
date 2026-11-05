@@ -3,7 +3,7 @@ import { CHARTERS } from '../game/content/charters'
 import { useGameStore } from '../game/store'
 import type { PendingChoice } from '../game/types'
 import { Icon } from './Icon'
-import { charterArt } from '../game/content/art'
+import { charterArt } from '../game/content/artFamilies'
 
 /**
  * The Queen's one-time charter: a run-shaping perk, breathing room with the
