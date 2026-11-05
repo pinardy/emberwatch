@@ -6,13 +6,10 @@ import {
   type AutoPauseHit,
   type RunWatch,
 } from './autoPause'
-import {
-  META_UPGRADES,
-  bankRun,
-  defaultMeta,
-  purchaseUpgrade,
-  supplyReward,
-} from './content/meta'
+import { earnedTitles } from './content/achievements'
+import { dailyExpedition, utcDateKey } from './content/daily'
+import { META_UPGRADES, defaultMeta, purchaseUpgrade } from './content/meta'
+import { settleRun, type RunSettlement } from './progression'
 import {
   addClearer,
   assignWorker,
@@ -27,7 +24,7 @@ import {
   togglePause,
   upgradeBuilding,
 } from './engine/actions'
-import { TICK_SECONDS, type GameSpeed } from './engine/balance'
+import { SPEED_OPTIONS, TICK_SECONDS, type GameSpeed } from './engine/balance'
 import { createRun } from './engine/createRun'
 import {
   appeaseThreat,
@@ -36,23 +33,51 @@ import {
   takeChoice,
 } from './engine/events'
 import { randomSeed } from './engine/rng'
+import type { LandChoice } from './engine/runModifiers'
 import { unassign } from './engine/society'
 import { tick } from './engine/tick'
 import { buyOffer, sellResource } from './engine/trade'
 import {
   loadMeta,
-  loadRun,
   loadSettings,
   saveMeta,
-  saveRun,
   saveSettings,
   type Settings,
 } from './persistence'
+import {
+  SLOT_LABELS,
+  deleteSlot,
+  freeSlot,
+  latestSlot,
+  loadSlot,
+  saveToSlot,
+  type SlotId,
+} from './saveSlots'
 import type { MetaState, ResourceId, RunState, SpeciesId, Vec2 } from './types'
 
-/** Most simulated seconds a single frame may consume. */
+/** Fewest simulated seconds a single frame may consume, at any speed. */
 const MAX_FRAME_BUDGET = 2
 const MAX_STEPS_PER_FRAME = 64
+/**
+ * Longest real frame the loop feeds the sim; mirrors the clamp in
+ * `useGameLoop`, so anything longer is a backgrounded or frozen tab.
+ */
+export const MAX_FRAME_REAL_SECONDS = 0.5
+
+/**
+ * Most simulated seconds one frame may owe. It scales with speed so a slow
+ * device at 5× (a frame of up to half a second) still gets all its time,
+ * with one tick of headroom for the carry, while a tab returning from the
+ * background still cannot fast-forward more than one long frame's worth.
+ */
+export function frameBudget(speed: number): number {
+  return Math.max(MAX_FRAME_BUDGET, speed * MAX_FRAME_REAL_SECONDS + TICK_SECONDS)
+}
+
+// The step cap must never be what slows the top speed down.
+if (MAX_STEPS_PER_FRAME * TICK_SECONDS < frameBudget(Math.max(...SPEED_OPTIONS))) {
+  throw new Error('MAX_STEPS_PER_FRAME cannot cover a full frame at top speed')
+}
 
 /**
  * Simulated seconds owed to the world but not yet ticked. Lives outside the
@@ -66,12 +91,27 @@ let simCarry = 0
  */
 let watched: { run: RunState; snapshot: RunWatch } | null = null
 
-export type Screen = 'menu' | 'setup' | 'game' | 'citadel'
+/**
+ * Whether the last save failed, so a full disk is reported once rather than
+ * every autosave, and again only after a save has worked in between.
+ */
+let saveFailing = false
+
+export type Screen =
+  | 'menu'
+  | 'setup'
+  | 'game'
+  | 'citadel'
+  | 'saves'
+  | 'achievements'
+  | 'daily'
 export type SidePanel = 'build' | 'villagers' | 'orders' | 'log' | 'trade' | null
 
 interface GameStore {
   screen: Screen
   run: RunState | null
+  /** The save slot the current run autosaves to. */
+  activeSlot: SlotId | null
   meta: MetaState
   settings: Settings
 
@@ -92,12 +132,34 @@ interface GameStore {
 
   // --- lifecycle -----------------------------------------------------------
   boot: () => void
-  /** `edict` is clamped to the highest Queen's Edict the Citadel has earned. */
-  startRun: (seed?: number, species?: SpeciesId[], edict?: number) => void
+  /**
+   * `edict` is clamped to the highest Queen's Edict the Citadel has earned.
+   * Without a `slot` the run takes the first free one; with every slot full
+   * it refuses rather than overwrite a run (the setup screen asks which).
+   */
+  startRun: (
+    seed?: number,
+    species?: SpeciesId[],
+    edict?: number,
+    land?: LandChoice,
+    slot?: SlotId,
+  ) => void
+  /**
+   * Sets out on today's (UTC) daily expedition: fixed map, trio and edict, no
+   * Citadel upgrades. Takes a save slot the same way `startRun` does.
+   */
+  startDaily: (now?: number, slot?: SlotId) => void
   abandonRun: () => void
   finishRun: () => void
   goToScreen: (screen: Screen) => void
-  resumeSaved: () => void
+  /** Loads a slot (the most recently played one by default) and plays it. */
+  resumeSaved: (slot?: SlotId) => void
+  /** Deletes a slot; deleting the slot being played drops that run too. */
+  deleteSave: (slot: SlotId) => void
+  /** Copies the current run into another slot; play continues in its own. */
+  saveCopy: (slot: SlotId) => void
+  /** Writes an already-validated imported run into a slot. Returns an error or null. */
+  importRun: (run: RunState, slot: SlotId) => string | null
 
   // --- loop ----------------------------------------------------------------
   advance: (realSeconds: number) => void
@@ -135,8 +197,23 @@ interface GameStore {
   recallAll: () => void
   dismissNotice: () => void
   buyUpgrade: (id: string) => void
+  /** Wears an earned achievement title on the menu, or none. */
+  setTitle: (title: string | null) => void
   updateSettings: (patch: Partial<Settings>) => void
   saveNow: () => void
+}
+
+/** The notice shown once a run is banked. */
+function settlementNotice(settled: RunSettlement, unlockedEdict: boolean): string {
+  const parts = [`Run banked: +${settled.runSupplies} Citadel supplies.`]
+  if (unlockedEdict) parts.push("A harsher Queen's Edict is unlocked.")
+  if (settled.achievements.length > 0) {
+    const names = settled.achievements.map((a) => `${a.icon} ${a.name}`).join(', ')
+    const bonus =
+      settled.achievementSupplies > 0 ? ` (+${settled.achievementSupplies} supplies)` : ''
+    parts.push(`Achievement${settled.achievements.length > 1 ? 's' : ''}: ${names}${bonus}.`)
+  }
+  return parts.join(' ')
 }
 
 /** Wraps a command that returns an error string, surfacing it as a notice. */
@@ -151,9 +228,51 @@ function runCommand(
   set({ version: get().version + 1, notice: error })
 }
 
+/**
+ * Starts a freshly created run in a save slot: the run being left is saved to
+ * its own slot first, the run takes `slot` or the first free one, and with
+ * every slot full nothing is overwritten (the player is sent to `fullScreen`
+ * with a notice instead). Shared by a normal settlement and the daily.
+ */
+function beginRun(
+  set: (partial: Partial<GameStore>) => void,
+  get: () => GameStore,
+  slot: SlotId | undefined,
+  fullScreen: Screen,
+  create: () => RunState,
+): void {
+  get().saveNow()
+  const target = slot ?? freeSlot()
+  if (!target) {
+    set({
+      screen: fullScreen,
+      notice: 'Every save slot holds a settlement. Choose one to replace, or delete one first.',
+    })
+    return
+  }
+  const run = create()
+  saveFailing = false
+  const saved = saveToSlot(target, run)
+  if (!saved.ok) saveFailing = true
+  set({
+    run,
+    activeSlot: target,
+    screen: 'game',
+    version: get().version + 1,
+    speed: 1,
+    buildMode: null,
+    selectedBuilding: null,
+    selectedDeposit: null,
+    selectedGlade: null,
+    panel: 'build',
+    notice: saved.ok ? null : saved.message,
+  })
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
   screen: 'menu',
   run: null,
+  activeSlot: null,
   meta: defaultMeta(),
   settings: loadSettings(),
   version: 0,
@@ -170,61 +289,122 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ meta: loadMeta(), settings: loadSettings() })
   },
 
-  startRun: (seed, species, edict) => {
+  startRun: (seed, species, edict, land, slot) => {
     const meta = get().meta
-    const run = createRun({
-      seed: seed ?? randomSeed(),
-      meta,
-      species,
-      edict: Math.min(edict ?? 0, meta.edictUnlocked),
-    })
-    saveRun(run)
+    beginRun(set, get, slot, 'setup', () =>
+      createRun({
+        seed: seed ?? randomSeed(),
+        meta,
+        species,
+        edict: Math.min(edict ?? 0, meta.edictUnlocked),
+        land,
+      }),
+    )
+  },
+
+  startDaily: (now, slot) => {
+    const day = dailyExpedition(utcDateKey(now ?? Date.now()))
+    // No `meta`: the daily is the same fair challenge for every Citadel.
+    beginRun(set, get, slot, 'daily', () =>
+      createRun({
+        seed: day.seed,
+        species: day.species,
+        edict: day.edict,
+        daily: day.date,
+      }),
+    )
+  },
+
+  resumeSaved: (slot) => {
+    const id = slot ?? latestSlot()
+    if (id && id === get().activeSlot && get().run) {
+      set({ screen: 'game', notice: null })
+      return
+    }
+    const run = id ? loadSlot(id) : null
+    if (!id || !run) {
+      set({ notice: 'No saved settlement found.' })
+      return
+    }
+    // The run being left behind is saved to its own slot first.
+    get().saveNow()
+    saveFailing = false
     set({
       run,
+      activeSlot: id,
       screen: 'game',
       version: get().version + 1,
-      speed: 1,
+      speed: 0,
+      panel: 'build',
       buildMode: null,
       selectedBuilding: null,
       selectedDeposit: null,
       selectedGlade: null,
-      panel: 'build',
       notice: null,
     })
   },
 
-  resumeSaved: () => {
-    const run = loadRun()
-    if (!run) {
-      set({ notice: 'No saved settlement found.' })
-      return
+  deleteSave: (slot) => {
+    deleteSlot(slot)
+    if (slot === get().activeSlot) {
+      set({ run: null, activeSlot: null, speed: 0, version: get().version + 1 })
     }
-    set({ run, screen: 'game', version: get().version + 1, speed: 0, panel: 'build' })
+    set({ version: get().version + 1, notice: `${SLOT_LABELS[slot]} deleted.` })
+  },
+
+  saveCopy: (slot) => {
+    const { run, activeSlot } = get()
+    if (!run || slot === activeSlot) return
+    const saved = saveToSlot(slot, run)
+    set({
+      version: get().version + 1,
+      notice: saved.ok ? `Copy saved to ${SLOT_LABELS[slot]}.` : saved.message,
+    })
+  },
+
+  importRun: (run, slot) => {
+    const saved = saveToSlot(slot, run)
+    if (!saved.ok) {
+      set({ notice: saved.message })
+      return saved.message
+    }
+    // Importing over the slot being played replaces that run outright.
+    if (slot === get().activeSlot) {
+      set({ run: null, activeSlot: null, speed: 0 })
+    }
+    set({ version: get().version + 1, notice: `Imported into ${SLOT_LABELS[slot]}.` })
+    return null
   },
 
   abandonRun: () => {
-    saveRun(null)
-    set({ run: null, screen: 'menu', speed: 0, version: get().version + 1 })
+    const slot = get().activeSlot
+    if (slot) deleteSlot(slot)
+    set({ run: null, activeSlot: null, screen: 'menu', speed: 0, version: get().version + 1 })
   },
 
-  /** Banks the reward for a finished run and returns to the Citadel. */
+  /**
+   * Banks a finished run (supplies, the ledger, a daily's result and any
+   * achievements) and returns to the Citadel, or to the daily page.
+   */
   finishRun: () => {
     const { run, meta } = get()
     if (!run || run.phase === 'playing') return
-    const reward = supplyReward(run)
-    const next = bankRun(meta, run)
+    const settled = settleRun(meta, run)
+    const next = settled.meta
     const unlockedEdict = next.edictUnlocked > meta.edictUnlocked
     saveMeta(next)
-    saveRun(null)
+    // The banked run is over: its slot is free for the next settlement.
+    const slot = get().activeSlot
+    if (slot) deleteSlot(slot)
     set({
       meta: next,
       run: null,
-      screen: 'citadel',
+      activeSlot: null,
+      // A daily returns to its own page, where the result can be shared.
+      screen: run.daily ? 'daily' : 'citadel',
       speed: 0,
       version: get().version + 1,
-      notice: unlockedEdict
-        ? `Run banked: +${reward} Citadel supplies. A harsher Queen's Edict is unlocked.`
-        : `Run banked: +${reward} Citadel supplies.`,
+      notice: settlementNotice(settled, unlockedEdict),
     })
   },
 
@@ -274,9 +454,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
      * unspent remainder carries into the next frame. Without the carry no
      * frame ever reaches a whole tick and the world stands still on any
      * display faster than 8 fps. The clamp stops a backgrounded tab from
-     * fast-forwarding on return.
+     * fast-forwarding on return; it grows with speed (see `frameBudget`) so a
+     * low frame rate at 4× or 5× is not silently slowed to the 1× budget.
      */
-    simCarry = Math.min(simCarry + realSeconds * speed, MAX_FRAME_BUDGET)
+    simCarry = Math.min(simCarry + realSeconds * speed, frameBudget(speed))
     let steps = 0
     while (simCarry >= TICK_SECONDS && steps < MAX_STEPS_PER_FRAME) {
       tick(run, TICK_SECONDS)
@@ -352,13 +533,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   chooseOption: (optionId) =>
     runCommand(set, get, (run) => {
       takeChoice(run, optionId)
-      saveRun(run)
+      get().saveNow()
       return null
     }),
   chooseEventOption: (index) =>
     runCommand(set, get, (run) => {
       resolveGladeEvent(run, index)
-      saveRun(run)
+      get().saveNow()
       return null
     }),
   reroll: () => runCommand(set, get, (run) => rerollChoice(run)),
@@ -388,6 +569,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ meta: result.meta, notice: `${def.name} unlocked.` })
   },
 
+  setTitle: (title) => {
+    const meta = get().meta
+    if (title !== null && !earnedTitles(meta.achievements).includes(title)) return
+    const next = { ...meta, title }
+    saveMeta(next)
+    set({ meta: next })
+  },
+
   updateSettings: (patch) => {
     const settings = { ...get().settings, ...patch }
     saveSettings(settings)
@@ -396,7 +585,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   saveNow: () => {
     const run = get().run
-    if (run) saveRun(run)
+    if (!run) return
+    let slot = get().activeSlot
+    if (!slot) {
+      // A run that never had a slot (set up directly) claims a free one.
+      slot = freeSlot()
+      if (!slot) return
+      set({ activeSlot: slot })
+    }
+    const saved = saveToSlot(slot, run)
+    if (saved.ok) {
+      saveFailing = false
+    } else if (!saveFailing) {
+      saveFailing = true
+      set({ notice: saved.message })
+    }
   },
 }))
 

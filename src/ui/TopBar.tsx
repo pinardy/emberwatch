@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { IMPATIENCE_HOSTILITY_THRESHOLD, SEASON_INFO } from '../game/engine/balance'
 import { MAX_HOSTILITY } from '../game/engine/tick'
 import {
   RUNWAY_WARNING_SECONDS,
+  deadlineForecast,
   formatDuration,
   hearthForecast,
   meterRates,
   secondsUntilStorm,
+  type DeadlineForecast,
 } from '../game/engine/forecast'
 import { computeModifiers } from '../game/engine/modifiers'
 import {
@@ -72,7 +74,7 @@ interface StatusAlert {
   severity: 'danger' | 'caution'
 }
 
-type Popover = 'status' | 'settings' | null
+type Popover = 'status' | 'settings' | 'speed' | null
 
 export function TopBar() {
   const run = useRun()
@@ -88,6 +90,7 @@ export function TopBar() {
   const [popover, setPopover] = useState<Popover>(null)
   const statusRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
+  const speedRef = useRef<HTMLDivElement>(null)
   // Modifiers and resolve walk the whole settlement: once per sim step only.
   const derived = useMemo(() => {
     if (!run) return null
@@ -97,6 +100,7 @@ export function TopBar() {
       rates: meterRates(run, mods),
       hearth: hearthForecast(run, mods),
       departures: secondsUntilDeparture(run),
+      deadline: deadlineForecast(run, mods),
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run, version])
@@ -107,7 +111,11 @@ export function TopBar() {
   useEffect(() => {
     if (!popover) return
     const onPointer = (e: PointerEvent) => {
-      const host = popover === 'status' ? statusRef.current : settingsRef.current
+      const host = {
+        status: statusRef.current,
+        settings: settingsRef.current,
+        speed: speedRef.current,
+      }[popover]
       if (host && !host.contains(e.target as Node)) setPopover(null)
     }
     document.addEventListener('pointerdown', onPointer)
@@ -122,7 +130,7 @@ export function TopBar() {
   const pop = population(run)
   const housing = totalHousing(run)
   const idle = idleVillagers(run).length
-  const { breakdowns, rates, hearth, departures } = derived
+  const { breakdowns, rates, hearth, departures, deadline } = derived
   const untilStorm = secondsUntilStorm(run)
   const storm = run.season.season === 'storm'
   const hearthDanger = run.coldHearth || hearth.runway < RUNWAY_WARNING_SECONDS
@@ -190,18 +198,45 @@ export function TopBar() {
           </div>
         </div>
 
-        <div className="speed-group" role="group" aria-label="Game speed">
-          {SPEED_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={speed === option ? 'is-active' : ''}
-              onClick={() => setSpeed(option)}
-              title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
-            >
-              {option === 0 ? '⏸' : `${option}×`}
-            </button>
-          ))}
+        <div className="topbar-anchor speed-anchor" ref={speedRef}>
+          {/* Phones fold the six speeds behind this; desktop hides it. */}
+          <button
+            type="button"
+            className={`speed-toggle ${speed === 0 ? 'is-paused' : ''} ${
+              popover === 'speed' ? 'is-open' : ''
+            }`}
+            onClick={() => toggle('speed')}
+            aria-expanded={popover === 'speed'}
+            aria-controls="speed-group"
+            aria-label={`Game speed: ${speed === 0 ? 'paused' : `${speed}×`}`}
+            title="Game speed"
+          >
+            {speed === 0 ? '⏸' : `${speed}×`}
+            <span className="speed-chevron" aria-hidden>
+              ▾
+            </span>
+          </button>
+          <div
+            id="speed-group"
+            className={`speed-group ${popover === 'speed' ? 'is-open' : ''}`}
+            role="group"
+            aria-label="Game speed"
+          >
+            {SPEED_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={speed === option ? 'is-active' : ''}
+                onClick={() => {
+                  setSpeed(option)
+                  if (popover === 'speed') setPopover(null)
+                }}
+                title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
+              >
+                {option === 0 ? '⏸' : `${option}×`}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -227,9 +262,12 @@ export function TopBar() {
           rate={`+${rates.impatiencePerMinute.toFixed(2)}/min`}
           hint={`You lose if this fills. Grows ${rates.impatiencePerMinute.toFixed(
             2,
-          )} per minute right now — faster each year, once hostility passes ${IMPATIENCE_HOSTILITY_THRESHOLD}, and with every villager who leaves.`}
+          )} per minute right now — faster each year, once hostility passes ${IMPATIENCE_HOSTILITY_THRESHOLD}, and with every villager who leaves.${deadlineHint(
+            deadline,
+          )}`}
           floats={impFloats}
           pulseKey={run.impatience}
+          note={<DeadlineNote deadline={deadline} />}
         />
         <Meter
           label="Hostility"
@@ -477,6 +515,58 @@ function statusAlerts(input: {
   return out
 }
 
+/** Tooltip sentence on the impatience meter about the Queen's deadline. */
+function deadlineHint(deadline: DeadlineForecast): string {
+  if (deadline.passed) {
+    return ` The Queen's deadline has passed: it adds ${deadline.overtimePerMinute.toFixed(
+      2,
+    )} per minute of that, and more every minute.`
+  }
+  if (!deadline.imminent) return ''
+  const where = deadline.landsIn
+    ? ` (Year ${deadline.landsIn.year}, ${SEASON_INFO[deadline.landsIn.season].name})`
+    : ''
+  return ` The Queen's deadline falls in ${formatDuration(
+    deadline.secondsLeft,
+  )}${where}; from then her impatience climbs ${deadline.startPerMinute.toFixed(
+    2,
+  )} per minute faster, and steeper every minute.`
+}
+
+/**
+ * The deadline under the impatience meter: a countdown through its last year,
+ * then the overtime it adds. Phones get the short form.
+ */
+function DeadlineNote({ deadline }: { deadline: DeadlineForecast }) {
+  if (deadline.passed) {
+    const rate = `+${deadline.overtimePerMinute.toFixed(2)}/min`
+    return (
+      <small className="meter-note deadline-note is-passed">
+        <span aria-hidden>👑 </span>
+        <span className="deadline-note-long">Deadline passed · {rate}</span>
+        <span className="deadline-note-short" aria-hidden>
+          Past +{deadline.overtimePerMinute.toFixed(2)}/m
+        </span>
+      </small>
+    )
+  }
+  if (!deadline.imminent) return null
+  const left = formatDuration(deadline.secondsLeft)
+  return (
+    <small
+      className={`meter-note deadline-note ${
+        deadline.secondsLeft <= RUNWAY_WARNING_SECONDS ? 'is-urgent' : ''
+      }`}
+    >
+      <span aria-hidden>👑 </span>
+      <span className="deadline-note-long">Queen's deadline in {left}</span>
+      <span className="deadline-note-short" aria-hidden>
+        in {left}
+      </span>
+    </small>
+  )
+}
+
 function hearthTitle(
   hearth: ReturnType<typeof hearthForecast>,
   storm: boolean,
@@ -512,6 +602,8 @@ interface MeterProps {
   floats?: Float[]
   /** Changing this key replays the pulse animation (impatience ticking up). */
   pulseKey?: number
+  /** A line under the bar (the Queen's deadline on the impatience meter). */
+  note?: ReactNode
 }
 
 function Meter({
@@ -526,6 +618,7 @@ function Meter({
   rate,
   floats,
   pulseKey,
+  note,
 }: MeterProps) {
   const pct = ((value + Math.min(1, Math.max(0, fraction))) / max) * 100
   return (
@@ -555,6 +648,7 @@ function Meter({
       >
         <div className="meter-fill" style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
+      {note}
       {floats && floats.length > 0 && (
         <div className="floaters" aria-hidden>
           {floats.map((f) => (

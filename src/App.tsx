@@ -1,6 +1,14 @@
 import { useEffect } from 'react'
 import { useGameStore } from './game/store'
-import { CitadelScreen, GameScreen, SetupScreen, preloadScreensWhenIdle } from './ui/lazyScreens'
+import { DailyScreen } from './ui/DailyScreen'
+import {
+  AchievementsScreen,
+  CitadelScreen,
+  GameScreen,
+  SavesScreen,
+  SetupScreen,
+  preloadScreensWhenIdle,
+} from './ui/lazyScreens'
 import { MenuScreen } from './ui/MenuScreen'
 import { UpdatePrompt } from './ui/UpdatePrompt'
 
@@ -20,7 +28,10 @@ export default function App() {
       {screen === 'menu' && <MenuScreen />}
       {screen === 'setup' && <SetupScreen />}
       {screen === 'citadel' && <CitadelScreen />}
+      {screen === 'saves' && <SavesScreen />}
       {screen === 'game' && <GameScreen />}
+      {screen === 'achievements' && <AchievementsScreen />}
+      {screen === 'daily' && <DailyScreen />}
       <UpdatePrompt />
     </>
   )

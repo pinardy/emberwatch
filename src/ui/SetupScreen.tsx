@@ -7,11 +7,16 @@ import {
   WORK_TAG_LABELS,
 } from '../game/content/species'
 import { parseSeed, randomSeed } from '../game/engine/rng'
-import { drawRunModifiers } from '../game/engine/runModifiers'
+import { citadelLoadout } from '../game/content/meta'
+import { landFor, type LandChoice } from '../game/engine/runModifiers'
+import { listSlots, type SlotId } from '../game/saveSlots'
 import { useGameStore } from '../game/store'
 import type { SpeciesId } from '../game/types'
 import { EdictPicker } from './EdictPicker'
+import { LandOptions } from './LandOptions'
 import { RunModifierList } from './RunModifierList'
+import { SlotPicker } from './SaveSlots'
+import { useConfirm } from './useConfirm'
 
 /** Settlements bring exactly this many species at most. */
 const MAX_SPECIES = 3
@@ -21,6 +26,19 @@ export function SetupScreen() {
   const meta = useGameStore((s) => s.meta)
   const startRun = useGameStore((s) => s.startRun)
   const goToScreen = useGameStore((s) => s.goToScreen)
+  const activeSlot = useGameStore((s) => s.activeSlot)
+  const run = useGameStore((s) => s.run)
+  // The run in progress saves first, so the picker sees it in its slot.
+  const [slots] = useState(() => {
+    useGameStore.getState().saveNow()
+    return listSlots()
+  })
+  // A new settlement takes a free slot; replacing a run is always a choice.
+  const [slot, setSlot] = useState<SlotId | null>(
+    () => slots.find((s) => !s.meta)?.id ?? null,
+  )
+  const slotTaken = slots.find((s) => s.id === slot)?.meta ?? null
+  const slotLabel = slots.find((s) => s.id === slot)?.label ?? ''
 
   const [seedText, setSeedText] = useState('')
   // Queen's Edict: defaults to the hardest rung earned so far.
@@ -53,17 +71,23 @@ export function SetupScreen() {
     setHint(null)
   }
 
-  // The land's modifiers follow from the seed alone, so a typed seed previews them.
+  // The land's modifiers follow from the seed (and the Citadel's land
+  // upgrades, if any), so a typed seed previews them.
+  const powers = useMemo(() => citadelLoadout(meta.upgrades), [meta.upgrades])
+  const [landChoice, setLandChoice] = useState<LandChoice>({})
   const previewSeed = seedText.trim() ? parseSeed(seedText) : null
   const land = useMemo(
-    () => (previewSeed === null ? [] : drawRunModifiers(previewSeed)),
-    [previewSeed],
+    () => (previewSeed === null ? [] : landFor(previewSeed, powers, landChoice)),
+    [previewSeed, powers, landChoice],
   )
 
   const start = () => {
+    if (!slot) return
     const seed = seedText.trim() ? parseSeed(seedText) : randomSeed()
-    startRun(seed, chosen, edict)
+    startRun(seed, chosen, edict, landChoice, slot)
   }
+  const replace = useConfirm(`replace-${slot}`, start)
+  const allFull = slots.every((s) => s.meta)
 
   return (
     <div className="screen setup-screen">
@@ -159,6 +183,14 @@ export function SetupScreen() {
             ) : (
               <RunModifierList ids={land} />
             )}
+            <LandOptions
+              powers={powers}
+              choice={landChoice}
+              onChange={setLandChoice}
+              ensureSeed={() => {
+                if (!seedText.trim()) setSeedText(String(randomSeed()))
+              }}
+            />
           </div>
         </section>
 
@@ -171,17 +203,49 @@ export function SetupScreen() {
           <EdictPicker unlocked={meta.edictUnlocked} value={edict} onPick={setEdict} />
         </section>
 
+        <section className="setup-section slot-section">
+          <h3>Save slot</h3>
+          <p className="muted">
+            {allFull
+              ? 'Every slot holds a settlement. Choose one to replace, or go back and delete or export one first.'
+              : 'The settlement saves itself here as you play. Slots that hold a run stay untouched unless you choose to replace one.'}
+          </p>
+          <SlotPicker
+            slots={slots}
+            value={slot}
+            onChange={setSlot}
+            name="setup-slot"
+            label="Save slot"
+            activeSlot={run ? activeSlot : null}
+          />
+        </section>
+
         <footer className="modal-foot setup-foot">
           <button type="button" onClick={() => goToScreen('menu')}>
             Back
           </button>
-          <button type="button" className="primary" onClick={start}>
-            Set out with {chosen.map((id) => SPECIES[id].icon).join(' ')}
-            <span className="sr-only">
-              {' '}
-              ({chosen.map((id) => SPECIES[id].name).join(', ')})
-            </span>
-          </button>
+          {!slot ? (
+            <button type="button" className="primary" disabled>
+              Choose a save slot
+            </button>
+          ) : slotTaken && replace.armed ? (
+            <button type="button" className="primary is-armed" onClick={replace.trigger}>
+              Replace {slotLabel}? Tap again
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="primary"
+              onClick={slotTaken ? replace.trigger : start}
+            >
+              Set out with {chosen.map((id) => SPECIES[id].icon).join(' ')}
+              {slotTaken ? ` · replaces ${slotLabel}` : ''}
+              <span className="sr-only">
+                {' '}
+                ({chosen.map((id) => SPECIES[id].name).join(', ')})
+              </span>
+            </button>
+          )}
         </footer>
       </div>
     </div>

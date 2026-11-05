@@ -89,6 +89,14 @@ export const SPECIES: Record<SpeciesId, SpeciesDef> = Object.fromEntries(
 
 export const SPECIES_LIST = defs
 
+/** One villager of a species: "Harpy", "Fox", "Beaver". */
+export function speciesSingular(sp: SpeciesId): string {
+  const name = SPECIES[sp]?.name ?? 'Villagers'
+  if (name.endsWith('ies')) return `${name.slice(0, -3)}y`
+  if (name.endsWith('xes')) return name.slice(0, -2)
+  return name.slice(0, -1)
+}
+
 export const STARTING_SPECIES: SpeciesId[] = ['human', 'beaver', 'lizard']
 
 /** Player-facing names for the building tags species work bonuses apply to. */

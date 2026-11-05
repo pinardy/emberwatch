@@ -4,8 +4,9 @@ import './lazy-screens.css'
 
 /*
  * Screens the menu does not need are split out of the startup chunk and
- * fetched on demand: the setup and Citadel screens, the game screen, and the
- * end-of-run modal with its timeline chart. To keep the first interaction
+ * fetched on demand: the setup, Citadel, saves and achievements screens, the
+ * game screen, and the end-of-run modal with its timeline chart. (The daily
+ * expedition screen stays eager: the menu shows its entry card.) To keep the first interaction
  * instant, the app preloads them in idle time once the menu is up, and a
  * screen whose code has already arrived renders directly, without suspending
  * — so after the preload, navigating behaves exactly as it did before the
@@ -87,6 +88,16 @@ export const CitadelScreen = lazyScreen(
   screenFallback,
 )
 
+export const SavesScreen = lazyScreen(
+  () => import('./SavesScreen').then((m) => m.SavesScreen),
+  screenFallback,
+)
+
+export const AchievementsScreen = lazyScreen(
+  () => import('./AchievementsScreen').then((m) => m.AchievementsScreen),
+  screenFallback,
+)
+
 export const GameScreen = lazyScreen(
   () => import('./GameScreen').then((m) => m.GameScreen),
   <div className="screen screen-loading" role="status" aria-live="polite">
@@ -108,7 +119,9 @@ export function preloadScreens(): Promise<unknown> {
     SetupScreen.preload(),
     GameScreen.preload(),
     CitadelScreen.preload(),
+    SavesScreen.preload(),
     EndModal.preload(),
+    AchievementsScreen.preload(),
   ])
 }
 

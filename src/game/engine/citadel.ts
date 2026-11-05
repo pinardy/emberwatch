@@ -1,4 +1,5 @@
 import { CORNERSTONE_LIST } from '../content/cornerstones'
+import { GLADE_EVENTS } from '../content/gladeEvents'
 import { CITADEL_EVENT_OPTIONS } from '../content/meta'
 import type { CornerstoneDef, GladeEventDef, GladeEventOptionDef, RunState } from '../types'
 
@@ -34,6 +35,23 @@ export function cornerstoneDraftSize(s: RunState): number {
 
 export function freeRerollsLeft(s: RunState): number {
   return s.citadel?.freeRerolls ?? 0
+}
+
+/** The settlement's own glade, the centre of the first ring. */
+const HOME_GLADE = 'glade0'
+
+/**
+ * The Scouts' Report on a glade: its waiting event, `null` when the scouts
+ * found nothing, or `undefined` when there is no report — the upgrade is not
+ * owned, the glade is outside the first ring, or it is already cleared.
+ * Reads only what map generation placed; it never touches the RNG.
+ */
+export function scoutedEvent(s: RunState, gladeId: string): GladeEventDef | null | undefined {
+  if (!s.citadel?.scoutReport) return undefined
+  const glade = s.glades[gladeId]
+  const home = s.glades[HOME_GLADE]
+  if (!glade || !home || glade.cleared || !home.neighbors.includes(gladeId)) return undefined
+  return glade.eventId ? (GLADE_EVENTS[glade.eventId] ?? null) : null
 }
 
 /**

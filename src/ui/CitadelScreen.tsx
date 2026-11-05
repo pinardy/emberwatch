@@ -156,6 +156,9 @@ export function CitadelScreen() {
           <button type="button" onClick={() => goToScreen('menu')}>
             Back to menu
           </button>
+          <button type="button" onClick={() => goToScreen('achievements')}>
+            🏅 Achievements
+          </button>
           <button type="button" className="primary" onClick={() => goToScreen('setup')}>
             Found a new settlement
           </button>

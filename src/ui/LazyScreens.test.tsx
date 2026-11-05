@@ -2,8 +2,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /*
- * The setup, Citadel and game screens and the end-of-run modal are lazily
- * loaded chunks. The other UI tests run with them preloaded (see
+ * The setup, Citadel, saves, achievements and game screens and the
+ * end-of-run modal are lazily loaded chunks. The other UI tests run with them preloaded (see
  * src/test/setup-ui.ts); these start from a fresh module graph so each screen
  * is genuinely cold: it suspends, shows its fallback, then renders once its
  * code arrives.
@@ -75,9 +75,14 @@ describe('lazily loaded screens', () => {
     try {
       vi.resetModules()
       const lazy = await import('./lazyScreens')
-      const spies = [lazy.SetupScreen, lazy.GameScreen, lazy.CitadelScreen, lazy.EndModal].map(
-        (s) => vi.spyOn(s, 'preload'),
-      )
+      const spies = [
+        lazy.SetupScreen,
+        lazy.GameScreen,
+        lazy.CitadelScreen,
+        lazy.SavesScreen,
+        lazy.AchievementsScreen,
+        lazy.EndModal,
+      ].map((s) => vi.spyOn(s, 'preload'))
       const { default: App } = await import('../App')
       render(<App />)
       for (const spy of spies) expect(spy).not.toHaveBeenCalled()

@@ -1,3 +1,4 @@
+import { feats } from './feats'
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CHARTERS, CHARTER_LIST } from '../content/charters'
 import { DECREES, DECREE_LIST } from '../content/decrees'
@@ -165,6 +166,7 @@ export function stepDecree(s: RunState, dt: number): void {
       s.stats.resourcesProduced += grant(s.stock, def.reward, s.storageCap, storageUsed(s))
     }
     recordEvent(s, 'decreeMet', def.name)
+    feats(s).decreesMet++
     pushLog(
       s,
       `📯 Decree fulfilled with ${Math.ceil(decree.timeLeft)}s to spare — ${def.name}. +${reputation} reputation.`,
@@ -267,6 +269,16 @@ export function offerCharter(s: RunState): void {
     // Nothing left to unlock: offer a second perk instead.
     const other = perks.find((c) => c.id !== perk.id)
     if (other) options.push(other.id)
+  }
+
+  // The Charter Office drafts spares: further perks, in list order after the
+  // drawn one, so owning it consumes no extra randomness.
+  const spares = s.citadel?.charterOptions ?? 0
+  const start = perks.indexOf(perk)
+  for (let i = 1; i < perks.length && spares > 0; i++) {
+    const next = perks[(start + i) % perks.length]
+    if (options.length >= 3 + spares) break
+    if (!options.includes(next.id)) options.push(next.id)
   }
 
   const choice: PendingChoice = { kind: 'charter', options }
