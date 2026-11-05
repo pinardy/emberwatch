@@ -7,9 +7,11 @@ import {
   WORK_TAG_LABELS,
 } from '../game/content/species'
 import { parseSeed, randomSeed } from '../game/engine/rng'
+import { drawRunModifiers } from '../game/engine/runModifiers'
 import { useGameStore } from '../game/store'
 import type { SpeciesId } from '../game/types'
 import { EdictPicker } from './EdictPicker'
+import { RunModifierList } from './RunModifierList'
 
 /** Settlements bring exactly this many species at most. */
 const MAX_SPECIES = 3
@@ -50,6 +52,13 @@ export function SetupScreen() {
     setChosen([...chosen, id])
     setHint(null)
   }
+
+  // The land's modifiers follow from the seed alone, so a typed seed previews them.
+  const previewSeed = seedText.trim() ? parseSeed(seedText) : null
+  const land = useMemo(
+    () => (previewSeed === null ? [] : drawRunModifiers(previewSeed)),
+    [previewSeed],
+  )
 
   const start = () => {
     const seed = seedText.trim() ? parseSeed(seedText) : randomSeed()
@@ -138,6 +147,18 @@ export function SetupScreen() {
             >
               🎲
             </button>
+          </div>
+          <div className="setup-land" aria-live="polite">
+            <h4>Lay of the land</h4>
+            {previewSeed === null ? (
+              <p className="muted">
+                Every map has one or two modifiers of its own — richer veins, longer
+                Storms, restless woods. A random map reveals them when you set out; enter
+                a seed to see them now.
+              </p>
+            ) : (
+              <RunModifierList ids={land} />
+            )}
           </div>
         </section>
 

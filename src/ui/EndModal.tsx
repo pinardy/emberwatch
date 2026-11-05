@@ -6,6 +6,7 @@ import {
 } from '../game/content/meta'
 import { useGameStore, useRun } from '../game/store'
 import { Overlay } from './ChoiceModal'
+import { RunModifierList } from './RunModifierList'
 import { RunTimelineChart } from './RunTimeline'
 
 export function EndModal() {
@@ -42,6 +43,13 @@ export function EndModal() {
           <RunTimelineChart run={run} />
 
           <div className="end-side">
+            {(run.runModifiers ?? []).length > 0 && (
+              <section className="end-land" aria-label="Lay of the land">
+                <h3>The land</h3>
+                <RunModifierList ids={run.runModifiers} compact />
+              </section>
+            )}
+
             <dl className="end-stats">
               <div>
                 <dt>Years survived</dt>

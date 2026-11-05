@@ -4,6 +4,7 @@ import type {
   DepositId,
   Glade,
   GladeKind,
+  MapgenHooks,
   Obstacle,
   ResourceBag,
   TerrainId,
@@ -69,8 +70,14 @@ export const DEPOSIT_RADIUS: Record<DepositId, number> = {
   fertileSoil: 0.8,
 }
 
-export function generateMap(rng: Rng): GeneratedMap {
+/**
+ * Generates the world. `hooks` come from the run's modifiers; with none, the
+ * RNG is consumed exactly as before, so a seed keeps its map.
+ */
+export function generateMap(rng: Rng, hooks: MapgenHooks = {}): GeneratedMap {
   const world: WorldInfo = { width: WORLD_WIDTH, height: WORLD_HEIGHT }
+  // Odds that a ring glade rolls small (safe); modifiers can thin them out.
+  const smallOdds = hooks.smallGladeOdds ?? 1
 
   // --- 1. Seed the glade centres --------------------------------------------
   // Two rings around the settlement so the player always has a couple of easy
@@ -106,12 +113,14 @@ export function generateMap(rng: Rng): GeneratedMap {
 
   inner.forEach((center, i) => {
     // Inner ring skews safe so the opening is survivable.
-    const kind: GladeKind = rng.chance(0.45) ? 'small' : 'dangerous'
+    const kind: GladeKind = rng.chance(0.45 * smallOdds) ? 'small' : 'dangerous'
     seeds.push({ id: `glade${i + 1}`, center, kind })
   })
   outer.forEach((center, i) => {
+    // Fewer small glades turn into dangerous ones; the forbidden share holds.
     const roll = rng.next()
-    const kind: GladeKind = roll < 0.2 ? 'small' : roll < 0.7 ? 'dangerous' : 'forbidden'
+    const small = 0.2 * smallOdds
+    const kind: GladeKind = roll < small ? 'small' : roll < 0.7 ? 'dangerous' : 'forbidden'
     seeds.push({ id: `glade${inner.length + i + 1}`, center, kind })
   })
 
@@ -139,7 +148,7 @@ export function generateMap(rng: Rng): GeneratedMap {
             deposits: ['trees', 'vegetation', 'trees', 'vegetation', 'stoneVein', 'clayPatch'],
             terrain: 'clearing',
           }
-        : rng.pick(GLADE_THEMES)
+        : pickTheme(rng, hooks)
   }
 
   // --- 3. Glade records --------------------------------------------------------
@@ -176,7 +185,7 @@ export function generateMap(rng: Rng): GeneratedMap {
       clearWork: isSettlement ? 0 : clearWorkFor(seed.kind, distance),
       clearProgress: 0,
       clearers: 0,
-      reward: isSettlement ? {} : rewardFor(seed.kind, rng),
+      reward: isSettlement ? {} : scaleReward(rewardFor(seed.kind, rng), hooks.rewardScale?.[seed.kind]),
       eventId,
     }
   })
@@ -238,7 +247,111 @@ export function generateMap(rng: Rng): GeneratedMap {
     }
   }
 
+  if (hooks.depositScale) {
+    applyDepositScale(rng, hooks.depositScale, glades, deposits, obstacles, depositCounter)
+  }
+
   return { world, glades, deposits, obstacles }
+}
+
+/** A glade theme, drawn with any modifier weights on its terrain. */
+function pickTheme(rng: Rng, hooks: MapgenHooks): (typeof GLADE_THEMES)[number] {
+  const weights = hooks.themeWeights
+  if (!weights) return rng.pick(GLADE_THEMES)
+  return rng.weighted(GLADE_THEMES, (t) => weights[t.terrain] ?? 1)
+}
+
+function scaleReward(reward: ResourceBag, factor: number | undefined): ResourceBag {
+  if (factor === undefined || factor === 1) return reward
+  const out: ResourceBag = {}
+  for (const [id, amount] of Object.entries(reward)) {
+    const qty = Math.round((amount ?? 0) * factor)
+    if (qty > 0) out[id as keyof ResourceBag] = qty
+  }
+  return out
+}
+
+/**
+ * Scales each deposit kind's count outside the settlement glade, after
+ * everything else is placed — so the rest of the map is exactly the one the
+ * seed generates without the hook. The opening glade is never touched: its
+ * starter deposits are what keep the first minutes survivable.
+ *
+ * Extra deposits go to glades that already carry the kind (a richer seam where
+ * the theme put one), round-robin; removals take from the glades with the
+ * most of that kind first, so no glade loses its only patch while another
+ * keeps three.
+ */
+function applyDepositScale(
+  rng: Rng,
+  scale: Partial<Record<DepositId, number>>,
+  glades: Record<string, Glade>,
+  deposits: Record<string, WorldDeposit>,
+  obstacles: Obstacle[],
+  counterStart: number,
+): void {
+  let counter = counterStart
+  const kinds = (Object.keys(scale) as DepositId[]).sort()
+  for (const kind of kinds) {
+    const factor = scale[kind] ?? 1
+    if (factor === 1) continue
+    const existing = Object.values(deposits).filter(
+      (d) => d.kind === kind && d.gladeId !== 'glade0',
+    )
+    const target = Math.max(0, Math.round(existing.length * factor))
+
+    if (target < existing.length) {
+      const perGlade = (gladeId: string) =>
+        Object.values(deposits).filter((d) => d.kind === kind && d.gladeId === gladeId).length
+      for (let removed = existing.length - target; removed > 0; removed--) {
+        const live = Object.values(deposits).filter(
+          (d) => d.kind === kind && d.gladeId !== 'glade0',
+        )
+        // Richest glade first; ties broken by the RNG.
+        const most = Math.max(...live.map((d) => perGlade(d.gladeId)))
+        const victim = rng.pick(live.filter((d) => perGlade(d.gladeId) === most))
+        delete deposits[victim.id]
+      }
+      continue
+    }
+
+    // Glades that already carry the kind, in id order (deterministic).
+    let hosts = [...new Set(existing.map((d) => d.gladeId))].sort()
+    // A kind the map lacks entirely seeds itself in random glades.
+    if (hosts.length === 0) {
+      hosts = rng.shuffle(Object.keys(glades).filter((id) => id !== 'glade0')).slice(0, 3)
+    }
+    let placed = 0
+    let attempts = 0
+    const want = target - existing.length
+    while (placed < want && attempts < want * 4 && hosts.length > 0) {
+      const gladeId = hosts[attempts % hosts.length]
+      attempts++
+      const glade = glades[gladeId]
+      const radius = DEPOSIT_RADIUS[kind]
+      const taken = [
+        { pos: glade.center, radius: 1.0 },
+        ...Object.values(deposits)
+          .filter((d) => d.gladeId === gladeId)
+          .map((d) => ({ pos: d.pos, radius: d.radius })),
+        ...obstacles
+          .filter((o) => o.gladeId === gladeId)
+          .map((o) => ({ pos: o.pos, radius: o.radius })),
+      ]
+      const pos = scatter(rng, glade.polygon, radius * 0.5 + 0.25, taken, radius)
+      if (!pos) continue
+      const id = `d${counter++}`
+      deposits[id] = {
+        id,
+        kind,
+        pos,
+        radius,
+        amount: infiniteDeposit(kind) ? null : rng.range(14, 30),
+        gladeId,
+      }
+      placed++
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

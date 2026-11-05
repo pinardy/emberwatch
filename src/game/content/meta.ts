@@ -621,6 +621,9 @@ function migrateHistoryEntry(raw: unknown): MetaHistoryEntry | null {
   }
   if (typeof e.edict === 'number') entry.edict = clampEdict(e.edict)
   if (typeof e.supplies === 'number') entry.supplies = e.supplies
+  if (Array.isArray(e.modifiers)) {
+    entry.modifiers = e.modifiers.filter((m): m is string => typeof m === 'string')
+  }
   return entry
 }
 
@@ -726,6 +729,7 @@ export function bankRun(meta: MetaState, run: RunState, now = Date.now()): MetaS
     species: [...run.speciesPool],
     edict,
     supplies: reward,
+    modifiers: [...(run.runModifiers ?? [])],
   }
   return {
     ...meta,

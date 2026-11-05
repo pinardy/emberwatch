@@ -31,7 +31,7 @@ import {
   gladeEventOptions,
 } from './citadel'
 import { drawOrder, pushLog } from './createRun'
-import type { Modifiers } from './modifiers'
+import { computeModifiers, type Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
 import { canAfford, grant, population, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
@@ -585,6 +585,11 @@ export function rerollChoice(s: RunState): string | null {
 // Orders
 // ---------------------------------------------------------------------------
 
+/** Reputation an order pays, after any run-long bonus to orders. */
+export function orderReputation(s: RunState, base: number): number {
+  return Math.max(0, base + computeModifiers(s).orderReputation)
+}
+
 export function stepOrders(s: RunState): void {
   let completedAny = false
   for (const order of s.orders) {
@@ -596,14 +601,15 @@ export function stepOrders(s: RunState): void {
       order.complete = true
       completedAny = true
       s.stats.ordersCompleted++
-      addReputation(s, def.reputationReward)
+      const reputation = orderReputation(s, def.reputationReward)
+      addReputation(s, reputation)
       if (def.reward) {
         const added = grant(s.stock, def.reward, s.storageCap, storageUsed(s))
         s.stats.resourcesProduced += added
       }
       pushLog(
         s,
-        `Order complete — ${describeGoal(def.goal)}. +${def.reputationReward} reputation.`,
+        `Order complete — ${describeGoal(def.goal)}. +${reputation} reputation.`,
         'good',
       )
     }
