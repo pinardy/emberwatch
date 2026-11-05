@@ -142,7 +142,7 @@ export function useHotkeys(active: boolean): void {
 
       if (e.key === 'Escape') {
         if (closeTopLayer('high')) return
-        if (store.buildMode) store.setBuildMode(null)
+        if (store.buildMode) store.cancelBuildStep()
         else if (store.selectedBuilding || store.selectedDeposit || store.selectedGlade) {
           store.clearSelection()
         } else closeTopLayer('low')

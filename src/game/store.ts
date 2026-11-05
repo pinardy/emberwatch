@@ -27,7 +27,7 @@ import {
   togglePause,
   upgradeBuilding,
 } from './engine/actions'
-import { TICK_SECONDS, type GameSpeed } from './engine/balance'
+import { ROAD_MIN_LENGTH, TICK_SECONDS, type GameSpeed } from './engine/balance'
 import { createRun } from './engine/createRun'
 import {
   appeaseThreat,
@@ -36,6 +36,7 @@ import {
   takeChoice,
 } from './engine/events'
 import { randomSeed } from './engine/rng'
+import { ROAD_TOOL, canStartRoad, placeRoad, removeRoad, roadAt, snapRoadPoint } from './engine/roads'
 import { unassign } from './engine/society'
 import { tick } from './engine/tick'
 import { buyOffer, sellResource } from './engine/trade'
@@ -89,6 +90,13 @@ interface GameStore {
   panel: SidePanel
   /** One-shot request for the map to fly its camera here; the view clears it. */
   cameraFocus: Vec2 | null
+  /**
+   * Road tool (`buildMode === ROAD_TOOL`): the last point of the road being
+   * laid, so the next click lays a stretch from here. Null before the first.
+   */
+  roadAnchor: Vec2 | null
+  /** Road tool: clicks lift roads instead of laying them. */
+  roadErase: boolean
 
   // --- lifecycle -----------------------------------------------------------
   boot: () => void
@@ -106,6 +114,15 @@ interface GameStore {
 
   // --- commands ------------------------------------------------------------
   setBuildMode: (defId: string | null) => void
+  /** Road tool: switch between laying and lifting roads. */
+  setRoadErase: (erase: boolean) => void
+  /** Road tool: finish the road being laid; the next click starts a new one. */
+  endRoad: () => void
+  /**
+   * Esc / right-click while building: ends the road being laid if there is
+   * one, otherwise puts the blueprint (or the road tool) away.
+   */
+  cancelBuildStep: () => void
   selectBuilding: (buildingId: string | null) => void
   selectDeposit: (depositId: string | null) => void
   selectGlade: (gladeId: string | null) => void
@@ -151,6 +168,43 @@ function runCommand(
   set({ version: get().version + 1, notice: error })
 }
 
+/**
+ * One click of the road tool: lift the road under it (erase mode), start a
+ * road, or lay the stretch from the last point to this one and carry on from
+ * here. Clicks snap onto road ends, buildings and roadsides so roads join.
+ */
+function layRoadPoint(
+  set: (partial: Partial<GameStore>) => void,
+  get: () => GameStore,
+  pos: Vec2,
+): void {
+  const { run, roadAnchor, roadErase } = get()
+  if (!run) return
+  if (roadErase) {
+    const road = roadAt(run, pos)
+    runCommand(set, get, (r) => (road ? removeRoad(r, road.id) : 'No road there.'))
+    return
+  }
+  const snap = snapRoadPoint(run, pos).pos
+  // Clicking the last point again finishes the road, like a double-click.
+  if (roadAnchor && Math.hypot(snap.x - roadAnchor.x, snap.y - roadAnchor.y) < ROAD_MIN_LENGTH) {
+    set({ roadAnchor: null, notice: null })
+    return
+  }
+  if (!roadAnchor) {
+    const error = canStartRoad(run, snap)
+    set({ notice: error, roadAnchor: error ? null : snap })
+    return
+  }
+  let laid = false
+  runCommand(set, get, (r) => {
+    const error = placeRoad(r, roadAnchor, snap)
+    laid = error === null
+    return error
+  })
+  if (laid) set({ roadAnchor: snap })
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
   screen: 'menu',
   run: null,
@@ -165,6 +219,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   selectedGlade: null,
   panel: 'build',
   cameraFocus: null,
+  roadAnchor: null,
+  roadErase: false,
 
   boot: () => {
     set({ meta: loadMeta(), settings: loadSettings() })
@@ -185,6 +241,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       version: get().version + 1,
       speed: 1,
       buildMode: null,
+      roadAnchor: null,
+      roadErase: false,
       selectedBuilding: null,
       selectedDeposit: null,
       selectedGlade: null,
@@ -309,7 +367,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // Commands
   // -------------------------------------------------------------------------
   setBuildMode: (defId) =>
-    set({ buildMode: defId, selectedBuilding: null, selectedDeposit: null, notice: null }),
+    set({
+      buildMode: defId,
+      selectedBuilding: null,
+      selectedDeposit: null,
+      notice: null,
+      roadAnchor: null,
+      roadErase: false,
+    }),
+  setRoadErase: (erase) => set({ roadErase: erase, roadAnchor: null, notice: null }),
+  endRoad: () => set({ roadAnchor: null }),
+  cancelBuildStep: () => {
+    const { buildMode, roadAnchor } = get()
+    if (buildMode === ROAD_TOOL && roadAnchor) set({ roadAnchor: null })
+    else get().setBuildMode(null)
+  },
 
   selectBuilding: (buildingId) =>
     set({ selectedBuilding: buildingId, selectedDeposit: null, selectedGlade: null }),
@@ -327,6 +399,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   place: (pos) => {
     const defId = get().buildMode
     if (!defId) return
+    if (defId === ROAD_TOOL) {
+      layRoadPoint(set, get, pos)
+      return
+    }
     runCommand(set, get, (run) => placeBuilding(run, defId, pos))
   },
 

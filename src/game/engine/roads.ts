@@ -1,6 +1,14 @@
 import { BUILDINGS } from '../content/buildings'
 import { RESOURCES } from '../content/resources'
-import type { BuildingDef, BuildingInstance, ResourceBag, RoadSegment, RunState, Vec2 } from '../types'
+import type {
+  BuildingDef,
+  BuildingInstance,
+  Glade,
+  ResourceBag,
+  RoadSegment,
+  RunState,
+  Vec2,
+} from '../types'
 import {
   FOOTPRINT_RADIUS,
   ROAD_HALF_WIDTH,
@@ -11,7 +19,7 @@ import {
   ROAD_WOOD_PER_UNIT,
   ROAD_WORK_BONUS,
 } from './balance'
-import { dist } from './geometry'
+import { dist, pointInPolygon } from './geometry'
 import { gladeAt, insideWorld } from './mapgen'
 import { canAfford, grant, spend, storageUsed } from './queries'
 
@@ -390,12 +398,6 @@ export function canPlaceRoad(s: RunState, a: Vec2, b: Vec2): string | null {
   if (length < ROAD_MIN_LENGTH) return 'Too short for a road.'
   if (length > ROAD_MAX_LENGTH) return `Too long — bend it within ${ROAD_MAX_LENGTH} paces.`
   if (!insideWorld(s.world, a) || !insideWorld(s.world, b)) return 'Beyond the forest edge.'
-  const steps = Math.ceil(length / 0.25)
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps
-    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
-    if (!gladeAt(s.glades, p)?.cleared) return 'A road can only run over cleared ground.'
-  }
   for (const o of s.obstacles) {
     if (distToSegment(o.pos, a, b) < o.radius + ROAD_HALF_WIDTH) {
       return o.kind === 'mire' ? 'A mire swallows the way.' : 'A crag blocks the way.'
@@ -409,6 +411,16 @@ export function canPlaceRoad(s: RunState, a: Vec2, b: Vec2): string | null {
   const same = (p: Vec2, q: Vec2) => dist(p, q) < NODE_EPS
   if ((s.roads ?? []).some((r) => (same(r.a, a) && same(r.b, b)) || (same(r.a, b) && same(r.b, a)))) {
     return 'There is already a road here.'
+  }
+  // Cleared ground all the way, sampled every quarter pace. Consecutive
+  // samples nearly always share a glade, so that one is tested first.
+  const steps = Math.ceil(length / 0.25)
+  let glade: Glade | undefined
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+    if (!glade || !pointInPolygon(p, glade.polygon)) glade = gladeAt(s.glades, p)
+    if (!glade?.cleared) return 'A road can only run over cleared ground.'
   }
   if (!canAfford(s.stock, roadCost(length))) return 'Not enough wood.'
   return null
