@@ -55,7 +55,7 @@ export function iconTexture(id: IconId): THREE.CanvasTexture {
     art.width = size
     art.height = size
     const g = art.getContext('2d')!
-    const scale = (size * 0.78) / 24
+    const scale = (size * 0.72) / 24 // the footprint the emoji glyphs had
     const offset = (size - 24 * scale) / 2
     g.lineCap = 'round'
     g.lineJoin = 'round'
