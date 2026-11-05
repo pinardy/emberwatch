@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
 import { DECREES } from '../game/content/decrees'
-import { GLADE_EVENTS } from '../game/content/gladeEvents'
+import { GLADE_EVENTS, GLADE_EVENT_LIST } from '../game/content/gladeEvents'
+import { RESOURCES } from '../game/content/resources'
+import type { defaultAutoPause } from '../game/autoPause'
+import { defaultSettings, loadSettings } from '../game/persistence'
 import { RUN_MODIFIERS } from '../game/content/runModifiers'
 import { findPlacement } from '../game/engine/actions'
 import { drawRunModifiers } from '../game/engine/runModifiers'
@@ -674,5 +677,291 @@ describe('mid-run structure UI', () => {
       fireEvent.keyDown(window, { key: ' ', code: 'Space', repeat: true })
       expect(useGameStore.getState().speed).toBe(0)
     }
+  })
+})
+
+describe('construction refunds in the inspector', () => {
+  /** A woodcutters' camp site nobody has worked on yet, selected. */
+  function selectFreshSite(): { siteId: string; woodBefore: number } {
+    startPlaying()
+    const run = currentRun()
+    const woodBefore = run.stock.wood ?? 0
+    const spot = findPlacement(run, 'woodcuttersCamp')!
+    act(() => {
+      useGameStore.getState().setBuildMode('woodcuttersCamp')
+      useGameStore.getState().place(spot)
+      useGameStore.getState().setBuildMode(null)
+    })
+    const site = Object.values(currentRun().buildings).find(
+      (b) => b.defId === 'woodcuttersCamp',
+    )!
+    expect(site.built).toBe(false)
+    act(() => useGameStore.getState().selectBuilding(site.id))
+    return { siteId: site.id, woodBefore }
+  }
+
+  it('cancels an untouched site for every material back', () => {
+    const { siteId, woodBefore } = selectFreshSite()
+    const inspector = document.querySelector('.inspector') as HTMLElement
+    expect(within(inspector).queryByRole('button', { name: /^Demolish$/ })).toBeNull()
+
+    const cancel = within(inspector).getByRole('button', { name: 'Cancel construction' })
+    fireEvent.click(cancel)
+    const cost = BUILDINGS.woodcuttersCamp.cost.wood!
+    expect(cancel.textContent).toMatch(/Confirm\? Refund/)
+    expect(cancel.textContent).toContain(`${RESOURCES.wood.icon}${cost}`)
+    expect(cancel.textContent).toContain('(100%)')
+
+    // Confirmed through the store's single demolish action: nothing is lost.
+    fireEvent.click(cancel)
+    expect(currentRun().buildings[siteId]).toBeUndefined()
+    expect(currentRun().stock.wood).toBe(woodBefore)
+  })
+
+  it('shows the sliding refund while building, and half once finished', () => {
+    const { siteId } = selectFreshSite()
+    const inspector = document.querySelector('.inspector') as HTMLElement
+    act(() => {
+      currentRun().buildings[siteId].buildProgress = BUILDINGS.woodcuttersCamp.buildSeconds / 2
+      bump()
+    })
+    const cancel = within(inspector).getByRole('button', { name: 'Cancel construction' })
+    fireEvent.click(cancel)
+    expect(cancel.textContent).toContain('(75%)')
+
+    // Finishing the site disarms the button and renames it.
+    act(() => {
+      const site = currentRun().buildings[siteId]
+      site.built = true
+      site.buildProgress = BUILDINGS.woodcuttersCamp.buildSeconds
+      bump()
+    })
+    const demolish = within(inspector).getByRole('button', { name: 'Demolish' })
+    fireEvent.click(demolish)
+    expect(demolish.textContent).toContain('(50%)')
+    expect(demolish.textContent).toContain(
+      `${RESOURCES.wood.icon}${BUILDINGS.woodcuttersCamp.cost.wood! / 2}`,
+    )
+  })
+})
+
+describe('auto-pause', () => {
+  beforeEach(() => {
+    useGameStore.setState({ settings: defaultSettings() })
+  })
+
+  function enable(trigger: keyof ReturnType<typeof defaultAutoPause>) {
+    const settings = useGameStore.getState().settings
+    act(() =>
+      useGameStore
+        .getState()
+        .updateSettings({ autoPause: { ...settings.autoPause, [trigger]: true } }),
+    )
+  }
+
+  /** Runs the sim at 1× until it stops itself, or gives up. */
+  function runUntilPaused(maxSeconds = 5) {
+    act(() => {
+      useGameStore.getState().setSpeed(1)
+      for (let t = 0; t < maxSeconds && useGameStore.getState().speed !== 0; t += 0.5) {
+        useGameStore.getState().advance(0.5)
+      }
+    })
+  }
+
+  /** Answers a glade event with its threat-unleashing option. */
+  function unleashThreat(): string {
+    const event = GLADE_EVENT_LIST.find((e) => e.options.some((o) => o.threat))!
+    const index = event.options.findIndex((o) => o.threat)
+    act(() => {
+      const run = currentRun()
+      for (const [id, amount] of Object.entries(event.options[index].cost ?? {})) {
+        run.stock[id as keyof typeof run.stock] = (amount ?? 0) + 50
+      }
+      run.pendingChoices.unshift({ kind: 'gladeEvent', options: [event.id], gladeId: 'glade1' })
+      bump()
+    })
+    act(() => useGameStore.getState().chooseEventOption(index))
+    return event.options[index].threat!.name
+  }
+
+  it('defaults to pausing for threats only, and migrates older settings', () => {
+    expect(defaultSettings().autoPause).toEqual({
+      threat: true,
+      decree: false,
+      departure: false,
+      storm: false,
+      caravan: false,
+    })
+    // Saved before auto-pause existed.
+    localStorage.setItem(
+      'emberwatch.settings.v1',
+      JSON.stringify({ pauseOnBlur: false, sound: false, renderer: '2d', shadows: true }),
+    )
+    expect(loadSettings().autoPause).toEqual(defaultSettings().autoPause)
+    expect(loadSettings().pauseOnBlur).toBe(false)
+    // A partial or malformed set keeps what it can.
+    localStorage.setItem(
+      'emberwatch.settings.v1',
+      JSON.stringify({ autoPause: { storm: true, threat: 'yes' } }),
+    )
+    expect(loadSettings().autoPause).toMatchObject({ storm: true, threat: true, caravan: false })
+  })
+
+  it('pauses when a threat is unleashed, and says why', () => {
+    startPlaying()
+    const name = unleashThreat()
+    const clock = currentRun().clock
+    runUntilPaused()
+    expect(useGameStore.getState().speed).toBe(0)
+    // Caught before the world moved on.
+    expect(currentRun().clock).toBe(clock)
+    const notice = useGameStore.getState().notice!
+    expect(notice).toBe(`Paused: ${name} is loose.`)
+    expect(screen.getByText(notice)).toBeTruthy()
+
+    // Resuming does not pause again for the same threat.
+    runUntilPaused(2)
+    expect(useGameStore.getState().speed).toBe(1)
+    expect(currentRun().clock).toBeGreaterThan(clock)
+  })
+
+  it('does not fight a pause the player chose', () => {
+    startPlaying()
+    // Paused, the player answers the event and the frame loop keeps running.
+    unleashThreat()
+    act(() => useGameStore.getState().advance(0.5))
+    runUntilPaused(2)
+    expect(useGameStore.getState().speed).toBe(1)
+  })
+
+  it('stays out of the way when the trigger is off', () => {
+    startPlaying()
+    act(() =>
+      useGameStore
+        .getState()
+        .updateSettings({ autoPause: { ...defaultSettings().autoPause, threat: false } }),
+    )
+    unleashThreat()
+    runUntilPaused(2)
+    expect(useGameStore.getState().speed).toBe(1)
+  })
+
+  it('pauses when the Queen issues a decree', () => {
+    startPlaying()
+    enable('decree')
+    act(() => {
+      currentRun().decree = null
+      currentRun().decreeTimer = 0.2
+    })
+    runUntilPaused()
+    expect(useGameStore.getState().speed).toBe(0)
+    const run = currentRun()
+    expect(run.decree).not.toBeNull()
+    expect(useGameStore.getState().notice).toBe(
+      `Paused: the Queen decrees "${DECREES[run.decree!.defId].name}".`,
+    )
+  })
+
+  it('pauses when a species starts to despair', () => {
+    startPlaying()
+    enable('departure')
+    const species = currentRun().speciesPool[0]
+    act(() => {
+      currentRun().resolve[species] = -20
+    })
+    runUntilPaused()
+    expect(useGameStore.getState().speed).toBe(0)
+    expect(useGameStore.getState().notice).toMatch(/in despair and will start leaving/)
+  })
+
+  it('pauses when the Storm begins', () => {
+    startPlaying()
+    enable('storm')
+    act(() => {
+      const season = currentRun().season
+      season.season = 'clearance'
+      season.elapsed = season.length - 0.2
+    })
+    runUntilPaused()
+    expect(currentRun().season.season).toBe('storm')
+    expect(useGameStore.getState().speed).toBe(0)
+    expect(useGameStore.getState().notice).toBe('Paused: the Storm has begun.')
+  })
+
+  it('pauses when a caravan arrives', () => {
+    startPlaying()
+    enable('caravan')
+    act(() => {
+      const run = currentRun()
+      const hearth = Object.values(run.buildings)[0]
+      run.buildings.post = {
+        ...hearth,
+        id: 'post',
+        defId: 'tradingPost',
+        pos: { x: hearth.pos.x + 4, y: hearth.pos.y },
+        built: true,
+        workers: [],
+      }
+      run.caravan.here = false
+      run.caravan.timer = 0.2
+    })
+    runUntilPaused()
+    expect(currentRun().caravan.here).toBe(true)
+    expect(useGameStore.getState().speed).toBe(0)
+    expect(useGameStore.getState().notice).toBe('Paused: a caravan has arrived.')
+  })
+
+  it('lets the player change the triggers mid-run', () => {
+    startPlaying()
+    const settingsButton = screen.getByRole('button', { name: 'Game settings' })
+    expect(settingsButton.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(settingsButton)
+    const popover = screen.getByRole('group', { name: 'Game settings' })
+    fireEvent.click(within(popover).getByRole('checkbox', { name: 'The Storm begins' }))
+    expect(useGameStore.getState().settings.autoPause.storm).toBe(true)
+    expect(loadSettings().autoPause.storm).toBe(true)
+
+    // Esc closes it again.
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('group', { name: 'Game settings' })).toBeNull()
+  })
+
+  it('shows the same triggers in the menu settings', () => {
+    render(<App />)
+    const box = screen.getByRole('checkbox', { name: 'A caravan arrives' })
+    fireEvent.click(box)
+    expect(useGameStore.getState().settings.autoPause.caravan).toBe(true)
+  })
+})
+
+describe('top-bar status toggle', () => {
+  it('flags a danger on the folded status toggle without opening it', () => {
+    startPlaying()
+    const toggle = () => document.querySelector('.status-toggle') as HTMLElement
+    expect(toggle().className).not.toMatch(/is-danger/)
+
+    act(() => {
+      currentRun().coldHearth = true
+      bump()
+    })
+    expect(toggle().className).toMatch(/is-danger/)
+    expect(toggle().getAttribute('aria-label')).toMatch(/The hearth is out/)
+    expect(toggle().querySelector('.status-badge')?.textContent).toBe('1')
+
+    expect(toggle().getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(toggle())
+    expect(toggle().getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('#topbar-status')?.className).toMatch(/is-open/)
+  })
+
+  it('marks the impatience meter when the Queen is nearly out of patience', () => {
+    startPlaying()
+    act(() => {
+      const run = currentRun()
+      run.impatience = run.maxImpatience - 1
+      bump()
+    })
+    expect(document.querySelector('.meter-bad')?.className).toMatch(/is-critical/)
   })
 })

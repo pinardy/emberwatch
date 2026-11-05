@@ -3,7 +3,6 @@ import { BUILDINGS } from '../game/content/buildings'
 import { CORNERSTONES } from '../game/content/cornerstones'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
-import { NEED_LABELS } from '../game/content/species'
 import { freeRerollsLeft, gladeEventOptions } from '../game/engine/citadel'
 import { optionAffordable, rerollCost } from '../game/engine/events'
 import { useGameStore, useRun } from '../game/store'
@@ -12,6 +11,7 @@ import { Cost } from './BuildPanel'
 import { DialogTip } from './TipsCoach'
 import { CharterChoice } from './CharterChoice'
 import { RunModifierList } from './RunModifierList'
+import { DraftAppealChips } from './DraftAppealChips'
 
 /**
  * Blocking modal for the three things that interrupt play: cornerstone picks,
@@ -183,11 +183,7 @@ export function ChoiceModal() {
                 <div className="option-effects">
                   <Effect label="Cost" bag={def.cost} tone="bad" />
                   {def.workerSlots > 0 && <span>👷 {def.workerSlots}</span>}
-                  {def.service && (
-                    <span>
-                      {NEED_LABELS[def.service.need].icon} {NEED_LABELS[def.service.need].name}
-                    </span>
-                  )}
+                  <DraftAppealChips run={run} defId={id} />
                 </div>
               </button>
             )

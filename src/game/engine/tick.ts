@@ -25,6 +25,7 @@ import { stepProduction } from './production'
 import { computeStorageCap, population, totalHousing } from './queries'
 import { checkCharter, stepConditions, stepDecree } from './structure'
 import { stepCaravan } from './trade'
+import { recordEvent, stepTimeline } from './timeline'
 import {
   stepBraziers,
   stepDepartures,
@@ -97,6 +98,7 @@ export function tick(s: RunState, dt: number): void {
   checkMilestones(s)
   checkCharter(s)
   checkEndConditions(s)
+  stepTimeline(s)
 }
 
 /**
@@ -127,6 +129,7 @@ function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
   s.season.length = seasonLengthFor(next, s.season.year, mods)
 
   if (next === 'storm') {
+    recordEvent(s, 'storm')
     s.hostility = Math.min(MAX_HOSTILITY, s.hostility + HOSTILITY_PER_STORM)
     pushLog(
       s,
@@ -134,6 +137,7 @@ function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
       'bad',
     )
   } else if (next === 'drizzle') {
+    recordEvent(s, 'year', String(s.season.year))
     pushLog(s, `Year ${s.season.year} begins. The storm has passed.`, 'good')
     if (s.season.year === QUEEN_DEADLINE_YEAR - 1) {
       pushLog(

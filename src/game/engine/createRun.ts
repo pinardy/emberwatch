@@ -25,10 +25,13 @@ import {
   STARTING_VILLAGERS,
   MAX_IMPATIENCE,
   MAX_REPUTATION,
+  SEASON_ORDER,
+  YEAR_SECONDS,
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { offerBlueprint, offerCornerstone } from './events'
 import { defaultDecreeState } from './structure'
+import { emptyTimeline } from './timeline'
 import { defaultCaravan } from './trade'
 import { generateMap } from './mapgen'
 import { computeModifiers, seasonLengthFor } from './modifiers'
@@ -188,6 +191,7 @@ export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptio
     pendingChoices: [],
     log: [],
     logCounter: 0,
+    timeline: emptyTimeline(speciesPool),
     speciesPool,
     newcomerTimer: 0,
     unlockedBuildings: [...new Set([...STARTING_BLUEPRINTS, ...loadout.startBlueprints])],
@@ -209,7 +213,12 @@ export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptio
   // --- the land's modifiers --------------------------------------------------
   applyRunModifiers(state, runModifiers)
   // Season-length effects reach the opening Drizzle too (an early frost).
-  state.season.length = seasonLengthFor('drizzle', 1, computeModifiers(state))
+  const landMods = computeModifiers(state)
+  state.season.length = seasonLengthFor('drizzle', 1, landMods)
+  // The first decree waits out Year 1 (DECREE_FIRST_DELAY is a base-length
+  // year): follow the year this land actually has, so it still arrives as
+  // Year 2 opens under Long Storms or an Early Frost.
+  state.decreeTimer += yearOneLength(landMods) - YEAR_SECONDS
 
   // --- opening orders -------------------------------------------------------
   for (let i = 0; i < 3; i++) drawOrder(state)
@@ -237,6 +246,11 @@ export function createRun({ seed, meta, species, edict, modifiers }: NewRunOptio
   )
 
   return state
+}
+
+/** Seconds in Year 1 once season-length modifiers apply. */
+function yearOneLength(mods: ReturnType<typeof computeModifiers>): number {
+  return SEASON_ORDER.reduce((sum, season) => sum + seasonLengthFor(season, 1, mods), 0)
 }
 
 /** Draws a fresh order the run has not seen yet and appends it. */

@@ -4,12 +4,16 @@ import { RESOURCES } from '../content/resources'
 import type { ResourceId, RunState, SpeciesId } from '../types'
 import {
   RUNWAY_WARNING_SECONDS,
+  STORM_FOOD_WARNING_LEAD,
   foodForecast,
   formatDuration,
   hearthForecast,
+  secondsUntilStorm,
   storageBlocked,
+  stormFoodForecast,
 } from './forecast'
 import { computeModifiers } from './modifiers'
+import { isFoodCamp } from './onboarding'
 import {
   canAfford,
   idleVillagers,
@@ -112,6 +116,20 @@ export function collectWarnings(s: RunState): Warning[] {
         severity: 'caution',
         text: `🍽️ Food runs out in ${formatDuration(food.runway)} at the current rate.`,
       })
+    } else {
+      // The Storm halves gathering and stops farms: say so while there is
+      // still a Drizzle or Clearance left to stock up in.
+      const untilStorm = secondsUntilStorm(s)
+      if (untilStorm !== null && untilStorm <= STORM_FOOD_WARNING_LEAD) {
+        const storm = stormFoodForecast(s, mods)
+        if (storm.shortfall >= 1) {
+          out.push({
+            id: 'food-storm',
+            severity: 'caution',
+            text: `🍽️ Food won't last the Storm — about ${Math.ceil(storm.shortfall)} meals short. ${foodAdvice(s)}`,
+          })
+        }
+      }
     }
   }
 
@@ -190,4 +208,14 @@ export function collectWarnings(s: RunState): Warning[] {
   }
 
   return out
+}
+
+/** The most useful next move for a larder that will not last the Storm. */
+function foodAdvice(s: RunState): string {
+  const camps = Object.values(s.buildings).filter((b) => isFoodCamp(b.defId))
+  if (camps.length === 0) return "Build a Foragers' Camp."
+  if (!camps.some((b) => b.workers.length > 0)) return 'Assign workers to your food camps.'
+  return s.unlockedBuildings.includes('cookhouse')
+    ? 'Build another food camp or a Cookhouse.'
+    : 'Build another food camp.'
 }

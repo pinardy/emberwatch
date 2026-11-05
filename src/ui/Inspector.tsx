@@ -3,7 +3,12 @@ import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
 import { useEffect, useRef, useState } from 'react'
 import { NEED_LABELS, SPECIES, VILLAGER_TRAITS } from '../game/content/species'
-import { demolishRefund, isReachable, rushCost } from '../game/engine/actions'
+import {
+  demolishRefund,
+  demolishRefundShare,
+  isReachable,
+  rushCost,
+} from '../game/engine/actions'
 import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { computeModifiers } from '../game/engine/modifiers'
 import { availableRecipes, idleVillagers } from '../game/engine/queries'
@@ -101,7 +106,9 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
   const chooseRecipe = useGameStore((s) => s.chooseRecipe)
   const pauseBuilding = useGameStore((s) => s.pauseBuilding)
   const demolish = useGameStore((s) => s.demolish)
-  const confirmDemolish = useConfirm(`demolish:${building.id}`, () => {
+  // Keyed on `built` too: a site that finishes while armed disarms, so the
+  // second click never removes something the button no longer describes.
+  const confirmDemolish = useConfirm(`demolish:${building.id}:${building.built}`, () => {
     demolish(building.id)
     useGameStore.getState().clearSelection()
   })
@@ -114,6 +121,10 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
   const adjacency = adjacencyStatus(run, building)
   const terrain = terrainOf(run, building)
   const ground = terrainHint(building.defId, terrain)
+  // Unbuilt sites are cancelled, not demolished: the refund slides from all of
+  // the materials (untouched) towards half (finished).
+  const removeLabel = building.built ? 'Demolish' : 'Cancel construction'
+  const refundShare = Math.round(demolishRefundShare(building) * 100)
 
   return (
     <div className="inspector-body">
@@ -289,22 +300,31 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             onClick={confirmDemolish.trigger}
             title={
               confirmDemolish.armed
-                ? 'Click again to tear it down'
-                : 'Tear this building down for half its materials back'
+                ? building.built
+                  ? 'Click again to tear it down'
+                  : 'Click again to cancel construction'
+                : building.built
+                  ? 'Tear this building down for half its materials back'
+                  : refundShare >= 100
+                    ? 'Nobody has worked on this site yet: cancel it for all of its materials back'
+                    : `Cancel this site for ${refundShare}% of its materials back`
             }
           >
             {confirmDemolish.armed ? (
               <>
-                Confirm? Refund <BagLabel bag={demolishRefund(building.defId)} />
+                Confirm? Refund <BagLabel bag={demolishRefund(building)} />
+                <small className="refund-share"> ({refundShare}%)</small>
               </>
             ) : (
-              'Demolish'
+              removeLabel
             )}
           </button>
         )}
         <span className="sr-only" aria-live="polite">
           {confirmDemolish.armed
-            ? `Press Demolish again within a few seconds to tear down the ${def.name}.`
+            ? building.built
+              ? `Press Demolish again within a few seconds to tear down the ${def.name} for ${refundShare}% of its materials.`
+              : `Press Cancel construction again within a few seconds to remove the ${def.name} site for ${refundShare}% of its materials.`
             : ''}
         </span>
       </footer>

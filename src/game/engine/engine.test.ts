@@ -21,6 +21,10 @@ import {
   rushCost,
   sootheCost,
   sootheQueen,
+  demolishBuilding,
+  demolishRefund,
+  demolishRefundShare,
+  isUnstartedSite,
 } from './actions'
 import {
   ADJACENCY_RANGE,
@@ -120,7 +124,7 @@ import {
   ignoresColdHearth,
   mealMultiplier,
 } from './traits'
-import type { RunState } from '../types'
+import type { BuildingInstance, RunState } from '../types'
 
 const SEED = 123456
 
@@ -1710,6 +1714,76 @@ describe('multi-partner adjacency', () => {
     put(state, 'shelter', { x: FAR.x, y: FAR.y - 1.6 })
     expect(describePlacement(state, 'tavern', FAR).parts.join(' ')).toContain(
       '+20% capacity beside 2 homes',
+    )
+  })
+})
+
+describe('demolition refunds', () => {
+  /** Places `defId` wherever it fits and returns the new site. */
+  function site(state: RunState, defId: string): BuildingInstance {
+    const spot = findPlacement(state, defId)
+    expect(spot, `${defId} has somewhere to stand`).toBeTruthy()
+    const before = new Set(Object.keys(state.buildings))
+    expect(placeBuilding(state, defId, spot!)).toBeNull()
+    const id = Object.keys(state.buildings).find((k) => !before.has(k))!
+    return state.buildings[id]
+  }
+
+  it('hands back every material for a site nobody has worked on', () => {
+    const state = newRun()
+    state.storageCap = 1000
+    const wood = state.stock.wood ?? 0
+    const camp = site(state, 'woodcuttersCamp')
+    expect(state.stock.wood).toBe(wood - BUILDINGS.woodcuttersCamp.cost.wood!)
+    expect(isUnstartedSite(camp)).toBe(true)
+    expect(demolishRefundShare(camp)).toBe(1)
+    expect(demolishRefund(camp)).toEqual(BUILDINGS.woodcuttersCamp.cost)
+
+    expect(demolishBuilding(state, camp.id)).toBeNull()
+    expect(state.buildings[camp.id]).toBeUndefined()
+    expect(state.stock.wood).toBe(wood)
+  })
+
+  it('slides from a full refund to half as construction progresses', () => {
+    const state = newRun()
+    state.storageCap = 1000
+    state.stock.plank = 8
+    state.stock.brick = 4
+    const cabin = site(state, 'cabin')
+    const seconds = BUILDINGS.cabin.buildSeconds
+
+    cabin.buildProgress = seconds / 2
+    expect(isUnstartedSite(cabin)).toBe(false)
+    expect(demolishRefundShare(cabin)).toBeCloseTo(0.75)
+    expect(demolishRefund(cabin)).toEqual({ plank: 6, brick: 3 })
+
+    cabin.buildProgress = seconds * 0.99
+    expect(demolishRefundShare(cabin)).toBeGreaterThan(0.5)
+    expect(demolishRefundShare(cabin)).toBeLessThan(0.51)
+
+    cabin.built = true
+    cabin.buildProgress = seconds
+    expect(demolishRefundShare(cabin)).toBe(0.5)
+    expect(demolishRefund(cabin)).toEqual({ plank: 4, brick: 2 })
+    // A bare definition id means a finished building.
+    expect(demolishRefund('cabin')).toEqual({ plank: 4, brick: 2 })
+
+    expect(demolishBuilding(state, cabin.id)).toBeNull()
+    expect(state.stock.plank).toBe(4)
+    expect(state.stock.brick).toBe(2)
+  })
+
+  it('treats rushed and instantly built buildings as finished', () => {
+    const state = newRun()
+    state.storageCap = 1000
+    state.stock.amber = 500
+    const camp = site(state, 'woodcuttersCamp')
+    expect(rushConstruction(state, camp.id)).toBeNull()
+    expect(isUnstartedSite(camp)).toBe(false)
+    expect(demolishRefundShare(camp)).toBe(0.5)
+    // Something built on placement keeps its progress at zero but is finished.
+    expect(demolishRefundShare({ defId: 'woodcuttersCamp', built: true, buildProgress: 0 })).toBe(
+      0.5,
     )
   })
 })

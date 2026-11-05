@@ -9,6 +9,7 @@ import { caravanAvailable, hasTradingPost, offerPrice, sellPrice } from '../game
 import { useGameStore, useRun } from '../game/store'
 import { DecreeCard } from './DecreeCard'
 import { RunModifierList } from './RunModifierList'
+import { RaceSparkline } from './RunTimeline'
 import type { ResourceId } from '../game/types'
 
 export function OrdersPanel() {
@@ -21,7 +22,10 @@ export function OrdersPanel() {
   return (
     <div className="panel-body">
       <section className="build-group">
-        <h3>The Queen's orders</h3>
+        <div className="orders-head">
+          <h3>The Queen's orders</h3>
+          <RaceSparkline run={run} />
+        </div>
         <p className="panel-hint">
           Completing an order grants reputation immediately and draws a replacement.
         </p>
