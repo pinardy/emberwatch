@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 187 tests: simulation, forecasts, Citadel, balance harness, UI
+npm test           # 319 tests: simulation, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -23,6 +23,7 @@ npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
 | **Lingering conditions** | Some glade choices leave an aftermath tied to the build loop — flooded paths slow construction until you lay planks, a spirit wants incense before its deadline, a blight saps resolve until a new service hall stands. The bar above the threats tracks each one's progress. |
 | **Resolve** | Each species has a resolve score driven by housing, food variety, satisfied service needs, and hostility (hunger ramps in over about a meal). Above its threshold, a species earns **reputation**; at −5 or below it despairs, and after 70 s one villager leaves, then the rest hold on 30 s longer before the next follows — the warning strip counts it down. Every species also bends one rule — lizards shrug off a cold hearth, idle beavers build faster, harpies clear glades from the air — and most villagers arrive with a personal quirk. |
 | **Warmth** | Housing within the hearth's warmth radius is safe; homes beyond it chill their residents during the Storm unless a **brazier** stands near them — a small fire bowl (a starting blueprint) that warms homes in its own radius but burns wood every Storm second, and goes cold when the woodpile runs dry. |
+| **Upgrades** | Twenty buildings can be raised one or two tiers — a shelter into a reinforced shelter (insulated for the Storm) and then a snug lodge (comfort), a tavern into a taproom and an alehouse, a mill into a joinery. First tiers cost mostly planks and bricks, second tiers parts, tools or copper bars, so the deeper chains pay off late. An upgrade is a construction job for idle builders (rushable with amber); the building keeps working at its old tier until it lands. Upgrades take no new ground and no new worker — the answer when the hearth's warm ring is full. |
 | **Placement** | Ground matters: fertile glades speed farms, rocky ones masons and miners (and break ploughs), marsh yields rich clay but slows construction, forest speeds gatherers. Buildings have several adjacency partners each, and every service venue reaches more villagers with homes around it (+10% capacity per home, up to three) and its supplier next door. The placement ghost and the Inspector spell all of it out. |
 | **Caravans** | Once a Trading Post stands, caravans call on a cycle with rotating lots to buy — and pay double for one good they want that visit. Amber also rerolls drafts, rushes construction, and soothes the Queen. |
 | **Reputation** | Fills from completed orders, glade events, reclaimed land, and high resolve — which only pays in full for species whose service needs are met. Fill it and you win. |
@@ -89,7 +90,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs ten test files:
+`npm test` runs fourteen test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), and clears glades. It plays 24 seeds for each of three species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
@@ -104,8 +105,10 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`App.test.tsx`** — UI smoke tests that mount the real app in jsdom and click the path a player takes: menu → setup → blueprint draft → placing a building → switching panels → winning.
 - **`forecast.test.ts`** — the HUD's forward-looking numbers (Storm countdown, wood and food runways, meter rates, building status), checked against what a real tick applies.
 - **`citadel.test.ts`** — meta progression: save migration, upgrade prerequisites, Queen's Edicts, locked cornerstones, draft sizes and the reward breakdown.
+- **`upgrades.test.ts`** and **`UpgradeSection.test.tsx`** — building upgrades: every tier effect (housing, comfort, insulation, storage, service capacity, slots, speed, reach, warmth, recipes and ratios), the upgrade construction flow with builders and rush, decree counting, save/load mid-upgrade and old saves; and the Inspector's upgrade block.
 - **`runModifiers.test.ts`** — the map-modifier pool: content invariants, seed-deterministic draws, mapgen hooks changing deposit counts exactly as declared, effects folding into the modifiers (seasons, caravans, decrees, braziers, terrain, adjacency), and saves and history. The balance harness also forces each modifier in turn on a smaller seed set and checks it stays winnable but not trivial.
 - **`timeline.test.ts`** and **`RunTimeline.test.tsx`** — the run timeline: sampling cadence, the size bound and downsampling, recorded events, save/load and old saves, the outcome sentence, and the end-screen chart's keyboard readout, views and table.
+- **`onboarding.test.ts`** and **`Onboarding.test.tsx`** — the opening: the first-steps checklist, the first royal decree, and how the blueprint draft presents its options.
 - **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, building badges, warmth, and that static geometry is not rebuilt on every tick.
 
 ## PWA

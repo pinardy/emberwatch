@@ -4,6 +4,7 @@ import {
   BRAZIER_WARMTH_RADIUS,
 } from '../engine/balance'
 import type { AdjacencyBonus, BuildingDef } from '../types'
+import { BUILDING_UPGRADES } from './upgrades'
 
 /**
  * Building catalogue. Recipes are declarative so the sim never needs a switch
@@ -643,6 +644,10 @@ const defs: BuildingDef[] = [
     description: 'Satisfies Brawling for up to 25 villagers. Serves more of the settlement with homes close by.',
   },
 ]
+
+// Upgrade tiers are declared in `content/upgrades.ts` and attached here, so
+// every def carries its own `upgrades` like any other field.
+for (const def of defs) def.upgrades ??= BUILDING_UPGRADES[def.id]
 
 export const BUILDINGS: Record<string, BuildingDef> = Object.fromEntries(
   defs.map((d) => [d.id, d]),

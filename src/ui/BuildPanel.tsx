@@ -82,6 +82,14 @@ export function BuildPanel() {
                             {NEED_LABELS[def.service.need].name} {def.service.capacity}
                           </em>
                         ) : null}
+                        {def.upgrades?.length ? (
+                          <em
+                            className="tag-upgrade"
+                            title={`Upgradable once built: ${def.upgrades.map((u) => u.name).join(' → ')}`}
+                          >
+                            ⬆ {def.upgrades.length} upgrade{def.upgrades.length > 1 ? 's' : ''}
+                          </em>
+                        ) : null}
                       </span>
                     </span>
                   </button>

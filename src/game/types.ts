@@ -218,6 +218,50 @@ export interface BuildingDef {
   /** Footprint radius override; defaults to the category's footprint. */
   footprint?: number
   description: string
+  /**
+   * Upgrade tiers, in order: `upgrades[0]` takes a building from tier 0 to 1.
+   * Declared in `content/upgrades.ts` and attached to the def at load. Each
+   * tier's effects stack on top of the ones before it — see `engine/upgrades.ts`.
+   */
+  upgrades?: BuildingUpgrade[]
+}
+
+/**
+ * What one upgrade tier adds. Every field reuses a concept the base def
+ * already has, so the sim folds tiers in where it reads the base number.
+ */
+export interface UpgradeEffects {
+  /** Extra worker slots. */
+  workerSlots?: number
+  /** Work speed, percent (additive with other tiers). */
+  workSpeed?: number
+  /** Extra villagers a service venue reaches, before neighbourhood bonuses. */
+  serviceCapacity?: number
+  /** Extra housing. */
+  housing?: number
+  /** Extra stockpile capacity. */
+  storage?: number
+  /** Gathering camps reach this much further (world units). */
+  gatherRadius?: number
+  /** Warmth sources warm this much further (world units). */
+  warmthRadius?: number
+  /** Housing: residents count as comfortably housed, like a cabin's. */
+  comfort?: boolean
+  /** Housing: stays warm in the Storm even beyond every fire. */
+  insulated?: boolean
+  /** Recipes this tier unlocks, offered beside the def's own. */
+  recipes?: Recipe[]
+  /** Better output ratio: extra outputs per completed cycle, by recipe id. */
+  extraOutputs?: Record<string, ResourceBag>
+}
+
+export interface BuildingUpgrade {
+  /** The building's name once this tier is reached, e.g. "Reinforced Shelter". */
+  name: string
+  cost: ResourceBag
+  /** Seconds of construction work at one builder's speed. */
+  buildSeconds: number
+  effects: UpgradeEffects
 }
 
 /**
@@ -376,6 +420,16 @@ export interface BuildingInstance {
   depositsInRange: Partial<Record<DepositId, string[]>>
   /** Warmth sources only: set while a Storm finds no wood to burn. */
   unlit?: boolean
+  /**
+   * Upgrade tier reached (0 = as first built). Absent on saves from before
+   * upgrades existed, which reads as 0 — see `engine/upgrades.ts#tierOf`.
+   */
+  tier?: number
+  /**
+   * Work banked toward the next tier while an upgrade is under way; absent
+   * otherwise. The building keeps working at its current tier meanwhile.
+   */
+  upgradeProgress?: number
 }
 
 // ---------------------------------------------------------------------------

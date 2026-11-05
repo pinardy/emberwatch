@@ -5,15 +5,17 @@ import { ORDERS } from '../content/orders'
 import { RUN_MODIFIER_LIST } from '../content/runModifiers'
 import { SPECIES } from '../content/species'
 import { EDIBLE } from '../content/resources'
-import type { BuildingInstance, ResourceId, RunState, ServiceNeed, SpeciesId } from '../types'
+import type { BuildingInstance, ResourceId, RunState, ServiceNeed, SpeciesId, Vec2 } from '../types'
 import {
   addClearer,
   assignWorker,
   findPlacement,
   isReachable,
   placeBuilding,
+  canUpgradeBuilding,
   removeWorker,
   setRecipe,
+  upgradeBuilding,
 } from './actions'
 import { GLADES_PER_REPUTATION } from './balance'
 import { createRun } from './createRun'
@@ -30,6 +32,7 @@ import {
   SERVICE_COVERAGE_RATIO,
   activeRecipe,
   canAfford,
+  comfortableHousing,
   foodStock,
   idleVillagers,
   population,
@@ -40,6 +43,7 @@ import {
 } from './queries'
 import { dist } from './geometry'
 import { tick } from './tick'
+import { baseServiceCapacity, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 
 /**
  * End-to-end balance harness.
@@ -91,6 +95,8 @@ interface BotReport {
   lost: number
   /** Braziers raised to warm homes beyond the hearth. */
   braziers: number
+  /** Upgrade tiers standing at the end, across every building. */
+  upgrades: number
   /** Map modifiers the seed drew (or the test forced). */
   modifiers: string
   /** Orders still open at the end, with progress — stuck ones explain slow runs. */
@@ -157,7 +163,7 @@ function countBuilt(s: RunState, defId: string): number {
  * hearth. Building compactly is what a competent player does, and it keeps
  * housing inside the hearth's warmth once the Storm chills distant homes.
  */
-function tryPlace(s: RunState, defId: string): boolean {
+function tryPlace(s: RunState, defId: string, accept?: (pos: Vec2) => boolean): boolean {
   if (!s.unlockedBuildings.includes(defId)) return false
   const def = BUILDINGS[defId]
   if (!def || !canAfford(s.stock, def.cost)) return false
@@ -175,6 +181,9 @@ function tryPlace(s: RunState, defId: string): boolean {
     else noRoom.set(s, new Set([key]))
     return false
   }
+  // The spot the search found is the best on offer; refuse it if it is not
+  // good enough (a home out in the cold) and let the caller fall back.
+  if (accept && !accept(pos)) return false
   return placeBuilding(s, defId, pos) === null
 }
 
@@ -196,7 +205,7 @@ function neededServices(s: RunState): ServiceNeed[] {
 function slotPressure(s: RunState): number {
   let slots = 0
   for (const b of Object.values(s.buildings)) {
-    if (b.built) slots += BUILDINGS[b.defId]?.workerSlots ?? 0
+    if (b.built) slots += workerSlotsOf(b)
   }
   return slots / Math.max(1, population(s))
 }
@@ -208,8 +217,13 @@ function build(s: RunState, economyOnly = false): void {
   const pop = population(s)
 
   // Housing and storage need no workers, so they are never gated.
-  if (totalHousing(s) < pop + 4 && (tryPlace(s, 'cabin') || tryPlace(s, 'shelter'))) return
-  if (storageUsed(s) > s.storageCap * 0.8 && tryPlace(s, 'warehouse')) return
+  if (totalHousing(s) < pop + 4 && buildHousing(s)) return
+  if (
+    storageUsed(s) > s.storageCap * 0.8 &&
+    (tryPlace(s, 'warehouse') || tryUpgrade(s, ['warehouse']))
+  ) {
+    return
+  }
   // Homes that sprawled past the hearth's reach get a brazier before the Storm.
   if (warmSprawl(s)) return
 
@@ -241,6 +255,10 @@ function build(s: RunState, economyOnly = false): void {
    */
   if (!economyOnly && slotPressure(s) < 1.6 && buildServices(s)) return
 
+  // Comfort is resolve for everyone and costs no worker: once the venues are
+  // seen to, raise shelters into lodges with the planks left over.
+  if (comfortUpgrade(s)) return
+
   // 4. The material chain that pays for those venues.
   if (slotPressure(s) > 1.25) return
   if (countPlanned(s, 'stonecuttersCamp') < 1 && tryPlace(s, 'stonecuttersCamp')) return
@@ -253,6 +271,33 @@ function build(s: RunState, economyOnly = false): void {
 
   // 6. A cookhouse doubles what every one of those camps is worth.
   if (countPlanned(s, 'cookhouse') < 2 && pop > 18 && tryPlace(s, 'cookhouse')) return
+}
+
+/**
+ * Out of housing. A new home goes up while there is warm ground for it; once
+ * the hearth's reach is full, raising a home that already stands (more beds,
+ * insulated walls) beats sprawling into the cold. Only when nothing can be
+ * upgraded does a home go up out in the cold.
+ */
+function buildHousing(s: RunState): boolean {
+  for (const defId of ['cabin', 'shelter']) {
+    if (tryPlace(s, defId, (pos) => isWarmAt(s, pos))) return true
+  }
+  if (tryUpgrade(s, ['cabin', 'shelter'])) return true
+  return tryPlace(s, 'cabin') || tryPlace(s, 'shelter')
+}
+
+/**
+ * Most of the settlement sleeping in comfort (cabins, lodges) is worth a
+ * resolve bonus to every species. A shelter takes two tiers to get there, so
+ * this keeps a plank reserve for venues and only works on one at a time.
+ */
+function comfortUpgrade(s: RunState): boolean {
+  const pop = population(s)
+  if (pop < 12 || comfortableHousing(s) >= pop * 0.6) return false
+  if ((s.stock.plank ?? 0) < 15) return false
+  if (Object.values(s.buildings).some((b) => b.defId === 'shelter' && isUpgrading(b))) return false
+  return tryUpgrade(s, ['shelter'])
 }
 
 /**
@@ -318,14 +363,33 @@ function buildServices(s: RunState): boolean {
       countBuilt(s, chain.producer) >= 1 || (s.stock[good as never] ?? 0) >= 10
     if (supplied && tryPlace(s, chain.service)) return true
   }
+  /*
+   * Short on capacity: upgrading a venue that stands needs no extra worker
+   * and burns no extra goods, so it comes before raising a second one.
+   */
   const required = Math.ceil(pop * SERVICE_COVERAGE_RATIO)
   for (const need of neededServices(s)) {
     const chain = SERVICE_CHAIN[need]
-    const capacity =
-      countBuilt(s, chain.service) * (BUILDINGS[chain.service]?.service?.capacity ?? 0)
-    if (capacity > 0 && capacity < required && tryPlace(s, chain.service)) return true
+    const capacity = Object.values(s.buildings)
+      .filter((b) => b.defId === chain.service && b.built)
+      .reduce((sum, b) => sum + baseServiceCapacity(b), 0)
+    if (capacity <= 0 || capacity >= required) continue
+    if (tryUpgrade(s, [chain.service]) || tryPlace(s, chain.service)) return true
   }
   return false
+}
+
+/**
+ * Starts the next tier on the least-upgraded standing instance of any of
+ * `defIds` that can take one right now (built, idle, affordable).
+ */
+function tryUpgrade(s: RunState, defIds: string[]): boolean {
+  // One upgrade at a time: they only get builders the new sites leave idle.
+  if (Object.values(s.buildings).some(isUpgrading)) return false
+  const candidate = Object.values(s.buildings)
+    .filter((b) => defIds.includes(b.defId) && canUpgradeBuilding(s, b.id) === null)
+    .sort((a, b) => tierOf(a) - tierOf(b))[0]
+  return !!candidate && upgradeBuilding(s, candidate.id) === null
 }
 
 /** producer building id → the set of recipes the settlement needs from it. */
@@ -347,6 +411,17 @@ function wantsResin(s: RunState): boolean {
   )
 }
 
+/** A workshop whose wanted recipe burns resin is built or under way. */
+function resinConsumerPlanned(s: RunState): boolean {
+  for (const [producer, recipes] of wantedRecipes(s)) {
+    const usesResin = [...recipes].some(
+      (id) => (BUILDINGS[producer]?.recipes.find((r) => r.id === id)?.inputs.resin ?? 0) > 0,
+    )
+    if (usesResin && countPlanned(s, producer) > 0) return true
+  }
+  return false
+}
+
 /** True when any needed service good is made from plant fiber. */
 function wantsFiber(s: RunState): boolean {
   return [...wantedRecipes(s).values()].some(
@@ -358,8 +433,13 @@ function wantsFiber(s: RunState): boolean {
 function tuneRecipes(s: RunState): void {
   const wanted = wantedRecipes(s)
 
-  // Resin gates incense and scrolls, so dedicate one woodcutter to tapping.
-  if (wantsResin(s)) {
+  /*
+   * Resin gates incense and scrolls, so dedicate one woodcutter to tapping —
+   * once a workshop that burns it has been started. Tapping from minute one,
+   * for a chain that is minutes away, halves the wood of a settlement that
+   * cannot yet afford a warehouse, and slow builders never dig out of that.
+   */
+  if (wantsResin(s) && resinConsumerPlanned(s)) {
     const camps = Object.values(s.buildings).filter(
       (b) => b.defId === 'woodcuttersCamp' && b.built,
     )
@@ -398,7 +478,10 @@ function tuneRecipes(s: RunState): void {
   }
 }
 
-/** Sites currently under construction. */
+/**
+ * New sites under construction. Upgrades wait for builders until these are
+ * done, so they do not count toward the bot's limit on open sites.
+ */
 function openSites(s: RunState): number {
   return Object.values(s.buildings).filter((b) => !b.built).length
 }
@@ -488,7 +571,7 @@ function staff(s: RunState): void {
   }
 
   const targets = Object.values(s.buildings)
-    .filter((b) => b.built && (BUILDINGS[b.defId]?.workerSlots ?? 0) > b.workers.length)
+    .filter((b) => b.built && workerSlotsOf(b) > b.workers.length)
     .map((b) => ({ b, p: priority(b) }))
     .filter((t) => t.p >= 0)
     .sort((a, c) => c.p - a.p)
@@ -499,7 +582,7 @@ function staff(s: RunState): void {
     const keep = p >= 7 ? (openSites(s) > 0 ? 1 : 0) : reserve
     while (
       idleVillagers(s).length > keep &&
-      building.workers.length < (BUILDINGS[building.defId]?.workerSlots ?? 0)
+      building.workers.length < workerSlotsOf(building)
     ) {
       if (assignWorker(s, building.id) !== null) break
     }
@@ -662,6 +745,7 @@ function playRun(
     sources,
     lost: s.stats.villagersLost,
     braziers: countPlanned(s, 'brazier'),
+    upgrades: Object.values(s.buildings).reduce((sum, b) => sum + tierOf(b), 0),
     modifiers: s.runModifiers.join(','),
     openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),
   }
@@ -714,13 +798,14 @@ function summarise(label: string, reports: BotReport[]): string {
   return (
     `${label.padEnd(20)} won ${wins.length}/${reports.length} lost ${losses.length} stall ${stalls.length} early-collapse ${reports.filter(isEarlyCollapse).length}` +
     ` · avg win ${mean(wins.map((r) => r.exactMinutes)).toFixed(1)}min · longest ${Math.max(...reports.map((r) => r.exactMinutes)).toFixed(1)}min` +
-    ` · rep in wins: orders ${src('orders')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')}`
+    ` · rep in wins: orders ${src('orders')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')}` +
+    ` · upgrades/run ${mean(reports.map((r) => r.upgrades)).toFixed(1)}`
   )
 }
 
 function logRun(seed: number, r: BotReport): void {
   console.log(
-    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
+    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
       `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}`,
   )
 }

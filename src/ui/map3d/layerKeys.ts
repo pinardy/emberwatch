@@ -8,6 +8,7 @@ import {
   gladePlateInfo,
   isColdHousing,
   isUnlitWarmthSource,
+  upgradeFraction,
   type MapBuildingStatus,
   type StatusContext,
 } from '../mapShared'
@@ -87,6 +88,10 @@ export interface BuildingView {
   cold: boolean
   /** Warmth sources: whether the fire is burning (drives the brazier model). */
   lit: boolean
+  /** Upgrade tier reached (drives the tier mark and the model's trim). */
+  tier: number
+  /** Upgrade under way: progress in 2% steps; -1 when none is. */
+  upgrade: number
 }
 
 export function buildingViews(run: RunState): BuildingView[] {
@@ -102,14 +107,21 @@ export function buildingViews(run: RunState): BuildingView[] {
       status: buildingStatusKind(run, building, ctx),
       cold: isColdHousing(run, building, sources) || isUnlitWarmthSource(building),
       lit: !building.unlit,
+      tier: building.tier ?? 0,
+      upgrade: quantise(upgradeFraction(building)),
     }
   })
+}
+
+/** 2% steps, like construction progress; -1 for "no upgrade under way". */
+function quantise(fraction: number | null): number {
+  return fraction === null ? -1 : Math.floor(fraction * 50) / 50
 }
 
 export function buildingKey(run: RunState): string {
   let key = ''
   for (const v of buildingViews(run)) {
-    key += `${v.building.id}:${v.progress}:${v.workers}:${v.status}:${v.cold ? 1 : 0}${v.lit ? 1 : 0},`
+    key += `${v.building.id}:${v.progress}:${v.workers}:${v.status}:${v.cold ? 1 : 0}${v.lit ? 1 : 0}:${v.tier}:${v.upgrade},`
   }
   return key
 }

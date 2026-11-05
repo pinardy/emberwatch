@@ -19,7 +19,7 @@ import {
 import { pushLog } from './createRun'
 import { dist } from './geometry'
 import { gladeAt, insideWorld } from './mapgen'
-import { depositsInRangeOf } from './production'
+import { completeUpgrade, depositsInRangeOf } from './production'
 import {
   availableRecipes,
   canAfford,
@@ -30,6 +30,17 @@ import {
 } from './queries'
 import { unassign } from './society'
 import { clearMultiplier } from './traits'
+import {
+  displayName,
+  gatherRadiusOf,
+  isUpgrading,
+  maxTier,
+  nextUpgrade,
+  recipesOf,
+  tierName,
+  tierOf,
+  workerSlotsOf,
+} from './upgrades'
 
 /** Player commands. Each returns `null` on success or a reason for failure. */
 export type ActionError = string | null
@@ -104,6 +115,7 @@ export function placeBuilding(s: RunState, defId: string, pos: Vec2): ActionErro
     activeRecipeId: def.recipes[0]?.id ?? '',
     recipeProgress: 0,
     paused: false,
+    tier: 0,
     depositsInRange: def.gatherRadius
       ? depositsInRangeOf(s, pos, def.gatherRadius)
       : {},
@@ -168,7 +180,8 @@ export function findPlacement(s: RunState, defId: string, near?: Vec2): Vec2 | n
   return null
 }
 
-type RefundSubject = Pick<BuildingInstance, 'defId' | 'built' | 'buildProgress'>
+type RefundSubject = Pick<BuildingInstance, 'defId' | 'built' | 'buildProgress'> &
+  Partial<Pick<BuildingInstance, 'tier' | 'upgradeProgress'>>
 
 /**
  * Share of the cost a building returns when it comes down: all of it while
@@ -192,18 +205,75 @@ export function isUnstartedSite(building: Pick<BuildingInstance, 'built' | 'buil
  * Materials handed back when a building is torn down, rounded down. A bare
  * definition id means a finished building.
  */
+/** Adds `share` of each cost entry to `into`, rounding down per resource. */
+function addShare(into: Record<string, number>, cost: ResourceBag, share: number): void {
+  for (const [id, amount] of Object.entries(cost)) {
+    into[id] = (into[id] ?? 0) + (amount ?? 0) * share
+  }
+}
+
+/**
+ * Materials a building has cost so far: its base cost, every finished upgrade
+ * tier, and the tier currently under way (paid in full when it was started).
+ */
+export function demolishSpent(building: RefundSubject): ResourceBag {
+  const def = BUILDINGS[building.defId]
+  const tiers = def?.upgrades ?? []
+  const done = Math.min(building.tier ?? 0, tiers.length)
+  const total: Record<string, number> = {}
+  addShare(total, def?.cost ?? {}, 1)
+  for (let i = 0; i < done; i++) addShare(total, tiers[i].cost, 1)
+  if (building.built && building.upgradeProgress !== undefined && tiers[done]) {
+    addShare(total, tiers[done].cost, 1)
+  }
+  return total as ResourceBag
+}
+
+/**
+ * What tearing a building down returns. The base cost follows
+ * `demolishRefundShare`; every finished upgrade tier returns
+ * `DEMOLISH_REFUND_BUILT` like a finished building; and an upgrade still in
+ * progress slides from a full refund (no work done) down to that share, the
+ * same rule a construction site follows.
+ */
 export function demolishRefund(building: string | RefundSubject): ResourceBag {
-  const subject: RefundSubject =
-    typeof building === 'string' ? { defId: building, built: true, buildProgress: 0 } : building
-  const share = demolishRefundShare(subject)
+  const raw = refundBeforeRounding(building)
   const refund: ResourceBag = {}
-  const cost = Object.entries(BUILDINGS[subject.defId]?.cost ?? {}) as [ResourceId, number][]
-  for (const [id, amount] of cost) {
+  for (const [id, amount] of Object.entries(raw)) {
     // The epsilon keeps a share like 0.7 × 10 from flooring to 6.
-    const qty = Math.floor((amount ?? 0) * share + 1e-9)
-    if (qty > 0) refund[id] = qty
+    const qty = Math.floor(amount + 1e-9)
+    if (qty > 0) refund[id as ResourceId] = qty
   }
   return refund
+}
+
+/**
+ * The refund as a share of everything spent on the building (0..1), before
+ * per-resource rounding — the rule's share, which is what the UI states.
+ */
+export function demolishRefundPercent(building: RefundSubject): number {
+  const total = (bag: Record<string, number | undefined>) =>
+    Object.values(bag).reduce<number>((a, n) => a + (n ?? 0), 0)
+  const spent = total(demolishSpent(building))
+  return spent > 0 ? total(refundBeforeRounding(building)) / spent : 0
+}
+
+function refundBeforeRounding(building: string | RefundSubject): Record<string, number> {
+  const subject: RefundSubject =
+    typeof building === 'string' ? { defId: building, built: true, buildProgress: 0 } : building
+  const def = BUILDINGS[subject.defId]
+  const tiers = def?.upgrades ?? []
+  const done = Math.min(subject.tier ?? 0, tiers.length)
+  const raw: Record<string, number> = {}
+  addShare(raw, def?.cost ?? {}, demolishRefundShare(subject))
+  for (let i = 0; i < done; i++) addShare(raw, tiers[i].cost, DEMOLISH_REFUND_BUILT)
+  const pending = tiers[done]
+  if (subject.built && subject.upgradeProgress !== undefined && pending) {
+    const progress =
+      pending.buildSeconds > 0 ? Math.min(1, subject.upgradeProgress / pending.buildSeconds) : 1
+    addShare(raw, pending.cost, 1 - (1 - DEMOLISH_REFUND_BUILT) * progress)
+  }
+  return raw
 }
 
 export function demolishBuilding(s: RunState, buildingId: string): ActionError {
@@ -237,8 +307,9 @@ export function assignWorker(
   if (!building) return 'No such building.'
   const def = BUILDINGS[building.defId]
   if (!def) return 'No such building.'
-  if (def.workerSlots <= 0) return 'This building needs no workers.'
-  if (building.workers.length >= def.workerSlots) return 'All slots are full.'
+  const slots = workerSlotsOf(building)
+  if (slots <= 0) return 'This building needs no workers.'
+  if (building.workers.length >= slots) return 'All slots are full.'
 
   let chosen = villagerId ? s.villagers[villagerId] : undefined
   if (chosen && chosen.assignment !== null) return `${chosen.name} is already busy.`
@@ -277,8 +348,8 @@ export function removeWorker(
 export function setRecipe(s: RunState, buildingId: string, recipeId: string): ActionError {
   const building = s.buildings[buildingId]
   if (!building) return 'No such building.'
-  const def = BUILDINGS[building.defId]
-  if (!def?.recipes.some((r) => r.id === recipeId)) return 'Unknown recipe.'
+  // Recipes unlocked by an upgrade tier count once that tier is reached.
+  if (!recipesOf(building).some((r) => r.id === recipeId)) return 'Unknown recipe.'
   if (building.activeRecipeId === recipeId) return null
   building.activeRecipeId = recipeId
   // Switching product loses banked work — same rule as the real thing.
@@ -335,12 +406,19 @@ export function isReachable(s: RunState, gladeId: string): boolean {
 // Amber sinks
 // ---------------------------------------------------------------------------
 
-/** Amber to finish a construction site on the spot. */
+/** Amber to finish a construction site — or an upgrade under way — on the spot. */
 export function rushCost(s: RunState, buildingId: string): number {
   const building = s.buildings[buildingId]
   const def = building ? BUILDINGS[building.defId] : undefined
-  if (!building || !def || building.built) return 0
-  const remaining = Math.max(0, def.buildSeconds - building.buildProgress)
+  if (!building || !def) return 0
+  let remaining: number
+  if (!building.built) {
+    remaining = Math.max(0, def.buildSeconds - building.buildProgress)
+  } else {
+    const upgrade = nextUpgrade(building)
+    if (!upgrade || !isUpgrading(building)) return 0
+    remaining = Math.max(0, upgrade.buildSeconds - (building.upgradeProgress ?? 0))
+  }
   return Math.max(5, Math.ceil(remaining * RUSH_COST_PER_SECOND))
 }
 
@@ -348,18 +426,65 @@ export function rushCost(s: RunState, buildingId: string): number {
 export function rushConstruction(s: RunState, buildingId: string): ActionError {
   const building = s.buildings[buildingId]
   if (!building) return 'No such building.'
-  if (building.built) return 'Already finished.'
+  if (building.built && !isUpgrading(building)) return 'Already finished.'
   const cost = rushCost(s, buildingId)
   if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
   const def = BUILDINGS[building.defId]
+  if (building.built) {
+    // Rushing an upgrade: the next tier stands at once.
+    spend(s.stock, { amber: cost })
+    completeUpgrade(s, building)
+    pushLog(s, `${displayName(building)} rushed for ${cost} amber.`, 'info')
+    return null
+  }
   spend(s.stock, { amber: cost })
   building.built = true
   building.buildProgress = def?.buildSeconds ?? building.buildProgress
   s.stats.buildingsBuilt++
-  if (def?.gatherRadius) {
-    building.depositsInRange = depositsInRangeOf(s, building.pos, def.gatherRadius)
-  }
+  const radius = gatherRadiusOf(building)
+  if (radius) building.depositsInRange = depositsInRangeOf(s, building.pos, radius)
   pushLog(s, `${def?.name ?? 'A building'} rushed for ${cost} amber.`, 'info')
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Upgrades
+// ---------------------------------------------------------------------------
+
+/** Why a building cannot start its next upgrade right now, or null if it can. */
+export function canUpgradeBuilding(s: RunState, buildingId: string): ActionError {
+  const building = s.buildings[buildingId]
+  if (!building) return 'No such building.'
+  const def = BUILDINGS[building.defId]
+  if (!def) return 'No such building.'
+  if (maxTier(building.defId) === 0) return `The ${def.name} cannot be upgraded.`
+  if (!building.built) return 'Finish building it first.'
+  if (isUpgrading(building)) return 'An upgrade is already under way.'
+  const upgrade = nextUpgrade(building)
+  if (!upgrade) return `The ${displayName(building)} is fully upgraded.`
+  if (!canAfford(s.stock, upgrade.cost)) return 'Not enough materials.'
+  return null
+}
+
+/**
+ * Starts raising a building to its next tier: pays the materials and opens an
+ * upgrade site that idle builders work like any construction. The building
+ * keeps working at its current tier until the upgrade completes, so a venue
+ * never drops its coverage and no worker has to be shuffled off it.
+ */
+export function upgradeBuilding(s: RunState, buildingId: string): ActionError {
+  const error = canUpgradeBuilding(s, buildingId)
+  if (error) return error
+  const building = s.buildings[buildingId]
+  const upgrade = nextUpgrade(building)!
+  spend(s.stock, upgrade.cost)
+  building.tier = tierOf(building)
+  building.upgradeProgress = 0
+  pushLog(
+    s,
+    `Builders begin raising the ${displayName(building)} into a ${tierName(building.defId, tierOf(building) + 1)}.`,
+    'info',
+  )
   return null
 }
 
