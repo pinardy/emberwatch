@@ -8,6 +8,13 @@ import type {
   RunState,
   SpeciesId,
 } from '../types'
+import {
+  backfillAchievements,
+  emptyAchievementState,
+  isAchievementTitle,
+  migrateAchievementState,
+} from './achievements'
+import { emptyDailyLedger, isDateKey, migrateDailyLedger } from './daily'
 
 /**
  * Between-run progression: the Citadel's upgrade tree and the Queen's Edicts.
@@ -76,6 +83,24 @@ export interface MetaUpgradeEffects {
   maxImpatience?: number
   /** Run-long modifiers, shown in the run as a "Citadel provisions" effect. */
   ongoing?: CornerstoneEffect[]
+  /** Citadel-locked map modifiers admitted to the land's draw pool. */
+  unlockModifiers?: string[]
+  /** Re-rolls of the land's modifiers allowed on the setup screen. */
+  landRerolls?: number
+  /** One map modifier may be chosen on the setup screen. */
+  chooseModifier?: boolean
+  /** The Inspector names the events waiting in the first ring of glades. */
+  scoutReport?: boolean
+  /** Extra perks offered by the Queen's mid-run charter. */
+  charterOptions?: number
+  /** Cosmetic hearth flame (id in `HEARTH_STYLES`). */
+  hearthStyle?: string
+}
+
+/** Cosmetic hearth flames. `ember` is the plain fire every run has. */
+export const HEARTH_STYLES: Record<string, { name: string; flame: string; light: string }> = {
+  ember: { name: 'Ember', flame: '#ff8a3d', light: '#ffab52' },
+  sapphire: { name: 'Sapphire', flame: '#4fb4ff', light: '#8fd3ff' },
 }
 
 export interface MetaUpgradeDef {
@@ -93,7 +118,7 @@ export interface MetaUpgradeDef {
 }
 
 /*
- * The first five ids (deeperStores, travelRations, unlockHarpy, unlockFox,
+ * Ids are what saves hold: never rename one. The first five ids (deeperStores, travelRations, unlockHarpy, unlockFox,
  * citadelBlessing) predate the tree and must never be renamed — they are what
  * v1 saves hold.
  */
@@ -178,6 +203,26 @@ const defs: MetaUpgradeDef[] = [
     description: 'Word travels the Citadel roads: newcomers arrive 15% sooner.',
     effects: { ongoing: [{ kind: 'newcomerRate', percent: -15 }] },
   },
+  {
+    id: 'charterOffice',
+    name: 'Charter Office',
+    icon: '🗂️',
+    cost: 6,
+    branch: 'charters',
+    requires: ['merchantCharter'],
+    description: "Clerks draft a spare: the Queen's mid-run charter offers one more perk to choose from.",
+    effects: { charterOptions: 1 },
+  },
+  {
+    id: 'frontierCharter',
+    name: 'Frontier Charter',
+    icon: '🐺',
+    cost: 7,
+    branch: 'charters',
+    requires: ['openRoads'],
+    description: 'Settlers may be sent past the last road: the Wild Frontier joins the pool of lands a map can draw.',
+    effects: { unlockModifiers: ['wildFrontier'] },
+  },
 
   // ---- Knowledge -----------------------------------------------------------
   {
@@ -230,6 +275,37 @@ const defs: MetaUpgradeDef[] = [
     description:
       'Admits two Citadel cornerstones to the draft pool: Citadel Masons and Wayfarer’s Ledger.',
     effects: { unlockCornerstones: ['citadelMasons', 'wayfarersLedger'] },
+  },
+  {
+    id: 'scoutsReport',
+    name: "Scouts' Report",
+    icon: '🔍',
+    cost: 5,
+    branch: 'knowledge',
+    requires: ['surveyorsNotes'],
+    description:
+      'Scouts walk the first ring of glades before you arrive: the Inspector names the event waiting in each one.',
+    effects: { scoutReport: true },
+  },
+  {
+    id: 'unchartedLands',
+    name: 'Uncharted Lands',
+    icon: '🧭',
+    cost: 6,
+    branch: 'knowledge',
+    requires: ['surveyorsNotes'],
+    description: 'Two new lands join the pool a map can draw: Amber Springs and the Pilgrim Road.',
+    effects: { unlockModifiers: ['amberSprings', 'pilgrimRoad'] },
+  },
+  {
+    id: 'secondSurvey',
+    name: 'Second Survey',
+    icon: '🔭',
+    cost: 5,
+    branch: 'knowledge',
+    requires: ['unchartedLands'],
+    description: "Don't like the lay of the land? Re-roll a map's modifiers once on the setup screen.",
+    effects: { landRerolls: 1 },
   },
 
   // ---- Crown ---------------------------------------------------------------
@@ -285,6 +361,26 @@ const defs: MetaUpgradeDef[] = [
       cornerstoneOptions: 1,
       unlockCornerstones: ['royalMandate', 'stormwardens'],
     },
+  },
+  {
+    id: 'gildedHearth',
+    name: 'Gilded Hearth',
+    icon: '💠',
+    cost: 3,
+    branch: 'crown',
+    description: 'Cosmetic: a royal gift of salts makes every hearth burn with a sapphire flame.',
+    effects: { hearthStyle: 'sapphire' },
+  },
+  {
+    id: 'chosenGround',
+    name: 'Chosen Ground',
+    icon: '📌',
+    cost: 10,
+    branch: 'crown',
+    requires: ['queensEar', 'secondSurvey'],
+    description:
+      'The Queen lets you pick the site: choose one map modifier on the setup screen, and the seed fills in the rest.',
+    effects: { chooseModifier: true },
   },
 ]
 
@@ -380,6 +476,10 @@ export interface CitadelLoadout {
   startCornerstoneChoice: boolean
   maxImpatience: number
   ongoing: CornerstoneEffect[]
+  /** Citadel-locked map modifiers admitted to the draw pool. */
+  unlockModifiers: string[]
+  landRerolls: number
+  chooseModifier: boolean
   /** The part that keeps acting during the run; stored on `RunState`. */
   perks: CitadelPerks
 }
@@ -405,6 +505,9 @@ export function citadelLoadout(upgrades: readonly string[]): CitadelLoadout {
     startCornerstoneChoice: false,
     maxImpatience: 0,
     ongoing: [],
+    unlockModifiers: [],
+    landRerolls: 0,
+    chooseModifier: false,
     perks: emptyCitadelPerks(),
   }
   const addUnique = (list: string[], ids: string[] | undefined) => {
@@ -430,6 +533,13 @@ export function citadelLoadout(upgrades: readonly string[]): CitadelLoadout {
     out.perks.freeRerolls += e.freeRerolls ?? 0
     addUnique(out.perks.cornerstones, e.unlockCornerstones)
     addUnique(out.perks.eventOptions, e.eventOptions)
+    addUnique(out.unlockModifiers, e.unlockModifiers)
+    out.landRerolls += e.landRerolls ?? 0
+    if (e.chooseModifier) out.chooseModifier = true
+    // In-run perks are only set when owned, so a run without them is unchanged.
+    if (e.scoutReport) out.perks.scoutReport = true
+    if (e.charterOptions) out.perks.charterOptions = (out.perks.charterOptions ?? 0) + e.charterOptions
+    if (e.hearthStyle) out.perks.hearthStyle = e.hearthStyle
   }
   return out
 }
@@ -578,8 +688,9 @@ export function edictModifiers(level: number | undefined): EdictModifiers {
 /**
  * v1: five flat upgrades, no edicts.
  * v2: upgrade tree with prerequisites, Queen's Edicts, richer history.
+ * v3: achievements, the daily expedition ledger, and a worn title.
  */
-export const META_VERSION = 2
+export const META_VERSION = 3
 
 /** History entries kept in the save; the Citadel shows the newest ten. */
 export const HISTORY_LIMIT = 20
@@ -594,6 +705,9 @@ export function defaultMeta(): MetaState {
     upgrades: [],
     edictUnlocked: 0,
     history: [],
+    achievements: emptyAchievementState(),
+    daily: emptyDailyLedger(),
+    title: null,
   }
 }
 
@@ -624,6 +738,7 @@ function migrateHistoryEntry(raw: unknown): MetaHistoryEntry | null {
   if (Array.isArray(e.modifiers)) {
     entry.modifiers = e.modifiers.filter((m): m is string => typeof m === 'string')
   }
+  if (isDateKey(e.daily)) entry.daily = e.daily
   return entry
 }
 
@@ -652,21 +767,32 @@ export function migrateMeta(raw: unknown): MetaState {
     .slice(0, HISTORY_LIMIT)
 
   // Every win in the ledger proves the edict above it was earned; pre-v2 wins
-  // count as wins at level 0.
+  // count as wins at level 0. Daily expeditions are played under a fixed
+  // edict and prove nothing about the ladder.
   const earned = history
-    .filter((e) => e.won)
+    .filter((e) => e.won && !e.daily)
     .reduce((best, e) => Math.max(best, (e.edict ?? 0) + 1), 0)
   const v1Wins = num(m.runsWon) > 0 ? 1 : 0
 
+  const runsWon = Math.max(0, num(m.runsWon))
+  const runsLost = Math.max(0, num(m.runsLost))
+  const title = typeof m.title === 'string' && isAchievementTitle(m.title) ? m.title : null
   return {
     version: META_VERSION,
     citadelSupplies: Math.max(0, num(m.citadelSupplies)),
-    runsWon: Math.max(0, num(m.runsWon)),
-    runsLost: Math.max(0, num(m.runsLost)),
+    runsWon,
+    runsLost,
     unlockedSpecies: [...new Set([...storedSpecies, ...charterSpecies])],
     upgrades,
     edictUnlocked: clampEdict(Math.max(num(m.edictUnlocked), earned, v1Wins)),
     history,
+    // Saves from before v3 have no achievements: credit what the ledger proves.
+    achievements:
+      m.achievements === undefined
+        ? backfillAchievements({ runsWon, runsLost, history })
+        : migrateAchievementState(m.achievements),
+    daily: migrateDailyLedger(m.daily),
+    title,
   }
 }
 
@@ -731,14 +857,17 @@ export function bankRun(meta: MetaState, run: RunState, now = Date.now()): MetaS
     supplies: reward,
     modifiers: [...(run.runModifiers ?? [])],
   }
+  if (run.daily) entry.daily = run.daily
   return {
     ...meta,
     citadelSupplies: meta.citadelSupplies + reward,
     runsWon: meta.runsWon + (won ? 1 : 0),
     runsLost: meta.runsLost + (run.phase === 'lost' ? 1 : 0),
-    edictUnlocked: won
-      ? Math.max(meta.edictUnlocked, clampEdict(edict + 1))
-      : meta.edictUnlocked,
+    // A daily's edict is fixed for fairness, so winning one climbs no rung.
+    edictUnlocked:
+      won && !run.daily
+        ? Math.max(meta.edictUnlocked, clampEdict(edict + 1))
+        : meta.edictUnlocked,
     history: [entry, ...meta.history].slice(0, HISTORY_LIMIT),
   }
 }

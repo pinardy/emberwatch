@@ -52,7 +52,7 @@ const defs: RunModifierDef[] = [
       { kind: 'hostilityRate', percent: 20 },
       { kind: 'gladeLoot', percent: 30 },
     ],
-    excludes: ['ancientRuins'],
+    excludes: ['ancientRuins', 'wildFrontier'],
   },
   {
     id: 'longStorms',
@@ -154,11 +154,69 @@ const defs: RunModifierDef[] = [
   },
 ]
 
+/**
+ * Lands the open pool never draws: a Citadel upgrade has to admit them
+ * (`MetaUpgradeEffects.unlockModifiers`). They follow the same invariants as
+ * the open pool and are forced on in turn by the balance harness too. Kept out
+ * of `RUN_MODIFIER_LIST` so a run with no such upgrade draws exactly as before.
+ */
+const citadelDefs: RunModifierDef[] = [
+  {
+    id: 'amberSprings',
+    name: 'Amber Springs',
+    icon: '💧',
+    tone: 'mixed',
+    citadelLocked: true,
+    description: 'Resin seeps from every spring: glades give up 25% more loot and caravans ask 15% less, but the damp makes the hearth burn 15% more wood.',
+    effects: [
+      { kind: 'gladeLoot', percent: 25 },
+      { kind: 'tradePrices', percent: -15 },
+      { kind: 'hearthFuel', percent: 15 },
+    ],
+  },
+  {
+    id: 'pilgrimRoad',
+    name: 'Pilgrim Road',
+    icon: '🕯️',
+    tone: 'mixed',
+    citadelLocked: true,
+    description: 'A pilgrim road runs past the hearth: newcomers arrive 15% sooner and the Queen allows 20% longer for her decrees, but the forest grows restless 10% faster.',
+    effects: [
+      { kind: 'newcomerRate', percent: -15 },
+      { kind: 'decreeTime', percent: 20 },
+      { kind: 'hostilityRate', percent: 10 },
+    ],
+  },
+  {
+    id: 'wildFrontier',
+    name: 'Wild Frontier',
+    icon: '🐺',
+    tone: 'mixed',
+    citadelLocked: true,
+    description: 'Untamed country past the last road: glades clear 15% slower and anger the forest 15% more, but they hold 35% more loot and every decree met pays +1 reputation.',
+    effects: [
+      { kind: 'clearSpeed', percent: -15 },
+      { kind: 'gladeHostility', percent: 15 },
+      { kind: 'gladeLoot', percent: 35 },
+      { kind: 'decreeReputation', amount: 1 },
+    ],
+    excludes: ['restlessForest'],
+  },
+]
+
+/** Every modifier, open or Citadel-locked, by id. */
 export const RUN_MODIFIERS: Record<string, RunModifierDef> = Object.fromEntries(
-  defs.map((d) => [d.id, d]),
+  [...defs, ...citadelDefs].map((d) => [d.id, d]),
 )
 
+/** The open pool every run draws from. */
 export const RUN_MODIFIER_LIST = defs
+
+/** Modifiers only a Citadel upgrade admits to the pool. */
+export const CITADEL_RUN_MODIFIER_LIST = citadelDefs
+
+/** Both lists, open pool first. */
+export const ALL_RUN_MODIFIER_LIST = [...defs, ...citadelDefs]
 
 /** Fewest and most modifiers a run draws. */
 export const MIN_RUN_MODIFIERS = 1
