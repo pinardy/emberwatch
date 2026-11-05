@@ -772,7 +772,9 @@ export function migrateMeta(raw: unknown): MetaState {
   const earned = history
     .filter((e) => e.won && !e.daily)
     .reduce((best, e) => Math.max(best, (e.edict ?? 0) + 1), 0)
-  const v1Wins = num(m.runsWon) > 0 ? 1 : 0
+  // Only pre-v2 saves need this: since v2 every win is in the ledger with its
+  // edict (and a daily win, under a fixed edict, must not count).
+  const v1Wins = num(m.version, 1) < 2 && num(m.runsWon) > 0 ? 1 : 0
 
   const runsWon = Math.max(0, num(m.runsWon))
   const runsLost = Math.max(0, num(m.runsLost))

@@ -17,8 +17,11 @@ import type { DailyLedger, DailyResult, RunState, SpeciesId } from '../types'
 /** The fixed Queen's Edict every daily expedition is played under. */
 export const DAILY_EDICT = 2
 
-/** Days of daily results kept in the save. */
-export const DAILY_HISTORY_LIMIT = 60
+/**
+ * Days of daily results kept in the save (a result is ~150 bytes). Streaks are
+ * counted from these, so one longer than this many days reads as this long.
+ */
+export const DAILY_HISTORY_LIMIT = 400
 
 /** Every species, in a stable order: dailies ignore the player's charters. */
 export const DAILY_SPECIES_POOL: readonly SpeciesId[] = ['human', 'beaver', 'lizard', 'harpy', 'fox']
@@ -182,10 +185,15 @@ export function recordDaily(ledger: DailyLedger, result: DailyResult): DailyLedg
     const attempts = existing.attempts + 1
     entry = betterDaily(result, existing) ? { ...result, attempts } : { ...existing, attempts }
   }
-  const results = [entry, ...ledger.results.filter((r) => r.date !== result.date)]
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-    .slice(0, DAILY_HISTORY_LIMIT)
-  return { results, bestStreak: Math.max(ledger.bestStreak, longestStreak(results)) }
+  const all = [entry, ...ledger.results.filter((r) => r.date !== result.date)].sort((a, b) =>
+    a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
+  )
+  // Measured before the oldest day is trimmed, so a streak as long as the
+  // whole window still counts in full once.
+  return {
+    results: all.slice(0, DAILY_HISTORY_LIMIT),
+    bestStreak: Math.max(ledger.bestStreak, longestStreak(all)),
+  }
 }
 
 /** The ledger row for `date`, if that day was attempted. */
