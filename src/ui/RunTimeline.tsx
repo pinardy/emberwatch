@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
-import { SPECIES } from '../game/content/species'
+import { SPECIES, speciesSingular } from '../game/content/species'
 import { RESOLVE_LEAVE_THRESHOLD } from '../game/engine/balance'
 import { COL, describeOutcome, inStorm, raceAt, stormPeriods } from '../game/engine/timeline'
 import type { RunState, SpeciesId, TimelineEvent } from '../game/types'
@@ -49,10 +49,7 @@ const MARKER_LABEL: Record<MarkerKind, string> = {
 // ---------------------------------------------------------------------------
 
 function singular(sp: string | undefined): string {
-  const name = SPECIES[sp as SpeciesId]?.name ?? 'Villagers'
-  if (name.endsWith('ies')) return `${name.slice(0, -3)}y`
-  if (name.endsWith('xes')) return name.slice(0, -2)
-  return name.slice(0, -1)
+  return sp && sp in SPECIES ? speciesSingular(sp as SpeciesId) : 'Villager'
 }
 
 export function eventLabel(e: TimelineEvent): string {

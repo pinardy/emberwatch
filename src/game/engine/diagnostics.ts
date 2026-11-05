@@ -1,10 +1,12 @@
 import { BUILDINGS } from '../content/buildings'
-import { NEED_LABELS, SPECIES } from '../content/species'
+import { NEED_LABELS, SPECIES, speciesSingular } from '../content/species'
 import { RESOURCES } from '../content/resources'
 import type { ResourceId, RunState, SpeciesId } from '../types'
+import { DEPARTURE_GRACE, SECONDS_TO_LEAVE } from './balance'
 import {
   RUNWAY_WARNING_SECONDS,
   STORM_FOOD_WARNING_LEAD,
+  deadlineForecast,
   foodForecast,
   formatDuration,
   hearthForecast,
@@ -21,6 +23,7 @@ import {
   secondsUntilDeparture,
   totalHousing,
 } from './queries'
+import { despairRate } from './traits'
 
 /**
  * Things that are quietly going wrong.
@@ -74,7 +77,7 @@ export function collectWarnings(s: RunState): Warning[] {
     out.push({
       id: `leaving-${sp}`,
       severity: 'danger',
-      text: `🚪 ${SPECIES[sp as SpeciesId].name} will start leaving in ${Math.ceil(seconds ?? 0)}s.`,
+      text: departureText(s, sp as SpeciesId, seconds ?? 0),
     })
   }
 
@@ -199,6 +202,16 @@ export function collectWarnings(s: RunState): Warning[] {
     })
   }
 
+  // The deadline is what ends a stalled run: count it down for its last year.
+  const deadline = deadlineForecast(s, mods)
+  if (deadline.imminent) {
+    out.push({
+      id: 'deadline',
+      severity: deadline.secondsLeft <= RUNWAY_WARNING_SECONDS ? 'danger' : 'caution',
+      text: `👑 The Queen's deadline is in ${formatDuration(deadline.secondsLeft)}. After it her impatience climbs faster every minute.`,
+    })
+  }
+
   if (s.impatience >= s.maxImpatience - 3) {
     out.push({
       id: 'impatience',
@@ -208,6 +221,41 @@ export function collectWarnings(s: RunState): Warning[] {
   }
 
   return out
+}
+
+/**
+ * The departure countdown, worded from what has already happened: before
+ * anyone has gone the species "will start leaving"; after a departure the rest
+ * hold on through a grace period, and then "another will leave".
+ */
+function departureText(s: RunState, sp: SpeciesId, seconds: number): string {
+  const rate = despairRate(sp)
+  const inGrace = s.despair[sp] < 0
+  if (!inGrace && !leftThisSpell(s, sp, rate)) {
+    return `🚪 ${SPECIES[sp].name} will start leaving in ${Math.ceil(seconds)}s.`
+  }
+  const another = `🚪 Another ${speciesSingular(sp)} will leave in ${Math.ceil(seconds)}s`
+  if (!inGrace) return `${another}.`
+  const grace = Math.ceil(-s.despair[sp] / rate)
+  return `${another} — the rest are holding on after a departure (${grace}s of grace left).`
+}
+
+/**
+ * Whether a villager of `sp` walked out within the last despair cycle (grace
+ * plus the countdown), read from the timeline's departure markers. The sim
+ * keeps no other record: despair restarts below zero after a departure and is
+ * back above it once the grace has run out.
+ */
+function leftThisSpell(s: RunState, sp: SpeciesId, rate: number): boolean {
+  if (rate <= 0) return false
+  const events = s.timeline?.events ?? []
+  const cycle = (DEPARTURE_GRACE + SECONDS_TO_LEAVE) / rate
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]
+    // Timeline times are rounded to 0.1s; allow a tick of slack.
+    if (e.k === 'left' && e.d === sp) return s.clock - e.t <= cycle + 1
+  }
+  return false
 }
 
 /** The most useful next move for a larder that will not last the Storm. */

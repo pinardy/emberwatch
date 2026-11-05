@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import type { GameSpeed } from '../game/engine/balance'
-import { useGameStore, type SidePanel } from '../game/store'
+import { SPEED_OPTIONS, type GameSpeed } from '../game/engine/balance'
+import { MAX_FRAME_REAL_SECONDS, useGameStore, type SidePanel } from '../game/store'
 
 const AUTOSAVE_INTERVAL_MS = 8000
 
@@ -21,7 +21,7 @@ export function useGameLoop(active: boolean): void {
     lastSave.current = performance.now()
 
     const step = (now: number) => {
-      const dt = Math.min((now - lastFrame.current) / 1000, 0.5)
+      const dt = Math.min((now - lastFrame.current) / 1000, MAX_FRAME_REAL_SECONDS)
       lastFrame.current = now
       useGameStore.getState().advance(dt)
 
@@ -125,7 +125,7 @@ function isTextEntry(target: EventTarget | null): boolean {
 }
 
 /**
- * Keyboard shortcuts: Space pauses, 1–3 set speed, B/P/O/T/L open panels, Esc
+ * Keyboard shortcuts: Space pauses, 1–5 set speed, B/P/O/T/L open panels, Esc
  * closes the topmost thing (help, placement, selection, then tips).
  *
  * Everything is ignored while a blocking dialog is up — the draft and glade
@@ -158,8 +158,9 @@ export function useHotkeys(active: boolean): void {
         if (!e.repeat) store.togglePlay()
         return
       }
-      if (e.key === '1' || e.key === '2' || e.key === '3') {
-        store.setSpeed(Number(e.key) as GameSpeed)
+      const speed = Number(e.key)
+      if (/^[1-9]$/.test(e.key) && (SPEED_OPTIONS as readonly number[]).includes(speed)) {
+        store.setSpeed(speed as GameSpeed)
         return
       }
       const panel = PANEL_KEYS[e.code]

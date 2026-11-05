@@ -115,6 +115,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`runModifiers.test.ts`** — the map-modifier pool: content invariants, seed-deterministic draws, mapgen hooks changing deposit counts exactly as declared, effects folding into the modifiers (seasons, caravans, decrees, braziers, terrain, adjacency), and saves and history. The balance harness also forces each modifier in turn on a smaller seed set and checks it stays winnable but not trivial.
 - **`timeline.test.ts`** and **`RunTimeline.test.tsx`** — the run timeline: sampling cadence, the size bound and downsampling, recorded events, save/load and old saves, the outcome sentence, and the end-screen chart's keyboard readout, views and table.
 - **`onboarding.test.ts`** and **`Onboarding.test.tsx`** — the opening: the first-steps checklist, the first royal decree, and how the blueprint draft presents its options.
+- **`saves.test.ts`** and **`SavesScreen.test.tsx`** — save slots: the slot index and its repair, migration of the single save, overwrite protection, full storage, the export/import round trip, and rejecting malformed and hostile files (prototype keys, mangled fields) without throwing.
 - **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, building badges, warmth, roads and villagers, and that static geometry is not rebuilt on every tick.
 - **`roads.test.ts`** — the road graph and its bonus (directness, junctions, warehouse hubs), the rules for laying roads, the cache that keeps the per-tick cost a lookup, and old saves without roads.
 - **`villagerRoutes.test.ts`** — the walking villagers' routes: a pure function of the run, following roads where they run and walking straight where they do not.
@@ -122,6 +123,12 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 ## PWA
 
 `vite-plugin-pwa` generates the manifest and a Workbox service worker precaching the whole app shell, so after one load the game runs fully offline — there is no server component. Runs autosave to `localStorage` every 8 seconds, on tab hide, and on page unload; the game pauses itself when the tab is backgrounded rather than fast-forwarding on return.
+
+**Save slots.** There are four run slots — Autosave plus Slots 1–3 — listed on the menu's *Saved settlements* screen with their species, edict, season, reputation, impatience, modifiers, seed and when they were last played. Each run autosaves to its own slot; *Continue* resumes the most recently played one. A new settlement takes a free slot and only replaces a run when the player picks that slot and confirms. The Autosave slot keeps the original `emberwatch.run.v1` key, so a save from before slots simply appears there; a small index (`emberwatch.slots.v1`) holds the metadata and is rebuilt from the slots whenever it disagrees with them (`src/game/saveSlots.ts`). A save that no longer fits in storage leaves the previous one intact and says so once.
+
+**Export and import.** Any slot exports as a versioned JSON file (`{ format: "emberwatch-run", version, exportedAt, meta, run }`) or as text to copy, for phones. Imports are untrusted: parsed with `JSON.parse` only, with `__proto__`/`constructor`/`prototype` keys stripped, shape-checked field by field, migrated through the same defaults as a local save, and ticked once on a copy before anything is written (`src/game/saveFile.ts`).
+
+**Speeds.** Pause and 1×–5× (keys Space and 1–5). The loop's per-frame budget scales with speed, so 5× keeps real time even at a couple of frames a second, while one stalled frame can still only advance the world a few seconds.
 
 Icons are generated at build time by `scripts/generate-icons.mjs`, which writes real PNGs using only `node:zlib` — no binary assets in the repo and no image dependencies.
 
