@@ -3631,6 +3631,7 @@ button.is-armed {
 
 .upgrade-bar {
   fill: #8fc4e8;
+}
 
 /* ---- Run modifiers: the lay of the land ------------------------------------ */
 
@@ -3708,6 +3709,7 @@ button.is-armed {
 .setup-land h4 {
   margin: 0 0 6px;
   font-size: 13px;
+}
 
 /* ==========================================================================
    Run timeline — the end-screen chart and the Orders panel sparkline
