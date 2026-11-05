@@ -934,6 +934,11 @@ export interface RunState {
   decree: RoyalDecree | null
   /** Seconds until the next decree while none is live. */
   decreeTimer: number
+  /**
+   * Decrees lapsed and not yet made good: each one makes the next miss cost
+   * more, and each decree met forgives one. Absent on older saves (reads as 0).
+   */
+  decreeStrikes?: number
   /** Whether the mid-run charter has been offered, and which was chosen. */
   charterOffered: boolean
   charter: string | null

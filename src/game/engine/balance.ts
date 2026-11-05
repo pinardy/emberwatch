@@ -381,8 +381,17 @@ export const BRAZIER_FOOTPRINT = 0.4
 export const DECREE_FIRST_DELAY = YEAR_SECONDS
 /** Seconds between one decree ending (met or missed) and the next. */
 export const DECREE_INTERVAL = 200
-/** Impatience when a decree's deadline passes unmet. */
+/** Impatience when a decree's deadline passes unmet, with no strikes standing. */
 export const DECREE_MISS_IMPATIENCE = 1.5
+/**
+ * Extra impatience on a missed decree for every earlier miss still standing.
+ * The Queen forgives one lapse; she does not forgive a habit. Meeting a decree
+ * clears one strike, so a settlement that recovers is not punished forever.
+ * The balance bot ignores decrees and usually wins before a second miss, so
+ * this moves its win rate by about a point; it is aimed at long runs that
+ * let every decree lapse.
+ */
+export const DECREE_MISS_ESCALATION = 1
 /**
  * Decrees are only drawn from goals the settlement has not already mostly
  * met, so a deadline is a real push rather than a free payout.
