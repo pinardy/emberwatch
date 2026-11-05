@@ -75,7 +75,10 @@ export function ChoiceModal() {
                       <span className="is-good">👑 +{option.reputation}</span>
                     ) : null}
                     {option.impatience ? (
-                      <span className="is-bad">⏳ +{option.impatience}</span>
+                      <span className={option.impatience > 0 ? 'is-bad' : 'is-good'}>
+                        ⏳ {option.impatience > 0 ? '+' : ''}
+                        {option.impatience}
+                      </span>
                     ) : null}
                     {option.hostility ? (
                       <span className={option.hostility > 0 ? 'is-bad' : 'is-good'}>
