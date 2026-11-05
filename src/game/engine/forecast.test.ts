@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { BUILDINGS } from '../content/buildings'
 import { findPlacement } from './actions'
-import { HEARTH_FUEL_PER_SECOND, SEASON_LENGTH } from './balance'
+import {
+  HEARTH_FUEL_PER_SECOND,
+  IMPATIENCE_OVERTIME_BASE,
+  QUEEN_DEADLINE_YEAR,
+  SEASON_LENGTH,
+  YEAR_SECONDS,
+} from './balance'
 import { createRun } from './createRun'
 import { collectWarnings } from './diagnostics'
 import { takeChoice } from './events'
 import {
   buildingStatus,
+  deadlineForecast,
   foodForecast,
   foodProductionRate,
   formatDuration,
@@ -15,12 +22,14 @@ import {
   secondsUntilStorm,
   storageBlocked,
   stormFoodForecast,
+  yearLengthFor,
 } from './forecast'
-import { computeModifiers } from './modifiers'
+import { computeModifiers, seasonLengthFor } from './modifiers'
 import { depositsInRangeOf } from './production'
 import { idleVillagers, storageUsed } from './queries'
-import { tick } from './tick'
-import type { BuildingInstance, RunState } from '../types'
+import { QUEEN_DEADLINE_SECONDS, deadlineOvertimeRate } from './society'
+import { DEADLINE_PASSED_LOG, tick } from './tick'
+import type { BuildingInstance, RunState, Season } from '../types'
 
 /** Baseline seasons and rates: the seed's map modifiers are tested elsewhere. */
 function newRun(): RunState {
@@ -428,5 +437,133 @@ describe('forecasts under season-changing map modifiers', () => {
       state.pendingChoices = []
     }
     expect(state.clock).toBeCloseTo(promised, 0)
+  })
+})
+
+describe("the Queen's deadline", () => {
+  function runWith(modifiers: string[]): RunState {
+    const state = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'], modifiers })
+    while (state.pendingChoices.length > 0) takeChoice(state, state.pendingChoices[0].options[0])
+    state.hostility = 0
+    state.stock.wood = 400
+    state.stock.berry = 400
+    return state
+  }
+
+  /** Puts the run `elapsed` seconds into `season` of `year`, clock to match. */
+  function at(state: RunState, year: number, season: Season, elapsed: number): RunState {
+    const mods = computeModifiers(state)
+    let clock = 0
+    for (let y = 1; y < year; y++) clock += yearLengthFor(y, mods)
+    for (const s of ['drizzle', 'clearance', 'storm'] as Season[]) {
+      if (s === season) break
+      clock += seasonLengthFor(s, year, mods)
+    }
+    state.clock = clock + elapsed
+    state.season = { year, season, elapsed, length: seasonLengthFor(season, year, mods) }
+    return state
+  }
+
+  const deadlineWarning = (state: RunState) => collectWarnings(state).find((w) => w.id === 'deadline')
+
+  it('falls at the start of Year 5 at standard season lengths', () => {
+    expect(QUEEN_DEADLINE_SECONDS).toBe((QUEEN_DEADLINE_YEAR - 1) * YEAR_SECONDS)
+    const state = at(runWith([]), 4, 'clearance', 40)
+    const forecast = deadlineForecast(state, computeModifiers(state))
+    expect(forecast).toMatchObject({
+      passed: false,
+      imminent: true,
+      secondsPast: 0,
+      overtimePerMinute: 0,
+      landsIn: { year: 5, season: 'drizzle' },
+    })
+    expect(forecast.secondsLeft).toBeCloseTo(SEASON_LENGTH.clearance - 40 + SEASON_LENGTH.storm)
+    expect(forecast.startPerMinute).toBeCloseTo(IMPATIENCE_OVERTIME_BASE * 60)
+  })
+
+  it('counts down only through its last year, and warns a year ahead', () => {
+    const early = at(runWith([]), 3, 'storm', 100)
+    expect(deadlineForecast(early, computeModifiers(early)).imminent).toBe(false)
+    expect(deadlineWarning(early)).toBeUndefined()
+
+    const lastYear = at(runWith([]), 4, 'drizzle', 0)
+    expect(deadlineForecast(lastYear, computeModifiers(lastYear)).secondsLeft).toBe(YEAR_SECONDS)
+    expect(deadlineWarning(lastYear)).toEqual({
+      id: 'deadline',
+      severity: 'caution',
+      text: "👑 The Queen's deadline is in 6m 40s. After it her impatience climbs faster every minute.",
+    })
+
+    // The last minute is a danger, so it heads the strip.
+    const lastMinute = at(runWith([]), 4, 'storm', SEASON_LENGTH.storm - 45)
+    expect(deadlineWarning(lastMinute)).toMatchObject({ severity: 'danger', text: /is in 45s/ })
+  })
+
+  it('reports the overtime the tick applies once it has passed', () => {
+    const state = at(runWith([]), 5, 'drizzle', 120)
+    const mods = computeModifiers(state)
+    const forecast = deadlineForecast(state, mods)
+    expect(forecast).toMatchObject({ passed: true, imminent: false, secondsLeft: 0, landsIn: null })
+    expect(forecast.secondsPast).toBeCloseTo(120)
+    expect(forecast.overtimePerMinute).toBeCloseTo(deadlineOvertimeRate(state) * 60)
+    expect(forecast.overtimePerMinute).toBeGreaterThan(forecast.startPerMinute)
+    // The overtime is exactly what the meter gains over a run just short of it.
+    const before = { ...state, clock: QUEEN_DEADLINE_SECONDS }
+    expect(
+      meterRates(state, mods).impatiencePerMinute - meterRates(before, mods).impatiencePerMinute,
+    ).toBeCloseTo(forecast.overtimePerMinute, 9)
+    expect(deadlineWarning(state)).toBeUndefined()
+  })
+
+  it('logs (and so toasts) once, the moment the overtime starts', () => {
+    const state = at(runWith([]), 4, 'storm', SEASON_LENGTH.storm - 0.25)
+    const said = () => state.log.filter((e) => e.text === DEADLINE_PASSED_LOG).length
+    tick(state, 0.125)
+    expect(said()).toBe(0)
+    expect(deadlineOvertimeRate(state)).toBe(0)
+    tick(state, 0.125)
+    expect(state.season.year).toBe(5)
+    expect(said()).toBe(1)
+    tick(state, 0.125)
+    expect(deadlineOvertimeRate(state)).toBeGreaterThan(0)
+    expect(said()).toBe(1)
+  })
+
+  it('Long Storms: the deadline lands in Year 4\'s Storm, and is said there', () => {
+    const state = at(runWith(['longStorms']), 4, 'drizzle', 0)
+    const mods = computeModifiers(state)
+    expect(yearLengthFor(4, mods)).toBeCloseTo(YEAR_SECONDS + SEASON_LENGTH.storm * 0.25)
+    const forecast = deadlineForecast(state, mods)
+    // Three long years have gone by: less than a standard year is left.
+    expect(forecast.secondsLeft).toBeCloseTo(QUEEN_DEADLINE_SECONDS - 3 * yearLengthFor(2, mods))
+    expect(forecast.secondsLeft).toBeLessThan(YEAR_SECONDS)
+    expect(forecast.landsIn).toEqual({ year: 4, season: 'storm' })
+    expect(deadlineWarning(state)?.text).toContain(`is in ${formatDuration(forecast.secondsLeft)}.`)
+
+    // Tick to the deadline: it passes mid-Storm, before Year 5 begins.
+    let guard = 0
+    while (deadlineOvertimeRate(state) === 0 && guard++ < 10_000) {
+      tick(state, 0.125)
+      state.pendingChoices = []
+    }
+    expect(state.season).toMatchObject({ year: 4, season: 'storm' })
+    expect(state.log.some((e) => e.text === DEADLINE_PASSED_LOG)).toBe(true)
+    expect(deadlineForecast(state, mods).passed).toBe(true)
+  })
+
+  it('Early Frost: a short first year leaves Year 5 starting before the deadline', () => {
+    const state = at(runWith(['earlyFrost']), 4, 'storm', SEASON_LENGTH.storm - 0.125)
+    const mods = computeModifiers(state)
+    expect(yearLengthFor(1, mods)).toBeLessThan(yearLengthFor(2, mods))
+    tick(state, 0.125)
+    expect(state.season).toMatchObject({ year: 5, season: 'drizzle' })
+    // Year 5 has begun, but the Queen's clock has not run out: no overtime, no
+    // "deadline has passed", and the countdown is still on.
+    expect(deadlineOvertimeRate(state)).toBe(0)
+    expect(state.log.some((e) => e.text === DEADLINE_PASSED_LOG)).toBe(false)
+    const forecast = deadlineForecast(state, mods)
+    expect(forecast.secondsLeft).toBeCloseTo(yearLengthFor(2, mods) - yearLengthFor(1, mods))
+    expect(forecast).toMatchObject({ imminent: true, landsIn: { year: 5, season: 'drizzle' } })
+    expect(deadlineWarning(state)).toBeDefined()
   })
 })
