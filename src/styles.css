@@ -4211,3 +4211,25 @@ button.is-armed {
     padding: 10px 8px 8px;
   }
 }
+
+/* ==========================================================================
+   Road tool banner: more controls than a blueprint's, so it wraps on phones
+   instead of running off the side of the map.
+   ========================================================================== */
+
+.build-banner.road-banner {
+  /* Above the minimap (30) and glade plates, so Done stays tappable. */
+  z-index: 31;
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 6px;
+  width: max-content;
+  max-width: calc(100% - 20px);
+  white-space: normal;
+  text-align: center;
+}
+
+.build-banner.road-banner button[aria-pressed='true'] {
+  border-color: var(--gold);
+  color: var(--gold);
+}

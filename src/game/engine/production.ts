@@ -23,6 +23,7 @@ import type { Modifiers } from './modifiers'
 import { extraOutputChance, productionMultiplier } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
+import { roadMultiplier } from './roads'
 import { buildMultiplier, workTraitMultiplier } from './traits'
 import {
   gatherRadiusOf,
@@ -150,7 +151,9 @@ export function workRate(s: RunState, b: BuildingInstance, mods: Modifiers): num
     productionMultiplier(mods, def.tags) *
     adjacencyMultiplier(s, b, mods) *
     tierSpeedMultiplier(b) *
-    terrainWorkMultiplier(b.defId, terrainOf(s, b), mods)
+    terrainWorkMultiplier(b.defId, terrainOf(s, b), mods) *
+    // Exactly 1 without roads; a cached lookup with them.
+    roadMultiplier(s, b)
   )
 }
 

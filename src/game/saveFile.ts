@@ -178,6 +178,14 @@ export function runProblem(run: unknown): string | null {
   ) {
     return 'its obstacles are damaged'
   }
+  // Roads are optional (saves from before them have none).
+  if (
+    run.roads !== undefined &&
+    (!Array.isArray(run.roads) ||
+      !run.roads.every((r) => isRec(r) && typeof r.id === 'string' && isVec(r.a) && isVec(r.b)))
+  ) {
+    return 'its roads are damaged'
+  }
   if (
     !Array.isArray(run.speciesPool) ||
     run.speciesPool.length === 0 ||
