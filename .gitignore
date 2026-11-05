@@ -13,3 +13,4 @@ dev-dist
 playwright-report
 test-results
 blob-report
+dist-artifact

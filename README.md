@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 598 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
+npm test           # 599 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -154,12 +154,11 @@ Icons are generated at build time by `scripts/generate-icons.mjs`, which writes 
 
 ## CI & deployment
 
-`.github/workflows/ci.yml` runs on every pull request and every push to `main`:
+`.github/workflows/ci.yml` runs on every pull request and every push to `main`: `npm ci` → typecheck → `npx vitest run` → `npm run build` → the Playwright smoke test against that build. A newer push to the same PR cancels the run it supersedes. If the smoke test fails, its HTML report and traces are uploaded as a run artifact (`playwright-report-*`); open a trace with `npx playwright show-trace <trace.zip>`.
 
-1. **Checks** (all events): `npm ci` → typecheck → `npx vitest run` → `npm run build` → the Playwright smoke test against that build. A newer push to the same PR cancels the run it supersedes. If the smoke test fails, its HTML report and traces are uploaded as a run artifact (`playwright-report-*`); open a trace with `npx playwright show-trace <trace.zip>`.
-2. **Deploy** (pushes to `main` only, after the checks pass): rebuilds with `BASE_PATH=/roguelite-game/`, runs the smoke test again against that exact build served under the sub-path, then publishes `dist/` with `actions/upload-pages-artifact` + `actions/deploy-pages` to the `github-pages` environment. It can also be re-run by hand (Actions → CI → Run workflow on `main`).
+The repository is private, so the game is not on GitHub Pages. It is hosted as a private claude.ai Artifact, which its owner can share from the page's Share menu: **https://claude.ai/artifact/M78ydYF34bBJ7X2Ku1BctL**.
 
-The site is served at **https://pinardy.github.io/roguelite-game/**.
+`npm run build:artifact` builds and then writes `dist-artifact/` (`scripts/artifact-page.mjs`): `emberwatch.html` holds the built page without its document wrapper (the Artifact host supplies that), alongside `assets/`, `icons/` and `favicon.svg`. Republishing that page to the same artifact URL updates the game in place. The Artifact host does not run service workers, so offline play and installing as an app only apply to builds served elsewhere; saves still persist in the browser's local storage for that page.
 
 ### The smoke test
 
@@ -175,17 +174,15 @@ The site is served at **https://pinardy.github.io/roguelite-game/**.
 ```bash
 npx playwright install chromium        # once; CI uses --with-deps
 npm run test:e2e                       # builds, serves on :4319, runs (~30 s)
-BASE_PATH=/roguelite-game/ npm run test:e2e   # same, under the Pages sub-path
+BASE_PATH=/sub/path/ npm run test:e2e         # same, served under a sub-path
 E2E_SKIP_BUILD=1 npm run test:e2e      # reuse an existing dist/
 ```
 
 `BASE_PATH` sets Vite's `base`. Unset, it stays relative (`./`), so `npm run dev`, `vitest` and `npm run preview` behave as before; the manifest's `start_url`/`scope` and icon paths are relative to it, and the service worker registers at the base with the base as its scope. The app has no router, so no SPA 404 fallback is needed.
 
-### One-time setup for the repository owner
+### Optional setup for the repository owner
 
-- **Settings → Pages → Build and deployment → Source: "GitHub Actions".** Until this is set, the deploy job fails at the deploy step.
-- GitHub Pages on a **private** repository requires a paid plan (GitHub Pro, Team or Enterprise). On the free plan the repository must be public for the site to publish.
-- Optional: in Settings → Branches, require the "Typecheck, tests, build, browser smoke test" check before merging to `main`.
+- In Settings → Branches, require the "Typecheck, tests, build, browser smoke test" check before merging to `main`.
 
 ### Dependency audit
 

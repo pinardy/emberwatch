@@ -12,7 +12,7 @@ import {
 } from '../game/content/daily'
 import { EDICTS, edictLabel } from '../game/content/meta'
 import { SPECIES } from '../game/content/species'
-import { useGameStore } from '../game/store'
+import { useGameStore, SLOTS_FULL_NOTICE } from '../game/store'
 import type { DailyResult } from '../game/types'
 import { RunModifierList } from './RunModifierList'
 import './replay.css'
@@ -147,10 +147,20 @@ export function DailyScreen() {
             {today} UTC
           </time>
         </header>
-        {notice && (
-          <p className="is-good daily-notice" role="status">
-            {notice}
-          </p>
+        {notice === SLOTS_FULL_NOTICE ? (
+          // Refused, not banked: say so as a warning and offer the way out.
+          <div className="is-bad daily-notice daily-notice-blocked" role="alert">
+            <p>{notice}</p>
+            <button type="button" onClick={() => goToScreen('saves')}>
+              Manage saves
+            </button>
+          </div>
+        ) : (
+          notice && (
+            <p className="is-good daily-notice" role="status">
+              {notice}
+            </p>
+          )
         )}
         <p className="muted">
           One map a day, the same for everyone: the date picks the seed, the settlers and the land.

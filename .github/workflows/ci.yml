@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
-  # Redeploy by hand from the Actions tab (deploys only when run on main).
+  # Re-run by hand from the Actions tab.
   workflow_dispatch:
 
 permissions:
@@ -12,9 +12,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  # A new push to a PR cancels its superseded run. On main, runs queue instead
-  # (a newer one still replaces any run that is waiting), so a Pages deploy is
-  # never cut off halfway.
+  # A new push to a PR cancels its superseded run; every push to main is checked.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
@@ -65,68 +63,3 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  pages-build:
-    name: Build for GitHub Pages
-    needs: checks
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      # Project site: https://<owner>.github.io/<repo>/. Derived from the repo
-      # name so a rename or fork still deploys to the right sub-path.
-      BASE_PATH: /${{ github.event.repository.name }}/
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build under the Pages sub-path
-        run: npm run build
-
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Smoke-test the exact build being deployed
-        # Served under BASE_PATH, as Pages will serve it: catches assets, the
-        # manifest or the service worker escaping the sub-path.
-        run: npm run test:e2e
-        env:
-          E2E_SKIP_BUILD: '1'
-
-      - name: Upload Playwright report and traces
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-pages-${{ github.run_attempt }}
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 14
-          if-no-files-found: ignore
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: pages-build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4

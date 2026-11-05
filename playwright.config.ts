@@ -7,7 +7,7 @@ import { defineConfig, devices } from '@playwright/test'
  *
  * The suite serves a production build with `vite preview` on a fixed port.
  * Set BASE_PATH (e.g. /roguelite-game/) to build and serve under the same
- * sub-path GitHub Pages uses. Set E2E_SKIP_BUILD=1 to reuse an existing
+ * sub-path a static host would use. Set E2E_SKIP_BUILD=1 to reuse an existing
  * dist/ (CI builds once, in its own step).
  */
 

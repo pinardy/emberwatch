@@ -8,7 +8,7 @@ import { SPECIES } from '../game/content/species'
 import { landFor } from '../game/engine/runModifiers'
 import { createRun } from '../game/engine/createRun'
 import { saveMeta } from '../game/persistence'
-import { useGameStore } from '../game/store'
+import { SLOTS_FULL_NOTICE, useGameStore } from '../game/store'
 import type { MetaState, RunState } from '../game/types'
 
 /** UI for the reasons to come back: the daily, achievements and the new Citadel options. */
@@ -111,6 +111,17 @@ describe('the daily expedition', () => {
     const after = screen.getByRole('button', { name: /Daily expedition/i })
     expect(after.textContent).toContain('Held in Y1')
     expect(after.textContent).toContain('1-day streak')
+  })
+
+  it('says a refused start is a problem, not a result, and offers the saves screen', () => {
+    useGameStore.setState({ screen: 'daily', notice: SLOTS_FULL_NOTICE })
+    render(<App />)
+    const alert = screen.getByRole('alert')
+    expect(alert.textContent).toContain('Every save slot holds a settlement')
+    expect(alert.className).toContain('is-bad')
+    expect(screen.queryByRole('status', { name: /Every save slot/i })).toBeNull()
+    fireEvent.click(within(alert).getByRole('button', { name: /Manage saves/i }))
+    expect(useGameStore.getState().screen).toBe('saves')
   })
 
   it('copies the share line, or leaves it selected without clipboard access', async () => {
