@@ -152,6 +152,14 @@ E2E_SKIP_BUILD=1 npm run test:e2e      # reuse an existing dist/
 - GitHub Pages on a **private** repository requires a paid plan (GitHub Pro, Team or Enterprise). On the free plan the repository must be public for the site to publish.
 - Optional: in Settings → Branches, require the "Typecheck, tests, build, browser smoke test" check before merging to `main`.
 
+### Dependency audit
+
+`npm audit` reports only four low-severity entries, all one advisory: [deepmerge prototype poisoning](https://github.com/advisories/GHSA-gcqx-w48m-w2h4). No patched deepmerge exists. It reaches the project only through `vite-plugin-pwa → workbox-build → @rollup/plugin-node-resolve`, which runs at build time and merges configuration this repository writes, so no untrusted input reaches it.
+
+`package.json` overrides workbox-build's `glob` to 14.x, which clears the glob and minimatch advisories. workbox-build calls only `globSync` with `cwd`, `follow` and `ignore`, which glob 14 still supports. The generated service worker precaches the same files. Remove the override once workbox-build depends on a patched glob itself.
+
+npm 10 crashes ("Cannot read properties of null (reading 'edgesOut')") when it re-resolves this dependency tree, for example in `npm audit fix` or `npm update`. It trips on vitest's optional peer dependencies. Update dependencies with npm 11 (`npx npm@11 update <pkg>`); `npm ci` on npm 10, as CI uses, installs the resulting lockfile normally.
+
 ## Known scope limits
 
 - Art is emoji throughout; there are no sprites. Audio is synthesised in WebAudio (season stings, event cues, a rain loop that follows the season) — no recorded assets.
