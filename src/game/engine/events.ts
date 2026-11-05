@@ -1,3 +1,4 @@
+import { feats } from './feats'
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CORNERSTONES, RARITY_WEIGHTS } from '../content/cornerstones'
 import { GLADE_EVENTS } from '../content/gladeEvents'
@@ -293,6 +294,7 @@ export function appeaseThreat(s: RunState, threatId: string): string | null {
   if (!canAfford(s.stock, threat.appease)) return 'Not enough to appease it.'
   spend(s.stock, threat.appease)
   s.threats = s.threats.filter((t) => t.id !== threatId)
+  feats(s).threatsAppeased++
   recordEvent(s, 'appeased', threat.name)
   pushLog(s, `${threat.icon} ${threat.name} has been dealt with.`, 'good')
   return null

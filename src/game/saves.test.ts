@@ -237,9 +237,26 @@ describe('overwrite protection', () => {
     expect(SLOT_IDS.map((id) => loadSlot(id)!.seed)).toEqual([1, 2, 3, 4])
 
     // Replacing is a deliberate choice of slot, and replaces only that one.
-    store().startRun(6, undefined, undefined, '2')
+    store().startRun(6, undefined, undefined, undefined, '2')
     expect(store().activeSlot).toBe('2')
     expect(SLOT_IDS.map((id) => loadSlot(id)!.seed)).toEqual([1, 2, 6, 4])
+  })
+
+  it('starts the daily expedition in a free slot, and never over a run in progress', () => {
+    store().startRun(1)
+    store().startDaily(Date.UTC(2026, 10, 5, 12))
+    expect(store().activeSlot).toBe('1')
+    expect(store().run!.daily).toBe('2026-11-05')
+    expect(loadSlot('auto')!.seed).toBe(1)
+
+    // With every slot full, the daily is refused rather than overwrite a run.
+    store().startRun(3)
+    store().startRun(4)
+    const before = SLOT_IDS.map((id) => loadSlot(id)!.seed)
+    store().startDaily(Date.UTC(2026, 10, 6, 12))
+    expect(store().screen).toBe('daily')
+    expect(store().notice).toMatch(/Every save slot holds a settlement/)
+    expect(SLOT_IDS.map((id) => loadSlot(id)!.seed)).toEqual(before)
   })
 
   it('autosaves to the slot being played, not to the autosave slot', () => {

@@ -1,4 +1,5 @@
 import {
+  CITADEL_RUN_MODIFIER_LIST,
   MAX_RUN_MODIFIERS,
   RUN_MODIFIERS,
   RUN_MODIFIER_LIST,
@@ -33,18 +34,74 @@ export function modifiersClash(a: RunModifierDef, b: RunModifierDef): boolean {
   return (a.excludes ?? []).includes(b.id) || (b.excludes ?? []).includes(a.id)
 }
 
-/** The one or two modifiers a seed draws. Deterministic, and seed-only. */
-export function drawRunModifiers(seed: number): string[] {
-  const rng = makeRng(modifierStreamSeed(seed), 0)
+export interface DrawOptions {
+  /** Citadel-locked modifier ids admitted to the pool. */
+  unlocked?: readonly string[]
+  /**
+   * Which draw of this seed: 0 is the seed's own land, 1 the Second Survey's
+   * re-roll. Each is its own deterministic stream.
+   */
+  reroll?: number
+}
+
+/** The pool a run draws from: the open list, then any Citadel-admitted lands. */
+export function modifierPool(unlocked: readonly string[] = []): RunModifierDef[] {
+  const admitted = CITADEL_RUN_MODIFIER_LIST.filter((d) => unlocked.includes(d.id))
+  return admitted.length > 0 ? [...RUN_MODIFIER_LIST, ...admitted] : [...RUN_MODIFIER_LIST]
+}
+
+/**
+ * The one or two modifiers a seed draws. Deterministic, and seed-only — with
+ * no options it is exactly the draw every run has always had.
+ */
+export function drawRunModifiers(seed: number, options: DrawOptions = {}): string[] {
+  const reroll = Math.max(0, Math.floor(options.reroll ?? 0))
+  const streamSeed =
+    reroll === 0 ? modifierStreamSeed(seed) : hashInt((seed ^ MODIFIER_STREAM) >>> 0, reroll)
+  const rng = makeRng(streamSeed, 0)
   const count = rng.chance(SECOND_MODIFIER_CHANCE) ? MAX_RUN_MODIFIERS : 1
   const drawn: RunModifierDef[] = []
-  let pool = [...RUN_MODIFIER_LIST]
+  // Admitted lands are appended, so the open pool's indices never move.
+  let pool = modifierPool(options.unlocked)
   while (drawn.length < count && pool.length > 0) {
     const pick = rng.pick(pool)
     drawn.push(pick)
     pool = pool.filter((d) => d.id !== pick.id && !modifiersClash(d, pick))
   }
   return drawn.map((d) => d.id)
+}
+
+/** What the setup screen lets a Citadel-equipped player do with the land. */
+export interface LandChoice {
+  /** Use the Second Survey's re-roll instead of the seed's own land. */
+  reroll?: boolean
+  /** Chosen Ground: this modifier is guaranteed; the draw fills the rest. */
+  chosen?: string
+}
+
+/** The land-shaping powers a Citadel loadout grants. */
+export interface LandPowers {
+  unlockModifiers: readonly string[]
+  landRerolls: number
+  chooseModifier: boolean
+}
+
+/**
+ * The modifiers a run gets from its seed, the Citadel's land powers and the
+ * player's setup choices. Choices the powers do not allow are ignored, so a
+ * player without the upgrades always gets the plain seed draw.
+ */
+export function landFor(seed: number, powers: LandPowers, choice: LandChoice = {}): string[] {
+  const unlocked = powers.unlockModifiers
+  const drawn = drawRunModifiers(seed, {
+    unlocked,
+    reroll: choice.reroll && powers.landRerolls > 0 ? 1 : 0,
+  })
+  const chosen = choice.chosen ? RUN_MODIFIERS[choice.chosen] : undefined
+  if (!powers.chooseModifier || !chosen) return drawn
+  if (!modifierPool(unlocked).some((d) => d.id === chosen.id)) return drawn
+  const rest = runModifierDefs(drawn).filter((d) => d.id !== chosen.id && !modifiersClash(d, chosen))
+  return [chosen.id, ...rest.map((d) => d.id)].slice(0, MAX_RUN_MODIFIERS)
 }
 
 /** Known modifier defs for a list of ids, skipping unknown ones (old saves). */

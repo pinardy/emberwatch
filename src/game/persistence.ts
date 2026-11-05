@@ -1,4 +1,5 @@
 import { defaultAutoPause, migrateAutoPause, type AutoPauseSettings } from './autoPause'
+import { defaultFeats } from './content/achievements'
 import { defaultMeta, emptyCitadelPerks, migrateMeta } from './content/meta'
 import { defaultDecreeState } from './engine/structure'
 import { createTimeline } from './engine/timeline'
@@ -131,6 +132,8 @@ export function migrateRun(raw: unknown): RunState | null {
   if (!Array.isArray(run.runModifiers)) run.runModifiers = []
   // Saves from before the run timeline start an empty one where they resume.
   run.timeline ??= createTimeline(run)
+  // Saves from before achievements: nothing remarkable recorded yet.
+  run.feats = { ...defaultFeats(), ...(run.feats ?? {}) }
   return run
 }
 

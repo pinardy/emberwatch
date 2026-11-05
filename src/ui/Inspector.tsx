@@ -34,6 +34,7 @@ import type {
   RunState,
   Villager,
 } from '../game/types'
+import { ScoutReport } from './ScoutReport'
 import { useConfirm } from './useConfirm'
 import { UpgradeSection } from './UpgradeSection'
 import {
@@ -667,6 +668,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
                   ⚠ Something is waiting here. Clearing it will force a decision.
                 </p>
               )}
+              <ScoutReport run={run} gladeId={gladeId} />
             </section>
           </>
         )}
