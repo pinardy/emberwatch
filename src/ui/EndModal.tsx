@@ -31,7 +31,7 @@ export function EndModal() {
     <Overlay>
       <div className={`modal modal-end ${won ? 'is-won' : 'is-lost'}`}>
         <header>
-          <span className="modal-icon">{won ? <Icon id="reputation" /> : '🌫️'}</span>
+          <span className="modal-icon">{won ? <Icon id="reputation" /> : <Icon id="fog" emoji="🌫️" />}</span>
           <div>
             <h2>{won ? 'The settlement holds' : 'The settlement is lost'}</h2>
             <small>
@@ -110,12 +110,14 @@ export function EndModal() {
                 )}
                 <li className="reward-total">
                   <span>Total</span>
-                  <span>📦 {reward}</span>
+                  <span>
+                    <Icon id="warehouse" emoji="📦" /> {reward}
+                  </span>
                 </li>
               </ul>
               {opensEdict !== null && (
                 <p className="is-good">
-                  📜 Victory under these terms unlocks {edictLabel(opensEdict)}.
+                  <Icon id="scroll" emoji="📜" /> Victory under these terms unlocks {edictLabel(opensEdict)}.
                 </p>
               )}
             </section>

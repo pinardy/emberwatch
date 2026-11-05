@@ -21,6 +21,8 @@ import type {
   TerrainId,
   Vec2,
 } from '../game/types'
+import type { IconId } from '../art/icons'
+import { STATUS_BADGE_ART } from '../game/content/artFamilies'
 
 /**
  * Pure helpers and tiny hooks shared by both map renderers (3D scene and the
@@ -201,6 +203,8 @@ export type MapBuildingStatus = EngineBuildingStatus['kind']
 
 export interface StatusBadge {
   icon: string
+  /** The drawn glyph (a white `mono/` icon); `icon` is the emoji fallback. */
+  art: IconId
   label: string
   color: string
   /** Problems are shown at every zoom; good news only up close. */
@@ -208,14 +212,14 @@ export interface StatusBadge {
 }
 
 export const STATUS_BADGE: Record<Exclude<MapBuildingStatus, 'none'>, StatusBadge> = {
-  construction: { icon: '🔨', label: 'Under construction', color: '#d9b46a', problem: false },
-  paused: { icon: '⏸', label: 'Paused', color: '#8a949a', problem: true },
-  noWorkers: { icon: '👤', label: 'No workers', color: '#e8a33c', problem: true },
-  noDeposit: { icon: '🚫', label: 'No deposit in reach', color: '#d05050', problem: true },
-  offSeason: { icon: '🌧', label: 'Idle this season', color: '#5f8fd4', problem: true },
-  waitingInputs: { icon: '⏳', label: 'Waiting for inputs', color: '#e07a3c', problem: true },
-  storageFull: { icon: '📦', label: 'Storage full', color: '#d05050', problem: true },
-  working: { icon: '⚙', label: 'Working', color: '#6fbf72', problem: false },
+  construction: { icon: '🔨', art: STATUS_BADGE_ART.construction, label: 'Under construction', color: '#d9b46a', problem: false },
+  paused: { icon: '⏸', art: STATUS_BADGE_ART.paused, label: 'Paused', color: '#8a949a', problem: true },
+  noWorkers: { icon: '👤', art: STATUS_BADGE_ART.noWorkers, label: 'No workers', color: '#e8a33c', problem: true },
+  noDeposit: { icon: '🚫', art: STATUS_BADGE_ART.noDeposit, label: 'No deposit in reach', color: '#d05050', problem: true },
+  offSeason: { icon: '🌧', art: STATUS_BADGE_ART.offSeason, label: 'Idle this season', color: '#5f8fd4', problem: true },
+  waitingInputs: { icon: '⏳', art: STATUS_BADGE_ART.waitingInputs, label: 'Waiting for inputs', color: '#e07a3c', problem: true },
+  storageFull: { icon: '📦', art: STATUS_BADGE_ART.storageFull, label: 'Storage full', color: '#d05050', problem: true },
+  working: { icon: '⚙', art: STATUS_BADGE_ART.working, label: 'Working', color: '#6fbf72', problem: false },
 }
 
 /** Lazily computed per-call context so a batch of buildings shares the work. */

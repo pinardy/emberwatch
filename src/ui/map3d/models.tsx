@@ -168,18 +168,20 @@ export function IconSprite({
 /** Round coloured status badge (building states). */
 export function BadgeSprite({
   icon,
+  art,
   color,
   x = 0,
   y,
   size,
 }: {
   icon: string
+  art?: IconId
   color: string
   x?: number
   y: number
   size: number
 }) {
-  const map = useMemo(() => badgeTexture(icon, color), [icon, color])
+  const map = useMemo(() => badgeTexture(icon, color, art), [icon, color, art])
   // `x` shifts the badge sideways in screen space (via the sprite's anchor),
   // so it stays beside the icon whichever way the camera faces.
   return (

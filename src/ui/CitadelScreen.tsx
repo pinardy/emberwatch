@@ -11,6 +11,8 @@ import { runModifierDefs } from '../game/engine/runModifiers'
 import { useGameStore } from '../game/store'
 import { EdictPicker } from './EdictPicker'
 import { Icon } from './Icon'
+import { runModifierArt } from '../game/content/art'
+import { metaBranchArt, metaUpgradeArt } from '../game/content/artFamilies'
 
 /** Runs shown in the ledger; older ones stay in the save but off screen. */
 const LEDGER_ROWS = 10
@@ -27,8 +29,12 @@ export function CitadelScreen() {
     <div className="screen citadel-screen">
       <div className="menu-card wide">
         <header className="row-between">
-          <h2>🏛️ The Citadel</h2>
-          <span className="chip big">📦 {meta.citadelSupplies} supplies</span>
+          <h2>
+            <Icon id="guildHouse" emoji="🏛️" /> The Citadel
+          </h2>
+          <span className="chip big">
+            <Icon id="warehouse" emoji="📦" /> {meta.citadelSupplies} supplies
+          </span>
         </header>
         <p className="muted">
           Every settlement you found — won or lost — sends supplies back to the Citadel.
@@ -37,14 +43,16 @@ export function CitadelScreen() {
         </p>
         <div className="citadel-stats">
           <span className="chip">
-            🏗️ {owned}/{META_UPGRADE_LIST.length} upgrades
+            <Icon id="scaffold" emoji="🏗️" /> {owned}/{META_UPGRADE_LIST.length} upgrades
           </span>
           <span className="chip">
             <Icon id="reputation" /> {meta.runsWon} held
           </span>
-          <span className="chip">🌫️ {meta.runsLost} lost</span>
           <span className="chip">
-            📜{' '}
+            <Icon id="fog" emoji="🌫️" /> {meta.runsLost} lost
+          </span>
+          <span className="chip">
+            <Icon id="scroll" emoji="📜" />{' '}
             {meta.edictUnlocked > 0
               ? `Up to Edict ${edictNumeral(meta.edictUnlocked)}`
               : 'No edicts earned yet'}
@@ -56,7 +64,7 @@ export function CitadelScreen() {
             <section key={branch.id} className="upgrade-branch" aria-label={branch.name}>
               <header>
                 <h3>
-                  {branch.icon} {branch.name}
+                  <Icon id={metaBranchArt(branch.id)} emoji={branch.icon} /> {branch.name}
                 </h3>
                 <small>{branch.blurb}</small>
               </header>
@@ -64,11 +72,15 @@ export function CitadelScreen() {
                 const status = upgradeStatus(meta, def.id)
                 const missing = missingPrerequisites(meta, def.id)
                 const label =
-                  status === 'owned'
-                    ? '✓ Unlocked'
-                    : status === 'locked'
-                      ? `🔒 ${def.cost} supplies`
-                      : `${def.cost} supplies`
+                  status === 'owned' ? (
+                    '✓ Unlocked'
+                  ) : status === 'locked' ? (
+                    <>
+                      <Icon id="lock" emoji="🔒" /> {def.cost} supplies
+                    </>
+                  ) : (
+                    `${def.cost} supplies`
+                  )
                 return (
                   <button
                     key={def.id}
@@ -77,7 +89,9 @@ export function CitadelScreen() {
                     disabled={status !== 'available'}
                     onClick={() => buyUpgrade(def.id)}
                   >
-                    <span className="option-icon">{def.icon}</span>
+                    <span className="option-icon">
+                      <Icon id={metaUpgradeArt(def)} emoji={def.icon} />
+                    </span>
                     <strong>{def.name}</strong>
                     <small>{def.description}</small>
                     {missing.length > 0 && (
@@ -86,7 +100,11 @@ export function CitadelScreen() {
                         className="upgrade-req"
                         title={`Requires ${missing.map((id) => META_UPGRADES[id]?.name ?? id).join(', ')}`}
                       >
-                        Requires {missing.map((id) => META_UPGRADES[id]?.icon ?? id).join(' ')}
+                        Requires{' '}
+                        {missing.map((id) => {
+                          const req = META_UPGRADES[id]
+                          return req ? <Icon key={id} id={metaUpgradeArt(req)} emoji={req.icon} /> : id
+                        })}
                       </small>
                     )}
                     <em>{label}</em>
@@ -133,7 +151,9 @@ export function CitadelScreen() {
                             <Icon id="reputation" /> Held
                           </>
                         ) : (
-                          '🌫️ Lost'
+                          <>
+                            <Icon id="fog" emoji="🌫️" /> Lost
+                          </>
                         )}
                       </td>
                       <td>
@@ -146,7 +166,9 @@ export function CitadelScreen() {
                       <td>{edictNumeral(entry.edict ?? 0)}</td>
                       <td title={runModifierDefs(entry.modifiers ?? []).map((d) => d.name).join(', ')}>
                         {entry.modifiers?.length
-                          ? runModifierDefs(entry.modifiers).map((d) => d.icon).join(' ')
+                          ? runModifierDefs(entry.modifiers).map((d) => (
+                              <Icon key={d.id} id={runModifierArt(d)} emoji={d.icon} />
+                            ))
                           : '—'}
                       </td>
                       <td>{entry.years}</td>
@@ -168,7 +190,7 @@ export function CitadelScreen() {
             Back to menu
           </button>
           <button type="button" onClick={() => goToScreen('achievements')}>
-            🏅 Achievements
+            <Icon id="medal" emoji="🏅" /> Achievements
           </button>
           <button type="button" className="primary" onClick={() => goToScreen('setup')}>
             Found a new settlement

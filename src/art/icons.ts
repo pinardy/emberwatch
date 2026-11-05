@@ -10,138 +10,33 @@ import {
   rotateAbout,
   scaleAbout,
   translate,
-  type Matrix,
 } from './geometry'
+import { CORE_ICONS } from './core'
+import { FRAMES, framed, type FrameId } from './frames'
+import { MOTIFS } from './motifs'
+import {
+  F,
+  FLAME,
+  art,
+  bar,
+  f,
+  l,
+  leafShape,
+  matrixAttr,
+  toneColor,
+  xf,
+  type IconArt,
+  type Shape,
+} from './draw'
+import { CLOUD, MUG, ROCK, conifer } from './kit'
+
+export { PALETTE, matrixAttr, toneColor, type IconArt, type Shape, type Tone } from './draw'
 
 /**
- * Emberwatch's hand-drawn icon set: every resource, building, species,
- * service need, HUD meter, season, map deposit and glade kind, drawn as path
- * data on a 24×24 grid. There are no image files — the same paths render as
- * inline SVG in the UI, as `<symbol>`s on the 2D map and onto canvas textures
- * on the 3D map.
- *
- * One style throughout: flat fills from a small palette with a dark ink
- * outline (it reads on bright ground in 3D and disappears into the dark UI),
- * round caps and joins, light detail strokes, and ember accents.
+ * Emberwatch's hand-drawn icon set: the full registry, loaded with the lazy
+ * screens. The drawing kit lives in `draw.ts`; the handful of icons the menu
+ * needs at startup in `core.ts`.
  */
-
-/**
- * The palette. Hues are taken from the theme tokens in `styles.css`
- * (`--gold`, `--good`, `--bad`, `--warn`, `--text`) and extended with a few
- * earth tones; every fill is light enough to read on `--panel` (#141b21).
- * `current` follows the surrounding text colour (`currentColor`).
- */
-export const PALETTE = {
-  ink: '#16110d',
-  gold: '#d9b46a',
-  ember: '#e2763a',
-  flame: '#f4c55a',
-  leaf: '#7fbf7a',
-  moss: '#4f9a5a',
-  bark: '#a06a41',
-  timber: '#d8a46a',
-  stone: '#aab3b5',
-  slate: '#6f7e85',
-  clay: '#c46f4c',
-  copper: '#e08d55',
-  cream: '#ecdcbc',
-  skin: '#e2b48c',
-  red: '#d9695f',
-  blood: '#b54a40',
-  rose: '#eea79c',
-  blue: '#7397dc',
-  water: '#5f8fd4',
-  plum: '#a978c8',
-  cloud: '#c9d3da',
-  warn: '#e0a755',
-  current: 'currentColor',
-} as const
-
-export type Tone = keyof typeof PALETTE
-
-export interface Shape {
-  /** SVG path data on the 24×24 grid. */
-  d: string
-  fill?: Tone
-  stroke?: Tone
-  /** Stroke width in grid units. */
-  w?: number
-  /** Opacity. */
-  o?: number
-  /** Optional transform. */
-  m?: Matrix
-}
-
-export type IconArt = readonly Shape[]
-
-// ---- shape helpers --------------------------------------------------------
-
-const OUTLINE = 1.3
-
-/** A filled shape with the ink outline. */
-function f(fill: Tone, d: string, w = OUTLINE): Shape {
-  return { d, fill, stroke: 'ink', w }
-}
-/** A filled shape, no outline (highlights, inner detail). */
-function F(fill: Tone, d: string, o?: number): Shape {
-  return o === undefined ? { d, fill } : { d, fill, o }
-}
-/** A stroke-only line. */
-function l(stroke: Tone, d: string, w = 1.3, o?: number): Shape {
-  return o === undefined ? { d, stroke, w } : { d, stroke, w, o }
-}
-/** A thick line with an ink outline (handles, poles, stems). */
-function bar(tone: Tone, d: string, w = 2): Shape[] {
-  return [l('ink', d, w + OUTLINE * 2), l(tone, d, w)]
-}
-/** Apply a transform to a group of shapes. */
-function xf(m: Matrix, shapes: readonly Shape[]): Shape[] {
-  return shapes.map((s) => ({ ...s, m: s.m ? mul(m, s.m) : m }))
-}
-function art(...items: (Shape | readonly Shape[])[]): Shape[] {
-  return items.flat()
-}
-
-// ---- shared motifs --------------------------------------------------------
-
-const FLAME_OUTER =
-  'M12 3C13 6.5 17.5 8.5 17.5 13C17.5 16 15.2 18 12 18S6.5 16 6.5 13C6.5 10.5 8 9 9.2 8C9.2 9.8 10 11 11 11.2C10.4 8 11 5 12 3Z'
-const FLAME_INNER =
-  'M12 9.5C12.8 11.5 14.8 12.5 14.8 14.8C14.8 16.4 13.6 17.5 12 17.5S9.2 16.4 9.2 14.8C9.2 13.2 10.4 12.5 11 11.2C11.4 12.2 12 12.5 12.4 12.3C12 11.4 11.8 10.4 12 9.5Z'
-/** Flame spanning x 6.5–17.5, y 3–18. */
-const FLAME = [f('ember', FLAME_OUTER), F('flame', FLAME_INNER)]
-
-const CLOUD =
-  'M6.5 16.5C4.3 16.5 3 15 3 13.2C3 11.4 4.4 10 6.2 10C6.7 7.4 8.9 5.5 11.5 5.5C14 5.5 16 7.2 16.6 9.5C18.9 9.5 20.8 11.1 20.8 13.2C20.8 15.1 19.3 16.5 17.3 16.5Z'
-
-const ROCK = 'M3.5 18.5L5.5 11L10.5 6.5L16.5 7.5L20.5 12.5L19.5 18.5Z'
-
-/** Beer mug, body x 4.5–15.5, handle to x 20. */
-const MUG = art(
-  bar('gold', 'M15.5 10.5H18C19.3 10.5 20 11.2 20 12.5V15C20 16.3 19.3 17 18 17H15.5', 1.8),
-  f('gold', rect(4.5, 7.5, 11, 13, 2)),
-  l('bark', 'M8 11.5V17.5M12 11.5V17.5', 1.2),
-  f(
-    'cream',
-    'M4 8.5C4 6 6 5 7.5 5.6C8.3 4 11 3.7 12.3 5C13.8 4.2 16.3 4.8 16.3 7.2C16.3 8.5 15.5 9.2 14.8 9.3H5.2C4.5 9.3 4 9 4 8.5Z',
-  ),
-)
-
-/** A conifer whose tip is at (cx, top) and which is `h` tall. */
-function conifer(cx: number, top: number, h: number, tone: Tone): Shape[] {
-  const s = h / 17
-  const m: Matrix = [s, 0, 0, s, cx - 12 * s, top - 2.5 * s]
-  return xf(m, [
-    f('bark', rect(10.6, 15, 2.8, 4.5, 0.6)),
-    f(tone, 'M12 2.5L16.5 8.8H14.4L18.5 15.5H5.5L9.6 8.8H7.5Z'),
-  ])
-}
-
-function leafShape(x: number, y: number, len: number, angle: number, tone: Tone): Shape {
-  // A pointed leaf from (x, y) along `angle` degrees.
-  const d = `M0 0C${len * 0.3} ${-len * 0.32} ${len * 0.75} ${-len * 0.3} ${len} 0C${len * 0.75} ${len * 0.3} ${len * 0.3} ${len * 0.32} 0 0Z`
-  return { ...f(tone, d, 1.1), m: mul(translate(x, y), rotateAbout(angle, 0, 0)) }
-}
 
 // ---- the registry ---------------------------------------------------------
 
@@ -544,12 +439,6 @@ const BUILDING_ICONS = {
     f('red', 'M1.8 4.6C7 6.4 17 6.4 22.2 4.6L21.6 7.8H2.4Z'),
     F('gold', rect(10.9, 7.8, 2.2, 2.4, 0.4)),
   ),
-  guildHouse: art(
-    f('cream', 'M2.5 8.5L12 3L21.5 8.5Z'),
-    f('stone', rect(3.5, 8.5, 17, 2.2, 0.4)),
-    ...[4.8, 8.8, 12.8, 16.8].map((x) => f('cream', rect(x, 10.7, 2.4, 7.8, 0), 1.1)),
-    f('stone', rect(2.5, 18.5, 19, 2.6, 0.4)),
-  ),
   bathHouse: art(
     l('cloud', 'M8 8C7 6.5 9 5.5 8 3.5M12 8C11 6.5 13 5.5 12 3.5M16 8C15 6.5 17 5.5 16 3.5', 1.3, 0.85),
     f('timber', 'M2.8 10.8H21.2L19.5 19C19.3 20 18.5 20.5 17.5 20.5H6.5C5.5 20.5 4.7 20 4.5 19Z'),
@@ -574,64 +463,7 @@ const BUILDING_ICONS = {
   ),
 } satisfies Record<string, IconArt>
 
-const SPECIES_ICONS = {
-  human: art(
-    f('moss', 'M4 21.8C4.5 18.6 7.5 17.4 9 17.4H15C16.5 17.4 19.5 18.6 20 21.8Z'),
-    f('skin', circle(12, 13.2, 5.3)),
-    F('ink', circle(10, 13.8, 0.8)),
-    F('ink', circle(14, 13.8, 0.8)),
-    l('ink', 'M10.5 16.1C11.4 16.8 12.6 16.8 13.5 16.1', 1, 0.8),
-    f('gold', ellipse(12, 9.2, 9, 2.2)),
-    f('gold', 'M7.6 9.2C7.6 5.6 9.6 3.4 12 3.4S16.4 5.6 16.4 9.2Z'),
-    l('bark', 'M7.8 8H16.2', 1.3),
-  ),
-  beaver: art(
-    f('bark', circle(6.4, 6.6, 2.3)),
-    f('bark', circle(17.6, 6.6, 2.3)),
-    f('bark', ellipse(12, 12, 7.6, 7.2)),
-    f('timber', ellipse(12, 15, 4.3, 3.3)),
-    F('ink', ellipse(12, 13.3, 1.7, 1.15)),
-    f('cream', rect(10.5, 16.4, 3, 3.4, 0.6), 1),
-    l('ink', 'M12 16.6V19.6', 0.8),
-    F('ink', circle(9, 10.4, 1.05)),
-    F('ink', circle(15, 10.4, 1.05)),
-    F('cream', circle(9.35, 10.05, 0.35)),
-    F('cream', circle(15.35, 10.05, 0.35)),
-  ),
-  lizard: art(
-    bar('leaf', 'M12 16C12 19.8 15 21.6 18 20.2', 1.8),
-    bar('leaf', 'M9.8 9.6L6.4 8.2L5.4 6M14.2 9.6L17.6 8.2L18.6 6M9.8 14.4L6.4 15.8L5.4 18M14.2 14.4L17.6 15.8L18.6 18', 1.4),
-    f('leaf', ellipse(12, 12, 3.2, 5.4)),
-    f('leaf', ellipse(12, 5.4, 2.6, 3.1)),
-    F('ink', circle(10.9, 4.6, 0.65)),
-    F('ink', circle(13.1, 4.6, 0.65)),
-    F('moss', circle(12, 10.2, 0.8)),
-    F('moss', circle(12, 13, 0.8)),
-  ),
-  harpy: art(
-    f(
-      'plum',
-      'M5 21C4.4 15 5.4 8.4 10 5.2C13 3.2 16.8 3.4 18.4 6.2L18.2 10.6C17.4 13 15.8 14.6 14 15.6L15.2 21Z',
-    ),
-    l('rose', 'M6.6 16.5C8 14.8 10 14 12 13.8M7.4 12.4C8.8 10.6 10.6 9.8 12.6 9.6', 1.1, 0.7),
-    f('gold', 'M17.6 5.8L22 8.4L18 11.4Z', 1.1),
-    F('cream', circle(15, 7.6, 1.5)),
-    F('ink', circle(15.2, 7.6, 0.8)),
-    f('plum', 'M9.5 5.6C8.5 3.6 9 2 10.5 1.4C10.8 2.8 11.6 3.6 12.6 4.2Z', 1),
-  ),
-  fox: art(
-    f('ember', 'M3.8 3.2L10.2 7.8L5.2 11.2Z'),
-    f('ember', 'M20.2 3.2L13.8 7.8L18.8 11.2Z'),
-    F('ink', 'M5 5.4L8.4 7.9L5.9 9.6Z', 0.7),
-    F('ink', 'M19 5.4L15.6 7.9L18.1 9.6Z', 0.7),
-    f('ember', 'M3.4 10C3.4 7.4 7.4 6 12 6S20.6 7.4 20.6 10C20.6 14 16 19.6 12 21C8 19.6 3.4 14 3.4 10Z'),
-    F('cream', 'M3.6 11C6 12.4 9.4 14.8 12 20.8C8.2 19.4 4.6 15.2 3.6 11Z'),
-    F('cream', 'M20.4 11C18 12.4 14.6 14.8 12 20.8C15.8 19.4 19.4 15.2 20.4 11Z'),
-    F('ink', ellipse(8.8, 11.4, 0.95, 1.25)),
-    F('ink', ellipse(15.2, 11.4, 0.95, 1.25)),
-    F('ink', ellipse(12, 19, 1.4, 1)),
-  ),
-} satisfies Record<string, IconArt>
+
 
 const NEED_ICONS = {
   rest: art(
@@ -677,24 +509,6 @@ const NEED_ICONS = {
 } satisfies Record<string, IconArt>
 
 const HUD_ICONS = {
-  reputation: art(
-    f('gold', 'M3.6 17.4L2.6 7.6L8 11.4L12 4.4L16 11.4L21.4 7.6L20.4 17.4Z'),
-    f('gold', rect(3.4, 16.8, 17.2, 3.4, 1)),
-    F('red', circle(12, 18.5, 1.05)),
-    F('blue', circle(7.6, 18.5, 0.9)),
-    F('blue', circle(16.4, 18.5, 0.9)),
-    f('flame', circle(2.6, 7.4, 1.3), 1),
-    f('flame', circle(12, 4.2, 1.3), 1),
-    f('flame', circle(21.4, 7.4, 1.3), 1),
-  ),
-  impatience: art(
-    l('current', 'M6.6 5C6.6 9 11 10.5 11 12S6.6 15 6.6 19M17.4 5C17.4 9 13 10.5 13 12S17.4 15 17.4 19', 1.4),
-    F('flame', 'M8.4 7.6H15.6C14.8 9.3 12.8 10.4 12 11.4C11.2 10.4 9.2 9.3 8.4 7.6Z'),
-    F('flame', 'M12 14.6C13.6 15.6 15.8 17 16.4 19H7.6C8.2 17 10.4 15.6 12 14.6Z'),
-    l('flame', 'M12 11.4V15', 0.8),
-    f('bark', rect(4.5, 2.4, 15, 2.8, 1)),
-    f('bark', rect(4.5, 18.8, 15, 2.8, 1)),
-  ),
   hostility: art(
     // Three claw rakes: wide enough to read as marks, not lines, at 16px.
     ...[1.2, 7, 12.8].map((a) =>
@@ -764,14 +578,6 @@ const MAP_ICONS = {
     F('ink', circle(12, 19.4, 0.6), 0.5),
   ),
   // ---- glade kinds
-  settlement: art(
-    xf(mul(translate(12, 2), mul(scaleAbout(1.2, 0, 0), translate(-12, -3))), FLAME),
-  ),
-  small: art(
-    bar('moss', 'M12 21V11', 1.3),
-    leafShape(12, 13, 8, -150, 'leaf'),
-    leafShape(12, 11, 9, -35, 'leaf'),
-  ),
   dangerous: art(
     f('warn', 'M12 2.8L22 19.8H2Z', 1.5),
     F('ink', rect(10.9, 8.4, 2.2, 6.6, 1.1)),
@@ -806,30 +612,48 @@ const MAP_ICONS = {
 } satisfies Record<string, IconArt>
 
 export const ICONS = {
+  ...CORE_ICONS,
   ...RESOURCE_ICONS,
   ...BUILDING_ICONS,
-  ...SPECIES_ICONS,
   ...NEED_ICONS,
   ...HUD_ICONS,
   ...MAP_ICONS,
+  ...MOTIFS,
 }
 
-/** Every drawn icon. A typo in `<Icon id="…">` is a compile error. */
-export type IconId = keyof typeof ICONS
+/** A drawn icon on its own. */
+export type BaseIconId = keyof typeof ICONS
 
-export const ICON_IDS = Object.keys(ICONS) as IconId[]
+/**
+ * Every drawn icon: a base icon, or a base icon set in one of the family
+ * frames (`'stone-rare/compass'`, `'threat/wolf'`). Both halves are checked,
+ * so a typo in `<Icon id="…">` or in `content/art.ts` is a compile error.
+ */
+export type IconId = BaseIconId | `${FrameId}/${BaseIconId}`
+
+export const ICON_IDS = Object.keys(ICONS) as BaseIconId[]
+
+const has = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k)
 
 export function isIconId(id: unknown): id is IconId {
-  return typeof id === 'string' && Object.prototype.hasOwnProperty.call(ICONS, id)
+  if (typeof id !== 'string') return false
+  if (has(ICONS, id)) return true
+  const slash = id.indexOf('/')
+  return slash > 0 && has(FRAMES, id.slice(0, slash)) && has(ICONS, id.slice(slash + 1))
 }
 
-/** Resolve a tone to a concrete colour; `current` becomes `currentColor` unless overridden. */
-export function toneColor(tone: Tone, current: string = PALETTE.current): string {
-  return tone === 'current' ? current : PALETTE[tone]
-}
+const composed = new Map<string, readonly Shape[]>()
 
-function matrixAttr(m: Matrix): string {
-  return `matrix(${m.map((v) => Math.round(v * 10000) / 10000).join(' ')})`
+/** The shapes of any icon id, framed ones composed once and cached. */
+export function iconShapes(id: IconId): readonly Shape[] {
+  if (has(ICONS, id)) return ICONS[id as BaseIconId]
+  let hit = composed.get(id)
+  if (!hit) {
+    const slash = id.indexOf('/')
+    hit = framed(id.slice(0, slash) as FrameId, ICONS[id.slice(slash + 1) as BaseIconId])
+    composed.set(id, hit)
+  }
+  return hit
 }
 
 /**
@@ -839,7 +663,7 @@ function matrixAttr(m: Matrix): string {
  */
 export function iconSvgMarkup(id: IconId, opts: { size?: number; current?: string } = {}): string {
   const size = opts.size ?? 24
-  const body = ICONS[id]
+  const body = iconShapes(id)
     .map((s) => {
       const attrs = [`d="${s.d}"`, `fill="${s.fill ? toneColor(s.fill, opts.current) : 'none'}"`]
       if (s.stroke) attrs.push(`stroke="${toneColor(s.stroke, opts.current)}"`, `stroke-width="${s.w ?? 1.3}"`)
@@ -851,4 +675,3 @@ export function iconSvgMarkup(id: IconId, opts: { size?: number; current?: strin
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`
 }
 
-export { matrixAttr }

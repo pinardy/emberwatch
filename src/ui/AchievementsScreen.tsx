@@ -8,6 +8,9 @@ import {
 import { useGameStore } from '../game/store'
 import type { AchievementState } from '../game/types'
 import './replay.css'
+import { achievementArt } from '../game/content/artFamilies'
+import { Icon } from './Icon'
+import { IconText } from './IconText'
 
 function rewardText(def: AchievementDef): string | null {
   const parts: string[] = []
@@ -29,7 +32,7 @@ export function AchievementCard({ def, state }: { def: AchievementDef; state: Ac
   return (
     <li className={`achievement-card ${earned ? 'is-earned' : 'is-locked'}`}>
       <span className="achievement-icon" aria-hidden>
-        {def.icon}
+        <Icon id={achievementArt(def)} emoji={def.icon} />
       </span>
       <div className="achievement-body">
         <strong>{def.name}</strong>
@@ -54,9 +57,15 @@ export function AchievementCard({ def, state }: { def: AchievementDef; state: Ac
             </small>
           </div>
         )}
-        {reward && <small className="achievement-reward">{reward}</small>}
+        {reward && (
+          <small className="achievement-reward">
+            <IconText text={reward} anywhere />
+          </small>
+        )}
       </div>
-      <em className="achievement-status">{earned ? `✓ ${earnedOn(at)}` : '🔒'}</em>
+      <em className="achievement-status">
+        {earned ? `✓ ${earnedOn(at)}` : <Icon id="lock" emoji="🔒" label="Locked" />}
+      </em>
     </li>
   )
 }
@@ -74,7 +83,9 @@ export function AchievementsScreen() {
     <div className="screen achievements-screen">
       <div className="menu-card wide">
         <header className="row-between">
-          <h2>🏅 Achievements</h2>
+          <h2>
+            <Icon id="medal" emoji="🏅" /> Achievements
+          </h2>
           <span className="chip big">
             {earned}/{ACHIEVEMENT_LIST.length} earned
           </span>
@@ -126,7 +137,7 @@ export function AchievementsScreen() {
             Back to menu
           </button>
           <button type="button" onClick={() => goToScreen('citadel')}>
-            🏛️ The Citadel
+            <Icon id="guildHouse" emoji="🏛️" /> The Citadel
           </button>
         </footer>
       </div>

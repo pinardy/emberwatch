@@ -1,6 +1,8 @@
 import { scoutedEvent } from '../game/engine/citadel'
 import type { RunState } from '../game/types'
 import './replay.css'
+import { gladeEventArt } from '../game/content/artFamilies'
+import { Icon } from './Icon'
 
 /**
  * The Scouts' Report (a Citadel upgrade): names what waits in a glade of the
@@ -12,12 +14,12 @@ export function ScoutReport({ run, gladeId }: { run: RunState; gladeId: string }
   if (report === undefined) return null
   return (
     <p className="scout-report">
-      🔍 <strong>Scouts' report:</strong>{' '}
+      <Icon id="magnifier" emoji="🔍" /> <strong>Scouts' report:</strong>{' '}
       {report === null ? (
         'nothing waiting here but trees.'
       ) : (
         <>
-          {report.icon} {report.name}: {report.description}
+          <Icon id={gladeEventArt(report)} emoji={report.icon} /> {report.name}: {report.description}
         </>
       )}
     </p>
