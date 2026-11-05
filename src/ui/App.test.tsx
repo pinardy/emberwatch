@@ -4,7 +4,6 @@ import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
 import { DECREES } from '../game/content/decrees'
 import { GLADE_EVENTS, GLADE_EVENT_LIST } from '../game/content/gladeEvents'
-import { RESOURCES } from '../game/content/resources'
 import type { defaultAutoPause } from '../game/autoPause'
 import { defaultSettings, loadSettings } from '../game/persistence'
 import { RUN_MODIFIERS } from '../game/content/runModifiers'
@@ -761,6 +760,11 @@ describe('construction refunds in the inspector', () => {
     return { siteId: site.id, woodBefore }
   }
 
+  /** The amount next to a resource's drawn icon in a refund label. */
+  function refundOf(button: HTMLElement, art: string): string | undefined {
+    return button.querySelector(`.bag-label svg[data-icon="${art}"]`)?.parentElement?.textContent ?? undefined
+  }
+
   it('cancels an untouched site for every material back', () => {
     const { siteId, woodBefore } = selectFreshSite()
     const inspector = document.querySelector('.inspector') as HTMLElement
@@ -770,7 +774,7 @@ describe('construction refunds in the inspector', () => {
     fireEvent.click(cancel)
     const cost = BUILDINGS.woodcuttersCamp.cost.wood!
     expect(cancel.textContent).toMatch(/Confirm\? Refund/)
-    expect(cancel.textContent).toContain(`${RESOURCES.wood.icon}${cost}`)
+    expect(refundOf(cancel, 'wood')).toBe(`${cost}`)
     expect(cancel.textContent).toContain('(100%)')
 
     // Confirmed through the store's single demolish action: nothing is lost.
@@ -800,9 +804,7 @@ describe('construction refunds in the inspector', () => {
     const demolish = within(inspector).getByRole('button', { name: 'Demolish' })
     fireEvent.click(demolish)
     expect(demolish.textContent).toContain('(50%)')
-    expect(demolish.textContent).toContain(
-      `${RESOURCES.wood.icon}${BUILDINGS.woodcuttersCamp.cost.wood! / 2}`,
-    )
+    expect(refundOf(demolish, 'wood')).toBe(`${BUILDINGS.woodcuttersCamp.cost.wood! / 2}`)
   })
 })
 

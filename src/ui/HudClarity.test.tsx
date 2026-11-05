@@ -107,8 +107,10 @@ describe('glade-event prices', () => {
     show(eventRun(event.id, { berry: 40, ale: 10 }))
     render(<ChoiceModal />)
 
-    const effect = within(optionButton(calming.label)).getByText(/⏳/)
-    expect(effect.textContent).toBe(`⏳ ${calming.impatience}`)
+    // The impatience icon is announced by name; the number carries its sign.
+    const icon = within(optionButton(calming.label)).getByRole('img', { name: 'impatience' })
+    const effect = icon.parentElement as HTMLElement
+    expect(effect.textContent?.trim()).toBe(`${calming.impatience}`)
     expect(effect.className).toBe('is-good')
   })
 })

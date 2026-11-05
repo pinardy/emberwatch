@@ -3,6 +3,7 @@ import { storageBlocked } from '../game/engine/forecast'
 import { computeModifiers } from '../game/engine/modifiers'
 import { useRun } from '../game/store'
 import type { LogEntry, RunState } from '../game/types'
+import { IconText } from './IconText'
 
 /**
  * A non-blocking stream of what just happened. The sim already narrates every
@@ -158,7 +159,9 @@ export function EventToasts() {
           title="Dismiss"
           onClick={() => setToasts((current) => current.filter((t) => t.key !== toast.key))}
         >
-          <span className="event-toast-text">{toast.text}</span>
+          <span className="event-toast-text">
+            <IconText text={toast.text} />
+          </span>
           {toast.count > 1 && <span className="event-toast-count">×{toast.count}</span>}
         </button>
       ))}

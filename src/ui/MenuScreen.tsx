@@ -3,7 +3,7 @@ import { latestSlot, listSlots } from '../game/saveSlots'
 import { useGameStore } from '../game/store'
 import { ACHIEVEMENT_LIST, achievementCount } from '../game/content/achievements'
 import { DailyMenuEntry } from './DailyScreen'
-import { slotOneLiner } from './SaveSlots'
+import { SlotOneLiner } from './SaveSlots'
 import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
 
 export function MenuScreen() {
@@ -44,7 +44,7 @@ export function MenuScreen() {
             <button type="button" className="primary" onClick={() => resumeSaved(latest.id)}>
               ▶ Continue
               <small className="menu-sub">
-                {latest.label} · {slotOneLiner(latest.meta)}
+                {latest.label} · <SlotOneLiner meta={latest.meta} />
               </small>
             </button>
           )}

@@ -15,6 +15,8 @@ import type { SpeciesId } from '../game/types'
 import { EdictPicker } from './EdictPicker'
 import { LandOptions } from './LandOptions'
 import { RunModifierList } from './RunModifierList'
+import { Icon } from './Icon'
+import { NEED_ART } from '../game/content/art'
 import { SlotPicker } from './SaveSlots'
 import { useConfirm } from './useConfirm'
 
@@ -124,7 +126,7 @@ export function SetupScreen() {
                   style={{ ['--species' as string]: def.color }}
                 >
                   <span className="species-icon" aria-hidden>
-                    {def.icon}
+                    <Icon of={def} />
                   </span>
                   <strong>{def.name}</strong>
                   {picked && <em className="picked-tag">✓ Chosen</em>}
@@ -132,7 +134,7 @@ export function SetupScreen() {
                   <div className="need-row">
                     {def.needs.map((need) => (
                       <span key={need} className="need">
-                        {NEED_LABELS[need].icon} {NEED_LABELS[need].name}
+                        <Icon id={NEED_ART[need]} /> {NEED_LABELS[need].name}
                       </span>
                     ))}
                   </div>
@@ -238,7 +240,10 @@ export function SetupScreen() {
               className="primary"
               onClick={slotTaken ? replace.trigger : start}
             >
-              Set out with {chosen.map((id) => SPECIES[id].icon).join(' ')}
+              Set out with{' '}
+              {chosen.map((id) => (
+                <Icon key={id} of={SPECIES[id]} />
+              ))}
               {slotTaken ? ` · replaces ${slotLabel}` : ''}
               <span className="sr-only">
                 {' '}

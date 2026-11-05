@@ -2,6 +2,7 @@ import { RESOURCES } from '../game/content/resources'
 import { buildingStatus, type BuildingStatus } from '../game/engine/forecast'
 import type { Modifiers } from '../game/engine/modifiers'
 import type { BuildingInstance, RunState } from '../game/types'
+import { IconText } from './IconText'
 
 /**
  * One line saying whether a building is working and, if not, exactly what is
@@ -22,7 +23,7 @@ export function BuildingStatusLine({
   if (!text) return null
   return (
     <p className={`building-status is-${status.kind}`} role="status">
-      {text}
+      <IconText text={text} />
     </p>
   )
 }

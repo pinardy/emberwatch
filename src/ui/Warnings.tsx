@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react'
 import { collectWarnings } from '../game/engine/diagnostics'
 import { useGameStore, useRun } from '../game/store'
+import { IconText } from './IconText'
 
 /** Most warnings the strip shows at once; the rest wait their turn. */
 export const MAX_WARNINGS = 4
@@ -38,7 +39,7 @@ export function Warnings() {
       <div id={listId} className="warnings-list" role="status" aria-live="polite">
         {warnings.map((warning) => (
           <div key={warning.id} className={`warning is-${warning.severity}`}>
-            {warning.text}
+            <IconText text={warning.text} />
           </div>
         ))}
       </div>

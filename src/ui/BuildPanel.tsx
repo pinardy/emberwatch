@@ -1,10 +1,13 @@
 import { BUILDINGS, CATEGORY_LABELS } from '../game/content/buildings'
 import { RESOURCES } from '../game/content/resources'
 import { NEED_LABELS } from '../game/content/species'
-import { describeBonus, partnerIcon } from '../game/engine/adjacency'
+import { NEED_ART } from '../game/content/art'
+import { describeBonus } from '../game/engine/adjacency'
 import { canAfford } from '../game/engine/queries'
 import { useGameStore, useRun } from '../game/store'
 import type { BuildingCategory, ResourceBag } from '../game/types'
+import { Icon } from './Icon'
+import { PartnerIcon } from './PartnerIcon'
 import { RoadCard } from './RoadTool'
 
 const ORDER: BuildingCategory[] = [
@@ -52,7 +55,7 @@ export function BuildPanel() {
                     onClick={() => setBuildMode(active ? null : def.id)}
                   >
                     <span className="build-icon" aria-hidden>
-                      {def.icon}
+                      <Icon of={def} />
                     </span>
                     <span className="build-main">
                       <strong>{def.name}</strong>
@@ -68,7 +71,7 @@ export function BuildPanel() {
                         {def.gatherRadius ? <em>◎ {def.gatherRadius}</em> : null}
                         {(def.adjacency ?? []).map((bonus, i) => (
                           <em key={`adj-${i}`} title={describeBonus(bonus)}>
-                            🔗 {partnerIcon(bonus)} +{bonus.percent}%
+                            🔗 <PartnerIcon bonus={bonus} /> +{bonus.percent}%
                             {bonus.effect === 'capacity' ? ' cap' : ''}
                           </em>
                         ))}
@@ -79,7 +82,7 @@ export function BuildPanel() {
                         ) : null}
                         {def.service ? (
                           <em>
-                            {NEED_LABELS[def.service.need].icon}{' '}
+                            <Icon id={NEED_ART[def.service.need]} />{' '}
                             {NEED_LABELS[def.service.need].name} {def.service.capacity}
                           </em>
                         ) : null}
@@ -115,7 +118,7 @@ export function Cost({ cost, stock }: { cost: ResourceBag; stock: ResourceBag })
         if (have >= amount) {
           return (
             <span key={id} title={RESOURCES[id]?.name}>
-              {RESOURCES[id]?.icon} {amount}
+              <Icon of={RESOURCES[id]} /> {amount}
             </span>
           )
         }
@@ -126,7 +129,7 @@ export function Cost({ cost, stock }: { cost: ResourceBag; stock: ResourceBag })
             className="is-bad cost-short"
             title={`${RESOURCES[id]?.name}: you have ${have} of ${amount}`}
           >
-            {RESOURCES[id]?.icon} {amount}{' '}
+            <Icon of={RESOURCES[id]} /> {amount}{' '}
             <small>({amount - have} short)</small>
           </span>
         )

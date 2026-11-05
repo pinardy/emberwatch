@@ -16,6 +16,8 @@ import { useGameStore } from '../game/store'
 import type { DailyResult } from '../game/types'
 import { RunModifierList } from './RunModifierList'
 import './replay.css'
+import { Icon } from './Icon'
+import { IconText } from './IconText'
 
 /**
  * Today's UTC date key, refreshed when UTC midnight passes while the page is
@@ -93,11 +95,13 @@ export function DailyMenuEntry() {
       </span>
       <span className="daily-entry-body">
         <span aria-label={day.species.map((id) => SPECIES[id].name).join(', ')}>
-          {day.species.map((id) => SPECIES[id].icon).join(' ')}
+          {day.species.map((id) => (
+            <Icon key={id} of={SPECIES[id]} />
+          ))}
         </span>
         <span>· {edictLabel(day.edict)}</span>
         <span className={result ? (result.won ? 'is-good' : '') : 'muted'}>
-          · {result ? describeDaily(result) : 'Not attempted yet'}
+          · {result ? <IconText text={describeDaily(result)} /> : 'Not attempted yet'}
         </span>
         {streak > 0 && <span className="chip">🔥 {streak}-day streak</span>}
       </span>
@@ -157,7 +161,7 @@ export function DailyScreen() {
           <div className="chip-row">
             {day.species.map((id) => (
               <span key={id} className="chip">
-                {SPECIES[id].icon} {SPECIES[id].name}
+                <Icon of={SPECIES[id]} /> {SPECIES[id].name}
               </span>
             ))}
           </div>
@@ -181,7 +185,7 @@ export function DailyScreen() {
           {result ? (
             <>
               <p className={result.won ? 'is-good' : ''}>
-                {describeDaily(result)}
+                <IconText text={describeDaily(result)} />
                 <span className="muted">
                   {' '}
                   · {result.attempts} attempt{result.attempts === 1 ? '' : 's'}
@@ -219,7 +223,13 @@ export function DailyScreen() {
                         <time dateTime={r.date}>{r.date}</time>
                       </td>
                       <td className={r.won ? 'is-good' : 'is-bad'}>
-                        {r.won ? '👑 Held' : '🌫️ Lost'}
+                        {r.won ? (
+                          <>
+                            <Icon id="reputation" emoji="👑" /> Held
+                          </>
+                        ) : (
+                          '🌫️ Lost'
+                        )}
                       </td>
                       <td>{r.years}</td>
                       <td>{runMinutes(r.seconds)} min</td>

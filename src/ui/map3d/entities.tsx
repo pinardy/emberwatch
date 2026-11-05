@@ -4,6 +4,7 @@ import { useCursor } from '@react-three/drei'
 import * as THREE from 'three'
 import { BUILDINGS } from '../../game/content/buildings'
 import { footprintOf } from '../../game/engine/actions'
+import { DEPOSIT_ART } from '../../game/content/art'
 import { DEPOSIT_INFO } from '../../game/engine/mapgen'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, DepositId, Vec2, WorldDeposit } from '../../game/types'
@@ -142,6 +143,7 @@ export const DepositNode = memo(function DepositNode({
       {/* The kind icon stays at every zoom, larger and higher from afar. */}
       <IconSprite
         icon={DEPOSIT_INFO[deposit.kind].icon}
+        art={DEPOSIT_ART[deposit.kind]}
         y={bucket === 'far' ? 1.7 : 1.35}
         size={bucket === 'far' ? 1.05 : 0.7}
       />
@@ -266,7 +268,7 @@ export const BuildingNode = memo(function BuildingNode({
           <ConstructionSite progress={progress} scale={scale} />
         )}
       </group>
-      {bucket !== 'far' && <IconSprite icon={def.icon} y={iconY} size={0.75} />}
+      {bucket !== 'far' && <IconSprite icon={def.icon} art={def.art} y={iconY} size={0.75} />}
       {!building.built && bucket !== 'far' && (
         <LabelSprite text={`${Math.round(progress * 10) * 10}%`} y={0.85} size={0.6} />
       )}
@@ -320,7 +322,7 @@ export function ThreatMarker({ pos }: { pos: Vec2 }) {
   return (
     <group position={[pos.x, 0, pos.y]} raycast={NO_RAYCAST}>
       <group ref={sprite} position={[0, 2.6, 0]}>
-        <IconSprite icon="⚠️" y={0} size={1.1} />
+        <IconSprite icon="⚠️" art="dangerous" y={0} size={1.1} />
       </group>
     </group>
   )
