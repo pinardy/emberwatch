@@ -549,3 +549,23 @@ describe('run modifiers across saves and the ledger', () => {
     )
   })
 })
+
+describe('the first royal decree on modified land', () => {
+  it('still arrives as Year 2 opens when Year 1 is longer or shorter', () => {
+    for (const modifiers of [['longStorms'], ['earlyFrost'], []]) {
+      const state = runWith(modifiers)
+      // A decree cornerstone shapes the decree itself, not when it comes.
+      state.cornerstones.push('royalCouriers')
+      while (state.season.year === 1) {
+        tick(state, 0.125)
+        state.pendingChoices = []
+        if (state.season.year === 1) expect(state.decree, `${modifiers} Y1 ${state.clock}`).toBeNull()
+      }
+      for (let i = 0; i < 4 && !state.decree; i++) tick(state, 0.125)
+      expect(state.decree, `${modifiers}`).not.toBeNull()
+      expect(state.season).toMatchObject({ year: 2, season: 'drizzle' })
+      const def = DECREES[state.decree!.defId]
+      expect(state.decree!.timeLimit).toBe(Math.round(def.timeLimit * 1.3))
+    }
+  })
+})

@@ -261,7 +261,8 @@ describe('food forecast for the coming Storm', () => {
 
     const short = larderRun('clearance', 0)
     short.stock.berry = Math.floor(needed) - 6
-    expect(stormFoodForecast(short, computeModifiers(short)).shortfall).toBeGreaterThan(5)
+    // Enough for a normal Storm, not for this one.
+    expect(stormFoodForecast(short, computeModifiers(short)).shortfall).toBeGreaterThan(1)
     expect(runThroughStorm(short).hungry).toBe(true)
   })
 
@@ -352,5 +353,80 @@ describe('food forecast for the coming Storm', () => {
 
   it('stays quiet at the start of a fresh run', () => {
     expect(collectWarnings(newRun()).map((w) => w.id)).not.toContain('food-storm')
+  })
+})
+
+describe('forecasts under season-changing map modifiers', () => {
+  /** A larder run on land with `modifiers`, partway through `season` of Year 2. */
+  function landRun(modifiers: string[], season: 'drizzle' | 'clearance', elapsed: number): RunState {
+    const state = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'], modifiers })
+    while (state.pendingChoices.length > 0) takeChoice(state, state.pendingChoices[0].options[0])
+    for (const id of FOODS) delete state.stock[id as keyof typeof state.stock]
+    state.foodDebt = 0
+    state.season = { year: 2, season, elapsed, length: SEASON_LENGTH[season] }
+    return state
+  }
+
+  /** Real seconds until the coming Storm ends, by ticking. */
+  function secondsToStormEnd(state: RunState): number {
+    const start = state.clock
+    runThroughStorm(state)
+    return state.clock - start
+  }
+
+  it('Long Storms: the Storm countdown, its length and the larder forecast match the tick', () => {
+    const state = landRun(['longStorms'], 'clearance', 40)
+    const mods = computeModifiers(state)
+    expect(secondsUntilStorm(state)).toBeCloseTo(SEASON_LENGTH.clearance - 40)
+    const forecast = stormFoodForecast(state, mods)
+    expect(forecast.horizon).toBeCloseTo(SEASON_LENGTH.clearance - 40 + SEASON_LENGTH.storm * 1.25)
+    // The hearth forecast budgets wood for the longer Storm too.
+    delete state.stock.wood
+    const hearth = hearthForecast(state, mods)
+    expect(hearth.stormShortfall).toBeCloseTo(
+      (SEASON_LENGTH.clearance - 40) * hearth.rate + SEASON_LENGTH.storm * 1.25 * hearth.stormRate,
+    )
+    state.stock.wood = 400
+    expect(secondsToStormEnd(state)).toBeCloseTo(forecast.horizon, 0)
+  })
+
+  it('Long Storms: food for a normal Storm is flagged short, and really runs out', () => {
+    const probe = landRun(['longStorms'], 'clearance', 0)
+    const forecast = stormFoodForecast(probe, computeModifiers(probe))
+    const baseNeeded =
+      (forecast.needed * (SEASON_LENGTH.clearance + SEASON_LENGTH.storm)) / forecast.horizon
+
+    const short = landRun(['longStorms'], 'clearance', 0)
+    short.stock.berry = Math.ceil(baseNeeded) + 1
+    short.stock.wood = 400
+    // Enough for a normal Storm, not for this one.
+    expect(stormFoodForecast(short, computeModifiers(short)).shortfall).toBeGreaterThan(1)
+    expect(runThroughStorm(short).hungry).toBe(true)
+
+    const enough = landRun(['longStorms'], 'clearance', 0)
+    enough.stock.berry = Math.ceil(forecast.needed) + 1
+    enough.stock.wood = 400
+    expect(stormFoodForecast(enough, computeModifiers(enough)).shortfall).toBe(0)
+    expect(runThroughStorm(enough).hungry).toBe(false)
+  })
+
+  it('Early Frost: the first Storm comes when the countdown says it will', () => {
+    const state = createRun({
+      seed: 4242,
+      species: ['human', 'beaver', 'lizard'],
+      modifiers: ['earlyFrost'],
+    })
+    while (state.pendingChoices.length > 0) takeChoice(state, state.pendingChoices[0].options[0])
+    const promised = secondsUntilStorm(state)!
+    expect(promised).toBeLessThan(SEASON_LENGTH.drizzle + SEASON_LENGTH.clearance - 60)
+    expect(stormFoodForecast(state, computeModifiers(state)).horizon).toBeCloseTo(
+      promised + SEASON_LENGTH.storm,
+    )
+    let guard = 0
+    while (state.season.season !== 'storm' && guard++ < 10_000) {
+      tick(state, 0.125)
+      state.pendingChoices = []
+    }
+    expect(state.clock).toBeCloseTo(promised, 0)
   })
 })
