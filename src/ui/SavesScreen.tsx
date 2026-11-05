@@ -67,40 +67,54 @@ function SlotCard({
       )}
       <div className="slot-actions">
         {slot.meta && (
-          <button type="button" className="primary" onClick={() => resumeSaved(slot.id)}>
+          <button
+            type="button"
+            className="primary"
+            aria-label={`${playing ? 'Resume' : 'Load'} ${slot.label}`}
+            onClick={() => resumeSaved(slot.id)}
+          >
             {playing ? '▶ Resume' : '▶ Load'}
-            <span className="sr-only"> {slot.label}</span>
-          </button>
-        )}
-        {slot.meta && (
-          <button type="button" onClick={() => withRun((r) => downloadSaveFile(r))}>
-            ⬇ Export<span className="sr-only"> {slot.label}</span>
           </button>
         )}
         {slot.meta && (
           <button
             type="button"
+            aria-label={`Export ${slot.label} as a file`}
+            onClick={() => withRun((r) => downloadSaveFile(r))}
+          >
+            ⬇ Export
+          </button>
+        )}
+        {slot.meta && (
+          <button
+            type="button"
+            aria-label={`Copy text of ${slot.label}`}
             onClick={() => withRun((r) => onCopyText(slot.label, saveFileText(r)))}
           >
-            📋 Copy text<span className="sr-only"> of {slot.label}</span>
+            📋 Copy text
           </button>
         )}
         {canSaveHere && (
           <button
             type="button"
             className={slot.meta && copy.armed ? 'is-armed' : ''}
+            aria-label={
+              slot.meta && copy.armed
+                ? `Replace ${slot.label}? Tap again`
+                : `Save current run to ${slot.label}`
+            }
             onClick={slot.meta ? copy.trigger : () => saveCopy(slot.id)}
           >
             {slot.meta && copy.armed
               ? `Replace ${slot.label}? Tap again`
               : `💾 Save current run here`}
-            <span className="sr-only"> ({slot.label})</span>
           </button>
         )}
         {slot.meta && (
           <button
             type="button"
             className={`danger ${del.armed ? 'is-armed' : ''}`}
+            aria-label={del.armed ? `Delete ${slot.label}? Tap again` : `Delete ${slot.label}`}
             onClick={del.trigger}
           >
             {del.armed
@@ -108,7 +122,6 @@ function SlotCard({
                 ? 'Delete the run you are playing? Tap again'
                 : 'Delete for good? Tap again'
               : '🗑 Delete'}
-            <span className="sr-only"> {slot.label}</span>
           </button>
         )}
       </div>
@@ -125,11 +138,9 @@ function ImportPanel({ slots }: { slots: SlotSummary[] }) {
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [target, setTarget] = useState<SlotId | null>(null)
-  const [done, setDone] = useState<string | null>(null)
 
   const accept = (next: ImportResult) => {
     setResult(next)
-    setDone(null)
     setTarget(slots.find((s) => !s.meta)?.id ?? null)
   }
 
@@ -139,11 +150,10 @@ function ImportPanel({ slots }: { slots: SlotSummary[] }) {
     if (!result?.ok || !target) return
     const error = importRun(result.run, target)
     if (error) {
-      setDone(null)
       setResult({ ok: false, error })
       return
     }
-    setDone(`Imported into ${targetSlot?.label}.`)
+    // The store's notice at the top of the screen confirms it.
     setResult(null)
     setPasteText('')
     setPasteOpen(false)
@@ -196,11 +206,6 @@ function ImportPanel({ slots }: { slots: SlotSummary[] }) {
             Check this save
           </button>
         </div>
-      )}
-      {done && (
-        <p className="slot-ok" role="status">
-          {done}
-        </p>
       )}
       {result && !result.ok && (
         <p className="slot-error" role="alert">

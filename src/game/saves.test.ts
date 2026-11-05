@@ -451,10 +451,14 @@ describe('export and import', () => {
     for (const key of Object.keys(run)) {
       for (const value of junk) {
         const text = JSON.stringify({ ...base, run: { ...run, [key]: value } })
-        let result: ReturnType<typeof parseSaveFile> | undefined
-        expect(() => (result = parseSaveFile(text)), `${key} = ${JSON.stringify(value)}`).not.toThrow()
-        // Anything accepted must run in the simulation.
-        if (result?.ok) expect(() => tick(result!.ok ? result.run : (null as never), 0.125)).not.toThrow()
+        const label = `${key} = ${JSON.stringify(value)}`
+        let accepted: RunState | null = null
+        expect(() => {
+          const result = parseSaveFile(text)
+          if (result.ok) accepted = result.run
+        }, label).not.toThrow()
+        // Anything accepted must keep running in the simulation.
+        if (accepted) expect(() => tick(accepted!, 0.125), label).not.toThrow()
       }
     }
   })
