@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { ICONS, toneColor, type IconId } from '../../art/icons'
+import { iconShapes, toneColor, type IconId } from '../../art/icons'
 
 /**
  * Canvas-baked textures for the 3D map. Drawn icons, emoji and short strings (worker
@@ -57,7 +57,7 @@ export function iconTexture(id: IconId): THREE.CanvasTexture {
     const offset = (size - 24 * scale) / 2
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-    const shapes = ICONS[id].map((shape) => ({ shape, path: new Path2D(shape.d) }))
+    const shapes = iconShapes(id).map((shape) => ({ shape, path: new Path2D(shape.d) }))
     const place = (m?: readonly number[]) => {
       ctx.setTransform(scale, 0, 0, scale, offset, offset)
       if (m) ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5])

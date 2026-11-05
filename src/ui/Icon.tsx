@@ -1,13 +1,16 @@
 import { memo, useEffect, useSyncExternalStore, type ReactElement } from 'react'
+import { CORE_ICONS } from '../art/core'
+import { matrixAttr, toneColor, type Shape } from '../art/draw'
 import type { IconId } from '../art/icons'
 import './icons.css'
 
 /*
  * The icon registry (all the path data) is its own chunk, kept out of the
- * startup bundle: only the menu ships eagerly, and it barely shows an icon.
- * The lazy screens fetch it alongside their own code (see `lazyScreens.tsx`),
- * so the game never renders without it; on the menu an icon shows its emoji
- * for the moment before the registry lands, then redraws.
+ * startup bundle. The few icons the menu shows live in `art/core.ts`, which
+ * ships eagerly, so the menu draws them on its first frame. The lazy screens
+ * fetch the full registry alongside their own code (see `lazyScreens.tsx`),
+ * so a screen never renders without it; anything else shows its emoji for
+ * the moment before the registry lands, then redraws.
  */
 type Registry = typeof import('../art/icons')
 let registry: Registry | null = null
@@ -74,7 +77,8 @@ export function Icon({ id, of, emoji, label, className }: IconProps) {
   const a11y = label
     ? ({ role: 'img', 'aria-label': label } as const)
     : ({ 'aria-hidden': true } as const)
-  if (art && reg?.isIconId(art)) {
+  const shapes = art ? shapesFor(reg, art) : null
+  if (art && shapes) {
     return (
       <svg
         className={className ? `icon ${className}` : 'icon'}
@@ -85,7 +89,7 @@ export function Icon({ id, of, emoji, label, className }: IconProps) {
         data-icon={art}
         {...a11y}
       >
-        {shapesOf(reg, art)}
+        {elementsOf(art, shapes)}
       </svg>
     )
   }
@@ -98,14 +102,21 @@ export function Icon({ id, of, emoji, label, className }: IconProps) {
   )
 }
 
-/** The paths of each icon, built once and reused by every render. */
-const shapeCache = new Map<IconId, ReactElement[]>()
+const has = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k)
 
-function shapesOf(reg: Registry, id: IconId): ReactElement[] {
-  const { ICONS, matrixAttr, toneColor } = reg
-  let hit = shapeCache.get(id)
+/** An icon's shapes: from the eager core, or from the registry once it is loaded. */
+function shapesFor(reg: Registry | null, id: IconId): readonly Shape[] | null {
+  if (has(CORE_ICONS, id)) return CORE_ICONS[id as keyof typeof CORE_ICONS]
+  return reg?.isIconId(id) ? reg.iconShapes(id) : null
+}
+
+/** The paths of each icon, built once and reused by every render. */
+const elementCache = new Map<string, ReactElement[]>()
+
+function elementsOf(id: IconId, shapes: readonly Shape[]): ReactElement[] {
+  let hit = elementCache.get(id)
   if (!hit) {
-    hit = ICONS[id].map((s, i) => (
+    hit = shapes.map((s, i) => (
       <path
         key={i}
         d={s.d}
@@ -116,14 +127,14 @@ function shapesOf(reg: Registry, id: IconId): ReactElement[] {
         transform={s.m ? matrixAttr(s.m) : undefined}
       />
     ))
-    shapeCache.set(id, hit)
+    elementCache.set(id, hit)
   }
   return hit
 }
 
 /** Element id of an icon's `<symbol>` inside an SVG that renders `IconSymbols`. */
 export function iconSymbolId(id: IconId): string {
-  return `art-${id}`
+  return `art-${id.replace('/', '_')}`
 }
 
 /**
@@ -137,20 +148,26 @@ export const IconSymbols = memo(function IconSymbols({ ids }: { ids: readonly Ic
   return (
     <defs>
       {ids.map((id) => (
-        <symbol
-          key={id}
-          id={iconSymbolId(id)}
-          viewBox="0 0 24 24"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          overflow="visible"
-        >
-          {shapesOf(reg, id)}
-        </symbol>
+        <SymbolDef key={id} id={id} shapes={shapesFor(reg, id)} />
       ))}
     </defs>
   )
 })
+
+function SymbolDef({ id, shapes }: { id: IconId; shapes: readonly Shape[] | null }) {
+  if (!shapes) return null
+  return (
+    <symbol
+      id={iconSymbolId(id)}
+      viewBox="0 0 24 24"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      overflow="visible"
+    >
+      {elementsOf(id, shapes)}
+    </symbol>
+  )
+}
 
 /** One icon inside an SVG scene, centred on (`x`, `y`). Needs `IconSymbols`. */
 export function IconUse({ id, x, y, size }: { id: IconId; x: number; y: number; size: number }) {
