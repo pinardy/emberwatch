@@ -45,8 +45,22 @@ const defs: SpeciesDef[] = [
     workBonus: { hunting: 0.4, smithing: 0.2 },
     trait: {
       name: 'Blood of Embers',
-      description: 'A cold hearth does not trouble them at all.',
-      effects: [{ kind: 'ignoreColdHearth' }],
+      description:
+        'A cold hearth does not trouble them at all, and they spar among themselves: Brawling counts as three-quarters met even without an Arena.',
+      effects: [
+        { kind: 'ignoreColdHearth' },
+        /*
+         * Brawling is the only need no other species shares, and its chain is
+         * the second deepest (fiber to fabric at a weaver, then fabric and
+         * planks into training gear, then an Arena). Never shared, it is
+         * always the need the draft reaches last: across every lizard trio it
+         * averaged ~1-20% coverage, and lizard trios trailed the rest by ~8
+         * points; beaver/lizard/fox, where the fox's Rest is unshared too,
+         * sat at 63% against 72-92%. Like the harpies' Education, the floor
+         * matters where the venue never comes and little once it stands.
+         */
+        { kind: 'needFloor', need: 'brawling', ratio: 0.75 },
+      ],
     },
     blurb: 'Hunters and smiths. Give them something to punch and someone to patch them up.',
   },
