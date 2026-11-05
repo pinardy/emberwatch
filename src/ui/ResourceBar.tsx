@@ -72,7 +72,13 @@ export function ResourceBar() {
         </div>
         {full && (
           <em className="storage-flag">
-            Full{derived.blocked > 0 ? ` · ${derived.blocked} stopped` : ''}
+            Full
+            {derived.blocked > 0 && (
+              <span className="storage-flag-count">
+                {` · ${derived.blocked}`}
+                <span className="storage-flag-word"> stopped</span>
+              </span>
+            )}
           </em>
         )}
       </div>
