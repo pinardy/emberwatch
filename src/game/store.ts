@@ -27,7 +27,7 @@ import {
   togglePause,
   upgradeBuilding,
 } from './engine/actions'
-import { TICK_SECONDS, type GameSpeed } from './engine/balance'
+import { SPEED_OPTIONS, TICK_SECONDS, type GameSpeed } from './engine/balance'
 import { createRun } from './engine/createRun'
 import {
   appeaseThreat,
@@ -50,9 +50,29 @@ import {
 } from './persistence'
 import type { MetaState, ResourceId, RunState, SpeciesId, Vec2 } from './types'
 
-/** Most simulated seconds a single frame may consume. */
+/** Fewest simulated seconds a single frame may consume, at any speed. */
 const MAX_FRAME_BUDGET = 2
 const MAX_STEPS_PER_FRAME = 64
+/**
+ * Longest real frame the loop feeds the sim; mirrors the clamp in
+ * `useGameLoop`, so anything longer is a backgrounded or frozen tab.
+ */
+export const MAX_FRAME_REAL_SECONDS = 0.5
+
+/**
+ * Most simulated seconds one frame may owe. It scales with speed so a slow
+ * device at 5× (a frame of up to half a second) still gets all its time,
+ * with one tick of headroom for the carry, while a tab returning from the
+ * background still cannot fast-forward more than one long frame's worth.
+ */
+export function frameBudget(speed: number): number {
+  return Math.max(MAX_FRAME_BUDGET, speed * MAX_FRAME_REAL_SECONDS + TICK_SECONDS)
+}
+
+// The step cap must never be what slows the top speed down.
+if (MAX_STEPS_PER_FRAME * TICK_SECONDS < frameBudget(Math.max(...SPEED_OPTIONS))) {
+  throw new Error('MAX_STEPS_PER_FRAME cannot cover a full frame at top speed')
+}
 
 /**
  * Simulated seconds owed to the world but not yet ticked. Lives outside the
@@ -274,9 +294,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
      * unspent remainder carries into the next frame. Without the carry no
      * frame ever reaches a whole tick and the world stands still on any
      * display faster than 8 fps. The clamp stops a backgrounded tab from
-     * fast-forwarding on return.
+     * fast-forwarding on return; it grows with speed (see `frameBudget`) so a
+     * low frame rate at 4× or 5× is not silently slowed to the 1× budget.
      */
-    simCarry = Math.min(simCarry + realSeconds * speed, MAX_FRAME_BUDGET)
+    simCarry = Math.min(simCarry + realSeconds * speed, frameBudget(speed))
     let steps = 0
     while (simCarry >= TICK_SECONDS && steps < MAX_STEPS_PER_FRAME) {
       tick(run, TICK_SECONDS)

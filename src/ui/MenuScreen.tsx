@@ -79,7 +79,7 @@ export function MenuScreen() {
             </li>
           </ol>
           <p className="muted">
-            <strong>Keys:</strong> Space pauses · 1/2/3 set speed · B build · P people · O
+            <strong>Keys:</strong> Space pauses · 1–5 set speed · B build · P people · O
             orders · T trade · L log · WASD/arrows pan · Q/E rotate · H homes · right-click
             or Esc cancels placement and closes tips. On touch screens, drag to pan, pinch
             to zoom and tap ✓ to place. Progress saves automatically and the game works
