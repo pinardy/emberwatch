@@ -545,7 +545,8 @@ export const MOTIFS = {
     f('cream', circle(12, 7.6, 4)),
     f('cream', 'M4 21C4 16 7.4 13.4 12 13.4S20 16 20 21Z'),
   ),
-  pause: art(f('cream', rect(5.8, 4.4, 4.2, 15.2, 1.2)), f('cream', rect(14, 4.4, 4.2, 15.2, 1.2))),
+  // Follows the text colour, so it reads on the gold of an active speed button.
+  pause: art(f('current', rect(5.8, 4.4, 4.2, 15.2, 1.2)), f('current', rect(14, 4.4, 4.2, 15.2, 1.2))),
   noEntry: art(...bar('red', 'M12 3.6A8.4 8.4 0 1 1 12 20.4A8.4 8.4 0 1 1 12 3.6Z', 2.2), ...bar('red', 'M6.2 6.2L17.8 17.8', 2.2)),
   rain: art(
     xf(translate(0, -2), [f('cloud', CLOUD)]),
