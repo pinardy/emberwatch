@@ -206,13 +206,16 @@ export function stepProduction(
 
   // --- construction ---------------------------------------------------------
   /*
-   * Upgrades are construction jobs like any other: an upgrading building is
-   * one more site sharing the builder pool, so raising a tier slows new
-   * construction rather than costing a worker.
+   * Upgrades are construction jobs for the same builder pool, but new
+   * buildings come first: while any new site is open the builders split
+   * across those alone, and upgrades take the pool only when it is free.
+   * An upgrade improves something that already works; a missing farm or
+   * home is a hole. Sharing evenly let upgrades stall the opening build-out
+   * wherever builders are slow (any trio without beavers).
    */
-  const underConstruction = Object.values(s.buildings).filter(
-    (b) => !b.built || isUpgrading(b),
-  )
+  const newSites = Object.values(s.buildings).filter((b) => !b.built)
+  const underConstruction =
+    newSites.length > 0 ? newSites : Object.values(s.buildings).filter(isUpgrading)
   // Idle villagers are the shared builder pool; beavers and strong backs count
   // for more than one pair of hands.
   let buildPower = 0

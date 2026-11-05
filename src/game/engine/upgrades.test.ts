@@ -321,7 +321,7 @@ describe('the upgrade construction flow', () => {
     expect(s.log.some((e) => e.text.includes('Water-wheel Mill'))).toBe(true)
   })
 
-  it('makes no progress without idle builders, and shares them with other sites', () => {
+  it('makes no progress without idle builders, and waits while new sites are open', () => {
     const s = newRun()
     stockUp(s)
     const shelter = stand(s, 'shelter')
@@ -340,13 +340,20 @@ describe('the upgrade construction flow', () => {
     const alone = shelter.upgradeProgress!
     expect(alone).toBeGreaterThan(0)
 
-    // A second site halves the share each gets.
+    // A new site takes every builder until it stands; then the upgrade resumes.
     const site = stand(s, 'cabin', { x: 50, y: 50 })
     site.built = false
     site.buildProgress = 0
     stepProduction(s, 1, mods)
+    expect(shelter.upgradeProgress).toBeCloseTo(alone)
+    expect(site.buildProgress).toBeCloseTo(alone)
+    // A second upgrade shares the pool with the first once no new site is open.
+    site.built = true
+    const other = stand(s, 'warehouse', { x: -50, y: 50 })
+    expect(upgradeBuilding(s, other.id)).toBeNull()
+    stepProduction(s, 1, mods)
     expect(shelter.upgradeProgress! - alone).toBeCloseTo(alone / 2)
-    expect(site.buildProgress).toBeCloseTo(alone / 2)
+    expect(other.upgradeProgress).toBeCloseTo(alone / 2)
   })
 
   it('can be rushed with amber', () => {

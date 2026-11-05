@@ -32,6 +32,7 @@ export function UpgradeSection({ run, building }: { run: RunState; building: Bui
   if (isUpgrading(building) && next) {
     const progress = building.upgradeProgress ?? 0
     const idle = idleVillagers(run).length
+    const newSites = Object.values(run.buildings).filter((b) => !b.built).length
     const cost = rushCost(run, building.id)
     const amber = Math.floor(run.stock.amber ?? 0)
     return (
@@ -40,9 +41,11 @@ export function UpgradeSection({ run, building }: { run: RunState; building: Bui
         <p className="muted" role="status">
           ⬆ Upgrading to <strong>{next.name}</strong> — {Math.floor(progress)}/{next.buildSeconds}{' '}
           work.{' '}
-          {idle > 0
-            ? `${idle} idle villager${idle === 1 ? ' is' : 's are'} building it.`
-            : 'No idle villagers are free to build it.'}{' '}
+          {newSites > 0
+            ? 'Builders finish new construction first; it resumes when they are free.'
+            : idle > 0
+              ? `${idle} idle villager${idle === 1 ? ' is' : 's are'} building it.`
+              : 'No idle villagers are free to build it.'}{' '}
           Its current tier stays in effect meanwhile.
         </p>
         <div

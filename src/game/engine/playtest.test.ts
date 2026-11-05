@@ -384,6 +384,8 @@ function buildServices(s: RunState): boolean {
  * `defIds` that can take one right now (built, idle, affordable).
  */
 function tryUpgrade(s: RunState, defIds: string[]): boolean {
+  // One upgrade at a time: they only get builders the new sites leave idle.
+  if (Object.values(s.buildings).some(isUpgrading)) return false
   const candidate = Object.values(s.buildings)
     .filter((b) => defIds.includes(b.defId) && canUpgradeBuilding(s, b.id) === null)
     .sort((a, b) => tierOf(a) - tierOf(b))[0]
@@ -409,6 +411,17 @@ function wantsResin(s: RunState): boolean {
   )
 }
 
+/** A workshop whose wanted recipe burns resin is built or under way. */
+function resinConsumerPlanned(s: RunState): boolean {
+  for (const [producer, recipes] of wantedRecipes(s)) {
+    const usesResin = [...recipes].some(
+      (id) => (BUILDINGS[producer]?.recipes.find((r) => r.id === id)?.inputs.resin ?? 0) > 0,
+    )
+    if (usesResin && countPlanned(s, producer) > 0) return true
+  }
+  return false
+}
+
 /** True when any needed service good is made from plant fiber. */
 function wantsFiber(s: RunState): boolean {
   return [...wantedRecipes(s).values()].some(
@@ -420,8 +433,13 @@ function wantsFiber(s: RunState): boolean {
 function tuneRecipes(s: RunState): void {
   const wanted = wantedRecipes(s)
 
-  // Resin gates incense and scrolls, so dedicate one woodcutter to tapping.
-  if (wantsResin(s)) {
+  /*
+   * Resin gates incense and scrolls, so dedicate one woodcutter to tapping —
+   * once a workshop that burns it has been started. Tapping from minute one,
+   * for a chain that is minutes away, halves the wood of a settlement that
+   * cannot yet afford a warehouse, and slow builders never dig out of that.
+   */
+  if (wantsResin(s) && resinConsumerPlanned(s)) {
     const camps = Object.values(s.buildings).filter(
       (b) => b.defId === 'woodcuttersCamp' && b.built,
     )
@@ -460,9 +478,12 @@ function tuneRecipes(s: RunState): void {
   }
 }
 
-/** Sites currently under construction, upgrades included. */
+/**
+ * New sites under construction. Upgrades wait for builders until these are
+ * done, so they do not count toward the bot's limit on open sites.
+ */
 function openSites(s: RunState): number {
-  return Object.values(s.buildings).filter((b) => !b.built || isUpgrading(b)).length
+  return Object.values(s.buildings).filter((b) => !b.built).length
 }
 
 /**
