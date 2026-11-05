@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { loadRun } from '../game/persistence'
 import { useGameStore } from '../game/store'
-import { AutoPauseFields, PauseOnBlurField } from './SettingsFields'
+import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
 
 export function MenuScreen() {
   const goToScreen = useGameStore((s) => s.goToScreen)
@@ -89,14 +89,7 @@ export function MenuScreen() {
 
         <details className="how-to settings-block">
           <summary>Settings</summary>
-          <label>
-            <input
-              type="checkbox"
-              checked={settings.sound}
-              onChange={(e) => updateSettings({ sound: e.target.checked })}
-            />
-            Sound & rain ambience
-          </label>
+          <SoundFields />
           <PauseOnBlurField />
           <label>
             <input

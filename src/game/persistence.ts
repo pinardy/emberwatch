@@ -14,12 +14,43 @@ export interface Settings {
   pauseOnBlur: boolean
   /** Opt-in pauses for in-run moments: a threat, a decree, the Storm... */
   autoPause: AutoPauseSettings
-  /** Master switch for the synthesised cues and rain ambience. */
+  /** Master switch (mute) for the synthesised cues, rain and music. */
   sound: boolean
+  /** Mixer levels, 0..1 each; `sound: false` silences all of them. */
+  volume: VolumeSettings
   /** Map renderer. 3D falls back to 2D automatically where WebGL is missing. */
   renderer: '3d' | '2d'
   /** Real-time shadows in the 3D view — the main GPU cost on weak devices. */
   shadows: boolean
+}
+
+export type VolumeChannel = 'master' | 'music' | 'effects' | 'ambience'
+export type VolumeSettings = Record<VolumeChannel, number>
+
+/**
+ * Master, effects and rain start at full level, so the mix of cues and rain
+ * players already know is unchanged. The ambient score starts low rather than
+ * off: 30% on the slider, which the squared gain curve makes about -21 dB. It
+ * is new and plays for the whole run under the rain and every cue, so a quiet
+ * bed that players can turn up beats a loud one they must hunt for a slider to
+ * silence; but leaving it on means they discover it exists at all. It waits
+ * for the same first gesture as every other sound and is silent while muted.
+ */
+export function defaultVolume(): VolumeSettings {
+  return { master: 1, music: 0.3, effects: 1, ambience: 1 }
+}
+
+/** Fills in missing or invalid levels (older saves have none) and clamps to 0..1. */
+export function migrateVolume(raw: unknown): VolumeSettings {
+  const volume = defaultVolume()
+  if (!raw || typeof raw !== 'object') return volume
+  for (const channel of Object.keys(volume) as VolumeChannel[]) {
+    const value = (raw as Record<string, unknown>)[channel]
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      volume[channel] = Math.min(1, Math.max(0, value))
+    }
+  }
+  return volume
 }
 
 export function defaultSettings(): Settings {
@@ -27,6 +58,7 @@ export function defaultSettings(): Settings {
     pauseOnBlur: true,
     autoPause: defaultAutoPause(),
     sound: true,
+    volume: defaultVolume(),
     renderer: '3d',
     shadows: true,
   }
@@ -111,9 +143,14 @@ export function saveMeta(meta: MetaState): void {
 
 export function loadSettings(): Settings {
   const saved = read<Partial<Settings>>(SETTINGS_KEY) ?? {}
-  // Settings saved before auto-pause existed (or with a partial set of
-  // triggers) get the defaults for whatever is missing.
-  return { ...defaultSettings(), ...saved, autoPause: migrateAutoPause(saved.autoPause) }
+  // Settings saved before auto-pause or the volume mixer existed (or with a
+  // partial set of either) get the defaults for whatever is missing.
+  return {
+    ...defaultSettings(),
+    ...saved,
+    autoPause: migrateAutoPause(saved.autoPause),
+    volume: migrateVolume(saved.volume),
+  }
 }
 
 export function saveSettings(settings: Settings): void {

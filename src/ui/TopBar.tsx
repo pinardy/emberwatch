@@ -20,7 +20,7 @@ import { SPECIES } from '../game/content/species'
 import { useGameStore, useRun } from '../game/store'
 import { SPEED_OPTIONS } from '../game/engine/balance'
 import type { RunState, SpeciesId } from '../game/types'
-import { AutoPauseFields, PauseOnBlurField } from './SettingsFields'
+import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
 import { useEscapeLayer } from './useGameLoop'
 
 interface Float {
@@ -269,7 +269,7 @@ export function TopBar() {
             type="button"
             className={`icon-btn settings-btn ${popover === 'settings' ? 'is-open' : ''}`}
             onClick={() => toggle('settings')}
-            title="Game settings: sound and auto-pause"
+            title="Game settings: sound, volume and auto-pause"
             aria-label="Game settings"
             aria-expanded={popover === 'settings'}
             aria-controls="game-settings"
@@ -283,14 +283,7 @@ export function TopBar() {
               role="group"
               aria-label="Game settings"
             >
-              <label>
-                <input
-                  type="checkbox"
-                  checked={sound}
-                  onChange={(e) => updateSettings({ sound: e.target.checked })}
-                />
-                Sound & rain ambience
-              </label>
+              <SoundFields />
               <PauseOnBlurField />
               <AutoPauseFields />
             </div>

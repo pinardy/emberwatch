@@ -1,9 +1,22 @@
+import { defaultVolume, type VolumeSettings } from '../game/persistence'
 import type { Season } from '../game/types'
+import type { MusicEngine, MusicMood } from './music'
 
 /**
- * Asset-free audio: every cue is synthesised with WebAudio oscillators, and the
- * rain ambience is looped filtered noise whose character follows the season.
- * The context is created lazily on the first user gesture (autoplay policy).
+ * Asset-free audio: every cue is synthesised with WebAudio oscillators, the
+ * rain ambience is looped filtered noise whose character follows the season,
+ * and the ambient score (./music, loaded on demand) is generated live.
+ *
+ * The graph is a small mixer:
+ *
+ *   cues ──────────────► effects ──┐
+ *   rain ──────────────► ambience ─┼─► master ─► destination
+ *   score ─► duck ─────► music ────┘
+ *
+ * `master` carries the master level and the mute; each bus carries its own
+ * slider; `duck` dips the score under event cues. The context is created, and
+ * resumed, only from a user gesture (autoplay policy): until `unlockAudio` has
+ * run, every call just records what it wants and plays nothing.
  */
 
 export type Cue =
@@ -26,35 +39,123 @@ export type Cue =
   | 'won'
   | 'lost'
 
-let ctx: AudioContext | null = null
-let master: GainNode | null = null
+export type { MusicMood }
+
+interface Graph {
+  ctx: AudioContext
+  master: GainNode
+  effects: GainNode
+  ambience: GainNode
+  music: GainNode
+  duck: GainNode
+}
+
+let graph: Graph | null = null
+let gestured = false
 let rainSource: AudioBufferSourceNode | null = null
 let rainFilter: BiquadFilterNode | null = null
 let rainGain: GainNode | null = null
 let muted = false
+let volume: VolumeSettings = defaultVolume()
+let wantedRain: Season | null = null
+let musicMood: MusicMood | null = null
+let musicHeld = false
+let musicEngine: MusicEngine | null = null
+let musicLoading: Promise<void> | null = null
 
-function ensureContext(): AudioContext | null {
-  if (typeof window === 'undefined' || !('AudioContext' in window)) return null
-  if (!ctx) {
-    ctx = new AudioContext()
-    master = ctx.createGain()
-    master.gain.value = muted ? 0 : 1
-    master.connect(ctx.destination)
-  }
-  if (ctx.state === 'suspended') void ctx.resume()
-  return ctx
+/** Slider position (0..1) to gain: squared, so the travel feels even to the ear. */
+export function levelToGain(level: number): number {
+  const v = Math.min(1, Math.max(0, level))
+  return v * v
 }
 
-/** Call from a pointerdown/keydown handler so the context may start. */
+/** How far the score dips under an event cue, and how long it stays down. */
+const DUCK_GAIN = 0.3
+const DUCK_HOLD_S = 1.4
+
+/** Smoothing time constant for slider and mute changes (no zipper noise). */
+const LEVEL_SMOOTH_S = 0.05
+
+/**
+ * Has the page seen a user gesture? Our own pointer/key listener says so, and
+ * so does the browser's sticky activation where it reports it: the click on
+ * "Set out" that mounts the game counts, even though the game's listener was
+ * not attached yet.
+ */
+function hasGesture(): boolean {
+  if (gestured) return true
+  const activation = (globalThis.navigator as { userActivation?: { hasBeenActive?: boolean } })
+    ?.userActivation
+  return activation?.hasBeenActive === true
+}
+
+function ensureContext(): Graph | null {
+  if (!hasGesture()) return null
+  if (typeof AudioContext === 'undefined') return null
+  if (!graph) {
+    const ctx = new AudioContext()
+    const master = ctx.createGain()
+    master.gain.value = muted ? 0 : levelToGain(volume.master)
+    master.connect(ctx.destination)
+    const bus = (level: number) => {
+      const node = ctx.createGain()
+      node.gain.value = levelToGain(level)
+      node.connect(master)
+      return node
+    }
+    const effects = bus(volume.effects)
+    const ambience = bus(volume.ambience)
+    const music = bus(volume.music)
+    const duck = ctx.createGain()
+    duck.gain.value = 1
+    duck.connect(music)
+    graph = { ctx, master, effects, ambience, music, duck }
+  }
+  if (graph.ctx.state === 'suspended') void graph.ctx.resume()
+  return graph
+}
+
+/**
+ * Call from a pointerdown/keydown handler: the first call creates the
+ * context, later ones resume it if the browser suspended it.
+ */
 export function unlockAudio(): void {
-  ensureContext()
+  gestured = true
+  const fresh = graph === null
+  if (!ensureContext() || !fresh) return
+  // Anything asked for before the gesture starts now.
+  applyRain()
+  syncMusic()
 }
 
 export function setMuted(value: boolean): void {
   muted = value
-  if (master && ctx) {
-    master.gain.setTargetAtTime(value ? 0 : 1, ctx.currentTime, 0.05)
+  if (graph) {
+    graph.master.gain.setTargetAtTime(
+      value ? 0 : levelToGain(volume.master),
+      graph.ctx.currentTime,
+      LEVEL_SMOOTH_S,
+    )
   }
+  syncMusic()
+}
+
+/** Applies the mixer levels; cheap to call on every settings change. */
+export function setVolume(next: VolumeSettings): void {
+  volume = { ...next }
+  if (graph) {
+    const t = graph.ctx.currentTime
+    graph.master.gain.setTargetAtTime(muted ? 0 : levelToGain(volume.master), t, LEVEL_SMOOTH_S)
+    graph.effects.gain.setTargetAtTime(levelToGain(volume.effects), t, LEVEL_SMOOTH_S)
+    graph.ambience.gain.setTargetAtTime(levelToGain(volume.ambience), t, LEVEL_SMOOTH_S)
+    graph.music.gain.setTargetAtTime(levelToGain(volume.music), t, LEVEL_SMOOTH_S)
+  }
+  syncMusic()
+}
+
+/** True when a channel can be heard at all: not muted, neither slider at 0. */
+function audible(level: number): boolean {
+  return !muted && volume.master > 0 && level > 0
 }
 
 interface Note {
@@ -70,8 +171,9 @@ interface Note {
 }
 
 function play(notes: Note[]): void {
-  const c = ensureContext()
-  if (!c || !master || muted) return
+  const g = ensureContext()
+  if (!g || !audible(volume.effects)) return
+  const c = g.ctx
   const now = c.currentTime
   for (const n of notes) {
     const osc = c.createOscillator()
@@ -83,7 +185,7 @@ function play(notes: Note[]): void {
     gain.gain.linearRampToValueAtTime(peak, now + n.at + 0.02)
     gain.gain.exponentialRampToValueAtTime(0.0001, now + n.at + n.d)
     osc.connect(gain)
-    gain.connect(master)
+    gain.connect(g.effects)
     osc.start(now + n.at)
     osc.stop(now + n.at + n.d + 0.05)
   }
@@ -91,8 +193,9 @@ function play(notes: Note[]): void {
 
 /** A short burst of filtered noise (knocks, rumbles, stings). */
 function noiseBurst(duration: number, frequency: number, gainValue: number): void {
-  const c = ensureContext()
-  if (!c || !master || muted) return
+  const g = ensureContext()
+  if (!g || !audible(volume.effects)) return
+  const c = g.ctx
   const length = Math.ceil(c.sampleRate * duration)
   const buffer = c.createBuffer(1, length, c.sampleRate)
   const data = buffer.getChannelData(0)
@@ -109,11 +212,44 @@ function noiseBurst(duration: number, frequency: number, gainValue: number): voi
   gain.gain.exponentialRampToValueAtTime(0.0001, now + duration)
   source.connect(filter)
   filter.connect(gain)
-  gain.connect(master)
+  gain.connect(g.effects)
   source.start(now)
 }
 
+/**
+ * Cues that announce an event rather than confirm an action: the score dips
+ * under these so they read clearly. Placement clicks and refusals are too
+ * frequent to duck for; the music would pump.
+ */
+const DUCKING_CUES: ReadonlySet<Cue> = new Set<Cue>([
+  'seasonDrizzle',
+  'seasonClearance',
+  'seasonStorm',
+  'orderComplete',
+  'draftOpen',
+  'villagerLeft',
+  'villagerArrived',
+  'threat',
+  'threatStrike',
+  'gladeCleared',
+  'caravan',
+  'caravanLeaving',
+  'won',
+  'lost',
+])
+
+/** Dips the score for a moment, then lets it swell back. */
+function duckMusic(): void {
+  if (!graph || !musicEngine || !audible(volume.effects)) return
+  const { duck, ctx } = graph
+  const now = ctx.currentTime
+  duck.gain.cancelScheduledValues(now)
+  duck.gain.setTargetAtTime(DUCK_GAIN, now, 0.06)
+  duck.gain.setTargetAtTime(1, now + DUCK_HOLD_S, 0.6)
+}
+
 export function cue(name: Cue): void {
+  if (DUCKING_CUES.has(name)) duckMusic()
   switch (name) {
     case 'seasonDrizzle':
       play([
@@ -249,8 +385,15 @@ const RAIN: Record<Season, { gain: number; freq: number }> = {
 
 /** Starts (or retunes) the rain loop for the given season; null stops it. */
 export function setRainSeason(season: Season | null): void {
-  const c = ensureContext()
-  if (!c || !master) return
+  wantedRain = season
+  applyRain()
+}
+
+function applyRain(): void {
+  const g = ensureContext()
+  if (!g) return
+  const c = g.ctx
+  const season = wantedRain
 
   if (season === null) {
     if (rainGain) rainGain.gain.setTargetAtTime(0, c.currentTime, 0.4)
@@ -273,11 +416,88 @@ export function setRainSeason(season: Season | null): void {
     rainGain.gain.value = 0
     rainSource.connect(rainFilter)
     rainFilter.connect(rainGain)
-    rainGain.connect(master)
+    rainGain.connect(g.ambience)
     rainSource.start()
   }
 
   const target = RAIN[season]
   rainGain!.gain.setTargetAtTime(target.gain, c.currentTime, 1.2)
   rainFilter!.frequency.setTargetAtTime(target.freq, c.currentTime, 1.2)
+}
+
+// ---------------------------------------------------------------------------
+// Ambient score
+// ---------------------------------------------------------------------------
+
+/** What the score should play; null when no run is on screen. */
+export function setMusicMood(mood: MusicMood | null): void {
+  musicMood = mood
+  syncMusic()
+}
+
+/** Holds the score while the game is paused or the tab is hidden. */
+export function setMusicHeld(held: boolean): void {
+  musicHeld = held
+  syncMusic()
+}
+
+/**
+ * Starts, retunes or stops the score to match what is wanted. The engine is
+ * its own chunk, fetched the first time the score would actually be heard, so
+ * players who keep music at 0 never download it. It schedules notes on the
+ * audio clock about once a second and stops scheduling entirely while held,
+ * muted or turned down to nothing.
+ */
+function syncMusic(): void {
+  if (!graph) return
+  if (musicMood === null || musicHeld || !audible(volume.music)) {
+    musicEngine?.pause()
+    return
+  }
+  if (!musicEngine) {
+    if (!musicLoading) {
+      const g = graph
+      musicLoading = import('./music')
+        .then((m) => {
+          if (graph === g) musicEngine = m.createMusicEngine(g.ctx, g.duck)
+        })
+        .catch(() => {
+          // Offline before the chunk was cached: the game plays on without a score.
+        })
+        .finally(() => {
+          musicLoading = null
+          if (musicEngine) syncMusic()
+        })
+    }
+    return
+  }
+  musicEngine.setMood(musicMood)
+  musicEngine.resume()
+}
+
+/** Resolves once an in-flight load of the score engine has settled (tests). */
+export function musicReady(): Promise<void> {
+  return musicLoading ?? Promise.resolve()
+}
+
+/** The live graph, for tests that check the wiring. */
+export function audioGraphForTests() {
+  return { ...graph, rainGain, musicEngine }
+}
+
+/** Forgets the context and everything wanted, as on a fresh page (tests). */
+export function resetAudioForTests(): void {
+  musicEngine?.dispose()
+  graph = null
+  gestured = false
+  rainSource = null
+  rainFilter = null
+  rainGain = null
+  muted = false
+  volume = defaultVolume()
+  wantedRain = null
+  musicMood = null
+  musicHeld = false
+  musicEngine = null
+  musicLoading = null
 }
