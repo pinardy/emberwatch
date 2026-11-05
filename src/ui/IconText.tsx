@@ -92,6 +92,9 @@ export const LEADING_GLYPH_ART: Record<string, IconId> = {
   '🌫': 'fog',
   '📅': 'calendar',
   '🪦': 'grave',
+  '🎗': 'ribbon',
+  '⏸': 'pause',
+  '⛏': 'stonecuttersCamp',
 }
 
 const GLYPHS = [...new Set([...NAMED.keys(), ...Object.keys(LEADING_GLYPH_ART)])].sort(
@@ -101,7 +104,10 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const PATTERN = new RegExp(`(${GLYPHS.map(escape).join('|')})️?`, 'gu')
 
 /** Split `text` into strings and icon ids. Exported for tests. */
-export function tokenizeIconText(text: string): (string | { art: IconId; glyph: string })[] {
+export function tokenizeIconText(
+  text: string,
+  anywhere = false,
+): (string | { art: IconId; glyph: string })[] {
   const out: (string | { art: IconId; glyph: string })[] = []
   let last = 0
   for (const match of text.matchAll(PATTERN)) {
@@ -113,7 +119,7 @@ export function tokenizeIconText(text: string): (string | { art: IconId; glyph: 
       .replace(/^\s/, '')
       .toLowerCase()
     let art: IconId | undefined = NAMED.get(key)?.find((c) => after.startsWith(c.name))?.art
-    if (!art && text.slice(0, at).trim() === '') art = LEADING_GLYPH_ART[key]
+    if (!art && (anywhere || text.slice(0, at).trim() === '')) art = LEADING_GLYPH_ART[key]
     if (!art) continue
     if (at > last) out.push(text.slice(last, at))
     out.push({ art, glyph })
@@ -123,8 +129,12 @@ export function tokenizeIconText(text: string): (string | { art: IconId; glyph: 
   return out
 }
 
-export function IconText({ text }: { text: string }): ReactNode {
-  const parts = tokenizeIconText(text)
+/**
+ * `anywhere` also swaps headline glyphs mid-line — for short UI strings the
+ * app writes itself ("👑 +2 ⏳ −1"), never for the sim's free text.
+ */
+export function IconText({ text, anywhere = false }: { text: string; anywhere?: boolean }): ReactNode {
+  const parts = tokenizeIconText(text, anywhere)
   if (parts.length === 1 && typeof parts[0] === 'string') return text
   return parts.map((p, i) => (typeof p === 'string' ? p : <Icon key={i} id={p.art} emoji={p.glyph} />))
 }

@@ -25,7 +25,7 @@ export function DecreeCard() {
   if (!decree || !def) {
     return (
       <p className="muted decree-next">
-        📯 The next royal decree arrives in about {clockText(run.decreeTimer)}.
+        <Icon id="horn" emoji="📯" /> The next royal decree arrives in about {clockText(run.decreeTimer)}.
       </p>
     )
   }

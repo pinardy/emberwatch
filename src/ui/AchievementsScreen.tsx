@@ -10,6 +10,7 @@ import type { AchievementState } from '../game/types'
 import './replay.css'
 import { achievementArt } from '../game/content/art'
 import { Icon } from './Icon'
+import { IconText } from './IconText'
 
 function rewardText(def: AchievementDef): string | null {
   const parts: string[] = []
@@ -56,7 +57,11 @@ export function AchievementCard({ def, state }: { def: AchievementDef; state: Ac
             </small>
           </div>
         )}
-        {reward && <small className="achievement-reward">{reward}</small>}
+        {reward && (
+          <small className="achievement-reward">
+            <IconText text={reward} anywhere />
+          </small>
+        )}
       </div>
       <em className="achievement-status">
         {earned ? `✓ ${earnedOn(at)}` : <Icon id="lock" emoji="🔒" label="Locked" />}
@@ -78,7 +83,9 @@ export function AchievementsScreen() {
     <div className="screen achievements-screen">
       <div className="menu-card wide">
         <header className="row-between">
-          <h2>🏅 Achievements</h2>
+          <h2>
+            <Icon id="medal" emoji="🏅" /> Achievements
+          </h2>
           <span className="chip big">
             {earned}/{ACHIEVEMENT_LIST.length} earned
           </span>
@@ -130,7 +137,7 @@ export function AchievementsScreen() {
             Back to menu
           </button>
           <button type="button" onClick={() => goToScreen('citadel')}>
-            🏛️ The Citadel
+            <Icon id="guildHouse" emoji="🏛️" /> The Citadel
           </button>
         </footer>
       </div>

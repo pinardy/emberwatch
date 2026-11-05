@@ -34,7 +34,7 @@ import { panDirectionOf } from './usePanKeys'
 import { RoadGhost2D, RoadLayer2D, VillagerDots2D } from './MapLayers2D'
 import { RoadBanner } from './RoadTool'
 import { roadKey, villagerRouteKey } from './map3d/layerKeys'
-import { IconSymbols, IconUse } from './Icon'
+import { Icon, IconSymbols, IconUse } from './Icon'
 
 /** Every icon the 2D map stamps, defined once as `<symbol>`s. */
 const MAP_SYMBOLS: IconId[] = [
@@ -710,7 +710,7 @@ export function WarmthToggle() {
       className={on ? 'is-active' : ''}
       onClick={() => useMapOverlays.getState().toggleWarmth()}
     >
-      🔥
+      <Icon id="settlement" emoji="🔥" />
     </button>
   )
 }

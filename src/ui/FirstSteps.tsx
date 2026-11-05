@@ -10,6 +10,7 @@ import {
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import './first-steps.css'
+import { Icon } from './Icon'
 
 /**
  * The "First steps" checklist: a small card that walks a new player through
@@ -117,7 +118,10 @@ export function FirstSteps({ run }: { run: RunState }) {
     >
       <header className="first-steps-head">
         <strong>
-          <span aria-hidden>🧭 </span>First steps{' '}
+          <span aria-hidden>
+            <Icon id="compass" emoji="🧭" />{' '}
+          </span>
+          First steps{' '}
           <span className="first-steps-count">
             {doneCount}/{required.length}
           </span>

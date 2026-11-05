@@ -62,7 +62,9 @@ export function ResourceBar() {
             : 'Stockpile usage. Amber does not take up space.'
         }
       >
-        <span>📦</span>
+        <span>
+          <Icon id="warehouse" emoji="📦" />
+        </span>
         <strong>
           {Math.floor(used)}
           <small>/{run.storageCap}</small>
@@ -87,7 +89,9 @@ export function ResourceBar() {
           food.runway,
         )} without new food.`}
       >
-        <span>🍽️</span>
+        <span>
+          <Icon id="plate" emoji="🍽️" />
+        </span>
         <strong>{Math.floor(foodStock(run))}</strong>
         <small>×{foodVariety(run)}</small>
         <small className="food-runway">

@@ -28,8 +28,12 @@ export function CitadelScreen() {
     <div className="screen citadel-screen">
       <div className="menu-card wide">
         <header className="row-between">
-          <h2>🏛️ The Citadel</h2>
-          <span className="chip big">📦 {meta.citadelSupplies} supplies</span>
+          <h2>
+            <Icon id="guildHouse" emoji="🏛️" /> The Citadel
+          </h2>
+          <span className="chip big">
+            <Icon id="warehouse" emoji="📦" /> {meta.citadelSupplies} supplies
+          </span>
         </header>
         <p className="muted">
           Every settlement you found — won or lost — sends supplies back to the Citadel.
@@ -38,7 +42,7 @@ export function CitadelScreen() {
         </p>
         <div className="citadel-stats">
           <span className="chip">
-            🏗️ {owned}/{META_UPGRADE_LIST.length} upgrades
+            <Icon id="scaffold" emoji="🏗️" /> {owned}/{META_UPGRADE_LIST.length} upgrades
           </span>
           <span className="chip">
             <Icon id="reputation" /> {meta.runsWon} held
@@ -47,7 +51,7 @@ export function CitadelScreen() {
             <Icon id="fog" emoji="🌫️" /> {meta.runsLost} lost
           </span>
           <span className="chip">
-            📜{' '}
+            <Icon id="scroll" emoji="📜" />{' '}
             {meta.edictUnlocked > 0
               ? `Up to Edict ${edictNumeral(meta.edictUnlocked)}`
               : 'No edicts earned yet'}
@@ -185,7 +189,7 @@ export function CitadelScreen() {
             Back to menu
           </button>
           <button type="button" onClick={() => goToScreen('achievements')}>
-            🏅 Achievements
+            <Icon id="medal" emoji="🏅" /> Achievements
           </button>
           <button type="button" className="primary" onClick={() => goToScreen('setup')}>
             Found a new settlement
