@@ -1,6 +1,6 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
-import { SPECIES } from '../content/species'
+import { SPECIES, speciesSingular } from '../content/species'
 import type { ResourceId, RunState, Season, SpeciesId, Villager } from '../types'
 import {
   COMPLEX_FOOD_MULTIPLIER,
@@ -421,7 +421,7 @@ export function stepDepartures(s: RunState, dt: number): string[] {
         const victim = pickVictim(s, sp)
         if (!victim) continue
         removeVillager(s, victim.id)
-        departed.push(`${victim.name} the ${SPECIES[sp].name.slice(0, -1)} left the settlement.`)
+        departed.push(`${victim.name} the ${speciesSingular(sp)} left the settlement.`)
         s.stats.villagersLost++
         recordEvent(s, 'left', sp)
         addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)

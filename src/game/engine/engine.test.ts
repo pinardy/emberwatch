@@ -1850,3 +1850,21 @@ describe('demolition refunds', () => {
     )
   })
 })
+
+describe('log lines name a single villager by species', () => {
+  it('says "the Harpy" and "the Fox", not "the Harpie" or "the Foxe"', () => {
+    const state = newRun()
+    state.speciesPool = ['harpy', 'fox', 'human']
+    for (const sp of ['harpy', 'fox'] as const) {
+      for (const v of Object.values(state.villagers)) delete state.villagers[v.id]
+      const id = addVillager(state)!
+      state.villagers[id].species = sp
+      state.resolve[sp] = -20
+      state.despair[sp] = 0
+      const text = stepDepartures(state, SECONDS_TO_LEAVE * 4).find((t) =>
+        t.includes('left the settlement'),
+      )
+      expect(text).toContain(sp === 'harpy' ? 'the Harpy left' : 'the Fox left')
+    }
+  })
+})

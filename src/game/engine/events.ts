@@ -2,7 +2,7 @@ import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CORNERSTONES, RARITY_WEIGHTS } from '../content/cornerstones'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS, describeGoal, evaluateGoal } from '../content/orders'
-import { SPECIES, VILLAGER_TRAIT_LIST, villagerName } from '../content/species'
+import { SPECIES, VILLAGER_TRAIT_LIST, speciesSingular, villagerName } from '../content/species'
 import { EDIBLE, resourceName } from '../content/resources'
 import type {
   BuildingDef,
@@ -207,7 +207,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
       removeVillager(s, victim.id)
       s.stats.villagersLost++
       recordEvent(s, 'lost', victim.species)
-      pushLog(s, `${victim.name} the ${SPECIES[victim.species].name.slice(0, -1)} is lost.`, 'bad')
+      pushLog(s, `${victim.name} the ${speciesSingular(victim.species)} is lost.`, 'bad')
     }
   }
   if (option.villagerGain) {
@@ -667,7 +667,7 @@ export function stepNewcomers(
     const id = addVillager(s)
     if (id) {
       const v = s.villagers[id]
-      pushLog(s, `${v.name} the ${SPECIES[v.species].name.slice(0, -1)} arrived at the hearth.`, 'good')
+      pushLog(s, `${v.name} the ${speciesSingular(v.species)} arrived at the hearth.`, 'good')
     }
   }
 }
