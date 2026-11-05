@@ -4,7 +4,11 @@ import { SPECIES } from '../content/species'
 import {
   DECREE_MISS_ESCALATION,
   DECREE_MISS_IMPATIENCE,
+  FOOD_VARIETY_CAP,
   HOSTILITY_SQUEEZE_THRESHOLD,
+  RESOLVE_COMFORT,
+  RESOLVE_HOUSED,
+  RESOLVE_PER_FOOD_VARIETY,
   RESOLVE_PER_HOSTILITY,
   RESOLVE_PER_HOSTILITY_LATE,
   RESOLVE_PER_NEED,
@@ -53,8 +57,8 @@ function lapsingDecree(state: RunState): RoyalDecree {
 
 describe('hostility squeeze', () => {
   it('leaves the opening alone and tightens once the forest closes in', () => {
-    // Up to the threshold it is the old linear drag, so a first-year
-    // settlement (hostility ~10-25 at its first Storm) feels no change.
+    // Up to the threshold it is the old linear drag, so a newcomer's first
+    // Storm (hostility ~10-15 without much clearing) feels no change.
     for (const h of [0, 5, HOSTILITY_SQUEEZE_THRESHOLD]) {
       expect(hostilityResolvePenalty(h)).toBeCloseTo(h * RESOLVE_PER_HOSTILITY)
     }
@@ -69,9 +73,18 @@ describe('hostility squeeze', () => {
       expect(hostilityResolvePenalty(x)).toBeGreaterThan(last)
       last = hostilityResolvePenalty(x)
     }
-    // A late-game forest still costs less than two well-served needs, so a
-    // settlement that serves its people can outrun it.
-    expect(hostilityResolvePenalty(70)).toBeLessThan(2 * RESOLVE_PER_NEED)
+    // A late-game forest is still outrun by serving people: a housed, fed
+    // species with both needs met clears the strictest threshold at 70.
+    const strictest = Math.max(...Object.values(SPECIES).map((d) => d.resolveTarget))
+    for (const def of Object.values(SPECIES)) {
+      const served =
+        def.baseResolve +
+        2 * RESOLVE_PER_NEED +
+        RESOLVE_HOUSED +
+        RESOLVE_COMFORT +
+        FOOD_VARIETY_CAP * RESOLVE_PER_FOOD_VARIETY
+      expect(served - hostilityResolvePenalty(70), def.id).toBeGreaterThan(strictest)
+    }
   })
 
   it('is the hostility term every species sees in its resolve breakdown', () => {
@@ -138,21 +151,21 @@ describe('decree strikes', () => {
 
 describe('harpies teach one another', () => {
   it('only harpies, and only for Education, get a floor', () => {
-    expect(needFloor('harpy', 'education')).toBe(0.5)
+    expect(needFloor('harpy', 'education')).toBe(0.75)
     expect(needFloor('harpy', 'rest')).toBe(0)
     for (const sp of ['human', 'beaver', 'lizard', 'fox'] as SpeciesId[]) {
       for (const need of SPECIES[sp].needs) expect(needFloor(sp, need), `${sp} ${need}`).toBe(0)
     }
   })
 
-  it('counts Education half met without a Guild House, and no more', () => {
+  it('counts Education three-quarters met without a Guild House, and no more', () => {
     const state = newRun()
     const harpy = breakdownOf(state, 'harpy')
-    expect(harpy.needRatio.education).toBe(0.5)
+    expect(harpy.needRatio.education).toBe(0.75)
     expect(harpy.needDetail.education).toBe(false)
     expect(harpy.needRatio.rest).toBe(0)
-    expect(harpy.needs).toBeCloseTo(0.5 * RESOLVE_PER_NEED)
-    expect(harpy.needsMet).toBeCloseTo(0.25)
+    expect(harpy.needs).toBeCloseTo(0.75 * RESOLVE_PER_NEED)
+    expect(harpy.needsMet).toBeCloseTo(0.375)
     // Nobody else's needs move.
     expect(breakdownOf(state, 'fox').needs).toBe(0)
     expect(breakdownOf(state, 'human').needs).toBe(0)

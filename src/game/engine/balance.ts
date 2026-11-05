@@ -120,18 +120,18 @@ export const RESOLVE_PER_HOSTILITY = 0.1
  * costs `RESOLVE_PER_HOSTILITY_LATE` more on top. A settlement crosses it once
  * it starts clearing glades in earnest: a newcomer following the first-steps
  * checklist meets its first Storm at hostility ~10-15 and feels nothing, an
- * expanding one at ~25 loses a point, and the squeeze tightens from there: at
- * hostility 50 resolve drops 11 instead of 5, at 70 it drops 17. That is more
- * than one served need is worth, so a species with half its needs met sinks
- * to within a few points of its threshold and earns little reputation, while
- * one with both served still clears it comfortably — the late game rewards
- * serving people, not idling.
+ * expanding one at ~25 loses two points, and the squeeze tightens from there:
+ * at hostility 50 resolve drops 12 instead of 5, at 70 it drops 18. That is
+ * more than one served need is worth, so a species with half its needs met
+ * sinks to within a few points of its threshold and earns little reputation,
+ * while one with both served still clears it — the late game rewards serving
+ * people, not idling.
  *
  * Tuned against the balance harness: with the old flat 0.1 the competent bot
- * won 92% of the fixed seeds (95% once its labour bug was fixed), against a
+ * won 92% of the fixed seeds (96% once its labour bug was fixed), against a
  * 95% ceiling; this brings it to ~80% on fixed and fresh seeds alike.
  */
-export const HOSTILITY_SQUEEZE_THRESHOLD = 20
+export const HOSTILITY_SQUEEZE_THRESHOLD = 15
 export const RESOLVE_PER_HOSTILITY_LATE = 0.2
 
 /** Resolve every species loses to the forest at `hostility`. */
