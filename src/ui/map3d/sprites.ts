@@ -45,38 +45,47 @@ export function emojiTexture(emoji: string): THREE.CanvasTexture {
 const SPRITE_CURRENT = '#dfe6e3'
 
 /**
- * A drawn icon rasterised once: the registry's path data is replayed onto a
- * canvas through `Path2D` (the same strings the SVG renders), then stamped
- * onto the texture with the soft dark halo the emoji sprites always had.
+ * A drawn icon rasterised once: the registry's path data is replayed onto the
+ * texture's canvas through `Path2D` (the same strings the SVG renders). A
+ * first pass lays a soft dark rim under every shape — the halo the emoji
+ * sprites had, without a blur filter or a second canvas, both of which are
+ * slow under software WebGL.
  */
 export function iconTexture(id: IconId): THREE.CanvasTexture {
   return bake(`i:${id}`, (ctx, size) => {
-    const art = document.createElement('canvas')
-    art.width = size
-    art.height = size
-    const g = art.getContext('2d')!
     const scale = (size * 0.72) / 24 // the footprint the emoji glyphs had
     const offset = (size - 24 * scale) / 2
-    g.lineCap = 'round'
-    g.lineJoin = 'round'
-    for (const shape of ICONS[id]) {
-      g.setTransform(scale, 0, 0, scale, offset, offset)
-      if (shape.m) g.transform(...shape.m)
-      g.globalAlpha = shape.o ?? 1
-      const path = new Path2D(shape.d)
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    const shapes = ICONS[id].map((shape) => ({ shape, path: new Path2D(shape.d) }))
+    const place = (m?: readonly number[]) => {
+      ctx.setTransform(scale, 0, 0, scale, offset, offset)
+      if (m) ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5])
+    }
+    // Halo: each shape's silhouette, widened, in translucent ink.
+    ctx.globalAlpha = 0.45
+    ctx.fillStyle = ctx.strokeStyle = 'rgb(0, 0, 0)'
+    for (const { shape, path } of shapes) {
+      place(shape.m)
+      ctx.lineWidth = (shape.w ?? 1.3) + 2.2
+      if (shape.fill) ctx.fill(path)
+      ctx.stroke(path)
+    }
+    for (const { shape, path } of shapes) {
+      place(shape.m)
+      ctx.globalAlpha = shape.o ?? 1
       if (shape.fill) {
-        g.fillStyle = toneColor(shape.fill, SPRITE_CURRENT)
-        g.fill(path)
+        ctx.fillStyle = toneColor(shape.fill, SPRITE_CURRENT)
+        ctx.fill(path)
       }
       if (shape.stroke) {
-        g.strokeStyle = toneColor(shape.stroke, SPRITE_CURRENT)
-        g.lineWidth = shape.w ?? 1.3
-        g.stroke(path)
+        ctx.strokeStyle = toneColor(shape.stroke, SPRITE_CURRENT)
+        ctx.lineWidth = shape.w ?? 1.3
+        ctx.stroke(path)
       }
     }
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.55)'
-    ctx.shadowBlur = size * 0.07
-    ctx.drawImage(art, 0, 0)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalAlpha = 1
   })
 }
 
