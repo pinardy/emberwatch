@@ -27,6 +27,10 @@ import type { DailyResult, RunState } from './types'
 
 const NOV5 = Date.UTC(2026, 10, 5, 12, 0, 0)
 
+/** Node's environment (the app's tsconfig has no Node types). Changing TZ applies at once. */
+const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } })
+  .process.env
+
 function result(date: string, patch: Partial<DailyResult> = {}): DailyResult {
   return {
     date,
@@ -54,9 +58,9 @@ function finishedDaily(date: string, phase: 'won' | 'lost', patch: Partial<RunSt
 }
 
 describe('the daily seed', () => {
-  const originalTz = process.env.TZ
+  const originalTz = env.TZ
   afterEach(() => {
-    process.env.TZ = originalTz
+    env.TZ = originalTz
   })
 
   it('names the UTC calendar day, whatever the local timezone', () => {
@@ -65,7 +69,7 @@ describe('the daily seed', () => {
     const keys: string[] = []
     const localHours = new Set<number>()
     for (const tz of ['UTC', 'Pacific/Kiritimati', 'America/Los_Angeles', 'Asia/Kolkata', 'Pacific/Pago_Pago']) {
-      process.env.TZ = tz
+      env.TZ = tz
       keys.push(utcDateKey(new Date(instant)))
       localHours.add(new Date(instant).getHours())
     }
