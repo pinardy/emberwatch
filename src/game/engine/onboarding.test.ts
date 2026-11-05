@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { BLUEPRINT_POOL, BUILDINGS } from '../content/buildings'
+import { GLADE_EVENTS } from '../content/gladeEvents'
 import { SPECIES } from '../content/species'
 import { addClearer, assignWorker, findPlacement, placeBuilding } from './actions'
 import { DECREE_FIRST_DELAY, SEASON_LENGTH, YEAR_SECONDS } from './balance'
 import { createRun } from './createRun'
-import { draftAppeal, relevantBlueprints, takeChoice } from './events'
+import {
+  draftAppeal,
+  optionAffordable,
+  relevantBlueprints,
+  resolveGladeEvent,
+  takeChoice,
+} from './events'
 import { firstSteps, firstStepsComplete, firstStepTarget, isFoodCamp } from './onboarding'
+import { population } from './queries'
 import { tick } from './tick'
 import type { FirstStepId } from './onboarding'
 import type { RunState } from '../types'
@@ -104,6 +112,81 @@ describe('first steps checklist', () => {
     const id = (glade as { gladeId: string }).gladeId
     expect(state.glades[id].cleared).toBe(false)
     expect(state.glades[id].neighbors.some((n) => state.glades[n].cleared)).toBe(true)
+  })
+})
+
+/**
+ * A new player who does exactly what the checklist says, in order, and nothing
+ * else: one food camp, one woodcutters' camp, a worker in each, one shelter,
+ * a crew on the glade the checklist points at. Drafts take the first option;
+ * glade events take the first option that costs no villagers and unleashes no
+ * threat, as the event card's warnings steer a careful newcomer. Every
+ * balance change has to leave this settlement standing after its first Storm.
+ */
+function playChecklistOnly(state: RunState): void {
+  const act = () => {
+    const step = firstSteps(state).find((s) => !s.done)
+    if (!step) return
+    const target = firstStepTarget(state, step.id)
+    if (!target) return
+    if (target.kind === 'build') {
+      const pos = findPlacement(state, target.defId)
+      if (pos) placeBuilding(state, target.defId, pos)
+    } else if (target.kind === 'building') {
+      assignWorker(state, target.buildingId)
+    } else {
+      addClearer(state, target.gladeId)
+      addClearer(state, target.gladeId)
+    }
+  }
+  const answer = () => {
+    while (state.pendingChoices.length > 0) {
+      const choice = state.pendingChoices[0]
+      if (choice.kind === 'gladeEvent') {
+        const def = GLADE_EVENTS[choice.options[0]]
+        const safe = def.options.findIndex(
+          (o) => optionAffordable(state.stock, o) && !o.villagerLoss && !o.threat,
+        )
+        resolveGladeEvent(state, safe >= 0 ? safe : def.options.length - 1)
+      } else {
+        takeChoice(state, choice.options[0])
+      }
+    }
+  }
+  let sinceAct = Infinity
+  while (state.phase === 'playing' && state.season.year === 1) {
+    answer()
+    if (sinceAct >= 2) {
+      sinceAct = 0
+      act()
+    }
+    tick(state, 0.25)
+    sinceAct += 0.25
+  }
+  answer()
+}
+
+describe('a new player following the checklist', () => {
+  it('rides out the first Storm on every trio', () => {
+    const trios: RunState['speciesPool'][] = [
+      ['human', 'beaver', 'lizard'],
+      ['human', 'fox', 'harpy'],
+      ['beaver', 'lizard', 'harpy'],
+    ]
+    for (const species of trios) {
+      for (const seed of [1, 42, 777, 4242, 31337, 90210]) {
+        const state = createRun({ seed, species })
+        playChecklistOnly(state)
+        const label = `${species.join('/')} seed ${seed}`
+        expect(firstStepsComplete(state), `${label}: checklist done`).toBe(true)
+        expect(state.phase, `${label}: still in the running`).toBe('playing')
+        expect(state.season.year, label).toBe(2)
+        expect(state.stats.villagersLost, `${label}: nobody left`).toBe(0)
+        expect(population(state), label).toBeGreaterThanOrEqual(6)
+        // Nobody is on the verge of leaving as Year 2 opens.
+        for (const sp of species) expect(state.despair[sp], `${label}: ${sp} despair`).toBe(0)
+      }
+    }
   })
 })
 

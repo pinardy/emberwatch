@@ -60,9 +60,23 @@ const defs: SpeciesDef[] = [
     needs: ['education', 'rest'],
     workBonus: { scholar: 0.4, gathering: 0.2 },
     trait: {
-      name: 'Winged Scouts',
-      description: 'Survey glades from above: they clear 50% faster.',
-      effects: [{ kind: 'clearRate', percent: 50 }],
+      name: 'Winged Scholars',
+      description:
+        'Survey glades from above, clearing them 50% faster, and teach one another: Education counts as three-quarters met even without a Guild House.',
+      effects: [
+        { kind: 'clearRate', percent: 50 },
+        /*
+         * Education is the deepest chain in the game (a Guild House priced in
+         * bricks, a Scribes' Office priced in fabric, scrolls from fiber and
+         * resin). Where beavers share it, it is drafted early; in a trio
+         * without them it is the need the draft reaches last, and harpies sat
+         * half-served for the whole run. The floor is worth little once a
+         * Guild House covers them, so it mostly closes that gap: in the
+         * balance harness it lifts human/fox/harpy by ~12 points and
+         * beaver/lizard/harpy by ~1. Half (0.5) closed under half the gap.
+         */
+        { kind: 'needFloor', need: 'education', ratio: 0.75 },
+      ],
     },
     blurb: 'Scholars of the old world. Prone to complaining, excellent at reading.',
   },

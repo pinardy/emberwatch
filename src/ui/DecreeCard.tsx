@@ -1,8 +1,7 @@
 import { DECREES } from '../game/content/decrees'
 import { RESOURCES } from '../game/content/resources'
-import { DECREE_MISS_IMPATIENCE } from '../game/engine/balance'
 import { computeModifiers } from '../game/engine/modifiers'
-import { describeTimedGoal } from '../game/engine/structure'
+import { decreeMissImpatience, describeTimedGoal } from '../game/engine/structure'
 import { useRun } from '../game/store'
 import { Icon } from './Icon'
 
@@ -33,7 +32,7 @@ export function DecreeCard() {
 
   const urgent = decree.timeLeft < 60
   const mods = computeModifiers(run)
-  const missCost = Math.round(DECREE_MISS_IMPATIENCE * mods.decreeMissPenalty * 100) / 100
+  const missCost = Math.round(decreeMissImpatience(run) * 100) / 100
   return (
     <div className={`order-card decree-card ${urgent ? 'is-urgent' : ''}`}>
       <div className="row-between">

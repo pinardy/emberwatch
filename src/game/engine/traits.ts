@@ -1,6 +1,7 @@
 import { SPECIES, VILLAGER_TRAITS } from '../content/species'
 import type {
   Season,
+  ServiceNeed,
   SpeciesId,
   SpeciesTraitEffect,
   Villager,
@@ -53,6 +54,15 @@ export function clearMultiplier(v: Villager): number {
   let m = e ? 1 + e.percent / 100 : 1
   if (v.trait) m *= VILLAGER_TRAITS[v.trait].clear ?? 1
   return m
+}
+
+/** Share (0..1) of `need` this species counts as met with no venue at all. */
+export function needFloor(species: SpeciesId, need: ServiceNeed): number {
+  let floor = 0
+  for (const e of SPECIES[species].trait.effects) {
+    if (e.kind === 'needFloor' && e.need === need) floor = Math.max(floor, e.ratio)
+  }
+  return Math.min(1, floor)
 }
 
 /** Personal work-speed multiplier on top of species work bonuses. */

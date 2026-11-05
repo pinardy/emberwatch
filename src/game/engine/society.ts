@@ -26,7 +26,6 @@ import {
   RESOLVE_HOUSED,
   RESOLVE_LEAVE_THRESHOLD,
   RESOLVE_PER_FOOD_VARIETY,
-  RESOLVE_PER_HOSTILITY,
   RESOLVE_PER_NEED,
   RESOLVE_STARVING,
   RESOLVE_UNHOUSED,
@@ -34,6 +33,7 @@ import {
   SECONDS_TO_LEAVE,
   STARVING_MIN_SEVERITY,
   YEAR_SECONDS,
+  hostilityResolvePenalty,
 } from './balance'
 import type { Modifiers } from './modifiers'
 import { makeRng } from './rng'
@@ -48,7 +48,7 @@ import {
   totalHousing,
   warmHousing,
 } from './queries'
-import { despairRate, ignoresColdHearth, mealMultiplier } from './traits'
+import { despairRate, ignoresColdHearth, mealMultiplier, needFloor } from './traits'
 import { recordEvent } from './timeline'
 
 /**
@@ -244,9 +244,11 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
     const needRatio: Record<string, number> = {}
     let satisfied = 0
     for (const need of def.needs) {
-      const ratio = coverage[need].active
+      const served = coverage[need].active
         ? Math.min(1, coverage[need].capacity / required)
         : 0
+      // Some species meet part of a need among themselves (harpies teach).
+      const ratio = Math.max(served, needFloor(sp, need))
       needRatio[need] = ratio
       needDetail[need] = ratio >= 1
       satisfied += ratio
@@ -255,7 +257,7 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
     satisfied = Math.min(def.needs.length, satisfied + reduction)
     const needsTerm = satisfied * RESOLVE_PER_NEED
     const varietyTerm = variety * RESOLVE_PER_FOOD_VARIETY
-    const hostilityTerm = -s.hostility * RESOLVE_PER_HOSTILITY
+    const hostilityTerm = -hostilityResolvePenalty(s.hostility)
     const cornerstoneTerm = resolveBonusFor(mods, sp) + (storm ? mods.stormResolve : 0)
     // Lizards do not feel a cold hearth; nobody escapes hunger or the rain.
     const speciesColdTerm = ignoresColdHearth(sp) ? 0 : coldTerm
