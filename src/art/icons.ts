@@ -696,8 +696,9 @@ const HUD_ICONS = {
     f('bark', rect(4.5, 18.8, 15, 2.8, 1)),
   ),
   hostility: art(
-    ...[0, 5, 10].map((dx) =>
-      f('red', `M${2.5 + dx} 3C${6.8 + dx} 8.2 ${8.4 + dx} 14.4 ${6.6 + dx} 21C${10.6 + dx} 15 ${10.2 + dx} 8.4 ${2.5 + dx} 3Z`, 1.1),
+    // Three claw rakes: wide enough to read as marks, not lines, at 16px.
+    ...[1.2, 7, 12.8].map((a) =>
+      f('red', `M${a} 2.6C${a + 5.4} 7.6 ${a + 7} 14 ${a + 4.6} 21.4C${a + 9.6} 15 ${a + 8.8} 7.8 ${a} 2.6Z`, 0.9),
     ),
   ),
   drizzle: art(
