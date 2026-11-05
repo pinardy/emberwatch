@@ -612,6 +612,200 @@ const defs: GladeEventDef[] = [
     ],
   },
 
+  {
+    id: 'fogboundFerry',
+    name: 'Fogbound Ferry',
+    icon: '⛴️',
+    kind: 'dangerous',
+    description:
+      'A flat ferry on a black river nobody mapped, and a ferryman who will not give his name. He says he can bring travellers to your door — for a price.',
+    options: [
+      {
+        label: 'Pay the ferryman',
+        description: 'Spend 20 amber. He keeps a crossing open for the rest of the run.',
+        requires: { amber: 20 },
+        cost: { amber: 20 },
+        ongoing: {
+          name: 'The Ferry Crossing',
+          icon: '⛴️',
+          description: 'Newcomers arrive 15% sooner for the rest of the run.',
+          effects: [{ kind: 'newcomerRate', percent: -15 }],
+        },
+      },
+      {
+        label: 'Break up the ferry for planks',
+        description: 'Good seasoned timber. The river remembers.',
+        gain: { plank: 14, wood: 6 },
+        hostility: 5,
+      },
+      { label: 'Wave him off', description: 'He poles away into the fog without a word.' },
+    ],
+  },
+  {
+    id: 'emberMoths',
+    name: 'Ember Moths',
+    icon: '🦋',
+    kind: 'dangerous',
+    description:
+      'A cloud of moths with wings like banked coals. They roost in anything warm — a fire bowl, a chimney, a sleeping villager’s hair.',
+    options: [
+      {
+        label: 'Lure them into the braziers',
+        description: 'Spend 12 wood on a trail of embers. Moth-warmed braziers need far less wood.',
+        requires: { wood: 12 },
+        cost: { wood: 12 },
+        ongoing: {
+          name: 'Moth-Lit Braziers',
+          icon: '🦋',
+          description: 'Braziers burn 40% less wood for the rest of the run.',
+          effects: [{ kind: 'brazierFuel', percent: -40 }],
+        },
+      },
+      {
+        label: 'Net them for lamp oil',
+        description: 'Glowing resin and a little amber. The forest notices the empty air.',
+        gain: { resin: 10, amber: 12 },
+        hostility: 4,
+      },
+      { label: 'Let them drift on', description: 'They go looking for a warmer fire.' },
+    ],
+  },
+  {
+    id: 'hermitsGarden',
+    name: "Hermit's Garden",
+    icon: '🧓',
+    kind: 'dangerous',
+    description:
+      'Neat rows of herbs behind a wall of thorn, and an old hermit who has outlived three viceroys. He is lonely, though he would never say so.',
+    options: [
+      {
+        label: 'Trade for his cuttings',
+        description: 'Pay 15 amber for a basket of herbs and roots.',
+        requires: { amber: 15 },
+        cost: { amber: 15 },
+        gain: { herb: 12, root: 10 },
+      },
+      {
+        label: 'Invite him to the hearth',
+        description: 'Spend 6 food on a proper welcome. He brings his seeds — and himself.',
+        foodCost: 6,
+        gain: { herb: 8, vegetable: 6 },
+        villagerGain: 1,
+        reputation: 1,
+      },
+      { label: 'Leave him his peace', description: 'He waves, once, without looking up.' },
+    ],
+  },
+  {
+    id: 'collapsedMine',
+    name: 'Collapsed Mine',
+    icon: '⛏️',
+    kind: 'dangerous',
+    description:
+      'A pre-Storm copper mine, its mouth half-fallen. Somebody is tapping on the rock from the inside — slow, patient, in threes.',
+    options: [
+      {
+        label: 'Shore it up and dig them out',
+        description: 'Spend 8 planks. Two hardy miners join the settlement.',
+        requires: { plank: 8 },
+        cost: { plank: 8 },
+        villagerGain: 2,
+        reputation: 1,
+      },
+      {
+        label: 'Take the ore cart and go',
+        description: 'A full cart at the entrance. The tapping turns to scratching, and follows you.',
+        gain: { copperOre: 16, stone: 10, amber: 15 },
+        threat: {
+          name: 'Things in the Shaft',
+          icon: '🕳️',
+          description: 'Something climbs out of the old workings at night and raids the stockpile.',
+          interval: 80,
+          appease: { plank: 12 },
+          strike: { stockLoss: { stone: 6, copperOre: 4 }, hostility: 3 },
+        },
+      },
+      {
+        label: 'Seal the entrance',
+        description: 'The tapping stops. The forest heard it stop.',
+        hostility: 4,
+      },
+    ],
+  },
+  {
+    id: 'mirrorPool',
+    name: 'Mirror Pool',
+    icon: '🪞',
+    kind: 'dangerous',
+    description:
+      'A pool so still it reflects tomorrow. The villagers who looked swear they saw the Queen’s next letter, word for word.',
+    options: [
+      {
+        label: 'Leave an offering of amber',
+        description: 'Spend 25 amber. The pool keeps showing you what the Queen will ask.',
+        requires: { amber: 25 },
+        cost: { amber: 25 },
+        reputation: 1,
+        ongoing: {
+          name: 'Foresight',
+          icon: '🪞',
+          description: 'Royal decrees allow 25% more time for the rest of the run.',
+          effects: [{ kind: 'decreeTime', percent: 25 }],
+        },
+      },
+      {
+        label: 'Drink from it',
+        description:
+          'Clarity, and a scroll’s worth of visions — but nobody sleeps well until they have more room to breathe.',
+        gain: { scroll: 6, amber: 15 },
+        condition: {
+          name: 'Restless Dreams',
+          icon: '🌙',
+          description: '−2 resolve for every species until two more homes are built.',
+          resolveBy: { kind: 'buildingsOfCategory', category: 'housing', amount: 2 },
+          whileActive: [{ kind: 'resolveFlat', species: 'all', amount: -2 }],
+        },
+      },
+      { label: 'Throw a stone in', description: 'Tomorrow ripples, and is gone.' },
+    ],
+  },
+  {
+    id: 'lostCourier',
+    name: "The Queen's Lost Courier",
+    icon: '📨',
+    kind: 'dangerous',
+    description:
+      'A royal courier, tangled in bramble and half out of his wits, still clutching a satchel sealed with the Queen’s own wax.',
+    options: [
+      {
+        label: 'Nurse him back to health',
+        description: 'Spend 6 food. He rides home singing your praises.',
+        foodCost: 6,
+        impatience: -1,
+      },
+      {
+        label: 'Read the dispatches first',
+        description: 'Amber and secrets — and now the Queen expects news of the frontier.',
+        gain: { amber: 25, scroll: 3 },
+        condition: {
+          name: 'Broken Seals',
+          icon: '📨',
+          description:
+            'The dispatches ask after the frontier: clear 1 more glade within 4 minutes to impress the Queen (+1 reputation), or she hears of the broken seals (+2 impatience).',
+          resolveBy: { kind: 'gladesCleared', amount: 1 },
+          deadline: 240,
+          onResolve: { reputation: 1 },
+          onFail: { impatience: 2 },
+        },
+      },
+      {
+        label: 'Point him toward the Citadel',
+        description: 'He wanders off in roughly the right direction.',
+        hostility: 2,
+      },
+    ],
+  },
+
   // ---- forbidden glades ---------------------------------------------------
   {
     id: 'ancientVault',
@@ -869,6 +1063,121 @@ const defs: GladeEventDef[] = [
         description: 'A mystery for the next viceroy.',
         impatience: 1,
       },
+    ],
+  },
+  {
+    id: 'drownedBellTower',
+    name: 'Drowned Bell Tower',
+    icon: '🔔',
+    kind: 'forbidden',
+    description:
+      'A bell tower standing to its shoulders in a flooded hollow. Every Storm, the bell tolls by itself, and the settlement hears it in their sleep.',
+    options: [
+      {
+        label: 'Raise the bell',
+        description:
+          'Spend 8 copper bars and 10 planks on a frame. Its toll steadies everyone through the Storm.',
+        requires: { copperBar: 8, plank: 10 },
+        cost: { copperBar: 8, plank: 10 },
+        reputation: 1,
+        ongoing: {
+          name: 'The Storm Bell',
+          icon: '🔔',
+          description: '+3 resolve for every species while the Storm rages.',
+          effects: [{ kind: 'stormResolve', amount: 3 }],
+        },
+      },
+      {
+        label: 'Dive for the bell-metal',
+        description: 'A fortune in bronze — and one diver who does not come up.',
+        gain: { copperBar: 14, amber: 35 },
+        villagerLoss: 1,
+      },
+      {
+        label: 'Melt it where it stands',
+        description: 'The bell screams as it goes. Something under the water answers.',
+        gain: { copperBar: 12, amber: 30 },
+        threat: {
+          name: 'The Drowned Choir',
+          icon: '🔔',
+          description: 'Voices under the water sing through every Storm. Nobody rests.',
+          interval: 85,
+          appease: { amber: 35 },
+          strike: { impatience: 0.5, hostility: 3 },
+          whileActive: [{ kind: 'stormResolve', amount: -3 }],
+        },
+      },
+      { label: 'Let it toll', description: 'It has tolled for a century.', hostility: 5 },
+    ],
+  },
+  {
+    id: 'fenWitch',
+    name: 'The Fen Witch',
+    icon: '🧙',
+    kind: 'forbidden',
+    description:
+      'A hut on spindly stilts and a woman who knows the true name of every bog in the forest. She can teach your builders where the ground will hold.',
+    options: [
+      {
+        label: 'Pay her price',
+        description: 'Spend 25 amber and 8 clay for her stilts. Her ground-lore halves every terrain penalty.',
+        requires: { amber: 25, clay: 8 },
+        cost: { amber: 25, clay: 8 },
+        ongoing: {
+          name: "Witch's Ground-Lore",
+          icon: '🧙',
+          description:
+            'Unfavourable terrain (sinking marsh, rocky farmland) hurts half as much for the rest of the run.',
+          effects: [{ kind: 'terrainPenalty', percent: -50 }],
+        },
+      },
+      {
+        label: 'Steal her cauldron',
+        description: 'Solid copper, full of something valuable. She curses every threshold you own.',
+        gain: { copperBar: 6, amber: 45, herb: 10 },
+        condition: {
+          name: "The Witch's Curse",
+          icon: '🧙',
+          description:
+            'Hostility rises 25% faster until two more homes are raised with warded thresholds.',
+          resolveBy: { kind: 'buildingsOfCategory', category: 'housing', amount: 2 },
+          whileActive: [{ kind: 'hostilityRate', percent: 25 }],
+        },
+      },
+      { label: 'Bid her good evening', description: 'She cackles. Not unkindly.' },
+    ],
+  },
+  {
+    id: 'sealedTreasury',
+    name: 'Sealed Treasury',
+    icon: '💰',
+    kind: 'forbidden',
+    description:
+      'A strongroom of the old Crown, its seals unbroken, its ledgers still legible. By law every coin inside belongs to the Queen.',
+    options: [
+      {
+        label: 'Open it properly and send it home',
+        description: 'Spend 3 parts on the lock. The Queen is delighted, and pays a finder’s fee.',
+        requires: { part: 3 },
+        cost: { part: 3 },
+        gain: { amber: 25 },
+        reputation: 2,
+      },
+      {
+        label: 'Skim the coffers',
+        description: 'Seventy amber now. The royal auditors will come counting.',
+        gain: { amber: 70 },
+        condition: {
+          name: 'The Royal Audit',
+          icon: '📒',
+          description:
+            'The auditors want a brick counting-house: produce 24 bricks within 5 minutes, or the Queen hears of it (+3 impatience).',
+          resolveBy: { kind: 'produced', resource: 'brick', amount: 24 },
+          deadline: 300,
+          onFail: { impatience: 3 },
+        },
+      },
+      { label: 'Leave it sealed', description: 'Some doors are the Crown’s to open.' },
     ],
   },
 ]

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS } from '../content/orders'
+import { RUN_MODIFIER_LIST } from '../content/runModifiers'
 import { SPECIES } from '../content/species'
 import { EDIBLE } from '../content/resources'
 import type { BuildingInstance, ResourceId, RunState, ServiceNeed, SpeciesId, Vec2 } from '../types'
@@ -20,7 +21,13 @@ import { GLADES_PER_REPUTATION } from './balance'
 import { createRun } from './createRun'
 import { computeModifiers } from './modifiers'
 import { resolveBreakdowns } from './society'
-import { appeaseThreat, optionAffordable, resolveGladeEvent, takeChoice } from './events'
+import {
+  appeaseThreat,
+  optionAffordable,
+  orderReputation,
+  resolveGladeEvent,
+  takeChoice,
+} from './events'
 import {
   SERVICE_COVERAGE_RATIO,
   activeRecipe,
@@ -90,6 +97,10 @@ interface BotReport {
   braziers: number
   /** Upgrade tiers standing at the end, across every building. */
   upgrades: number
+  /** Map modifiers the seed drew (or the test forced). */
+  modifiers: string
+  /** Orders still open at the end, with progress — stuck ones explain slow runs. */
+  openOrders: string
 }
 
 /** Snapshot of resolve versus the threshold each species must beat. */
@@ -632,6 +643,8 @@ interface PlayOptions {
   /** Never builds service venues or their supply chains — the idle economy. */
   economyOnly?: boolean
   maxMinutes?: number
+  /** Force these map modifiers instead of the ones the seed draws. */
+  modifiers?: string[]
 }
 
 /** Where a run's reputation came from. */
@@ -648,8 +661,8 @@ function playRun(
   species: SpeciesId[],
   options: PlayOptions = {},
 ): BotReport {
-  const { economyOnly = false, maxMinutes = 45 } = options
-  const s = createRun({ seed, species })
+  const { economyOnly = false, maxMinutes = 45, modifiers } = options
+  const s = createRun({ seed, species, modifiers })
   let sinceDecision = Infinity
   const maxSeconds = maxMinutes * 60
   const sources: ReputationSources = { orders: 0, glades: 0, events: 0, resolve: 0 }
@@ -676,7 +689,7 @@ function playRun(
     sinceDecision += STEP
     const stillOpen = new Set(s.orders.map((o) => o.defId))
     for (const id of openOrders) {
-      if (!stillOpen.has(id)) sources.orders += ORDERS[id]?.reputationReward ?? 0
+      if (!stillOpen.has(id)) sources.orders += orderReputation(s, ORDERS[id]?.reputationReward ?? 0)
     }
     sources.glades +=
       Math.floor(s.stats.gladesCleared / GLADES_PER_REPUTATION) -
@@ -712,6 +725,8 @@ function playRun(
     lost: s.stats.villagersLost,
     braziers: countPlanned(s, 'brazier'),
     upgrades: Object.values(s.buildings).reduce((sum, b) => sum + tierOf(b), 0),
+    modifiers: s.runModifiers.join(','),
+    openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),
   }
 }
 
@@ -744,6 +759,9 @@ const SEEDS = ENV.PLAYTEST_SEED ? [Number(ENV.PLAYTEST_SEED)] : ALL_SEEDS.slice(
 /** The economy-only bot is a control group; half the seeds are enough. */
 const ECON_SEEDS = SEEDS.slice(0, Math.max(1, Math.ceil(SEEDS.length / 2)))
 
+/** Seeds per forced map modifier (trios rotate across them). */
+const MODIFIER_SEED_COUNT = Number(ENV.PLAYTEST_MODIFIER_SEEDS ?? 6)
+
 /** The Queen's deadline must end every run by about this point. */
 const VERDICT_BY_MINUTES = 40
 
@@ -767,7 +785,7 @@ function summarise(label: string, reports: BotReport[]): string {
 function logRun(seed: number, r: BotReport): void {
   console.log(
     `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
-      `\n    services: ${r.services}\n    drafted: ${r.drafted}`,
+      `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}`,
   )
 }
 
@@ -831,6 +849,43 @@ describe('balance harness', () => {
       expect(r.buildings).toBeGreaterThan(8)
       expect(r.population).toBeGreaterThan(10)
       expect(r.minutes).toBeGreaterThan(8)
+    }
+  }, 300_000)
+
+  /*
+   * Every run now draws one or two map modifiers, so the sweep above already
+   * mixes them in — but a seed sample can miss one entirely. Force each in
+   * turn on a smaller set (rotating the trios) and compare against the same
+   * seeds with no modifier, so no single twist makes runs unwinnable or turns
+   * them into a formality.
+   */
+  it('no single map modifier makes runs unwinnable or trivial', () => {
+    const seeds = ALL_SEEDS.slice(0, MODIFIER_SEED_COUNT)
+    const sweep = (modifiers: string[]) =>
+      seeds.map((seed, i) => playRun(seed, TRIOS[i % TRIOS.length], { modifiers }))
+    const baseline = sweep([])
+    const lines = [summarise('no modifier', baseline)]
+    const results = RUN_MODIFIER_LIST.map((def) => {
+      const reports = sweep([def.id])
+      lines.push(summarise(def.id, reports))
+      return { id: def.id, reports }
+    })
+    console.log(lines.join('\n'))
+
+    const baseShare = winShare(baseline)
+    for (const { id, reports } of results) {
+      const share = winShare(reports)
+      const wins = reports.filter((r) => r.phase === 'won')
+      // Winnable: a competent player still takes a fair share of these maps,
+      // and not far fewer than without the modifier.
+      expect(share, `${id} win share`).toBeGreaterThanOrEqual(1 / 3)
+      expect(share, `${id} vs baseline`).toBeGreaterThanOrEqual(baseShare - 0.5)
+      // Not trivial: wins still take a real settlement and a real while.
+      expect(mean(wins.map((r) => r.exactMinutes)), `${id} avg win`).toBeGreaterThanOrEqual(12)
+      for (const r of wins) expect(r.exactMinutes, `${id} win time`).toBeGreaterThan(8)
+      // And a twist must not empty the settlement in the opening minutes.
+      expect(reports.filter(isEarlyCollapse).length, `${id} early collapses`).toBeLessThanOrEqual(1)
+      for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
     }
   }, 300_000)
 

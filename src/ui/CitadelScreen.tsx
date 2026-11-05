@@ -7,6 +7,7 @@ import {
   upgradeStatus,
 } from '../game/content/meta'
 import { SPECIES } from '../game/content/species'
+import { runModifierDefs } from '../game/engine/runModifiers'
 import { useGameStore } from '../game/store'
 import { EdictPicker } from './EdictPicker'
 
@@ -113,6 +114,7 @@ export function CitadelScreen() {
                     <th>Result</th>
                     <th>Settlers</th>
                     <th>Edict</th>
+                    <th>Land</th>
                     <th>Years</th>
                     <th>Reputation</th>
                     <th>Supplies</th>
@@ -131,6 +133,11 @@ export function CitadelScreen() {
                           : '—'}
                       </td>
                       <td>{edictNumeral(entry.edict ?? 0)}</td>
+                      <td title={runModifierDefs(entry.modifiers ?? []).map((d) => d.name).join(', ')}>
+                        {entry.modifiers?.length
+                          ? runModifierDefs(entry.modifiers).map((d) => d.icon).join(' ')
+                          : '—'}
+                      </td>
                       <td>{entry.years}</td>
                       <td>{entry.reputation}</td>
                       <td>{entry.supplies !== undefined ? `+${entry.supplies}` : '—'}</td>

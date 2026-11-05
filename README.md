@@ -33,6 +33,7 @@ npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
 | **Drafts** | The run opens on a blueprint draft, and reputation milestones alternate blueprints and cornerstones. You can never unlock everything, so which needs you *can* satisfy is the run's central decision. |
 | **Citadel** | Won or lost, each settlement sends supplies home — itemised by reputation, land, orders and years, so a strong loss still pays. Spend them on an 18-upgrade tree in four branches (Provisions, Charters, Knowledge, Crown) with prerequisites; most upgrades widen options rather than add power: extra draft options, a free reroll, a starting cornerstone draft, extra glade-event choices, and Citadel-locked cornerstones admitted to the draft pool. The ledger shows your last ten runs. |
 | **Queen's Edicts** | A seven-rung difficulty ladder chosen on the setup screen. Each edict stacks on the ones below (faster impatience, a leaner stockpile, a restless forest, bitter storms, a shorter leash, thinner ranks, a stricter victory) and pays +25% supplies per rung. Winning under your hardest edict unlocks the next. |
+| **Lay of the land** | Every map draws one or two of twelve run modifiers from its seed — Rich Veins, Fertile Floodplain, Long Storms, Wandering Traders, Ill Omens and more. Some reshape map generation (deposit counts, glade themes, the odds of dangerous glades, their loot); others are run-long effects folded in like a pact. Most are trade-offs. A typed seed previews them on the setup screen; they are listed in the Orders panel, on the end screen and in the Citadel ledger. |
 | **Run timeline** | The end screen charts how the run unfolded: reputation against impatience over time, with Storms shaded and villager losses, threats, cornerstones and missed decrees marked, plus resolve per species against its threshold and population. A one-line summary says why the run was won or lost, and a table carries every number. The Orders panel shows the live race as a sparkline. |
 
 Idle villagers are your builders and your clearing crews, so every worker you assign is a builder you gave up. That tension is deliberate — the top bar always shows the idle count.
@@ -89,7 +90,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs nine test files:
+`npm test` runs ten test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), and clears glades. It plays 24 seeds for each of three species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
@@ -105,6 +106,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`forecast.test.ts`** — the HUD's forward-looking numbers (Storm countdown, wood and food runways, meter rates, building status), checked against what a real tick applies.
 - **`citadel.test.ts`** — meta progression: save migration, upgrade prerequisites, Queen's Edicts, locked cornerstones, draft sizes and the reward breakdown.
 - **`upgrades.test.ts`** and **`UpgradeSection.test.tsx`** — building upgrades: every tier effect (housing, comfort, insulation, storage, service capacity, slots, speed, reach, warmth, recipes and ratios), the upgrade construction flow with builders and rush, decree counting, save/load mid-upgrade and old saves; and the Inspector's upgrade block.
+- **`runModifiers.test.ts`** — the map-modifier pool: content invariants, seed-deterministic draws, mapgen hooks changing deposit counts exactly as declared, effects folding into the modifiers (seasons, caravans, decrees, braziers, terrain, adjacency), and saves and history. The balance harness also forces each modifier in turn on a smaller seed set and checks it stays winnable but not trivial.
 - **`timeline.test.ts`** and **`RunTimeline.test.tsx`** — the run timeline: sampling cadence, the size bound and downsampling, recorded events, save/load and old saves, the outcome sentence, and the end-screen chart's keyboard readout, views and table.
 - **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, building badges, warmth, and that static geometry is not rebuilt on every tick.
 
@@ -153,5 +155,5 @@ E2E_SKIP_BUILD=1 npm run test:e2e      # reuse an existing dist/
 
 - Art is emoji throughout; there are no sprites. Audio is synthesised in WebAudio (season stings, event cues, a rain loop that follows the season) — no recorded assets.
 - Meta progression is an upgrade tree and a difficulty ladder, with no world map campaign. Edicts were sanity-checked against the balance bot (it wins less often as the ladder climbs) but are not asserted by the harness.
-- ~30 buildings, 25 glade events, and 30+ cornerstones — enough for the loop to have real decisions, well short of Against the Storm's catalogue.
+- ~30 buildings, 34 glade events, 40+ cornerstones and 12 map modifiers — enough for the loop to have real decisions, well short of Against the Storm's catalogue.
 - Buildings have circular footprints and free placement; there are no road networks or villager pathing, though warmth (hearth and braziers), terrain, deposit reach and adjacency bonuses make placement matter.

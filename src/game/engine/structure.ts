@@ -21,6 +21,7 @@ import {
 } from './balance'
 import { pushLog } from './createRun'
 import { relevantBlueprints } from './events'
+import { computeModifiers } from './modifiers'
 import { grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { tierOf } from './upgrades'
@@ -158,14 +159,15 @@ export function stepDecree(s: RunState, dt: number): void {
   if (decree.progress >= 1) {
     decree.complete = true
     s.stats.ordersCompleted++
-    addReputation(s, def.reputationReward)
+    const reputation = Math.max(0, def.reputationReward + computeModifiers(s).decreeReputation)
+    addReputation(s, reputation)
     if (def.reward) {
       s.stats.resourcesProduced += grant(s.stock, def.reward, s.storageCap, storageUsed(s))
     }
     recordEvent(s, 'decreeMet', def.name)
     pushLog(
       s,
-      `📯 Decree fulfilled with ${Math.ceil(decree.timeLeft)}s to spare — ${def.name}. +${def.reputationReward} reputation.`,
+      `📯 Decree fulfilled with ${Math.ceil(decree.timeLeft)}s to spare — ${def.name}. +${reputation} reputation.`,
       'good',
     )
     s.decree = null
@@ -175,7 +177,8 @@ export function stepDecree(s: RunState, dt: number): void {
 
   decree.timeLeft -= dt
   if (decree.timeLeft <= 0) {
-    addImpatience(s, DECREE_MISS_IMPATIENCE)
+    const penalty = DECREE_MISS_IMPATIENCE * computeModifiers(s).decreeMissPenalty
+    if (penalty > 0) addImpatience(s, penalty)
     recordEvent(s, 'decreeMissed', def.name)
     pushLog(s, `📯 The decree lapsed unmet — ${def.name}. The Queen is displeased.`, 'bad')
     s.decree = null
@@ -200,19 +203,20 @@ export function issueDecree(s: RunState): boolean {
   const rng = makeRng(s.seed, s.rngCursor)
   const def = rng.pick(pool)
   s.rngCursor = rng.cursor()
+  const timeLimit = Math.round(def.timeLimit * computeModifiers(s).decreeTime)
   s.decree = {
     id: `d${s.orderCounter++}`,
     defId: def.id,
     progress: 0,
     complete: false,
-    timeLeft: def.timeLimit,
-    timeLimit: def.timeLimit,
+    timeLeft: timeLimit,
+    timeLimit,
     baseline: goalCount(def.goal, s) ?? 0,
   }
   s.decree.progress = goalProgress(def.goal, s, s.decree.baseline)
   pushLog(
     s,
-    `📯 Royal decree: ${def.name} — ${describeTimedGoal(def.goal)} within ${Math.round(def.timeLimit / 60)} minutes.`,
+    `📯 Royal decree: ${def.name} — ${describeTimedGoal(def.goal)} within ${Math.round(timeLimit / 60)} minutes.`,
     'info',
   )
   return true

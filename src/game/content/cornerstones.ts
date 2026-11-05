@@ -68,6 +68,7 @@ const defs: CornerstoneDef[] = [
   },
   {
     id: 'humanTradition',
+    species: 'human',
     name: 'Human Tradition',
     icon: '🧑‍🌾',
     rarity: 'common',
@@ -76,6 +77,7 @@ const defs: CornerstoneDef[] = [
   },
   {
     id: 'beaverGuilds',
+    species: 'beaver',
     name: 'Beaver Guilds',
     icon: '🦫',
     rarity: 'common',
@@ -87,6 +89,7 @@ const defs: CornerstoneDef[] = [
   },
   {
     id: 'lizardRites',
+    species: 'lizard',
     name: 'Lizard Rites',
     icon: '🦎',
     rarity: 'common',
@@ -270,6 +273,130 @@ const defs: CornerstoneDef[] = [
     effects: [
       { kind: 'extraOutput', tag: 'all', chance: 0.15 },
       { kind: 'globalStorage', amount: 100 },
+    ],
+  },
+
+  // ---- placement, seasons & decrees ----------------------------------------
+  // Rule-benders for the newer systems: braziers, terrain, adjacency, timed
+  // decrees and season lengths. Added after the originals so draft odds of the
+  // earlier pool stay recognisable.
+  {
+    id: 'kindlingBaskets',
+    name: 'Kindling Baskets',
+    icon: '🧺',
+    rarity: 'common',
+    description: 'Braziers burn half as much wood through the Storm, and the hearth 15% less.',
+    effects: [
+      { kind: 'brazierFuel', percent: -50 },
+      { kind: 'hearthFuel', percent: -15 },
+    ],
+  },
+  {
+    id: 'stiltFoundations',
+    name: 'Stilt Foundations',
+    icon: '🪜',
+    rarity: 'common',
+    description: 'Unfavourable ground (sinking marsh, rocky farmland) hurts half as much, and construction is 10% faster.',
+    effects: [
+      { kind: 'terrainPenalty', percent: -50 },
+      { kind: 'buildSpeed', percent: 10 },
+    ],
+  },
+  {
+    id: 'harpyAeries',
+    species: 'harpy',
+    name: 'Harpy Aeries',
+    icon: '🪶',
+    rarity: 'common',
+    description: 'Harpies gain +6 resolve and glades clear 10% faster.',
+    effects: [
+      { kind: 'resolveFlat', species: 'harpy', amount: 6 },
+      { kind: 'clearSpeed', percent: 10 },
+    ],
+  },
+  {
+    id: 'foxDens',
+    species: 'fox',
+    name: 'Fox Dens',
+    icon: '🦊',
+    rarity: 'common',
+    description: 'Foxes gain +6 resolve and gathering camps work 10% faster.',
+    effects: [
+      { kind: 'resolveFlat', species: 'fox', amount: 6 },
+      { kind: 'productionSpeed', tag: 'gathering', percent: 10 },
+    ],
+  },
+  {
+    id: 'surveyorsEye',
+    name: "Surveyor's Eye",
+    icon: '🔭',
+    rarity: 'rare',
+    description: 'Favourable ground is worth 50% more: fertile farms, rocky masons, forest gatherers, marsh clay.',
+    effects: [{ kind: 'terrainBoost', percent: 50 }],
+  },
+  {
+    id: 'guildQuarters',
+    name: 'Guild Quarters',
+    icon: '🏘️',
+    rarity: 'rare',
+    description: 'Adjacency work-speed bonuses are 50% stronger.',
+    effects: [{ kind: 'adjacencyBoost', percent: 50 }],
+  },
+  {
+    id: 'royalCouriers',
+    name: 'Royal Couriers',
+    icon: '🏇',
+    rarity: 'rare',
+    description: 'Royal decrees allow 30% more time, and one that lapses costs half the patience.',
+    effects: [
+      { kind: 'decreeTime', percent: 30 },
+      { kind: 'decreeMissPenalty', percent: -50 },
+    ],
+  },
+  {
+    id: 'clearSkiesAlmanac',
+    name: 'Almanac of Clear Skies',
+    icon: '📆',
+    rarity: 'rare',
+    description: 'Clearance lasts 25% longer and the Storm 10% shorter.',
+    effects: [
+      { kind: 'seasonLength', season: 'clearance', percent: 25 },
+      { kind: 'seasonLength', season: 'storm', percent: -10 },
+    ],
+  },
+  {
+    id: 'everburningBraziers',
+    name: 'Everburning Braziers',
+    icon: '🔥',
+    rarity: 'epic',
+    description: 'Braziers need no wood at all, the hearth burns 20% less, and every species gains +3 resolve in the Storm.',
+    effects: [
+      { kind: 'brazierFuel', percent: -100 },
+      { kind: 'hearthFuel', percent: -20 },
+      { kind: 'stormResolve', amount: 3 },
+    ],
+  },
+  {
+    id: 'geomancersCompact',
+    name: "Geomancers' Compact",
+    icon: '🗿',
+    rarity: 'epic',
+    description: 'Unfavourable ground no longer hurts at all, favourable ground is worth 50% more, and construction is 15% faster.',
+    effects: [
+      { kind: 'terrainPenalty', percent: -100 },
+      { kind: 'terrainBoost', percent: 50 },
+      { kind: 'buildSpeed', percent: 15 },
+    ],
+  },
+  {
+    id: 'crownSeal',
+    name: "The Crown's Seal",
+    icon: '🔏',
+    rarity: 'epic',
+    description: 'Every royal decree met in time pays +1 reputation, and decrees allow 20% more time.',
+    effects: [
+      { kind: 'decreeReputation', amount: 1 },
+      { kind: 'decreeTime', percent: 20 },
     ],
   },
 

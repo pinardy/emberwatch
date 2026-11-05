@@ -93,22 +93,34 @@ function terrainMultiplier(
   defId: string,
   terrain: TerrainId | undefined,
   kinds: TerrainEffect['kind'][],
+  mods?: Modifiers,
 ): number {
   let percent = 0
   for (const effect of terrainEffectsFor(defId, terrain)) {
-    if (kinds.includes(effect.kind)) percent += effect.percent
+    if (!kinds.includes(effect.kind)) continue
+    // Cornerstones can sharpen good ground or blunt bad ground.
+    const scale = !mods ? 1 : effect.percent > 0 ? mods.terrainBoost : mods.terrainPenalty
+    percent += effect.percent * scale
   }
   return Math.max(0.1, 1 + percent / 100)
 }
 
 /** Work-speed multiplier from the ground a building of `defId` stands on. */
-export function terrainWorkMultiplier(defId: string, terrain: TerrainId | undefined): number {
-  return terrainMultiplier(defId, terrain, ['workSpeed', 'yield'])
+export function terrainWorkMultiplier(
+  defId: string,
+  terrain: TerrainId | undefined,
+  mods?: Modifiers,
+): number {
+  return terrainMultiplier(defId, terrain, ['workSpeed', 'yield'], mods)
 }
 
 /** Construction-speed multiplier from the ground. */
-export function terrainBuildMultiplier(defId: string, terrain: TerrainId | undefined): number {
-  return terrainMultiplier(defId, terrain, ['buildSpeed'])
+export function terrainBuildMultiplier(
+  defId: string,
+  terrain: TerrainId | undefined,
+  mods?: Modifiers,
+): number {
+  return terrainMultiplier(defId, terrain, ['buildSpeed'], mods)
 }
 
 /** The terrain under a placed building (fixed at placement). */
@@ -136,9 +148,9 @@ export function workRate(s: RunState, b: BuildingInstance, mods: Modifiers): num
   return (
     rate *
     productionMultiplier(mods, def.tags) *
-    adjacencyMultiplier(s, b) *
+    adjacencyMultiplier(s, b, mods) *
     tierSpeedMultiplier(b) *
-    terrainWorkMultiplier(b.defId, terrainOf(s, b))
+    terrainWorkMultiplier(b.defId, terrainOf(s, b), mods)
   )
 }
 
@@ -150,14 +162,16 @@ export function seasonMultiplier(
 ): number {
   const def = BUILDINGS[defId]
   if (!def) return 1
+  // Run modifiers can make one season busier for every workplace.
+  const seasonal = mods ? Math.max(0, 1 + mods.seasonProduction[season]) : 1
   if (def.tags.includes('farming')) {
     const base = FARM_SEASON_MULTIPLIER[season]
     // Greenhouse-style cornerstones keep farms turning through the Storm.
-    if (season === 'storm' && mods) return Math.max(base, mods.farmsInStorm)
-    return base
+    if (season === 'storm' && mods) return Math.max(base, mods.farmsInStorm) * seasonal
+    return base * seasonal
   }
-  if (def.tags.includes('gathering')) return GATHER_SEASON_MULTIPLIER[season]
-  return 1
+  if (def.tags.includes('gathering')) return GATHER_SEASON_MULTIPLIER[season] * seasonal
+  return seasonal
 }
 
 export interface ProductionResult {
@@ -211,7 +225,7 @@ export function stepProduction(
     for (const b of underConstruction) {
       const def = BUILDINGS[b.defId]
       if (!def) continue
-      const work = perSite * terrainBuildMultiplier(b.defId, terrainOf(s, b)) * dt
+      const work = perSite * terrainBuildMultiplier(b.defId, terrainOf(s, b), mods) * dt
       if (b.built) {
         if (advanceUpgrade(s, b, work)) result.upgraded.push(b.id)
         continue

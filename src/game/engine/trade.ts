@@ -10,7 +10,7 @@ import {
   TRADE_LOT,
 } from './balance'
 import { pushLog } from './createRun'
-import { computeModifiers } from './modifiers'
+import { computeModifiers, type Modifiers } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 
@@ -59,16 +59,24 @@ function rollOffers(s: RunState): void {
   s.rngCursor = rng.cursor()
 }
 
-export function stepCaravan(s: RunState, dt: number): void {
+/**
+ * Whether caravans call at all: once a Trading Post stands, or anywhere when a
+ * run modifier has traders wandering the roads.
+ */
+export function caravanAvailable(s: RunState, mods: Modifiers = computeModifiers(s)): boolean {
+  return mods.caravanWithoutPost || hasTradingPost(s)
+}
+
+export function stepCaravan(s: RunState, dt: number, mods: Modifiers = computeModifiers(s)): void {
   // No road, no caravans: the timer only runs once a Trading Post stands.
-  if (!hasTradingPost(s)) return
+  if (!caravanAvailable(s, mods)) return
 
   s.caravan.timer -= dt
   if (s.caravan.timer > 0) return
 
   if (s.caravan.here) {
     s.caravan.here = false
-    s.caravan.timer = CARAVAN_INTERVAL
+    s.caravan.timer = CARAVAN_INTERVAL * mods.caravanInterval
     s.caravan.offers = []
     pushLog(s, '🐫 The caravan packs up and moves on.', 'info')
   } else {

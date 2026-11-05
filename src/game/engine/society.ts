@@ -161,11 +161,16 @@ export function stepBraziers(s: RunState, dt: number, fuelMultiplier = 1): numbe
 }
 
 /** Wood per second the hearth and every brazier burn during the Storm. */
-export function stormFuelPerSecond(s: RunState, hearthFuelPerSecond: number, fuelMultiplier = 1): number {
+export function stormFuelPerSecond(
+  s: RunState,
+  hearthFuelPerSecond: number,
+  fuelMultiplier = 1,
+  brazierMultiplier = fuelMultiplier,
+): number {
   let rate = hearthFuelPerSecond * fuelMultiplier
   for (const b of Object.values(s.buildings)) {
     const warmth = BUILDINGS[b.defId]?.warmth
-    if (warmth && b.built) rate += warmth.fuelPerSecond * fuelMultiplier
+    if (warmth && b.built) rate += warmth.fuelPerSecond * brazierMultiplier
   }
   return rate
 }
