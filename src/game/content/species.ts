@@ -1,4 +1,5 @@
 import type { SpeciesDef, SpeciesId, VillagerTraitId } from '../types'
+import { SPECIES_ART } from './art'
 
 const defs: SpeciesDef[] = [
   {
@@ -82,6 +83,8 @@ const defs: SpeciesDef[] = [
     blurb: 'Foragers and cooks who would rather be napping.',
   },
 ]
+
+for (const d of defs) d.art ??= SPECIES_ART[d.id]
 
 export const SPECIES: Record<SpeciesId, SpeciesDef> = Object.fromEntries(
   defs.map((d) => [d.id, d]),

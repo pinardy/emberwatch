@@ -1,4 +1,5 @@
 import type { ResourceDef, ResourceId } from '../types'
+import { RESOURCE_ART } from './art'
 
 const defs: ResourceDef[] = [
   // ---- materials -----------------------------------------------------------
@@ -43,6 +44,8 @@ const defs: ResourceDef[] = [
   // ---- currency ------------------------------------------------------------
   { id: 'amber', name: 'Amber', category: 'currency', icon: '🟨', value: 1 },
 ]
+
+for (const d of defs) d.art ??= RESOURCE_ART[d.id]
 
 export const RESOURCES: Record<ResourceId, ResourceDef> = Object.fromEntries(
   defs.map((d) => [d.id, d]),

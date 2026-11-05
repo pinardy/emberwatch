@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import type { IconId } from '../art/icons'
+import { BUILDING_ART, DEPOSIT_ART, GLADE_ART } from '../game/content/art'
 import { BUILDINGS } from '../game/content/buildings'
 import { canPlaceBuilding, footprintOf } from '../game/engine/actions'
-import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { describePlacement } from '../game/engine/placement'
 import { warmthSources } from '../game/engine/queries'
 import { displayName, workerSlotsOf } from '../game/engine/upgrades'
@@ -15,7 +16,6 @@ import {
   buildingStatusKind,
   gladeAccessText,
   gladeFill,
-  gladeKindLabel,
   gladeLook,
   gladePlateInfo,
   isColdHousing,
@@ -30,6 +30,18 @@ import {
   type StatusContext,
 } from './mapShared'
 import { panDirectionOf } from './usePanKeys'
+import { IconSymbols, IconUse } from './Icon'
+
+/** Every icon the 2D map stamps, defined once as `<symbol>`s. */
+const MAP_SYMBOLS: IconId[] = [
+  ...new Set([
+    ...Object.values(DEPOSIT_ART),
+    ...Object.values(GLADE_ART),
+    ...Object.values(BUILDING_ART).filter((id): id is IconId => id !== undefined),
+  ]),
+]
+/** Icon size on the 2D map, in SVG units (the old emoji were 18px text). */
+const MAP_ICON = 22
 
 /** Pixels per world unit inside the SVG coordinate system. */
 const S = 30
@@ -230,6 +242,7 @@ export function MapView2D() {
         role="application"
         aria-label="Settlement map"
       >
+        <IconSymbols ids={MAP_SYMBOLS} />
         <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
           <g ref={worldRef}>
             {/* The forest beyond the world's edge. */}
@@ -329,9 +342,7 @@ export function MapView2D() {
                     className="deposit-disc"
                     style={{ stroke: DEPOSIT_TINT[d.kind], strokeOpacity: 0.7 }}
                   />
-                  <text className="hex-icon" x={cx} y={cy + 6}>
-                    {DEPOSIT_INFO[d.kind].icon}
-                  </text>
+                  <IconUse id={DEPOSIT_ART[d.kind]} x={cx} y={cy} size={MAP_ICON} />
                   {d.amount !== null && (
                     <text className="hex-sub" x={cx} y={cy + d.radius * S + 10}>
                       {d.amount}
@@ -383,9 +394,13 @@ export function MapView2D() {
                       pointerEvents="none"
                     />
                   )}
-                  <text className="hex-icon" x={cx} y={cy + 6}>
-                    {def.icon}
-                  </text>
+                  {def.art ? (
+                    <IconUse id={def.art} x={cx} y={cy} size={MAP_ICON} />
+                  ) : (
+                    <text className="hex-icon" x={cx} y={cy + 6}>
+                      {def.icon}
+                    </text>
+                  )}
                   {!b.built && (
                     <>
                       <rect x={cx - 16} y={cy + r + 3} width={32} height={4} rx={2} className="build-bar-bg" />
@@ -521,8 +536,20 @@ export function MapView2D() {
                     className="glade-plate"
                     style={reachable ? { stroke: kindStyle.edge, strokeOpacity: 0.85 } : undefined}
                   />
-                  <text y={-8} className="glade-kind" style={reachable ? { fill: kindStyle.edge } : undefined}>
-                    {gladeKindLabel(glade.kind)}
+                  {/* Kind icon and label, centred together as one line. */}
+                  <IconUse
+                    id={GLADE_ART[glade.kind]}
+                    x={-kindStyle.label.length * 2.8 - 1}
+                    y={-11}
+                    size={11}
+                  />
+                  <text
+                    x={6}
+                    y={-8}
+                    className="glade-kind"
+                    style={reachable ? { fill: kindStyle.edge } : undefined}
+                  >
+                    {kindStyle.label}
                   </text>
                   <text y={7} className="glade-name">
                     {glade.name}

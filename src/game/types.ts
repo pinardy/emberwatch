@@ -6,6 +6,8 @@
  * that keeps the sim testable and lets us snapshot it straight into storage.
  */
 
+import type { IconId } from '../art/icons'
+
 // ---------------------------------------------------------------------------
 // Resources
 // ---------------------------------------------------------------------------
@@ -60,8 +62,10 @@ export interface ResourceDef {
   id: ResourceId
   name: string
   category: ResourceCategory
-  /** Emoji stand-in for art. Keeps the build asset-free. */
+  /** Emoji stand-in for art, and the fallback wherever `art` is missing. */
   icon: string
+  /** Drawn icon (see `content/art.ts`); `icon` is the emoji fallback. */
+  art?: IconId
   /** Base amber value, used by the trader. */
   value: number
 }
@@ -87,6 +91,8 @@ export interface SpeciesDef {
   id: SpeciesId
   name: string
   icon: string
+  /** Drawn icon (see `content/art.ts`); `icon` is the emoji fallback. */
+  art?: IconId
   /** Colour used for charts and resolve bars. */
   color: string
   /** Resolve floor before any modifiers. */
@@ -184,6 +190,8 @@ export interface BuildingDef {
   id: string
   name: string
   icon: string
+  /** Drawn icon (see `content/art.ts`); `icon` is the emoji fallback. */
+  art?: IconId
   category: BuildingCategory
   tags: BuildingTag[]
   cost: ResourceBag
@@ -303,6 +311,8 @@ export interface TerrainDef {
   id: TerrainId
   name: string
   icon: string
+  /** Drawn icon (see `content/art.ts`); `icon` is the emoji fallback. */
+  art?: IconId
   blurb: string
   effects: TerrainEffect[]
 }

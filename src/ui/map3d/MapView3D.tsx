@@ -3,6 +3,7 @@ import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Html, MapControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
+import { GLADE_ART } from '../../game/content/art'
 import { BUILDINGS } from '../../game/content/buildings'
 import { canPlaceBuilding, footprintOf } from '../../game/engine/actions'
 import { pairsWith } from '../../game/engine/adjacency'
@@ -19,13 +20,13 @@ import { MiniMap } from './MiniMap'
 import { Paths } from './Paths'
 import { Smoke } from './Smoke'
 import { Villagers } from './Villagers'
+import { Icon } from '../Icon'
 import { BuildBanner, WarmthToggle } from '../MapView2D'
 import {
   GLADE_KIND_STYLE,
   MAP_KEYS,
   gladeAccessText,
   gladeFill,
-  gladeKindLabel,
   gladeLook,
   gladePlateInfo,
   useCameraFocus,
@@ -270,7 +271,7 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
                 <meshBasicMaterial color="#9fc9a3" transparent opacity={0.35} side={THREE.DoubleSide} />
               </mesh>
             )}
-            <IconSprite icon={def.icon} y={1.1} size={0.8} />
+            <IconSprite icon={def.icon} art={def.art} y={1.1} size={0.8} />
             {hint && (
               <Html
                 position={[0, 1.9, 0]}
@@ -579,7 +580,9 @@ const GladePlate = memo(function GladePlate({
         style={{ '--kind-color': GLADE_KIND_STYLE[glade.kind].edge } as React.CSSProperties}
         onClick={() => useGameStore.getState().selectGlade(glade.id)}
       >
-        <small>{gladeKindLabel(glade.kind)}</small>
+        <small>
+          <Icon id={GLADE_ART[glade.kind]} /> {GLADE_KIND_STYLE[glade.kind].label}
+        </small>
         <strong>{glade.name}</strong>
         {percent > 0 && (
           <span className="glade-plate-3d-bar">

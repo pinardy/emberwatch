@@ -1,4 +1,5 @@
 import type { TerrainDef, TerrainId } from '../types'
+import { TERRAIN_ART } from './art'
 
 /**
  * What each kind of ground does to the buildings standing on it. A building
@@ -53,3 +54,5 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     effects: [{ kind: 'workSpeed', tag: 'gathering', percent: 15 }],
   },
 }
+
+for (const def of Object.values(TERRAIN)) def.art ??= TERRAIN_ART[def.id]
