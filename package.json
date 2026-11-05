@@ -39,5 +39,10 @@
     "vite": "^8.2.1",
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "workbox-build": {
+      "glob": "^14.0.3"
+    }
   }
 }
