@@ -4,7 +4,7 @@ import { NEED_LABELS } from '../game/content/species'
 import { NEED_ART } from '../game/content/art'
 import { describeBonus } from '../game/engine/adjacency'
 import { canAfford } from '../game/engine/queries'
-import { useGameStore, useRun } from '../game/store'
+import { useGameStore, useHudRun } from '../game/store'
 import type { BuildingCategory, ResourceBag } from '../game/types'
 import { Icon } from './Icon'
 import { PartnerIcon } from './PartnerIcon'
@@ -19,7 +19,7 @@ const ORDER: BuildingCategory[] = [
 ]
 
 export function BuildPanel() {
-  const run = useRun()
+  const run = useHudRun()
   const buildMode = useGameStore((s) => s.buildMode)
   const setBuildMode = useGameStore((s) => s.setBuildMode)
   if (!run) return null

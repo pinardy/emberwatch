@@ -6,7 +6,7 @@ import { TRADE_LOT } from '../game/engine/balance'
 import { orderReputation } from '../game/engine/events'
 import { modifierOngoingId } from '../game/engine/runModifiers'
 import { caravanAvailable, hasTradingPost, offerPrice, sellPrice } from '../game/engine/trade'
-import { useGameStore, useRun } from '../game/store'
+import { useGameStore, useHudRun } from '../game/store'
 import { DecreeCard } from './DecreeCard'
 import { RunModifierList } from './RunModifierList'
 import { RaceSparkline } from './RaceSparkline'
@@ -16,7 +16,7 @@ import { IconText } from './IconText'
 import { cornerstoneArt, ongoingArt } from '../game/content/artFamilies'
 
 export function OrdersPanel() {
-  const run = useRun()
+  const run = useHudRun()
   const soothe = useGameStore((s) => s.soothe)
   if (!run) return null
   // Modifier effects live in `ongoing` too; they are listed with the land.
@@ -127,7 +127,7 @@ export function OrdersPanel() {
 }
 
 export function LogPanel() {
-  const run = useRun()
+  const run = useHudRun()
   if (!run) return null
   return (
     <div className="panel-body">
@@ -155,7 +155,7 @@ export function LogPanel() {
  * sell your surplus — it pays double for the one good it wants this visit.
  */
 export function TradePanel() {
-  const run = useRun()
+  const run = useHudRun()
   const buyLot = useGameStore((s) => s.buyLot)
   const sell = useGameStore((s) => s.sell)
   if (!run) return null

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { idleVillagers } from '../game/engine/queries'
-import { useGameStore, useRun } from '../game/store'
+import { useGameStore, useHudRun, useHudVersion } from '../game/store'
 import type { RunState } from '../game/types'
 import { FirstSteps, useFirstStepsOpen } from './FirstSteps'
 import { useEscapeLayer } from './useGameLoop'
@@ -139,14 +139,14 @@ function dialogOpen(run: RunState): boolean {
  * open only urgent tips interrupt it, and the welcome tip is folded into it.
  */
 export function TipsCoach() {
-  const run = useRun()
+  const run = useHudRun()
   const seen = useSeenTips((s) => s.seen)
   const markSeen = useSeenTips((s) => s.markSeen)
   const [active, setActive] = useState<Tip | null>(null)
   const blocked = run ? dialogOpen(run) : true
   const checklist = useFirstStepsOpen(run)
-  // The run is mutated in place; the version is what says it moved on.
-  const version = useGameStore((s) => s.version)
+  // The run is mutated in place; the HUD clock is what says it moved on.
+  const version = useHudVersion()
 
   useEffect(() => {
     if (!run || blocked) return
@@ -193,7 +193,7 @@ export function TipsCoach() {
 
 /** A tip shown inside a dialog, e.g. the first blueprint draft. */
 export function DialogTip({ id }: { id: string }) {
-  const run = useRun()
+  const run = useHudRun()
   const seen = useSeenTips((s) => s.seen)
   const markSeen = useSeenTips((s) => s.markSeen)
   const tip = TIPS.find((t) => t.id === id)

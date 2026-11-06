@@ -1,6 +1,6 @@
 import { DECREES } from '../game/content/decrees'
 import { describeTimedGoal } from '../game/engine/structure'
-import { useGameStore, useRun } from '../game/store'
+import { useGameStore, useHudRun } from '../game/store'
 import type { ActiveCondition, ConditionOutcome } from '../game/types'
 import { clockText } from './DecreeCard'
 import { conditionArt } from '../game/content/artFamilies'
@@ -12,7 +12,7 @@ import { IconText } from './IconText'
  * threat bar: what each one costs, what lifts it, and how far along that is.
  */
 export function ConditionsBar() {
-  const run = useRun()
+  const run = useHudRun()
   const setPanel = useGameStore((s) => s.setPanel)
   const focusCamera = useGameStore((s) => s.focusCamera)
   if (!run) return null

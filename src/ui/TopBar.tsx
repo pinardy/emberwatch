@@ -1,25 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { IMPATIENCE_HOSTILITY_THRESHOLD, SEASON_INFO } from '../game/engine/balance'
 import { MAX_HOSTILITY } from '../game/engine/tick'
 import {
   RUNWAY_WARNING_SECONDS,
-  deadlineForecast,
   formatDuration,
   hearthForecast,
-  meterRates,
   secondsUntilStorm,
   type DeadlineForecast,
 } from '../game/engine/forecast'
-import { computeModifiers } from '../game/engine/modifiers'
-import {
-  idleVillagers,
-  population,
-  secondsUntilDeparture,
-  totalHousing,
-} from '../game/engine/queries'
-import { resolveBreakdowns } from '../game/engine/society'
+import { idleVillagers, population, totalHousing } from '../game/engine/queries'
 import { SPECIES } from '../game/content/species'
-import { useGameStore, useRun } from '../game/store'
+import { useFrameDerived } from '../game/frameDerived'
+import { useGameStore, useHudRun } from '../game/store'
 import { SPEED_OPTIONS } from '../game/engine/balance'
 import type { RunState, SpeciesId } from '../game/types'
 import type { IconId } from '../art/icons'
@@ -82,7 +74,7 @@ interface StatusAlert {
 type Popover = 'status' | 'settings' | 'speed' | null
 
 export function TopBar() {
-  const run = useRun()
+  const run = useHudRun()
   const speed = useGameStore((s) => s.speed)
   const setSpeed = useGameStore((s) => s.setSpeed)
   const goToScreen = useGameStore((s) => s.goToScreen)
@@ -91,24 +83,12 @@ export function TopBar() {
   const updateSettings = useGameStore((s) => s.updateSettings)
   const repFloats = useFloaters(run?.reputation ?? 0, 'up-good')
   const impFloats = useFloaters(run?.impatience ?? 0, 'up-bad')
-  const version = useGameStore((s) => s.version)
   const [popover, setPopover] = useState<Popover>(null)
   const statusRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
   const speedRef = useRef<HTMLDivElement>(null)
-  // Modifiers and resolve walk the whole settlement: once per sim step only.
-  const derived = useMemo(() => {
-    if (!run) return null
-    const mods = computeModifiers(run)
-    return {
-      breakdowns: resolveBreakdowns(run, mods),
-      rates: meterRates(run, mods),
-      hearth: hearthForecast(run, mods),
-      departures: secondsUntilDeparture(run),
-      deadline: deadlineForecast(run, mods),
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, version])
+  // Modifiers and resolve walk the whole settlement: once per sim step, shared.
+  const derived = useFrameDerived()?.topBar ?? null
 
   useEscapeLayer(popover !== null, () => setPopover(null))
 

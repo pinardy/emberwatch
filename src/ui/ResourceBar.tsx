@@ -1,12 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RESOURCES } from '../game/content/resources'
-import {
-  RUNWAY_WARNING_SECONDS,
-  foodForecast,
-  formatDuration,
-  storageBlocked,
-} from '../game/engine/forecast'
-import { computeModifiers } from '../game/engine/modifiers'
+import { RUNWAY_WARNING_SECONDS, formatDuration } from '../game/engine/forecast'
 import {
   complexFoodStock,
   foodStock,
@@ -14,7 +8,8 @@ import {
   sortBag,
   storageUsed,
 } from '../game/engine/queries'
-import { useGameStore, useRun } from '../game/store'
+import { useFrameDerived } from '../game/frameDerived'
+import { useHudRun } from '../game/store'
 import type { ResourceDef, ResourceId } from '../game/types'
 import { Icon } from './Icon'
 import { useStockTrends, type StockTrend, type StockTrends } from './stockTrends'
@@ -132,14 +127,10 @@ function TrendMark({ trend }: { trend?: StockTrend }) {
  * holding up a building.
  */
 export function ResourceBar() {
-  const run = useRun()
-  const version = useGameStore((s) => s.version)
-  const derived = useMemo(() => {
-    if (!run) return null
-    const mods = computeModifiers(run)
-    return { blocked: storageBlocked(run, mods).length, food: foodForecast(run, mods) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, version])
+  const run = useHudRun()
+  // Shared per sim step with the warnings, toasts and sound cues.
+  const frame = useFrameDerived()
+  const derived = frame && { blocked: frame.storageBlocked.length, food: frame.food }
   const stockTrends = useStockTrends(run)
   if (!run || !derived) return null
 
