@@ -7,6 +7,7 @@ import { describeOrder, orderReputation } from '../game/engine/orders'
 import { modifierOngoingId } from '../game/engine/runModifiers'
 import { caravanAvailable, hasTradingPost, offerPrice, sellPrice } from '../game/engine/trade'
 import { useGameStore, useHudRun } from '../game/store'
+import { Bar } from './Bar'
 import { DecreeCard } from './DecreeCard'
 import { orderTag } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
@@ -53,9 +54,7 @@ export function OrdersPanel() {
                 </span>
               </div>
               <small>{describeOrder(order)}</small>
-              <div className="bar">
-                <div className="bar-fill" style={{ width: `${order.progress * 100}%` }} />
-              </div>
+              <Bar value={order.progress} />
               <small className="muted">{Math.floor(order.progress * 100)}%</small>
             </div>
           )

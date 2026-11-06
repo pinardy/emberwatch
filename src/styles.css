@@ -1575,6 +1575,7 @@ code {
 }
 
 .bar {
+  display: block;
   height: 7px;
   background: rgba(0, 0, 0, 0.5);
   border-radius: 4px;
@@ -1583,6 +1584,7 @@ code {
 }
 
 .bar-fill {
+  display: block;
   height: 100%;
   background: linear-gradient(90deg, #5f8c63, var(--gold));
   transition: width 150ms linear;
@@ -3919,7 +3921,6 @@ button.is-armed {
 }
 
 .condition-progress {
-  display: block;
   height: 5px;
   margin: 3px 0 0;
 }
@@ -3952,10 +3953,6 @@ button.is-armed {
   .condition-text small:not(.condition-goal) {
     display: none;
   }
-}
-
-.condition-progress .bar-fill {
-  display: block;
 }
 
 /* --- building upgrades ---------------------------------------------------- */

@@ -26,6 +26,7 @@ import { terrainOf } from '../game/engine/production'
 import { benefitsFromRoad, describeRoadLink, roadLinkOf } from '../game/engine/roads'
 import { workerMultiplier } from '../game/engine/traits'
 import { useGameStore, useHudRun } from '../game/store'
+import { Bar } from './Bar'
 import { BuildingStatusLine } from './BuildingStatusLine'
 import { Icon } from './Icon'
 import { PartnerIcon } from './PartnerIcon'
@@ -172,12 +173,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             Under construction — {Math.floor(building.buildProgress)}/{def.buildSeconds}{' '}
             work. {idle > 0 ? `${idle} idle villagers are building it.` : 'No idle villagers are available to build it.'}
           </p>
-          <div className="bar">
-            <div
-              className="bar-fill"
-              style={{ width: `${(building.buildProgress / def.buildSeconds) * 100}%` }}
-            />
-          </div>
+          <Bar value={building.buildProgress / def.buildSeconds} />
           <button
             type="button"
             className="wide-button"
@@ -209,18 +205,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
                   </button>
                 ))}
               </div>
-              {active && (
-                <>
-                  <div className="bar">
-                    <div
-                      className="bar-fill"
-                      style={{
-                        width: `${Math.min(100, (building.recipeProgress / active.seconds) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                </>
-              )}
+              {active && <Bar value={building.recipeProgress / active.seconds} />}
               <BuildingStatusLine run={run} building={building} mods={mods} />
             </section>
           )}
@@ -655,7 +640,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
 
   const reachable = isReachable(run, gladeId)
   const idle = idleVillagers(run).length
-  const pct = glade.clearWork > 0 ? (glade.clearProgress / glade.clearWork) * 100 : 100
+  const cleared = glade.clearWork > 0 ? glade.clearProgress / glade.clearWork : 1
   const secondsLeft =
     glade.clearers > 0
       ? Math.ceil((glade.clearWork - glade.clearProgress) / glade.clearers)
@@ -701,9 +686,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
                   </button>
                 </div>
               </div>
-              <div className="bar">
-                <div className="bar-fill" style={{ width: `${Math.min(100, pct)}%` }} />
-              </div>
+              <Bar value={cleared} />
               <small className="muted">
                 {Math.floor(glade.clearProgress)}/{glade.clearWork} work
                 {secondsLeft !== null ? ` · about ${secondsLeft}s remaining` : ' · idle'}

@@ -8,14 +8,6 @@
   display: block;
 }
 
-.queen-progress .bar {
-  display: block;
-}
-
-.queen-progress .bar-fill {
-  display: block;
-}
-
 .queen-foot {
   flex-wrap: wrap;
   align-items: center;

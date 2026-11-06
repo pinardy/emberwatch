@@ -4,6 +4,7 @@ import { useGameStore, useHudRun } from '../game/store'
 import { formatClock } from '../game/engine/forecast'
 import type { ActiveCondition } from '../game/types'
 import { conditionArt } from '../game/content/artFamilies'
+import { Bar } from './Bar'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
 import { outcomeWords } from './threatText'
@@ -79,11 +80,7 @@ export function ConditionsBar() {
 }
 
 function Progress({ value }: { value: number }) {
-  return (
-    <span className="bar condition-progress" aria-label={`${Math.floor(value * 100)}%`}>
-      <span className="bar-fill" style={{ width: `${value * 100}%` }} />
-    </span>
-  )
+  return <Bar value={value} className="condition-progress" aria-label={`${Math.floor(value * 100)}%`} />
 }
 
 function outcomeText(c: ActiveCondition): string {

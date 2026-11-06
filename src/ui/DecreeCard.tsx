@@ -10,6 +10,7 @@ import {
 } from '../game/engine/structure'
 import { useHudRun } from '../game/store'
 import type { RunState } from '../game/types'
+import { Bar } from './Bar'
 import { Icon } from './Icon'
 
 /** The impatience a lapse would cost now, to two decimals. */
@@ -66,9 +67,7 @@ export function DecreeCard() {
         </span>
       </div>
       <small>{describeTimedGoal(goal)}</small>
-      <div className="bar">
-        <div className="bar-fill" style={{ width: `${decree.progress * 100}%` }} />
-      </div>
+      <Bar value={decree.progress} />
       <div className="row-between">
         <small className="muted">{Math.floor(decree.progress * 100)}%</small>
         <small className={`decree-clock ${urgent ? 'is-bad' : ''}`}>

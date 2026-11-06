@@ -20,6 +20,7 @@ import {
 } from '../game/engine/structure'
 import { useGameStore } from '../game/store'
 import type { Order, PendingChoice, RoyalDecree, RunState } from '../game/types'
+import { Bar } from './Bar'
 import { decreeMissCost } from './DecreeCard'
 import { Icon } from './Icon'
 import './queen-choice.css'
@@ -199,9 +200,7 @@ function Progress({ value }: { value: number }) {
   const pct = Math.floor(Math.max(0, Math.min(1, value)) * 100)
   return (
     <span className="queen-progress" aria-label={`${pct}% done`}>
-      <span className="bar">
-        <span className="bar-fill" style={{ width: `${pct}%` }} />
-      </span>
+      <Bar value={pct / 100} />
       <small>{pct}% done now</small>
     </span>
   )
