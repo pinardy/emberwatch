@@ -2,15 +2,14 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@t
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { findPlacement } from '../game/engine/actions'
-import { useGameStore } from '../game/store'
+import { HUD_INTERVAL_MS, useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { gladeFillGeometry, mapStats, useStaticGeometry } from './map3d/staticGeometry'
-import { useMapOverlays } from './mapShared'
+import { useHudValue, useMapOverlays } from './mapShared'
 import { roadKey } from './map3d/layerKeys'
 import { roadGeometry } from './map3d/Roads'
 import { ROAD_TOOL, placeRoad } from '../game/engine/roads'
 import { DISTRICT_STYLE, districtOf, obstacleTitle, plateShape } from './map2dArt'
-import { useThrottledRunValue } from './map2dState'
 import { BUILDINGS } from '../game/content/buildings'
 import { iconSymbolId } from './Icon'
 import type { IconId } from '../art/icons'
@@ -312,33 +311,43 @@ describe('2D map parity', () => {
 })
 
 describe('2D map subscriptions', () => {
-  it('re-derives on structural change at once, and throttles what ticking changes', () => {
+  it('re-derives at once after a command, and at most once per HUD tick while the sim steps', () => {
     useGameStore.getState().startRun(77)
     const store = useGameStore.getState()
     for (const choice of [...currentRun().pendingChoices]) store.chooseOption(choice.options[0])
+    act(() => useGameStore.getState().setSpeed(1))
     let derived = 0
     let structure = 'a'
     const { result } = renderHook(() =>
-      useThrottledRunValue(
-        (run) => {
-          derived++
-          return { key: `${structure}:${Math.floor(run.clock)}`, value: `${structure}:${Math.floor(run.clock)}` }
-        },
-        () => structure,
-        60_000,
-      ),
+      useHudValue(() => {
+        derived++
+        return { key: structure, value: { structure } }
+      }),
     )
-    const first = result.current
-    const afterMount = derived
-    // A burst of sim steps inside the throttle window derives nothing new.
-    tickSome(12)
-    expect(derived).toBe(afterMount)
-    expect(result.current).toBe(first)
-    // A structural change (a placement, an assignment) lands immediately.
+    const held = result.current
+    expect(held).toEqual({ structure: 'a' })
+    const version = () => useGameStore.getState().version
+    const hud = () => useGameStore.getState().hudVersion
+    // A burst of sim steps inside one HUD interval: every step moves the
+    // version, only the HUD ticks derive, and an unchanged key keeps the value.
+    const t0 = performance.now()
+    const [v0, h0, d0] = [version(), hud(), derived]
+    act(() => {
+      for (let i = 0; i < 12; i++) useGameStore.getState().advance(0.25, t0)
+    })
+    expect(version() - v0).toBeGreaterThan(hud() - h0 + 4)
+    expect(derived - d0).toBe(hud() - h0)
+    expect(result.current).toBe(held)
+    // The next HUD tick derives once more; the key held, so the value did too.
+    const d1 = derived
+    act(() => useGameStore.getState().advance(0.25, t0 + HUD_INTERVAL_MS))
+    expect(derived).toBe(d1 + 1)
+    expect(result.current).toBe(held)
+    // A command (a placement, an assignment) lands immediately.
     structure = 'b'
     act(() => useGameStore.setState({ version: useGameStore.getState().version + 1 }))
-    expect(derived).toBe(afterMount + 1)
-    expect(result.current).toMatch(/^b:/)
+    expect(derived).toBe(d1 + 2)
+    expect(result.current).toEqual({ structure: 'b' })
   })
 })
 

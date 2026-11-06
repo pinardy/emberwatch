@@ -14,7 +14,6 @@ import {
   GLADE_STAKE_ART,
   gladeStakesTitle,
   STATUS_BADGE,
-  buildingStatusKind,
   gladeAccessText,
   gladeFill,
   gladeKindLabel,
@@ -30,7 +29,7 @@ import {
   type MapBuildingStatus,
 } from './mapShared'
 import {
-  buildingKey,
+  buildingLayer,
   buildingViews,
   clearedKey,
   depositKey,
@@ -47,6 +46,19 @@ import {
 import { assignWorker, findPlacement, placeBuilding } from '../game/engine/actions'
 import { placeRoad, roadNetwork, roadStats } from '../game/engine/roads'
 import { gladeEdgeGeometry } from './map3d/staticGeometry'
+
+/** A fresh store version per read, as after a sim step (statuses are shared per version). */
+let version = 0
+
+/** The status badge the maps draw for `b`. */
+function buildingStatusKind(run: RunState, b: BuildingInstance): MapBuildingStatus {
+  return buildingViews(run, ++version).find((v) => v.building === b)!.status
+}
+
+/** The 3D building layer's key. */
+function buildingKey(run: RunState): string {
+  return buildingLayer(run, ++version).key
+}
 
 function newRun(): RunState {
   const run = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'] })
@@ -422,10 +434,10 @@ describe('building upgrade tiers on the map', () => {
     const a = addBuilding(run, 'warehouse', { pos: { x: 2.5, y: 2.5 } })
     addBuilding(run, 'shelter', { pos: { x: -2.5, y: 2.5 } })
     const key = buildingKey(run)
-    const views = buildingViews(run)
+    const views = buildingViews(run, ++version)
     a.tier = 1
     expect(buildingKey(run)).not.toBe(key)
-    const after = buildingViews(run)
+    const after = buildingViews(run, ++version)
     // The memoised node re-renders on changed props; every other view's props
     // are equal, so only this node re-renders.
     const strip = (v: (typeof views)[number]) => ({ ...v, building: v.building.id })

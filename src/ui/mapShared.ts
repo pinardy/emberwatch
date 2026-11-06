@@ -3,14 +3,10 @@ import { create } from 'zustand'
 import { BUILDINGS } from '../game/content/buildings'
 import { isReachable } from '../game/engine/actions'
 import { describeStakes, gladeStakesOf, type GladeStake } from '../game/engine/events'
-import {
-  buildingStatus,
-  type BuildingStatus as EngineBuildingStatus,
-} from '../game/engine/forecast'
+import type { BuildingStatus as EngineBuildingStatus } from '../game/engine/forecast'
 import { dist } from '../game/engine/geometry'
 import { TERRAIN_COLORS } from '../game/engine/mapgen'
-import { computeModifiers, type Modifiers } from '../game/engine/modifiers'
-import { isWarmAt, storageUsed, type WarmthSource } from '../game/engine/queries'
+import { isWarmAt, type WarmthSource } from '../game/engine/queries'
 import { housingOf, isInsulated, isUpgrading, nextUpgrade, tierOf } from '../game/engine/upgrades'
 import { useGameStore } from '../game/store'
 import type {
@@ -245,27 +241,6 @@ export const STATUS_BADGE: Record<Exclude<MapBuildingStatus, 'none'>, StatusBadg
   working: { icon: '⚙', art: STATUS_BADGE_ART.working, label: 'Working', color: '#6fbf72', problem: false },
 }
 
-/** Lazily computed per-call context so a batch of buildings shares the work. */
-export interface StatusContext {
-  used?: number
-  mods?: Modifiers
-}
-
-/**
- * The engine's status for `b`, reduced to its kind. Modifiers and storage use
- * are computed once per `ctx`, so a whole layer of buildings shares them.
- */
-export function buildingStatusKind(
-  run: RunState,
-  b: BuildingInstance,
-  ctx: StatusContext = {},
-): MapBuildingStatus {
-  if (!b.built) return 'construction'
-  ctx.mods ??= computeModifiers(run)
-  ctx.used ??= storageUsed(run)
-  return buildingStatus(run, b, ctx.mods, ctx.used).kind
-}
-
 /**
  * Storm chill: finished housing standing outside every live warmth source.
  * Pass `sources` (from `warmthSources`) when checking many buildings at once.
@@ -395,4 +370,44 @@ export function useCameraFocus(onFocus: (p: Vec2) => void): void {
     latest.current(cameraFocus)
     useGameStore.setState({ cameraFocus: null })
   }, [cameraFocus])
+}
+
+// ---------------------------------------------------------------------------
+// Subscriptions
+// ---------------------------------------------------------------------------
+
+/**
+ * A value a map layer derives from the run, on the HUD clock: `derive(run,
+ * version)` runs again only when `hudVersion` moves (about 8 Hz while the sim
+ * runs, at once after every command) or another run is loaded. While the
+ * returned key holds, the same value comes back and the layer does not
+ * re-render, so per-building work stays off the per-step path. Null without
+ * a run.
+ */
+export function useHudValue<T>(
+  derive: (run: RunState, version: number) => { key: string; value: T },
+): T | null {
+  const memo = useRef<{ hud: number; run: RunState | null; key: string; value: T | null }>({
+    hud: -1,
+    run: null,
+    key: '',
+    value: null,
+  })
+  return useGameStore((s) => {
+    const m = memo.current
+    if (s.hudVersion === m.hud && s.run === m.run) return m.value
+    m.hud = s.hudVersion
+    m.run = s.run
+    if (!s.run) {
+      m.key = ''
+      m.value = null
+    } else {
+      const next = derive(s.run, s.version)
+      if (m.value === null || next.key !== m.key) {
+        m.key = next.key
+        m.value = next.value
+      }
+    }
+    return m.value
+  })
 }

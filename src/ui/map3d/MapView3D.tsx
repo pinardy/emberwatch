@@ -28,6 +28,7 @@ import {
   gladeLook,
   gladePlateInfo,
   useCameraFocus,
+  useHudValue,
   useMapKey,
   useMapOverlays,
   useWarmthRingVisible,
@@ -45,8 +46,7 @@ import {
 } from './entities'
 import { GladeEdges, GroundSurface, gladeAt } from './Ground'
 import {
-  buildingKey,
-  buildingViews,
+  buildingLayer,
   depositKey,
   forestKey,
   gladePlateKey,
@@ -418,13 +418,13 @@ const BuildingLayer = memo(function BuildingLayer({
   bucket: ZoomBucket
   buildMode: string | null
 }) {
-  useRunKey(buildingKey)
+  const views = useHudValue(buildingLayer) ?? []
   const selectedBuilding = useGameStore((s) => s.selectedBuilding)
   const ghostDef = buildMode ? BUILDINGS[buildMode] : undefined
   return (
     <>
       <BuildingInstances run={run} />
-      {buildingViews(run).map(({ building, progress, workers, status, cold, lit, tier, upgrade }) => {
+      {views.map(({ building, progress, workers, status, cold, tier, upgrade }) => {
         // Buildings that pair with the blueprint in hand, in either direction.
         const partnerHint =
           !!ghostDef && building.built && !!BUILDINGS[building.defId] && pairsWith(ghostDef.id, building.defId)
@@ -439,7 +439,6 @@ const BuildingLayer = memo(function BuildingLayer({
             progress={progress}
             workers={workers}
             status={status}
-            lit={lit}
             tier={tier}
             upgrade={upgrade}
           />
@@ -686,7 +685,7 @@ export function MapView3D() {
         <BuildingLayer run={run} bucket={bucket} buildMode={buildMode} />
 
         {bucket !== 'far' && <Villagers run={run} />}
-        <Smoke run={run} />
+        <Smoke />
 
         <ThreatLayer run={run} />
         <GladePlates run={run} />

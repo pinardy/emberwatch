@@ -1,13 +1,12 @@
-import { createContext, useContext, useRef, useSyncExternalStore } from 'react'
+import { createContext, useContext } from 'react'
 import { create } from 'zustand'
 import { BUILDINGS } from '../game/content/buildings'
 import { footprintOf } from '../game/engine/actions'
 import { benefitsFromRoad, roadLinkOf, type RoadPreview } from '../game/engine/roads'
 import { displayName, workerSlotsOf } from '../game/engine/upgrades'
-import { useGameStore } from '../game/store'
 import type { RunState, Vec2 } from '../game/types'
 import { buildingViews } from './map3d/layerKeys'
-import type { MapBuildingStatus } from './mapShared'
+import { useHudValue, type MapBuildingStatus } from './mapShared'
 import { districtOf, type District } from './map2dArt'
 
 /**
@@ -93,100 +92,6 @@ export function setGhost(ghost: Ghost | null): void {
 }
 
 // ---------------------------------------------------------------------------
-// Throttled derived values
-// ---------------------------------------------------------------------------
-
-/**
- * Subscribes to a value derived from the run. `derive` returns the value and
- * a key string; subscribers re-render only when the key changes.
- *
- * `cheapKey` is a fast fingerprint of the structural state (which buildings
- * exist, their crews and tiers): when it changes — a placement, an
- * assignment, a new run — the value is derived at once. Changes that only
- * ticking causes (a progress bar creeping, a status flickering between
- * "working" and "waiting") are derived at most once per `throttleMs`, with a
- * trailing update so the last state always lands.
- */
-export function useThrottledRunValue<T>(
-  derive: (run: RunState) => { key: string; value: T },
-  cheapKey: (run: RunState) => string,
-  throttleMs: number,
-): T | null {
-  const holder = useRef<{
-    run: RunState | null
-    cheap: string
-    key: string
-    value: T | null
-    at: number
-    timer: ReturnType<typeof setTimeout> | null
-    store: { subscribe: (cb: () => void) => () => void; get: () => T | null } | null
-  }>({ run: null, cheap: '', key: '', value: null, at: 0, timer: null, store: null })
-  const h = holder.current
-
-  const recompute = (run: RunState | null): boolean => {
-    h.at = now()
-    if (!run) {
-      const changed = h.value !== null
-      h.run = null
-      h.key = ''
-      h.cheap = ''
-      h.value = null
-      return changed
-    }
-    h.run = run
-    h.cheap = cheapKey(run)
-    const next = derive(run)
-    if (next.key === h.key && h.value !== null) return false
-    h.key = next.key
-    h.value = next.value
-    return true
-  }
-
-  h.store ??= {
-    get: () => {
-      if (h.value === null && h.run === null) recompute(useGameStore.getState().run)
-      return h.value
-    },
-    subscribe: (cb) => {
-      // Catch anything that changed between the first render and subscribing.
-      if (recompute(useGameStore.getState().run)) cb()
-      const unsubscribe = useGameStore.subscribe((state) => {
-        const run = state.run
-        if (run !== h.run || !run) {
-          if (recompute(run)) cb()
-          return
-        }
-        if (cheapKey(run) !== h.cheap) {
-          if (h.timer) clearTimeout(h.timer)
-          h.timer = null
-          if (recompute(run)) cb()
-          return
-        }
-        const wait = throttleMs - (now() - h.at)
-        if (wait <= 0) {
-          if (recompute(run)) cb()
-        } else if (!h.timer) {
-          h.timer = setTimeout(() => {
-            h.timer = null
-            if (recompute(useGameStore.getState().run)) cb()
-          }, wait)
-        }
-      })
-      return () => {
-        unsubscribe()
-        if (h.timer) clearTimeout(h.timer)
-        h.timer = null
-      }
-    },
-  }
-  return useSyncExternalStore(h.store.subscribe, h.store.get, h.store.get)
-}
-
-function now(): number {
-  return typeof performance !== 'undefined' ? performance.now() : Date.now()
-}
-
-// ---------------------------------------------------------------------------
 // Buildings
 // ---------------------------------------------------------------------------
 
@@ -214,11 +119,11 @@ export interface BuildingView2D {
   road: number
 }
 
-export function buildingViews2D(run: RunState): { key: string; value: BuildingView2D[] } {
+export function buildingViews2D(run: RunState, version: number): { key: string; value: BuildingView2D[] } {
   let key = ''
   const value: BuildingView2D[] = []
   const hasRoads = (run.roads?.length ?? 0) > 0
-  for (const v of buildingViews(run)) {
+  for (const v of buildingViews(run, version)) {
     const b = v.building
     const def = BUILDINGS[b.defId]
     if (!def) continue
@@ -248,19 +153,9 @@ export function buildingViews2D(run: RunState): { key: string; value: BuildingVi
   return { key, value }
 }
 
-/** Structural fingerprint: changes on placement, crews, tiers, fires, seasons. */
-export function buildingCheapKey(run: RunState): string {
-  let key = `${run.season.season}|${run.roads?.length ?? 0}|`
-  for (const id in run.buildings) {
-    const b = run.buildings[id]
-    key += `${id}${b.built ? '' : '~'}${b.workers.length}${b.tier ?? 0}${b.upgradeProgress === undefined ? '' : '^'}${b.unlit ? '*' : ''},`
-  }
-  return key
-}
-
-/** The building layer's views: re-derived on structure changes, else ≤ 5×/s. */
+/** The building layer's views, on the HUD clock (see `useHudValue`). */
 export function useBuildingViews2D(): BuildingView2D[] {
-  return useThrottledRunValue(buildingViews2D, buildingCheapKey, 200) ?? EMPTY
+  return useHudValue(buildingViews2D) ?? EMPTY
 }
 
 const EMPTY: BuildingView2D[] = []
