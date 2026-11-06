@@ -43,6 +43,25 @@ function clickBuildCard(name: string) {
 }
 
 /** Answers the opening blueprint draft the way a player would. */
+/** Answers whatever the run is waiting on through the store, as a player would. */
+function answerPendingChoices() {
+  let guard = 0
+  while (currentRun().pendingChoices.length > 0 && guard++ < 20) {
+    const choice = currentRun().pendingChoices[0]
+    const before = currentRun().pendingChoices.length
+    act(() => {
+      const store = useGameStore.getState()
+      if (choice.kind !== 'gladeEvent') {
+        store.chooseOption(choice.options[0])
+        return
+      }
+      // Some options need goods the stockpile lacks; take the first it can pay.
+      for (let i = 0; i < 4 && currentRun().pendingChoices.length === before; i++) store.chooseEventOption(i)
+    })
+  }
+  expect(currentRun().pendingChoices).toEqual([])
+}
+
 function takeOpeningDraft() {
   let guard = 0
   while (currentRun().pendingChoices.length > 0 && guard++ < 10) {
@@ -287,13 +306,30 @@ describe('app shell', () => {
       [3, 5],
       [8, 4],
     ] as const) {
-      const clockBefore = currentRun().clock
-      act(() => {
-        useGameStore.getState().setSpeed(speed)
-        // Ten real seconds of frames, exactly as requestAnimationFrame delivers them.
-        for (let i = 0; i < fps * 10; i++) useGameStore.getState().advance(1 / fps)
-      })
-      const simulated = currentRun().clock - clockBefore
+      // A choice (a decree, an order, a glade event) or an auto-pause halts
+      // the world by design, and a run of this length meets several at random
+      // times. The loop is what's measured here, so answer any choice first,
+      // and measure the row again if one arrives mid-row.
+      let simulated = 0
+      for (let attempt = 0; ; attempt++) {
+        expect(attempt, 'interrupted on every attempt').toBeLessThan(10)
+        answerPendingChoices()
+        const clockBefore = currentRun().clock
+        let interrupted = false
+        act(() => {
+          useGameStore.getState().setSpeed(speed)
+          // Ten real seconds of frames, exactly as requestAnimationFrame delivers them.
+          for (let i = 0; i < fps * 10; i++) {
+            useGameStore.getState().advance(1 / fps)
+            if (currentRun().pendingChoices.length > 0 || useGameStore.getState().speed !== speed) {
+              interrupted = true
+              break
+            }
+          }
+        })
+        simulated = currentRun().clock - clockBefore
+        if (!interrupted) break
+      }
       expect(simulated).toBeGreaterThanOrEqual(10 * speed - 0.125 - 1e-9)
       expect(simulated).toBeLessThanOrEqual(10 * speed + 0.125 + 1e-9)
     }
