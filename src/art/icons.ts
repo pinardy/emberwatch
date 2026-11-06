@@ -602,6 +602,13 @@ const MAP_ICONS = {
     l('cream', 'M12 4.2V5.8M12 9.6V11.4M12 14.4V16.6M12 19.4V21.5', 1.4),
   ),
   // ---- terrain (beyond what the deposits already draw)
+  /** An outcrop of bedrock: the 2D map's unclearable crag obstacle. */
+  crag: art(
+    f('slate', 'M1.5 20.5L4 13.5L7.5 11L9.5 6L13.5 3.5L17 7L18.5 12L22.5 15.5L22.5 20.5Z'),
+    f('stone', 'M9.5 20.5L10.5 12.5L13.5 8.5L16.5 11L17.5 16L20 20.5Z'),
+    l('ink', 'M13.5 3.5L12.5 9L9.5 12.5M17.5 16L14.5 15L13 20.5M4 13.5L6.5 16.5', 1.1, 0.55),
+    l('cream', 'M10 6.5L13.3 4.4M14 9.4L16.2 11.4', 1.1, 0.75),
+  ),
   marsh: art(
     f('water', ellipse(12, 18, 9.5, 3)),
     l('cloud', 'M6 18H9.5M13.5 19H17', 1.1, 0.7),

@@ -457,7 +457,7 @@ code {
 
 .season-text small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .speed-group {
@@ -470,9 +470,11 @@ code {
 .speed-group button {
   border: none;
   border-radius: 0;
+  min-width: 34px;
+  min-height: 34px;
   padding: 6px 9px;
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .speed-group button.is-active {
@@ -488,12 +490,13 @@ code {
   justify-content: center;
   gap: 4px;
   min-width: 58px;
+  min-height: 34px;
   font-size: 13px;
   font-weight: 700;
 }
 
 .speed-toggle .speed-chevron {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -509,34 +512,107 @@ code {
   max-width: 620px;
 }
 
+/* Each meter adapts to its own width: label, value and rate never share a
+   line, so none is cut short; a narrow meter swaps to short forms. */
 .meter {
   min-width: 0;
+  container: meter / inline-size;
 }
 
 .meter-head {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.3;
   color: var(--muted);
   margin-bottom: 3px;
 }
 
+.meter-icon {
+  flex-shrink: 0;
+}
+
 .meter-label {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.meter-label-short {
+  display: none;
+}
+
 .meter-head strong {
+  flex-shrink: 0;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .meter-head small {
   color: var(--muted);
+  font-size: 12px;
   font-weight: 400;
+}
+
+/* The line under the bar: the rate (the meter's tooltip explains it) and,
+   on impatience, the Queen's deadline. */
+.meter-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.meter-sub .meter-rate {
+  flex-shrink: 0;
+}
+
+.meter-sub .meter-note {
+  min-width: 0;
+  margin-top: 0;
+}
+
+@container meter (max-width: 209px) {
+  .meter .deadline-note-short {
+    display: inline;
+  }
+
+  .meter .deadline-note-long {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+@container meter (max-width: 127px) {
+  .meter .meter-label-long {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .meter .meter-label-short {
+    display: inline;
+  }
+
+  /* The deadline line carries the overtime; the full rate is in the tooltip. */
+  .meter .meter-sub:has(.deadline-note) .meter-rate {
+    display: none;
+  }
 }
 
 .meter-track {
@@ -580,7 +656,7 @@ code {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 3px 7px;
+  padding: 3px 8px;
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -592,7 +668,7 @@ code {
 .meter-note {
   display: block;
   margin-top: 2px;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.2;
   color: var(--warn);
   white-space: nowrap;
@@ -666,24 +742,24 @@ code {
 .status-badge {
   display: inline-grid;
   place-items: center;
-  min-width: 18px;
-  height: 18px;
+  min-width: 19px;
+  height: 19px;
   padding: 0 5px;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--warn);
   color: #1a1207;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
 .status-toggle.is-danger .status-badge {
-  background: var(--bad);
+  background: #b0453c;
   color: #fff;
 }
 
 .status-chevron {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   transition: transform 150ms ease;
 }
 
@@ -744,7 +820,7 @@ code {
   width: 100%;
   padding: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -770,10 +846,61 @@ code {
   }
 }
 
+/* Up to 1500px the chips keep their numbers and the extras (each resolve
+   threshold, the hearth's Storm runway) stay in their tooltips, so the
+   meters keep room for their full labels. */
+@media (max-width: 1500px) and (min-width: 861px) {
+  .topbar-status {
+    gap: 8px;
+  }
+
+  .topbar .resolve-chip-threshold,
+  .topbar .hearth-storm {
+    display: none;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 861px) {
+  .speed-group button {
+    min-width: 32px;
+    padding: 6px 7px;
+  }
+}
+
+/* Below 1000px the six speeds do not fit beside the season, tools and
+   status: they fold into a dropdown that keeps every button a full finger
+   wide. */
+@media (max-width: 1000px) {
+  .speed-toggle {
+    display: inline-flex;
+  }
+
+  .speed-anchor .speed-group {
+    display: none;
+  }
+
+  .speed-anchor .speed-group.is-open {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 30;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    animation: fade-in 120ms ease;
+  }
+
+  .speed-anchor .speed-group.is-open button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 /* --- Phones and small tablets: two compact rows -------------------------- *
- * Row 1: menu, season, speed, map/sound/settings. Row 2: the three meters and
- * the status toggle, which folds population, hearth, idle and resolve into a
- * drawer but still shows any danger (icon, red badge and count) while closed.
+ * Row 1: menu, season, speed, map/sound/settings and the status toggle, which
+ * folds population, hearth, idle and resolve into a drawer but still shows any
+ * danger (icon, red badge and count) while closed. Row 2: the three meters,
+ * labelled, across the full width.
  */
 
 @media (max-width: 860px) {
@@ -790,17 +917,17 @@ code {
     flex: 1 0 auto;
   }
 
-  /* The basis forces the meters onto row 2, beside the status toggle. */
+  /* The full basis puts the meters on row 2, under everything else. */
   .topbar .topbar-meters {
     order: 3;
-    flex: 1 1 calc(100% - 170px);
+    flex: 1 1 100%;
     min-width: 0;
     max-width: none;
     gap: 8px;
   }
 
   .topbar-status-wrap {
-    order: 4;
+    order: 2;
     flex: 0 0 auto;
   }
 
@@ -907,81 +1034,33 @@ code {
     display: none;
   }
 
-  /* Six speeds do not fit beside the tools: they fold into a dropdown
-     that keeps every button a full finger wide. */
-  .speed-toggle {
-    display: inline-flex;
-  }
-
-  .speed-anchor .speed-group {
-    display: none;
-  }
-
-  .speed-anchor .speed-group.is-open {
-    display: flex;
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    z-index: 30;
-    background: var(--panel);
-    box-shadow: var(--shadow);
-    animation: fade-in 120ms ease;
-  }
-
-  .speed-anchor .speed-group.is-open button {
-    min-width: 44px;
-    min-height: 44px;
-  }
-
   .topbar .topbar-meters {
-    gap: 6px;
+    gap: 10px;
   }
 
-  /* Slim meters: icon, number and bar. The name stays on the bar for
-     assistive tech and in the tooltip. */
-  .topbar .meter-label {
-    display: none;
-  }
-
+  /* Slim meters: icon, short label and number over the bar (each meter
+     swaps to its short forms by its own width, see .meter). */
   .topbar .meter-head {
-    justify-content: space-between;
     margin-bottom: 2px;
-  }
-
-  .topbar .meter-head strong {
-    font-size: 11px;
   }
 
   .topbar .meter-track {
     height: 6px;
   }
 
-  /* The short deadline note shows; the long one stays for screen readers. */
-  .deadline-note-short {
-    display: inline;
-  }
-
-  .deadline-note-long {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-
-  .topbar .meter-note {
-    font-size: 10px;
-  }
-
   .status-toggle {
     padding: 4px 8px;
     gap: 3px;
   }
+
+  .topbar-tools {
+    gap: 0;
+  }
 }
 
 @media (pointer: coarse) {
-  .status-toggle {
+  .status-toggle,
+  .speed-toggle {
     min-height: 44px;
     min-width: 44px;
   }
@@ -997,11 +1076,18 @@ code {
    Resource bar
    ========================================================================== */
 
+/* The stockpile gauge, the food runway, then the stock in groups (food,
+   building materials, crafted goods and parts, trade goods and amber), each
+   with a trend mark when it is rising or falling, and an "All stock" drawer. */
 .resource-bar {
+  /* Its drawer drops over the map's HUD (20), under the top bar's (40). */
+  position: relative;
+  z-index: 35;
+  container: resbar / inline-size;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
+  gap: 8px;
+  padding: 5px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
   min-width: 0;
@@ -1011,8 +1097,8 @@ code {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  padding: 4px 8px;
+  font-size: 13px;
+  padding: 4px 9px;
   background: var(--bg-deep);
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -1021,6 +1107,7 @@ code {
 
 .storage small {
   color: var(--muted);
+  font-size: 12px;
 }
 
 .storage.is-warn {
@@ -1047,31 +1134,237 @@ code {
 
 .resource-scroll {
   display: flex;
-  gap: 14px;
+  gap: 6px;
+  flex: 0 1 auto;
   overflow-x: auto;
   scrollbar-width: thin;
-  padding-bottom: 2px;
   min-width: 0;
 }
 
 .resource-group {
   display: flex;
-  gap: 8px;
-  padding-right: 14px;
-  border-right: 1px solid var(--line-soft);
+  align-items: center;
+  gap: 10px;
+  padding: 3px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: #10171c;
   flex-shrink: 0;
-}
-
-.resource-group:last-child {
-  border-right: none;
 }
 
 .resource {
   display: flex;
   align-items: center;
   gap: 3px;
-  font-size: 12.5px;
+  font-size: 13px;
   white-space: nowrap;
+}
+
+.resource-trend {
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.resource-trend.is-up {
+  color: var(--good);
+}
+
+.resource-trend.is-down {
+  color: #f0a59d;
+}
+
+/* Running dry within two minutes, or holding up a building. */
+.resource.is-falling-fast strong {
+  color: #ff9e94;
+}
+
+.resource.is-blocking strong {
+  color: #f3c27a;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.resource-flag {
+  font-style: normal;
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #a8433a;
+  color: #fff;
+}
+
+.resource-more-anchor {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.resource-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 3px 11px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.resource-more-count {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.resource-more-chevron {
+  color: var(--muted);
+  transition: transform 150ms ease;
+}
+
+.resource-more.is-open {
+  border-color: var(--gold);
+}
+
+.resource-more.is-open .resource-more-chevron {
+  transform: rotate(180deg);
+}
+
+.resource-more.is-flagged {
+  border-color: #8a4a44;
+}
+
+.stock-drawer {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(620px, calc(100vw - 16px));
+  max-height: min(64vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 14px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px 18px;
+  animation: fade-in 120ms ease;
+}
+
+.stock-drawer-group h4 {
+  margin: 0 0 4px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stock-drawer-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.stock-drawer li.resource {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto minmax(74px, auto);
+  column-gap: 8px;
+  align-items: baseline;
+  white-space: normal;
+}
+
+.stock-drawer-trend {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.stock-drawer li.is-rising .stock-drawer-trend {
+  color: var(--good);
+}
+
+.stock-drawer li.is-falling .stock-drawer-trend {
+  color: #f0a59d;
+}
+
+.stock-drawer-blocking {
+  grid-column: 2 / -1;
+  color: #f3c27a;
+  font-size: 12px;
+}
+
+/* Narrower bars fold the low-priority groups into "All stock" rather than
+   clipping them; a flagged stock (running dry, or holding a building up)
+   always stays in view. */
+@container resbar (max-width: 1599px) {
+  .resource-group.group-trade .resource:not(.is-flagged) {
+    display: none;
+  }
+
+  .resource-group.group-trade:not(:has(.is-flagged)) {
+    display: none;
+  }
+}
+
+@container resbar (max-width: 1439px) {
+  .resource-group.group-crafted .resource:not(.is-flagged) {
+    display: none;
+  }
+
+  .resource-group.group-crafted:not(:has(.is-flagged)) {
+    display: none;
+  }
+}
+
+/* Phones: the gauge, the food runway, wood (hearth fuel) and anything
+   flagged; the rest is one tap away. */
+@container resbar (max-width: 640px) {
+  .resource-group .resource:not(.is-flagged, .is-key) {
+    display: none;
+  }
+
+  .resource-group:not(:has(.is-flagged, .is-key)) {
+    display: none;
+  }
+
+  .resource-group {
+    padding: 3px 8px;
+    gap: 8px;
+  }
+
+  /* Compact pills: the cap, the gauge and the variety are in the tooltips
+     (and the drawer); the runway chip stays big. */
+  .storage .storage-track,
+  .storage > strong > small,
+  .storage.is-full:not(.food-summary) > strong,
+  .storage.is-bad:not(.food-summary) > strong::after,
+  .food-summary .food-variety,
+  .food-summary:not(.is-warn, .is-bad) .food-runway > span,
+  .resource-more-label {
+    display: none;
+  }
+
+  .resource-bar {
+    gap: 6px;
+    padding: 3px 8px;
+  }
+
+  .storage {
+    padding: 3px 7px;
+    gap: 4px;
+  }
+
+  .food-summary {
+    padding: 3px 3px 3px 7px;
+  }
 }
 
 /* ==========================================================================
@@ -1233,6 +1526,18 @@ code {
   box-shadow: var(--shadow);
 }
 
+/* Phones: the banner wraps inside the map rather than spilling past it. */
+@media (max-width: 560px) {
+  .build-banner {
+    width: max-content;
+    max-width: calc(100% - 16px);
+    white-space: normal;
+    font-size: 12.5px;
+    line-height: 1.3;
+    padding: 5px 6px 5px 12px;
+  }
+}
+
 /* ==========================================================================
    Inspector (floating over the map)
    ========================================================================== */
@@ -1241,8 +1546,8 @@ code {
   width: min(340px, 100%);
   display: flex;
   flex-direction: column;
-  /* The inspector is the one item in the HUD stack that gives way: it
-     shrinks and scrolls rather than pushing tips or threats off the map. */
+  /* The inspector is the one item in the overlay dock that gives way: it
+     shrinks and scrolls rather than pushing anything else off the map. */
   flex: 0 1 auto;
   min-height: 0;
 }
@@ -1269,7 +1574,7 @@ code {
 .inspector-head small {
   display: block;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .inspector-icon {
@@ -1279,6 +1584,8 @@ code {
 
 .inspector-close {
   align-self: start;
+  min-width: 32px;
+  min-height: 32px;
 }
 
 .inspector-section {
@@ -1337,7 +1644,7 @@ code {
 .worker-chip em {
   color: var(--good);
   font-style: normal;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .recipe-list {
@@ -1361,7 +1668,7 @@ code {
 
 .recipe small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -1440,7 +1747,8 @@ code {
 
 .tabs button em {
   font-style: normal;
-  font-size: 10.5px;
+  font-size: 12px;
+  line-height: 1.2;
   color: var(--muted);
 }
 
@@ -1499,8 +1807,9 @@ code {
   background: var(--panel-3);
 }
 
+/* Dimmed, not faded out: its tags and cost still have to read. */
 .build-card.is-poor {
-  opacity: 0.62;
+  opacity: 0.78;
 }
 
 .build-icon {
@@ -1516,7 +1825,7 @@ code {
 
 .build-main small {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -1536,10 +1845,10 @@ code {
 
 .build-tags em {
   font-style: normal;
-  font-size: 10.5px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.05);
-  padding: 1px 6px;
+  font-size: 12px;
+  color: #a9b6b5;
+  background: #222c33;
+  padding: 1px 7px;
   border-radius: 10px;
 }
 
@@ -1563,7 +1872,7 @@ code {
 .species-head small {
   display: block;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.3;
 }
 
@@ -1576,7 +1885,7 @@ code {
 
 .species-resolve small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--muted);
 }
@@ -1619,7 +1928,7 @@ code {
   display: inline-flex;
   gap: 4px;
   align-items: center;
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 7px;
   border-radius: 20px;
   border: 1px solid var(--line);
@@ -1629,7 +1938,7 @@ code {
 .need em {
   font-style: normal;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .need.is-met {
@@ -1653,7 +1962,7 @@ code {
 
 .breakdown summary {
   cursor: pointer;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted);
 }
 
@@ -1689,7 +1998,7 @@ code {
 
 .villager small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1711,7 +2020,7 @@ code {
 
 .order-card small {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .order-reward {
@@ -1738,7 +2047,7 @@ code {
 .cornerstone-chip small {
   display: block;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .rarity-common {
@@ -1774,7 +2083,7 @@ code {
 
 .log-when {
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -1797,7 +2106,7 @@ code {
   gap: 2px;
   justify-items: center;
   padding: 9px 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -1921,7 +2230,7 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 11.5px;
+  font-size: 12px;
   margin-top: 4px;
 }
 
@@ -1939,7 +2248,7 @@ code {
 
 .rarity-tag {
   font-style: normal;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
@@ -2042,7 +2351,7 @@ code {
   }
 }
 
-/* Placed by .hud-stack: top centre on desktop, in the bottom column on phones. */
+/* Placed by the overlay dock (.hud-top): top centre of the map. */
 .warnings {
   display: grid;
   gap: 5px;
@@ -2058,11 +2367,6 @@ code {
 .warnings-list {
   display: grid;
   gap: 5px;
-}
-
-/* Phones only: the strip folds to its most urgent warning there. */
-.warnings-toggle {
-  display: none;
 }
 
 .warning {
@@ -2174,11 +2478,46 @@ code {
     grid-template-rows: minmax(220px, 1fr) auto;
   }
 
-  /* A shorter bottom sheet leaves the map room for its own HUD. */
+  /* A bottom sheet: tabs and the fold handle on one row, the panel under
+     them. Folded (no panel open) it is just that row, and the map gets the
+     height; a tab or the handle opens it again. */
   .sidebar {
     border-left: none;
     border-top: 1px solid var(--line);
-    max-height: 36vh;
+    max-height: 30vh;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sidebar.is-folded {
+    max-height: none;
+  }
+
+  .sidebar .panel-scroll {
+    grid-column: 1 / -1;
+  }
+
+  .sheet-handle {
+    display: grid;
+    place-items: center;
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 48px;
+    padding: 0 10px;
+    border: none;
+    border-left: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 18px;
+  }
+}
+
+/* Desktop keeps its side rail; the handle is a phone affordance. */
+@media (min-width: 861px) {
+  .sheet-handle {
+    display: none;
   }
 }
 
@@ -2238,27 +2577,14 @@ code {
   background: linear-gradient(180deg, rgba(233, 210, 140, 0.05), rgba(200, 180, 120, 0.02));
 }
 
+/* A static storm tint and vignette. The tint covers the whole screen, so it
+   must never animate: an animated full-screen background repaints every
+   frame (it once cost the Storm two-thirds of its frame rate). The moving
+   rain belongs to the maps, which draw it inside their own layers. */
 .game[data-season='storm'] .season-tint {
   background:
-    repeating-linear-gradient(
-      112deg,
-      transparent 0px,
-      transparent 7px,
-      rgba(150, 180, 210, 0.05) 7px,
-      rgba(150, 180, 210, 0.05) 8px
-    ),
-    radial-gradient(ellipse at 50% 120%, transparent 55%, rgba(20, 16, 40, 0.28) 100%),
-    linear-gradient(180deg, rgba(40, 44, 80, 0.12), rgba(24, 28, 52, 0.1));
-  animation: rain-drift 0.5s linear infinite;
-}
-
-@keyframes rain-drift {
-  from {
-    background-position: 0 0, 0 0, 0 0;
-  }
-  to {
-    background-position: -20px 8px, 0 0, 0 0;
-  }
+    radial-gradient(ellipse at 50% 120%, transparent 52%, rgba(20, 16, 40, 0.34) 100%),
+    linear-gradient(180deg, rgba(40, 44, 80, 0.15), rgba(24, 28, 52, 0.1));
 }
 
 /* ==========================================================================
@@ -2469,7 +2795,7 @@ code {
 
 .villager-trait {
   font-style: normal;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--gold);
   font-weight: 400;
 }
@@ -2919,78 +3245,174 @@ button.is-armed {
   font-size: 12px;
 }
 /* ---------------------------------------------------------------------------
- * The HUD stack: warnings, the notice, event toasts, conditions/decree and
- * threats (.bottom-stack), the tip coach and the inspector are laid out
- * together over the map so they never overlap. The right edge leaves the
- * map's zoom/compass buttons clear.
+ * The overlay dock: everything that floats over the map lives in one of four
+ * fixed regions, so nothing piles up and nothing covers the map's middle or
+ * the map controls (the stack's right inset leaves them clear).
  *
- * Desktop: a grid — tip above inspector on the left, notice above
- * conditions + threats at the bottom centre, toasts bottom-right, warnings
- * pinned to the top. Narrow desktops move the toasts above the notice.
- * Phones (below): one bottom-aligned column in which the inspector and the
- * conditions/threats block give way (shrink and scroll).
+ *   top      critical warnings (two in full, the rest behind "+N more") and
+ *            the passing notice — centred, clear of the build banner
+ *   context  bottom-left: the tip coach / First steps, or the inspector.
+ *            Tips wait while the player inspects or places something; the
+ *            checklist keeps to its next step instead.
+ *   centre   bottom-centre: the decree, lingering conditions and threats,
+ *            compact, never taller than ~30% of the map
+ *   toasts   bottom-right: news, deduplicated (×N) and capped
+ *
+ * Desktop: a three-column grid whose side columns stay under ~30% of the
+ * map's width each, so the left and right regions never reach the middle.
+ * Phones (below): the same regions along the map's top and bottom edges.
  * ------------------------------------------------------------------------- */
 
 .hud-stack {
   position: absolute;
-  inset: 12px 56px 12px 12px;
+  inset: 12px 60px 12px 12px;
   /* Under the 3D touch-placement ✓/✕ (25) and the minimap; above glade plates. */
   z-index: 20;
+  /* Regions size against the map, not the window. */
+  container: hud / size;
   display: grid;
-  grid-template-columns: minmax(0, 340px) minmax(0, 1fr) minmax(0, 300px);
-  grid-template-rows: auto minmax(0, 1fr) auto minmax(0, auto);
+  grid-template-columns:
+    minmax(0, min(340px, calc(30% - 12px)))
+    minmax(0, 1fr)
+    minmax(0, min(300px, calc(28% - 12px)));
+  grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'warn warn warn'
-    '. . toasts'
-    'tip notice toasts'
-    'inspector threats toasts';
+    'top top top'
+    'context . toasts'
+    'context centre toasts';
   column-gap: 16px;
   row-gap: 8px;
   pointer-events: none;
 }
 
-.hud-stack > * {
-  pointer-events: auto;
-}
-
-.hud-stack > .warnings,
-.hud-stack > .event-toasts,
-.hud-stack > .bottom-stack {
+/* Regions let the map take clicks between their cards. */
+.hud-top,
+.hud-context,
+.hud-stack > .bottom-stack,
+.hud-stack > .event-toasts {
   pointer-events: none;
 }
 
-/* Warnings head the stack, centred, clear of the build banner. */
-.hud-stack > .warnings {
-  grid-area: warn;
-  position: static;
-  transform: none;
-  justify-self: center;
-  margin-top: 36px;
+.hud-top > *,
+.hud-context > * {
+  pointer-events: auto;
 }
 
-.hud-stack > .tip-coach {
-  grid-area: tip;
-  align-self: end;
+/* --- top: warnings and the notice ---------------------------------------- */
+
+.hud-top {
+  grid-area: top;
+  justify-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  width: min(620px, 100%);
+  max-height: 28cqh;
+  min-height: 0;
 }
 
-.hud-stack > .notice {
-  grid-area: notice;
-  align-self: end;
-  justify-self: center;
+/* The 3D map's minimap holds the top-left corner. */
+.map-column:has(.minimap) .hud-top {
+  width: min(620px, calc(100% - 360px));
 }
 
-/* Conditions and the decree above the threat cards (run-structure). */
-.hud-stack > .bottom-stack {
-  grid-area: threats;
-  align-self: end;
+/* The build/road banner sits at the map's top centre while placing. */
+.map-column:has(.build-banner) .hud-top {
+  margin-top: 44px;
+  max-height: calc(28cqh - 44px);
+}
+
+.hud-top > .warnings {
+  pointer-events: none;
+  justify-items: center;
+}
+
+.hud-top > .notice {
+  align-self: start;
+}
+
+/* Folded warnings stay in the live region for screen readers only. */
+.warning.is-folded {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.warnings-toggle {
+  display: inline-flex;
+  align-items: center;
   justify-self: center;
-  position: static;
-  transform: none;
-  width: auto;
-  max-width: min(560px, 100%);
-  max-height: 100%;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(18, 26, 32, 0.94);
+  pointer-events: auto;
+}
+
+/* Opened, the whole strip reads in full and scrolls if it must. */
+.warnings.is-expanded .warnings-list {
+  max-height: calc(28cqh - 40px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
 }
+
+/* --- context: tip / First steps / inspector ------------------------------ */
+
+.hud-context {
+  grid-area: context;
+  align-self: end;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.hud-context > .tip-coach {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+/* The inspector is the item that gives way: it shrinks and scrolls. */
+.hud-context > .inspector {
+  width: 100%;
+  flex: 0 1 auto;
+  min-height: min(120px, 100%);
+}
+
+.hud-context > .inspector .inspector-body {
+  flex: 0 1 auto;
+  max-height: 72cqh;
+}
+
+/* Tips wait — still queued, not dismissed — while the player inspects
+   something or holds a blueprint; they come back once that is done. */
+.hud-context:has(> .inspector) > .tip-coach:not(.first-steps),
+.map-column:has(.build-banner) .hud-context > .tip-coach:not(.first-steps) {
+  display: none;
+}
+
+/* --- centre: decree, conditions, threats --------------------------------- */
+
+.hud-stack > .bottom-stack {
+  grid-area: centre;
+  align-self: end;
+  justify-self: center;
+  width: min(440px, 100%);
+  max-height: 30cqh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* --- toasts --------------------------------------------------------------- */
 
 .hud-stack > .event-toasts {
   grid-area: toasts;
@@ -2998,57 +3420,69 @@ button.is-armed {
   justify-self: end;
   position: static;
   width: 100%;
+  max-height: 30cqh;
 }
 
-.hud-stack > .inspector {
-  grid-area: inspector;
-  align-self: end;
-  max-height: 100%;
+/* A short map keeps to the two newest; the rest are in the Log. */
+@container hud (max-height: 620px) {
+  .hud-stack .event-toast:not(:nth-last-child(-n + 2)) {
+    display: none;
+  }
 }
 
+/* Narrow desktops and tablets: the toasts take the right column's bottom,
+   the centre narrows. */
 @media (max-width: 1180px) and (min-width: 861px) {
   .hud-stack {
-    grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, auto);
-    grid-template-areas:
-      'warn warn'
-      '. .'
-      '. toasts'
-      'tip notice'
-      'inspector threats';
-  }
-
-  .hud-stack > .event-toasts {
-    width: min(300px, 100%);
+    grid-template-columns:
+      minmax(0, min(320px, calc(32% - 12px)))
+      minmax(0, 1fr)
+      minmax(0, min(260px, calc(30% - 12px)));
   }
 }
+
+/* --- phones and small tablets -------------------------------------------- */
 
 @media (max-width: 860px) {
   .hud-stack {
     inset: 8px 60px 8px 8px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: stretch;
-    gap: 6px;
-    /* If it ever over-fills, clip the top (warnings) rather than spill over
-       the resource bar. */
-    overflow: hidden;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+      'top'
+      '.'
+      'toasts'
+      'centre'
+      'context';
+    row-gap: 6px;
   }
 
-  .hud-stack > * {
-    flex-shrink: 0;
-    max-width: 100%;
+  /* The map controls sit bottom-right, so the top edge has the full width. */
+  .hud-top {
+    justify-self: stretch;
+    justify-items: stretch;
+    width: auto;
+    margin-right: -52px;
   }
 
-  /* Warnings join the column. The most urgent one (dangers come first) shows
-     in full, advice and all; the rest fold behind a "+N more" toggle beside
-     it, and stay in the live region for screen readers. */
-  .hud-stack > .warnings {
-    margin-top: 0;
+  .map-column:has(.minimap) .hud-top {
+    width: auto;
+    margin-left: 112px;
+  }
+
+  /* The phone banner wraps to two lines. */
+  .map-column:has(.build-banner) .hud-top {
+    margin-top: 58px;
+    max-height: calc(28cqh - 58px);
+  }
+
+  /* The most urgent warning in full (advice and all), the next on one line,
+     the toggle beside them. */
+  .hud-top > .warnings {
     width: auto;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
+    justify-items: stretch;
     gap: 6px;
   }
 
@@ -3060,43 +3494,24 @@ button.is-armed {
     text-align: left;
   }
 
-  .warnings:not(.is-expanded) .warning:not(:first-child) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
+  .warnings:not(.is-expanded) .warning:nth-child(2) {
     white-space: nowrap;
-  }
-
-  /* Opened, the whole strip reads in full and scrolls if it must. */
-  .warnings.is-expanded .warnings-list {
-    max-height: min(32vh, 240px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    pointer-events: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .warnings-toggle {
-    display: inline-flex;
-    align-items: center;
-    min-height: 32px;
-    padding: 4px 10px;
     border-radius: 14px;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-    background: rgba(18, 26, 32, 0.94);
-    pointer-events: auto;
   }
 
-  .hud-stack > .notice {
-    align-self: center;
+  .hud-top > .notice {
+    justify-self: center;
   }
 
-  /* Only the newest toast; the rest is in the Log (and its badge). */
+  /* Only the newest toast, on one line; the rest is in the Log (and its badge). */
   .hud-stack > .event-toasts {
     width: auto;
+    justify-self: stretch;
   }
 
   .hud-stack .event-toast:not(:last-child) {
@@ -3112,20 +3527,10 @@ button.is-armed {
     text-overflow: ellipsis;
   }
 
-  /* The tip may shrink to a few lines and scroll. */
-  .hud-stack > .tip-coach {
-    flex-shrink: 1;
-    min-height: min(72px, 100%);
-    overflow-y: auto;
-  }
-
-  /* Conditions + threats: compact cards, and the block scrolls if it must. */
   .hud-stack > .bottom-stack {
-    align-self: stretch;
-    max-width: 100%;
-    flex-shrink: 1;
-    min-height: min(64px, 100%);
-    max-height: 45%;
+    width: auto;
+    justify-self: stretch;
+    max-height: 34cqh;
   }
 
   /* Threats first: they are the cards with a button to press. */
@@ -3147,21 +3552,33 @@ button.is-armed {
     display: none;
   }
 
-  /* The inspector shrinks and scrolls, but never below a usable height. */
-  .hud-stack > .inspector {
-    width: 100%;
-    flex-shrink: 1;
-    min-height: min(120px, 100%);
+  /* The tip keeps to a few lines and scrolls. */
+  .hud-context > .tip-coach {
+    max-height: 30cqh;
+    overflow-y: auto;
   }
 
-  .inspector-body {
-    max-height: 100%;
+  .hud-context > .tip-coach:not(.first-steps) {
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
   }
 
-  /* While the player inspects something, the tip and toasts wait (toasts
-     stay in the Log, with its badge); warnings stay folded to the top one. */
-  .hud-stack:has(.inspector) > .tip-coach,
-  .hud-stack:has(.inspector) > .event-toasts {
+  .hud-context > .tip-coach:not(.first-steps) p {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .hud-context > .inspector {
+    max-height: 60cqh;
+  }
+
+  /* One thing at a time at the bottom edge: while the player inspects
+     something the tip, toasts and decree wait (toasts stay in the Log, the
+     decree in Orders); while a tip shows, toasts wait. */
+  .hud-stack:has(.hud-context > .inspector) > .event-toasts,
+  .hud-stack:has(.hud-context > .inspector) .conditions-bar,
+  .hud-stack:has(.hud-context > .tip-coach:not(.first-steps)) > .event-toasts {
     display: none;
   }
 }
@@ -3214,7 +3631,7 @@ button.is-armed {
 
 .mult {
   font-style: normal;
-  font-size: 11.5px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -3259,14 +3676,14 @@ button.is-armed {
 
 .picker-option small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .best-tag {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--gold);
   white-space: nowrap;
 }
@@ -3319,16 +3736,16 @@ button.is-armed {
 
 .need-state {
   font-weight: 700;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .cost-short small {
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 .build-tags .tag-short {
   color: #f0c0bb;
-  background: rgba(217, 105, 95, 0.14);
+  background: #3a2422;
 }
 
 /* Storage filling up: stripes on the gauge, and a "!" when nearly full. */
@@ -3412,6 +3829,9 @@ button.is-armed {
   .speed-group button,
   .inspector button,
   .tip-coach button,
+  .warnings-toggle,
+  .resource-more,
+  .event-toast,
   .threat-card .threat-appease,
   .villager-main,
   .villager-assign,
@@ -3585,7 +4005,7 @@ button.is-armed {
 /* ==========================================================================
    Mid-run structure — royal decrees, lingering conditions, the charter.
    The bottom stack holds conditions above the threat bar; where it sits
-   over the map is decided by .hud-stack (see the HUD stack section).
+   over the map is decided by the overlay dock (.hud-stack).
    ========================================================================== */
 
 .bottom-stack {
@@ -3612,13 +4032,13 @@ button.is-armed {
 .condition-card {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   text-align: left;
   background: rgba(38, 32, 18, 0.96);
   border: 1px solid #7d6738;
   border-radius: var(--radius);
-  padding: 7px 12px;
+  padding: 6px 10px;
   box-shadow: var(--shadow);
   color: var(--text);
   animation: rise 180ms ease;
@@ -3634,12 +4054,12 @@ button.is-armed {
 }
 
 .condition-icon {
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .condition-text {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   flex: 1;
   min-width: 0;
 }
@@ -3657,8 +4077,13 @@ button.is-armed {
   font-size: 12px;
 }
 
+/* The decree is compact: name and clock, its goal on one line, a thin bar
+   (the full card, with the reward and the cost of missing it, is in Orders). */
 .condition-card.is-decree .condition-text small {
   color: #b9c5dc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .condition-goal {
@@ -3678,7 +4103,8 @@ button.is-armed {
 
 .condition-progress {
   display: block;
-  margin-top: 2px;
+  height: 5px;
+  margin: 3px 0 0;
 }
 
 .decree-card {
@@ -3749,6 +4175,7 @@ button.is-armed {
 
 .build-tags .tag-upgrade {
   color: var(--gold);
+  background: #262a24;
 }
 
 .tier-mark {

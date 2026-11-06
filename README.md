@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 609 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
+npm test           # 622 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -41,7 +41,7 @@ npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
 
 Idle villagers are your builders and your clearing crews, so every worker you assign is a builder you gave up. That tension is deliberate — the top bar always shows the idle count.
 
-The game plays RTS-style in continuous space: there is no grid. Buildings are placed anywhere on cleared ground with a live ghost cursor, camps must stand within reach of the deposits they work, and warmth and adjacency are real distances. The settlement renders as a 3D scene — low-poly buildings, a wild instanced forest over uncleared glades, season-driven light and rain — with a 2D vector map available from the top-bar toggle (and used automatically where WebGL is missing).
+The game plays RTS-style in continuous space: there is no grid. Buildings are placed anywhere on cleared ground with a live ghost cursor, camps must stand within reach of the deposits they work, and warmth and adjacency are real distances. The settlement renders as a 3D scene — low-poly buildings, a wild instanced forest over uncleared glades, season-driven light and rain — with a 2D vector map available from the top-bar toggle (and used automatically where WebGL is missing). On the 2D map every building stands on a plate shaped and tinted by its district (homes, camps, farms, workshops, services, storage, fires), so a grown settlement reads as quarters; crags and mires carry an icon and say on hover that they can never be cleared; the Storm darkens the ground and drives rain and lightning across the map.
 
 ## Architecture
 
@@ -95,7 +95,9 @@ src/
     lazyScreens.tsx     #   setup, Citadel, game and end-of-run screens as
                         #   lazy chunks, preloaded once the menu is idle
     MapView.tsx         #   picks the map renderer: 3D by default, 2D fallback
-    MapView2D.tsx       #   SVG vector map of the same world (no-WebGL, tests)
+    MapView2D.tsx       #   SVG vector map of the same world (no-WebGL, tests): camera,
+                        #   pointer, build ghost; MapLayers2D/MapBuildings2D hold the
+                        #   keyed, memoised layers and the villager + weather canvas
     villagerRoutes.ts   #   walking villagers for both maps: routes derived
                         #   from assignments, homes and roads, played back
                         #   against the clock (presentation only)
@@ -116,7 +118,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs thirty-four test files:
+`npm test` runs thirty-five test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), joins its workplaces to the hearth by road when it has wood to spare, and clears glades. It plays 24 seeds for each of four species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
@@ -129,6 +131,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
   This harness is what the numbers in `balance.ts` were tuned against, and it caught several real design faults during development — most notably that service buildings were originally locked behind reputation, which required the resolve that services provide.
 - **`App.test.tsx`** — UI smoke tests that mount the real app in jsdom and click the path a player takes: menu → setup → blueprint draft → placing a building → switching panels → winning.
+- **`HudDock.test.tsx`** — the HUD over the map: the overlay dock's regions (warnings and notices on top, the tip or the inspector bottom-left, decree and threats bottom-centre, toasts bottom-right), the side panel folding to a bottom sheet, the resource bar's grouping by purpose, its rolling stock trends (rising, falling, about to run dry), the empty goods holding a building up and the "All stock" drawer, and the meters' rate line and short labels.
 - **`forecast.test.ts`** — the HUD's forward-looking numbers (Storm countdown, wood and food runways, meter rates, building status), checked against what a real tick applies.
 - **`citadel.test.ts`** — meta progression: save migration, upgrade prerequisites, Queen's Edicts, locked cornerstones, draft sizes and the reward breakdown.
 - **`upgrades.test.ts`** and **`UpgradeSection.test.tsx`** — building upgrades: every tier effect (housing, comfort, insulation, storage, service capacity, slots, speed, reach, warmth, recipes and ratios), the upgrade construction flow with builders and rush, decree counting, save/load mid-upgrade and old saves; and the Inspector's upgrade block.
@@ -137,7 +140,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`onboarding.test.ts`** and **`Onboarding.test.tsx`** — the opening: the first-steps checklist (including a scripted newcomer who does only what it says and must still be standing after the first Storm on every harness trio), the first royal decree, and how the blueprint draft presents its options.
 - **`balanceTuning.test.ts`** — the rules the harness was last tuned with: the late-game hostility squeeze, escalating decree misses, and the harpies' Education and lizards' Brawling floors.
 - **`saves.test.ts`** and **`SavesScreen.test.tsx`** — save slots: the slot index and its repair, migration of the single save, overwrite protection, full storage, the export/import round trip, and rejecting malformed and hostile files (prototype keys, mangled fields) without throwing.
-- **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, building badges, warmth, roads and villagers, and that static geometry is not rebuilt on every tick.
+- **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, district plates, building badges, obstacles, the Storm's ground wash, warmth, roads and villagers, that static geometry is not rebuilt on every tick, and that the 2D layers re-derive on structural change but throttle what ticking changes.
 - **`runCache.test.ts`** and **`frameDerived.test.ts`** — the performance layer: the cached adjacency and settlement counts answer exactly what the plain queries do, before and after hand edits and engine changes mid-tick and through a played run; the HUD's shared per-step numbers equal the engine functions they stand for; the HUD clock throttles sim steps but not commands, pauses or season turns; the idle-time autosave.
 - **`roads.test.ts`** — the road graph and its bonus (directness, junctions, warehouse hubs), the rules for laying roads, the cache that keeps the per-tick cost a lookup, and old saves without roads.
 - **`villagerRoutes.test.ts`** — the walking villagers' routes: a pure function of the run, following roads where they run and walking straight where they do not.
