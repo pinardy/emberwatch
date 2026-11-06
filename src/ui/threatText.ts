@@ -1,5 +1,5 @@
 import { RESOURCES } from '../game/content/resources'
-import type { CornerstoneEffect, ResourceId, ThreatSpec } from '../game/types'
+import type { ConditionOutcome, CornerstoneEffect, ResourceId, ThreatSpec } from '../game/types'
 
 /**
  * Plain-language summaries of what a threat actually does, built from its
@@ -7,8 +7,9 @@ import type { CornerstoneEffect, ResourceId, ThreatSpec } from '../game/types'
  * off needs to see the bill.
  */
 
-function signed(n: number): string {
-  return `${n > 0 ? '+' : '−'}${Math.abs(n)}`
+/** "+3", "−3" (a real minus sign); `format` writes the magnitude. */
+export function signed(n: number, format: (abs: number) => string = String): string {
+  return `${n > 0 ? '+' : '−'}${format(Math.abs(n))}`
 }
 
 /** "steals 6 Berries, 6 Meat · hostility +3 · takes a villager". */
@@ -60,4 +61,16 @@ export function describeWhileActive(effects: CornerstoneEffect[] | undefined): s
     }
   }
   return parts.length > 0 ? parts.join(' · ') : null
+}
+
+/** What a condition pays or costs when it ends: "👑 +2", "🌩️ −5 ⏳ +1". */
+export function outcomeWords(o: ConditionOutcome | undefined): string {
+  if (!o) return ''
+  const parts: string[] = []
+  if (o.reputation) parts.push(`👑 +${o.reputation}`)
+  if (o.hostility) parts.push(`🌩️ ${signed(o.hostility)}`)
+  if (o.impatience) parts.push(`⏳ ${signed(o.impatience)}`)
+  if (o.villagerLoss) parts.push(`🪦 −${o.villagerLoss}`)
+  if (o.gain) parts.push('supplies')
+  return parts.join(' ')
 }

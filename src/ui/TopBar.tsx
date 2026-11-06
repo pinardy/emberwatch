@@ -18,7 +18,8 @@ import type { IconId } from '../art/icons'
 import { METER_ART, SEASON_ART } from '../game/content/art'
 import { Icon } from './Icon'
 import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
-import { useEscapeLayer } from './useGameLoop'
+import { useDismiss } from './useGameLoop'
+import { signed } from './threatText'
 
 interface Float {
   id: number
@@ -43,7 +44,7 @@ function useFloaters(value: number, direction: 'up-good' | 'up-bad'): Float[] {
       (delta > 0) === (direction === 'up-good') ? 'good' : 'bad'
     const float: Float = {
       id: counter.current++,
-      text: `${delta > 0 ? '+' : ''}${delta}`,
+      text: signed(delta),
       tone,
     }
     // Cap the stack; each float removes itself when its animation ends. No
@@ -90,22 +91,11 @@ export function TopBar() {
   // Modifiers and resolve walk the whole settlement: once per sim step, shared.
   const derived = useFrameDerived()?.topBar ?? null
 
-  useEscapeLayer(popover !== null, () => setPopover(null))
-
-  // A tap anywhere outside the open popover (and its button) closes it.
-  useEffect(() => {
-    if (!popover) return
-    const onPointer = (e: PointerEvent) => {
-      const host = {
-        status: statusRef.current,
-        settings: settingsRef.current,
-        speed: speedRef.current,
-      }[popover]
-      if (host && !host.contains(e.target as Node)) setPopover(null)
-    }
-    document.addEventListener('pointerdown', onPointer)
-    return () => document.removeEventListener('pointerdown', onPointer)
-  }, [popover])
+  useDismiss(
+    popover !== null,
+    popover === 'status' ? statusRef : popover === 'settings' ? settingsRef : speedRef,
+    () => setPopover(null),
+  )
 
   if (!run || !derived) return null
 

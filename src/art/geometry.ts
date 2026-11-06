@@ -8,8 +8,6 @@
 /** A 2D affine matrix `[a, b, c, d, e, f]`, as in SVG's `matrix()`. */
 export type Matrix = readonly [number, number, number, number, number, number]
 
-export const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0]
-
 /** `a` applied after `b`. */
 export function mul(a: Matrix, b: Matrix): Matrix {
   return [

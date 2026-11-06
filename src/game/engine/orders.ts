@@ -64,9 +64,13 @@ export function describeOrder(order: Order): string {
   return order.baseline === undefined ? describeGoal(goal) : describeTimedGoal(goal)
 }
 
-/** Reputation an order pays, after any run-long bonus to orders. */
-export function orderReputation(s: RunState, base: number): number {
-  return Math.max(0, base + computeModifiers(s).orderReputation)
+/**
+ * Reputation an order pays: the founding writ's fixed first point, whatever
+ * bends the other orders; any other order's reward after run-long bonuses.
+ */
+export function orderReputation(s: RunState, order: Pick<Order, 'defId' | 'writ'>): number {
+  const base = ORDERS[order.defId]?.reputationReward ?? 0
+  return order.writ ? base : Math.max(0, base + computeModifiers(s).orderReputation)
 }
 
 // ---------------------------------------------------------------------------
@@ -418,8 +422,7 @@ export function stepOrders(s: RunState): void {
     completedAny = true
     s.stats.ordersCompleted++
     if (def.consume && goal.kind === 'stock') spend(s.stock, { [goal.resource]: goal.amount })
-    // The writ is a fixed first point, whatever bends the other orders.
-    const reputation = order.writ ? def.reputationReward : orderReputation(s, def.reputationReward)
+    const reputation = orderReputation(s, order)
     addReputation(s, reputation)
     if (def.reward) {
       grantProduced(s, def.reward)

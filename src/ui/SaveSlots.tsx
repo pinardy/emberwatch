@@ -12,10 +12,6 @@ export function slotWhen(meta: SlotMeta): string {
   return `Year ${meta.year} · ${SEASON_INFO[meta.season]?.name ?? meta.season}`
 }
 
-export function slotSpecies(meta: SlotMeta): string {
-  return meta.species.map((id) => `${SPECIES[id].icon} ${SPECIES[id].name}`).join(', ')
-}
-
 function playedAgo(savedAt: number, now: number): string {
   if (!savedAt) return 'Last played before save slots'
   const minutes = Math.round((now - savedAt) / 60000)
