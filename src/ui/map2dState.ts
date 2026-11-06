@@ -6,8 +6,7 @@ import { benefitsFromRoad, roadLinkOf, type RoadPreview } from '../game/engine/r
 import { displayName, workerSlotsOf } from '../game/engine/upgrades'
 import type { RunState, Vec2 } from '../game/types'
 import { buildingViews } from './map3d/layerKeys'
-import { useHudValue, type MapBuildingStatus } from './mapShared'
-import { districtOf, type District } from './map2dArt'
+import { districtOf, useHudValue, type District, type MapBuildingStatus } from './mapShared'
 
 /**
  * State and subscriptions behind the 2D map's layers.

@@ -10,6 +10,7 @@ import { isWarmAt, type WarmthSource } from '../game/engine/queries'
 import { housingOf, isInsulated, isUpgrading, nextUpgrade, tierOf } from '../game/engine/upgrades'
 import { useGameStore } from '../game/store'
 import type {
+  BuildingDef,
   BuildingInstance,
   DepositId,
   Glade,
@@ -200,6 +201,32 @@ export const DEPOSIT_TINT: Record<DepositId, string> = {
 // ---------------------------------------------------------------------------
 // Buildings
 // ---------------------------------------------------------------------------
+
+/**
+ * What kind of building it is, as both maps draw it: the 2D plate's shape
+ * and tint (`map2dArt.ts`) and the 3D model (`modelParts.ts`).
+ */
+export type District =
+  | 'hearth'
+  | 'fire'
+  | 'housing'
+  | 'camp'
+  | 'farm'
+  | 'industry'
+  | 'service'
+  | 'storage'
+
+/** Which district a building belongs to, from its data (never its id). */
+export function districtOf(def: BuildingDef): District {
+  if (def.category === 'hearth') return 'hearth'
+  if (def.warmth) return 'fire'
+  if (def.category === 'housing') return 'housing'
+  if (def.tags.includes('farming')) return 'farm'
+  if (def.category === 'gathering') return 'camp'
+  if (def.category === 'production') return 'industry'
+  if (def.category === 'service') return 'service'
+  return 'storage'
+}
 
 /**
  * What a building is doing, as a badge-sized kind. The rules live in one

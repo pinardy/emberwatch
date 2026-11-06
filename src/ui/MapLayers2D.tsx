@@ -21,6 +21,7 @@ import {
 } from './map3d/layerKeys'
 import {
   DEPOSIT_TINT,
+  districtOf,
   GLADE_KIND_STYLE,
   gladeAccessText,
   gladeStakesTitle,
@@ -31,7 +32,7 @@ import {
   useWarmthRingVisible,
   type GladeAccess,
 } from './mapShared'
-import { districtOf, obstacleTitle, plateShape } from './map2dArt'
+import { obstacleTitle, plateShape } from './map2dArt'
 import { S, ViewBusContext, useGhost, useMapInteraction } from './map2dState'
 import { MAP_ICON } from './MapBuildings2D'
 import { REDUCED_MOTION } from './motion'
