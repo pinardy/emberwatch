@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
+import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import type { IconId } from '../../art/icons'
-import { emojiTexture, iconTexture } from './sprites'
+import { artTexture } from './sprites'
 
 /**
  * Small shared pieces of the 3D scene. Building, deposit and obstacle models
@@ -55,10 +56,49 @@ export function IconSprite({
   y: number
   size: number
 }) {
-  const map = useMemo(() => (art ? iconTexture(art) : emojiTexture(icon)), [art, icon])
+  const map = useMemo(() => artTexture(icon, art), [art, icon])
   return (
     <sprite position={[0, y, 0]} scale={[size, size, 1]} raycast={NO_RAYCAST}>
       <spriteMaterial map={map} transparent depthWrite={false} />
     </sprite>
+  )
+}
+
+/** The verdict bubble over a 3D build ghost (a building or a road stretch). */
+export function GhostHint3D({ y, ok, hint }: { y: number; ok: boolean; hint: string }) {
+  return (
+    <Html position={[0, y, 0]} center distanceFactor={12} zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
+      <div className={`ghost-hint ${ok ? 'is-ok' : 'is-bad'}`}>{hint}</div>
+    </Html>
+  )
+}
+
+/** Touch: the ✓ / ✕ over a ghost aimed by a tap, to place it or let it go. */
+export function GhostConfirm3D({
+  y,
+  ok,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+}: {
+  y: number
+  ok: boolean
+  confirmLabel: string
+  cancelLabel: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <Html position={[0, y, 0]} center distanceFactor={12} zIndexRange={[25, 0]}>
+      <div className="ghost-confirm">
+        <button type="button" className="ok" disabled={!ok} onClick={onConfirm} aria-label={confirmLabel}>
+          ✓
+        </button>
+        <button type="button" className="no" onClick={onCancel} aria-label={cancelLabel}>
+          ✕
+        </button>
+      </div>
+    </Html>
   )
 }

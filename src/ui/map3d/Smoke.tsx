@@ -2,10 +2,11 @@ import { memo, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BUILDINGS } from '../../game/content/buildings'
+import { withRunCache } from '../../game/engine/runCache'
+import { frameDerived } from '../../game/frameDerived'
 import type { RunState } from '../../game/types'
-import { buildingStatusKind, type StatusContext } from '../mapShared'
+import { useHudValue } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
-import { smokeKey, useRunKey } from './layerKeys'
 import { NO_RAYCAST } from './models'
 import { chimneyAt } from './modelParts'
 
@@ -71,23 +72,29 @@ function SmokeColumns({ emitters }: { emitters: [number, number, number][] }) {
   )
 }
 
-export const Smoke = memo(function Smoke({ run }: { run: RunState }) {
+type Emitter = [number, number, number]
+
+/** The hearth while lit, and every production chimney that is really working. */
+export function smokeEmitters(run: RunState, version: number): { key: string; value: Emitter[] } {
+  return withRunCache(run, () => emitters(run, version))
+}
+
+function emitters(run: RunState, version: number): { key: string; value: Emitter[] } {
+  const derived = frameDerived(run, version)
+  let key = run.coldHearth ? 'cold;' : 'lit;'
+  const value: Emitter[] = run.coldHearth ? [] : [[0, 0.75, 0]]
+  for (const b of Object.values(run.buildings)) {
+    // Only chimneys that are really producing: staffed, supplied, with room.
+    if (BUILDINGS[b.defId]?.category !== 'production' || derived.status(b).kind !== 'working') continue
+    key += `${b.id},`
+    if (value.length < MAX_EMITTERS) value.push(chimneyAt(b))
+  }
+  return { key, value }
+}
+
+export const Smoke = memo(function Smoke() {
   // Re-render only when the set of smoking chimneys changes.
-  const key = useRunKey(smokeKey)
-  const emitters = useMemo(() => {
-    const out: [number, number, number][] = []
-    if (!run.coldHearth) out.push([0, 0.75, 0])
-    const ctx: StatusContext = {}
-    for (const b of Object.values(run.buildings)) {
-      const def = BUILDINGS[b.defId]
-      // Only chimneys that are really producing: staffed, supplied, with room.
-      if (def?.category !== 'production' || buildingStatusKind(run, b, ctx) !== 'working') continue
-      out.push(chimneyAt(b))
-      if (out.length >= MAX_EMITTERS) break
-    }
-    return out
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, key])
-  if (REDUCED_MOTION || emitters.length === 0) return null
+  const emitters = useHudValue(smokeEmitters)
+  if (REDUCED_MOTION || !emitters || emitters.length === 0) return null
   return <SmokeColumns key={emitters.length} emitters={emitters} />
 })

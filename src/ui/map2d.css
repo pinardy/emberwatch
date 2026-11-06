@@ -171,14 +171,3 @@ svg.map-2d .obstacle-2d:hover .obstacle {
 svg.map-2d .weather-ground {
   transition: opacity 2.5s ease;
 }
-
-/*
- * The game-wide Storm tint (styles.css) drifts its streaks by animating
- * background-position, which repaints the whole screen every frame — on the
- * software compositing the 2D map runs under, that alone took the Storm from
- * ~44 to ~15 fps. While the 2D map is up, its canvas rain does that job, so
- * the tint holds still (its static streaks and shading stay).
- */
-.game:has(.map-wrap-2d) .season-tint {
-  animation: none;
-}

@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { SPECIES } from '../../game/content/species'
 import { useGameStore } from '../../game/store'
 import type { RunState, SpeciesId } from '../../game/types'
+import { isWorldRunning } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import {
   advanceViewClock,
@@ -135,8 +136,8 @@ export const Villagers = memo(function Villagers({ run }: { run: RunState }) {
     const h = head.current
     if (REDUCED_MOTION || !b || !h) return
     const { speed } = useGameStore.getState()
-    const running = run.phase === 'playing' && run.pendingChoices.length === 0
-    viewClock.current = advanceViewClock(viewClock.current, delta, running ? speed : 0, run.clock)
+    const pace = isWorldRunning(speed, run) ? speed : 0
+    viewClock.current = advanceViewClock(viewClock.current, delta, pace, run.clock)
     place(routes, viewClock.current, b, h, false)
   })
 

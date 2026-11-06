@@ -1,16 +1,17 @@
 import { BUILDINGS } from '../../game/content/buildings'
 import { warmthSources } from '../../game/engine/queries'
+import { withRunCache } from '../../game/engine/runCache'
+import { frameDerived } from '../../game/frameDerived'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, RunState } from '../../game/types'
 import {
-  buildingStatusKind,
+  gladeAccess,
   gladeLook,
-  gladePlateInfo,
+  gladeProgress,
   isColdHousing,
   isUnlitWarmthSource,
   upgradeFraction,
   type MapBuildingStatus,
-  type StatusContext,
 } from '../mapShared'
 
 /**
@@ -35,7 +36,7 @@ export function gladeSurfaceKey(run: RunState): string {
   for (const glade of Object.values(run.glades)) {
     const look = gladeLook(glade)
     key += `${glade.id}:${look}`
-    if (look === 'fogged') key += `:${gladePlateInfo(run, glade).access}`
+    if (look === 'fogged') key += `:${gladeAccess(run, glade)}`
     key += ','
   }
   return key
@@ -46,8 +47,7 @@ export function gladePlateKey(run: RunState): string {
   let key = ''
   for (const glade of Object.values(run.glades)) {
     if (gladeLook(glade) !== 'fogged') continue
-    const info = gladePlateInfo(run, glade)
-    key += `${glade.id}:${info.access}:${Math.floor(info.pct * 100)}:${info.clearers},`
+    key += `${glade.id}:${gladeAccess(run, glade)}:${Math.floor(gladeProgress(glade) * 100)}:${glade.clearers},`
   }
   return key
 }
@@ -86,16 +86,23 @@ export interface BuildingView {
   status: MapBuildingStatus
   /** A home out in the Storm's cold, or a brazier that has gone out. */
   cold: boolean
-  /** Warmth sources: whether the fire is burning (drives the brazier model). */
-  lit: boolean
   /** Upgrade tier reached (drives the tier mark and the model's trim). */
   tier: number
   /** Upgrade under way: progress in 2% steps; -1 when none is. */
   upgrade: number
 }
 
-export function buildingViews(run: RunState): BuildingView[] {
-  const ctx: StatusContext = {}
+/**
+ * Every building's view. Statuses come from the shared per-step derivations
+ * (`frameDerived`), so the maps and the HUD compute them once per version;
+ * one run-cache scope around the batch spares each status its own cache check.
+ */
+export function buildingViews(run: RunState, version: number): BuildingView[] {
+  return withRunCache(run, () => views(run, version))
+}
+
+function views(run: RunState, version: number): BuildingView[] {
+  const derived = frameDerived(run, version)
   const sources = warmthSources(run)
   return Object.values(run.buildings).map((building) => {
     const def = BUILDINGS[building.defId]
@@ -104,9 +111,8 @@ export function buildingViews(run: RunState): BuildingView[] {
       building,
       progress: Math.min(1, Math.floor(raw * 50) / 50),
       workers: building.workers.length,
-      status: buildingStatusKind(run, building, ctx),
+      status: derived.status(building).kind,
       cold: isColdHousing(run, building, sources) || isUnlitWarmthSource(building),
-      lit: !building.unlit,
       tier: building.tier ?? 0,
       upgrade: quantise(upgradeFraction(building)),
     }
@@ -118,29 +124,20 @@ function quantise(fraction: number | null): number {
   return fraction === null ? -1 : Math.floor(fraction * 50) / 50
 }
 
-export function buildingKey(run: RunState): string {
+/** The 3D building layer's views (for `useHudValue`), keyed by everything a node draws. */
+export function buildingLayer(run: RunState, version: number): { key: string; value: BuildingView[] } {
+  const value = buildingViews(run, version)
   let key = ''
-  for (const v of buildingViews(run)) {
-    key += `${v.building.id}:${v.progress}:${v.workers}:${v.status}:${v.cold ? 1 : 0}${v.lit ? 1 : 0}:${v.tier}:${v.upgrade},`
+  for (const v of value) {
+    key += `${v.building.id}:${v.progress}:${v.workers}:${v.status}:${v.cold ? 1 : 0}:${v.tier}:${v.upgrade},`
   }
-  return key
+  return { key, value }
 }
 
 /** Worn paths run to every finished building. */
 export function pathKey(run: RunState): string {
   let key = ''
   for (const b of Object.values(run.buildings)) if (b.built) key += `${b.id},`
-  return key
-}
-
-/** Chimney smoke: the hearth while lit, and production that is really working. */
-export function smokeKey(run: RunState): string {
-  let key = run.coldHearth ? 'cold;' : 'lit;'
-  const ctx: StatusContext = {}
-  for (const b of Object.values(run.buildings)) {
-    if (BUILDINGS[b.defId]?.category !== 'production') continue
-    if (buildingStatusKind(run, b, ctx) === 'working') key += `${b.id},`
-  }
   return key
 }
 
@@ -190,10 +187,6 @@ export function miniMapKey(run: RunState): string {
   key += ';'
   for (const b of Object.values(run.buildings)) key += `${b.id},`
   return `${key};${threatKey(run)}`
-}
-
-export function seasonKey(run: RunState): string {
-  return run.season.season
 }
 
 /**

@@ -54,10 +54,6 @@ export function emojiTile(emoji: string): SpriteTile {
   }
 }
 
-export function emojiTexture(emoji: string): THREE.CanvasTexture {
-  return bake(emojiTile(emoji))
-}
-
 /** Light ink for the `currentColor` tone, which has no text to inherit here. */
 const SPRITE_CURRENT = '#dfe6e3'
 
@@ -78,13 +74,14 @@ export function iconTile(id: IconId): SpriteTile {
   }
 }
 
-export function iconTexture(id: IconId): THREE.CanvasTexture {
-  return bake(iconTile(id))
-}
-
 /** The drawn `art` when there is one, else the emoji. */
 export function artTile(icon: string, art?: IconId): SpriteTile {
   return art ? iconTile(art) : emojiTile(icon)
+}
+
+/** `artTile` as a cached standalone texture, for the few loose sprites. */
+export function artTexture(icon: string, art?: IconId): THREE.CanvasTexture {
+  return bake(artTile(icon, art))
 }
 
 /** Replays an icon's paths at `scale`, offset by `offset` (both axes, or [x, y]). */
@@ -152,10 +149,6 @@ export function labelTile(text: string): SpriteTile {
   }
 }
 
-export function labelTexture(text: string): THREE.CanvasTexture {
-  return bake(labelTile(text))
-}
-
 /**
  * A round status badge: a coloured disc with a dark rim and a glyph — the
  * drawn `art` (a white `mono/` icon) when given, else the emoji.
@@ -183,8 +176,4 @@ export function badgeTile(icon: string, color: string, art?: IconId): SpriteTile
       ctx.fillText(icon, size / 2, size / 2 + size * 0.03)
     },
   }
-}
-
-export function badgeTexture(icon: string, color: string, art?: IconId): THREE.CanvasTexture {
-  return bake(badgeTile(icon, color, art))
 }
