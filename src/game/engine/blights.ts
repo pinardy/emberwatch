@@ -1,5 +1,5 @@
-import { RESOURCES, resourceName } from '../content/resources'
-import { STORM_BLIGHTS, STORM_BLIGHT_LIST, type StormBlightDef } from '../content/stormBlights'
+import { resourceName } from '../content/resources'
+import { STORM_BLIGHT_LIST, type StormBlightDef } from '../content/stormBlights'
 import type { ActiveCondition, RunState } from '../types'
 import {
   BLIGHT_PREP_GROWTH,
@@ -29,12 +29,8 @@ export function pendingBlight(s: RunState): ActiveCondition | undefined {
   return s.conditions.find((c) => c.breaksWithStorm)
 }
 
-/** Which blight a forecast condition announces. */
-export function blightOf(c: ActiveCondition): StormBlightDef | undefined {
-  return STORM_BLIGHT_LIST.find((b) => b.name === c.name)
-}
-
-function tally(s: RunState): NonNullable<RunState['stormBlights']> {
+/** The run's Storm-blight counts, created on first use (older saves lack them). */
+export function blightTally(s: RunState): NonNullable<RunState['stormBlights']> {
   s.stormBlights ??= { forecast: 0, struck: 0, blunted: 0 }
   return s.stormBlights
 }
@@ -76,7 +72,7 @@ export function announceBlight(s: RunState, def: StormBlightDef): ActiveConditio
   )
   // Counts down to the Storm; the outcome lands when it breaks, not on a timer.
   condition.timeLeft = Math.max(0, s.season.length - s.season.elapsed)
-  tally(s).forecast++
+  blightTally(s).forecast++
   return condition
 }
 
@@ -88,7 +84,7 @@ export function breakStormBlights(s: RunState): void {
   if (striking.length === 0) return
   s.conditions = remaining
   for (const c of striking) {
-    tally(s).struck++
+    blightTally(s).struck++
     const parts = applyOutcome(s, c.onFail)
     pushLog(
       s,
@@ -118,11 +114,3 @@ export function blightPrepAmount(s: RunState, def: StormBlightDef): number {
   const years = Math.max(0, s.season.year - 2)
   return Math.round(def.prep.amount * (1 + BLIGHT_PREP_GROWTH * years))
 }
-
-/** "12 Planks" — what a forecast asks to be made this year. */
-export function blightPrepText(s: RunState, def: StormBlightDef): string {
-  const r = RESOURCES[def.prep.resource]
-  return `${blightPrepAmount(s, def)} ${r?.name ?? def.prep.resource}`
-}
-
-export { STORM_BLIGHTS }

@@ -5,7 +5,8 @@ import { resolveGladeEvent, takeChoice } from '../game/engine/events'
 import { tick } from '../game/engine/tick'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import type { RunState } from '../game/types'
-import { RaceSparkline, RunTimelineChart, eventLabel, formatClock } from './RunTimeline'
+import { formatClock } from '../game/engine/forecast'
+import { RaceSparkline, RunTimelineChart, eventLabel } from './RunTimeline'
 
 afterEach(cleanup)
 
@@ -92,7 +93,7 @@ describe('RaceSparkline', () => {
 
 describe('timeline text', () => {
   it('formats clocks and names events', () => {
-    expect(formatClock(754)).toBe('12:34')
+    expect(formatClock(754, Math.round)).toBe('12:34')
     expect(eventLabel({ t: 0, k: 'left', d: 'harpy' })).toBe('A Harpy left in despair')
     expect(eventLabel({ t: 0, k: 'lost', d: 'fox' })).toBe('A Fox was lost')
     expect(eventLabel({ t: 0, k: 'year', d: '3' })).toBe('Year 3 began')

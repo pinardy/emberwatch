@@ -24,9 +24,9 @@ import {
   checkMilestones,
   stepClearing,
   stepNewcomers,
-  stepOrders,
   stepThreats,
 } from './events'
+import { stepOrders } from './orders'
 import { computeModifiers, seasonLengthFor, type Modifiers } from './modifiers'
 import { stepProduction } from './production'
 import { computeStorageCap, population, totalHousing } from './queries'

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { SPEED_OPTIONS, type GameSpeed } from '../game/engine/balance'
 import { MAX_FRAME_REAL_SECONDS, useGameStore, type SidePanel } from '../game/store'
 
@@ -101,6 +101,28 @@ export function useEscapeLayer(
       if (index >= 0) escapeLayers.splice(index, 1)
     }
   }, [open, priority])
+}
+
+/**
+ * Closes a popover on Esc or on a tap anywhere outside `host`, the element
+ * that holds both the popover and the button that opens it.
+ */
+export function useDismiss(
+  open: boolean,
+  host: RefObject<HTMLElement | null>,
+  close: () => void,
+): void {
+  useEscapeLayer(open, close)
+  const latest = useRef(close)
+  latest.current = close
+  useEffect(() => {
+    if (!open) return
+    const onPointer = (e: PointerEvent) => {
+      if (host.current && !host.current.contains(e.target as Node)) latest.current()
+    }
+    document.addEventListener('pointerdown', onPointer)
+    return () => document.removeEventListener('pointerdown', onPointer)
+  }, [open, host])
 }
 
 /** Side-panel shortcuts, by physical key so they survive non-QWERTY layouts. */

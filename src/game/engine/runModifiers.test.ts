@@ -22,7 +22,8 @@ import {
   STARTING_STOCK,
 } from './balance'
 import { createRun } from './createRun'
-import { optionAffordable, resolveGladeEvent, stepOrders, takeChoice } from './events'
+import { optionAffordable, resolveGladeEvent, takeChoice } from './events'
+import { stepOrders } from './orders'
 import { hearthForecast, secondsUntilStorm } from './forecast'
 import { DEPOSIT_RADIUS } from './mapgen'
 import { generateMap } from './worldgen'
@@ -35,7 +36,8 @@ import {
   modifierOngoingId,
   modifiersClash,
 } from './runModifiers'
-import { issueDecree, stepDecree } from './structure'
+import { stepDecree } from './structure'
+import { proclaimFirstDecree } from '../../test/decrees'
 import { storageUsed } from './queries'
 import { tick } from './tick'
 import { caravanAvailable, hasTradingPost, stepCaravan } from './trade'
@@ -465,7 +467,7 @@ describe('rule-bending cornerstones for braziers, terrain, adjacency, decrees an
 
   it('Royal Couriers lengthen decrees and soften a miss; the Crown’s Seal pays more', () => {
     const state = withCornerstone('royalCouriers')
-    expect(issueDecree(state)).toBe(true)
+    expect(proclaimFirstDecree(state)).toBe(true)
     const def = DECREES[state.decree!.defId]
     expect(state.decree!.timeLimit).toBe(Math.round(def.timeLimit * 1.3))
     state.decree!.timeLeft = 0.1

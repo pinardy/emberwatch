@@ -600,8 +600,6 @@ function gearPoints(cx: number, cy: number, outer: number, inner: number, lobes:
   return pts
 }
 
-export type MotifId = keyof typeof MOTIFS
-
 const DARK = new Set(['ink', 'slate', 'bark', 'blood', 'moss', 'deep'])
 
 /**

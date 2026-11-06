@@ -12,7 +12,6 @@ import {
 } from '../game/engine/events'
 import { useGameStore, useHudRun } from '../game/store'
 import type {
-  ConditionOutcome,
   ConditionSpec,
   CornerstoneDef,
   ResourceBag,
@@ -21,12 +20,13 @@ import type {
 import { formatDuration } from '../game/engine/forecast'
 import { describeTimedGoal } from '../game/engine/structure'
 import { IconText } from './IconText'
-import { describeStrike, describeWhileActive } from './threatText'
+import { describeStrike, describeWhileActive, outcomeWords } from './threatText'
 import { DialogTip } from './TipsCoach'
 import { CharterChoice } from './CharterChoice'
 import { DecreeChoice, OrderChoice } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
 import { DraftAppealChips } from './DraftAppealChips'
+import { BagIcons } from './BagIcons'
 import { Icon } from './Icon'
 import { conditionArt, cornerstoneArt, gladeEventArt, ongoingArt, threatArt } from '../game/content/artFamilies'
 
@@ -296,17 +296,6 @@ function conditionTerms(c: ConditionSpec): string {
   return parts.join(' · ')
 }
 
-function outcomeWords(o: ConditionOutcome | undefined): string {
-  if (!o) return ''
-  const parts: string[] = []
-  if (o.reputation) parts.push(`👑 +${o.reputation}`)
-  if (o.hostility) parts.push(`🌩️ ${o.hostility > 0 ? '+' : ''}${o.hostility}`)
-  if (o.impatience) parts.push(`⏳ ${o.impatience > 0 ? '+' : ''}${o.impatience}`)
-  if (o.villagerLoss) parts.push(`🪦 −${o.villagerLoss}`)
-  if (o.gain) parts.push('supplies')
-  return parts.join(' ')
-}
-
 /** Amber lever on drafts: redraw the options at a steepening price. */
 function RerollButton() {
   const run = useHudRun()
@@ -349,8 +338,7 @@ function Effect({
   tone: 'good' | 'bad'
   title?: string
 }) {
-  const entries = Object.entries(bag)
-  if (entries.length === 0 && !food) return null
+  if (Object.keys(bag).length === 0 && !food) return null
   return (
     <span className={tone === 'good' ? 'is-good' : 'is-bad'} title={title}>
       {label}:{' '}
@@ -359,12 +347,7 @@ function Effect({
           <Icon id="plate" emoji="🍽️" label="food" /> {food} food{' '}
         </span>
       ) : null}
-      {entries.map(([id, amount]) => (
-        <span key={id}>
-          <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
-          {amount}{' '}
-        </span>
-      ))}
+      <BagIcons bag={bag} />
     </span>
   )
 }

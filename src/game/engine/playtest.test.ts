@@ -45,7 +45,6 @@ import {
   appeaseThreat,
   optionAffordable,
   relevantBlueprints,
-  orderReputation,
   resolveGladeEvent,
   takeChoice,
 } from './events'
@@ -73,8 +72,8 @@ import {
 } from './roads'
 import { tick } from './tick'
 import { productionRate } from './forecast'
-import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal } from './orders'
-import { decreeGoal, decreeStreakBonus } from './structure'
+import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation } from './orders'
+import { categoryRate, decreeGoal, decreeReputation } from './structure'
 import { baseServiceCapacity, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 
 /**
@@ -1030,9 +1029,7 @@ function orderPromise(s: RunState, order: Order): number {
       break
     case 'stockCategory':
     case 'producedCategory':
-      if (RESOURCE_LIST.some((r) => r.category === goal.category && productionRate(s, mods, r.id) > 0)) {
-        score += 0.5
-      }
+      if (categoryRate(s, mods, goal.category) > 0) score += 0.5
       break
     case 'gladesCleared':
     case 'staffed':
@@ -1070,19 +1067,11 @@ function decreeOdds(s: RunState, decree: RoyalDecree): number {
     case 'produced':
       return (productionRate(s, mods, goal.resource) * decree.timeLimit) / goal.amount
     case 'stockCategory': {
-      const rate = RESOURCE_LIST.filter((r) => r.category === goal.category).reduce(
-        (sum, r) => sum + productionRate(s, mods, r.id),
-        0,
-      )
+      const rate = categoryRate(s, mods, goal.category)
       return (decree.progress * goal.amount + rate * decree.timeLimit * 0.25) / goal.amount
     }
-    case 'producedCategory': {
-      const rate = RESOURCE_LIST.filter((r) => r.category === goal.category).reduce(
-        (sum, r) => sum + productionRate(s, mods, r.id),
-        0,
-      )
-      return (rate * decree.timeLimit) / goal.amount
-    }
+    case 'producedCategory':
+      return (categoryRate(s, mods, goal.category) * decree.timeLimit) / goal.amount
     case 'gladesCleared':
       return Object.values(s.glades).some((g) => !g.cleared && g.clearers > 0) ? 0.9 : 0.6
     case 'buildingsOfCategory':
@@ -1165,16 +1154,13 @@ function playRun(
     tick(s, STEP)
     if (liveDecree && !s.decree && (s.feats?.decreesMet ?? 0) === decreesBefore) decreesMissed++
     if (liveDecree && (s.feats?.decreesMet ?? 0) > decreesBefore) {
-      sources.decrees +=
-        Math.max(0, (DECREES[liveDecree]?.reputationReward ?? 0) + computeModifiers(s).decreeReputation) +
-        decreeStreakBonus(s.decreeStreak ?? 0).reputation
+      sources.decrees += decreeReputation(s, DECREES[liveDecree])
     }
     sinceDecision += STEP
     const stillOpen = new Set(s.orders.map((o) => o.defId))
     for (const id of openOrders) {
       if (stillOpen.has(id)) continue
-      const base = ORDERS[id]?.reputationReward ?? 0
-      sources.orders += id.startsWith('writ_') ? base : orderReputation(s, base)
+      sources.orders += orderReputation(s, { defId: id, writ: id.startsWith('writ_') })
     }
     sources.glades +=
       Math.floor(s.stats.gladesCleared / GLADES_PER_REPUTATION) -

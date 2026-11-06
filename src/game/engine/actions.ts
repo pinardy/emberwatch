@@ -199,11 +199,6 @@ export function demolishRefundShare(building: RefundSubject): number {
   return 1 - (1 - DEMOLISH_REFUND_BUILT) * done
 }
 
-/** True while nobody has done any work on the site: removing it is a cancel. */
-export function isUnstartedSite(building: Pick<BuildingInstance, 'built' | 'buildProgress'>): boolean {
-  return !building.built && building.buildProgress <= 0
-}
-
 /**
  * Materials handed back when a building is torn down, rounded down. A bare
  * definition id means a finished building.

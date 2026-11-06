@@ -180,9 +180,13 @@ export function speciesCounts(s: RunState): Record<SpeciesId, number> {
   return { ...counts }
 }
 
-export function presentSpecies(s: RunState): SpeciesId[] {
-  const counts = speciesCounts(s)
-  return (Object.keys(counts) as SpeciesId[]).filter((sp) => counts[sp] > 0)
+/** Average resolve across the species living here (0 with nobody). */
+export function averageResolve(s: RunState): number {
+  const present = s.speciesPool.filter((sp) =>
+    Object.values(s.villagers).some((v) => v.species === sp),
+  )
+  if (present.length === 0) return 0
+  return present.reduce((sum, sp) => sum + s.resolve[sp], 0) / present.length
 }
 
 /**
@@ -206,10 +210,15 @@ export function secondsUntilDeparture(s: RunState): Partial<Record<SpeciesId, nu
 // Food
 // ---------------------------------------------------------------------------
 
-export function foodStock(s: RunState): number {
+/** Everything edible in `stock`. */
+export function edibleTotal(stock: ResourceBag): number {
   let sum = 0
-  for (const id of EDIBLE) sum += s.stock[id] ?? 0
+  for (const id of EDIBLE) sum += stock[id] ?? 0
   return sum
+}
+
+export function foodStock(s: RunState): number {
+  return edibleTotal(s.stock)
 }
 
 /** Number of distinct edible resources with at least 1 in stock. */
@@ -310,10 +319,9 @@ export function grant(
   return added
 }
 
-export function bagTotal(bag: ResourceBag): number {
-  let sum = 0
-  for (const amount of Object.values(bag)) sum += amount ?? 0
-  return sum
+/** Grants `gain` into the stockpile up to storage, counted as produced. */
+export function grantProduced(s: RunState, gain: ResourceBag): void {
+  s.stats.resourcesProduced += grant(s.stock, gain, s.storageCap, storageUsed(s))
 }
 
 export function sortBag(bag: ResourceBag): [ResourceId, number][] {

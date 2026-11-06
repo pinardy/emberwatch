@@ -25,15 +25,20 @@ import type { BuildingInstance, RunState, Villager } from '../types'
  * re-tiers a building, or adds or removes a villager, in the middle of a tick
  * must call the matching `touch…`.
  */
+/** What the cache saw of one building: the object, and the fields it reads. */
+interface SeenBuilding {
+  b: BuildingInstance
+  defId: string
+  x: number
+  y: number
+  built: boolean
+  tier: number | undefined
+}
+
 interface RunMemo {
   buildings: RunState['buildings']
   /** The buildings the cache was filled against, in record order. */
-  seen: BuildingInstance[]
-  seenDef: string[]
-  seenX: number[]
-  seenY: number[]
-  seenBuilt: boolean[]
-  seenTier: (number | undefined)[]
+  seen: SeenBuilding[]
   /** `stats.buildingsBuilt` at the last check; NaN forces a re-check. */
   built: number
   /** Derivations of the buildings alone, by name. */
@@ -54,17 +59,19 @@ let scope: RunMemo | null = null
 
 function checkBuildings(s: RunState, memo: RunMemo): void {
   memo.built = s.stats.buildingsBuilt
-  const { seen, seenDef, seenX, seenY, seenBuilt, seenTier } = memo
+  const seen = memo.seen
   let i = 0
   let same = true
   for (const b of Object.values(s.buildings)) {
+    const was = seen[i]
     if (
-      seen[i] !== b ||
-      seenDef[i] !== b.defId ||
-      seenX[i] !== b.pos.x ||
-      seenY[i] !== b.pos.y ||
-      seenBuilt[i] !== b.built ||
-      seenTier[i] !== b.tier
+      was === undefined ||
+      was.b !== b ||
+      was.defId !== b.defId ||
+      was.x !== b.pos.x ||
+      was.y !== b.pos.y ||
+      was.built !== b.built ||
+      was.tier !== b.tier
     ) {
       same = false
       break
@@ -74,20 +81,14 @@ function checkBuildings(s: RunState, memo: RunMemo): void {
   if (same && i === seen.length) return
   memo.byBuildings.clear()
   memo.perBuilding.clear()
-  seen.length = 0
-  seenDef.length = 0
-  seenX.length = 0
-  seenY.length = 0
-  seenBuilt.length = 0
-  seenTier.length = 0
-  for (const b of Object.values(s.buildings)) {
-    seen.push(b)
-    seenDef.push(b.defId)
-    seenX.push(b.pos.x)
-    seenY.push(b.pos.y)
-    seenBuilt.push(b.built)
-    seenTier.push(b.tier)
-  }
+  memo.seen = Object.values(s.buildings).map((b) => ({
+    b,
+    defId: b.defId,
+    x: b.pos.x,
+    y: b.pos.y,
+    built: b.built,
+    tier: b.tier,
+  }))
 }
 
 function checkVillagers(s: RunState, memo: RunMemo): void {
@@ -129,11 +130,6 @@ export function withRunCache<T>(s: RunState, fn: () => T): T {
     memo = {
       buildings: s.buildings,
       seen: [],
-      seenDef: [],
-      seenX: [],
-      seenY: [],
-      seenBuilt: [],
-      seenTier: [],
       built: Number.NaN,
       byBuildings: new Map(),
       perBuilding: new Map(),

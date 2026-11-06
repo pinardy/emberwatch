@@ -333,8 +333,8 @@ describe('decrees sized to the settlement', () => {
   })
 
   it('rewards a streak of decrees met', () => {
-    expect(decreeStreakBonus(1)).toEqual({ reputation: 0, amber: 0 })
-    expect(decreeStreakBonus(2).amber).toBeGreaterThan(0)
+    expect(decreeStreakBonus(1)).toBe(0)
+    expect(decreeStreakBonus(2)).toBeGreaterThan(0)
     const s = openedRun()
     s.storageCap = 9999
     s.decreeStreak = 1
@@ -355,7 +355,7 @@ describe('decrees sized to the settlement', () => {
     meet()
     expect(s.decreeStreak).toBe(2)
     expect(s.stock.amber ?? 0).toBe(
-      amber + (DECREES.decree_glade.reward?.amber ?? 0) + decreeStreakBonus(2).amber,
+      amber + (DECREES.decree_glade.reward?.amber ?? 0) + decreeStreakBonus(2),
     )
     // A lapse ends it.
     s.decree = { id: 'dx', defId: 'decree_glade', progress: 0, complete: false, timeLeft: 0.05, timeLimit: 270, baseline: s.stats.gladesCleared }

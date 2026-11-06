@@ -13,6 +13,7 @@ import { useGameStore } from '../game/store'
 import type { BuildingInstance, RunState } from '../game/types'
 import { Cost } from './BuildPanel'
 import { tierMark } from './mapShared'
+import { Bar } from './Bar'
 import { Icon } from './Icon'
 
 /**
@@ -49,19 +50,14 @@ export function UpgradeSection({ run, building }: { run: RunState; building: Bui
               : 'No idle villagers are free to build it.'}{' '}
           Its current tier stays in effect meanwhile.
         </p>
-        <div
-          className="bar"
+        <Bar
+          value={progress / next.buildSeconds}
           role="progressbar"
           aria-label="Upgrade progress"
           aria-valuemin={0}
           aria-valuemax={next.buildSeconds}
           aria-valuenow={Math.floor(progress)}
-        >
-          <div
-            className="bar-fill"
-            style={{ width: `${Math.min(100, (progress / next.buildSeconds) * 100)}%` }}
-          />
-        </div>
+        />
         <button
           type="button"
           className="wide-button"

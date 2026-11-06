@@ -3,7 +3,7 @@ import { VILLAGER_TRAIT_ART } from '../game/content/artFamilies'
 import { BUILDINGS } from '../game/content/buildings'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NEED_LABELS, SPECIES, VILLAGER_TRAITS } from '../game/content/species'
 import {
   demolishRefund,
@@ -26,6 +26,8 @@ import { terrainOf } from '../game/engine/production'
 import { benefitsFromRoad, describeRoadLink, roadLinkOf } from '../game/engine/roads'
 import { workerMultiplier } from '../game/engine/traits'
 import { useGameStore, useHudRun } from '../game/store'
+import { Bar } from './Bar'
+import { BagIcons } from './BagIcons'
 import { BuildingStatusLine } from './BuildingStatusLine'
 import { Icon } from './Icon'
 import { PartnerIcon } from './PartnerIcon'
@@ -81,16 +83,9 @@ export function Inspector() {
     return (
       <div className="inspector">
         <div className="inspector-body">
-          <header className="inspector-head">
-            <span className="inspector-icon">
-              <Icon id={DEPOSIT_ART[deposit.kind]} />
-            </span>
-            <div>
-              <strong>{DEPOSIT_INFO[deposit.kind].name}</strong>
-              <small>{run.glades[deposit.gladeId]?.name}</small>
-            </div>
-            <CloseButton />
-          </header>
+          <InspectorHead icon={<Icon id={DEPOSIT_ART[deposit.kind]} />} name={DEPOSIT_INFO[deposit.kind].name}>
+            {run.glades[deposit.gladeId]?.name}
+          </InspectorHead>
           <p className="muted">
             {deposit.amount === null
               ? 'Renewable — this deposit never runs out.'
@@ -105,17 +100,25 @@ export function Inspector() {
   return null
 }
 
-function CloseButton() {
+/** The inspector's title row: icon, name, a line under it, and Close. */
+function InspectorHead({ icon, name, children }: { icon: ReactNode; name: ReactNode; children: ReactNode }) {
   const clearSelection = useGameStore((s) => s.clearSelection)
   return (
-    <button
-      type="button"
-      className="icon-btn inspector-close"
-      aria-label="Close"
-      onClick={clearSelection}
-    >
-      ✕
-    </button>
+    <header className="inspector-head">
+      <span className="inspector-icon">{icon}</span>
+      <div>
+        <strong>{name}</strong>
+        <small>{children}</small>
+      </div>
+      <button
+        type="button"
+        className="icon-btn inspector-close"
+        aria-label="Close"
+        onClick={clearSelection}
+      >
+        ✕
+      </button>
+    </header>
   )
 }
 
@@ -147,24 +150,15 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
   return (
     <div className="inspector-body">
-      <header className="inspector-head">
-        <span className="inspector-icon">
-          <Icon of={def} />
-        </span>
-        <div>
-          <strong>{displayName(building)}</strong>
-          <small>
-            {tierMark(building) && (
-              <span className="tier-stars" aria-label={`Tier ${building.tier}`}>
-                {tierMark(building)}{' '}
-              </span>
-            )}
-            {run.glades[building.gladeId]?.name}
-            {building.paused ? ' · paused' : ''}
-          </small>
-        </div>
-        <CloseButton />
-      </header>
+      <InspectorHead icon={<Icon of={def} />} name={displayName(building)}>
+        {tierMark(building) && (
+          <span className="tier-stars" aria-label={`Tier ${building.tier}`}>
+            {tierMark(building)}{' '}
+          </span>
+        )}
+        {run.glades[building.gladeId]?.name}
+        {building.paused ? ' · paused' : ''}
+      </InspectorHead>
 
       {!building.built ? (
         <>
@@ -172,12 +166,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             Under construction — {Math.floor(building.buildProgress)}/{def.buildSeconds}{' '}
             work. {idle > 0 ? `${idle} idle villagers are building it.` : 'No idle villagers are available to build it.'}
           </p>
-          <div className="bar">
-            <div
-              className="bar-fill"
-              style={{ width: `${(building.buildProgress / def.buildSeconds) * 100}%` }}
-            />
-          </div>
+          <Bar value={building.buildProgress / def.buildSeconds} />
           <button
             type="button"
             className="wide-button"
@@ -209,18 +198,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
                   </button>
                 ))}
               </div>
-              {active && (
-                <>
-                  <div className="bar">
-                    <div
-                      className="bar-fill"
-                      style={{
-                        width: `${Math.min(100, (building.recipeProgress / active.seconds) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                </>
-              )}
+              {active && <Bar value={building.recipeProgress / active.seconds} />}
               <BuildingStatusLine run={run} building={building} mods={mods} />
             </section>
           )}
@@ -411,16 +389,10 @@ export function multiplierReason(v: Villager, def: BuildingDef): string {
 }
 
 function BagLabel({ bag }: { bag: ResourceBag }) {
-  const entries = Object.entries(bag)
-  if (entries.length === 0) return <span>nothing</span>
+  if (Object.keys(bag).length === 0) return <span>nothing</span>
   return (
     <span className="bag-label">
-      {entries.map(([id, amount]) => (
-        <span key={id} title={RESOURCES[id as keyof typeof RESOURCES]?.name}>
-          <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
-          {amount}
-        </span>
-      ))}
+      <BagIcons bag={bag} title />
     </span>
   )
 }
@@ -616,28 +588,16 @@ function WorkerSection({
 }
 
 export function RecipeLabel({ recipe }: { recipe: Recipe }) {
-  const inputs = Object.entries(recipe.inputs)
-  const outputs = Object.entries(recipe.outputs)
   return (
     <span className="recipe-label">
-      {inputs.length > 0 ? (
-        inputs.map(([id, amount]) => (
-          <span key={id}>
-            <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
-            {amount}
-          </span>
-        ))
+      {Object.keys(recipe.inputs).length > 0 ? (
+        <BagIcons bag={recipe.inputs} />
       ) : (
         <span>{recipe.requiresDeposit ? <Icon id={DEPOSIT_ART[recipe.requiresDeposit]} /> : '—'}</span>
       )}
       <em>→</em>
-      {outputs.length > 0 ? (
-        outputs.map(([id, amount]) => (
-          <span key={id}>
-            <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
-            {amount}
-          </span>
-        ))
+      {Object.keys(recipe.outputs).length > 0 ? (
+        <BagIcons bag={recipe.outputs} />
       ) : (
         <span>
           <Icon id="bell" emoji="🛎" />
@@ -655,7 +615,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
 
   const reachable = isReachable(run, gladeId)
   const idle = idleVillagers(run).length
-  const pct = glade.clearWork > 0 ? (glade.clearProgress / glade.clearWork) * 100 : 100
+  const cleared = glade.clearWork > 0 ? glade.clearProgress / glade.clearWork : 1
   const secondsLeft =
     glade.clearers > 0
       ? Math.ceil((glade.clearWork - glade.clearProgress) / glade.clearers)
@@ -666,16 +626,9 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
   return (
     <div className="inspector">
       <div className="inspector-body">
-        <header className="inspector-head">
-          <span className="inspector-icon">
-            <Icon id={GLADE_ART[glade.kind]} />
-          </span>
-          <div>
-            <strong>{glade.name}</strong>
-            <small>{GLADE_KIND_STYLE[glade.kind].title}</small>
-          </div>
-          <CloseButton />
-        </header>
+        <InspectorHead icon={<Icon id={GLADE_ART[glade.kind]} />} name={glade.name}>
+          {GLADE_KIND_STYLE[glade.kind].title}
+        </InspectorHead>
 
         {glade.cleared ? (
           <p className="muted">Cleared. You can build here.</p>
@@ -701,9 +654,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
                   </button>
                 </div>
               </div>
-              <div className="bar">
-                <div className="bar-fill" style={{ width: `${Math.min(100, pct)}%` }} />
-              </div>
+              <Bar value={cleared} />
               <small className="muted">
                 {Math.floor(glade.clearProgress)}/{glade.clearWork} work
                 {secondsLeft !== null ? ` · about ${secondsLeft}s remaining` : ' · idle'}
@@ -713,11 +664,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
             <section className="inspector-section">
               <h4>Expected haul</h4>
               <div className="chip-row">
-                {Object.entries(glade.reward).map(([id, amount]) => (
-                  <span key={id} className="chip">
-                    <Icon of={RESOURCES[id as keyof typeof RESOURCES]} /> {amount}
-                  </span>
-                ))}
+                <BagIcons bag={glade.reward} className="chip" />
               </div>
               {event && (
                 <p className="muted warn-text">

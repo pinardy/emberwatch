@@ -4,8 +4,7 @@ import App from '../App'
 import { SPECIES } from '../game/content/species'
 import { assignWorker, findPlacement } from '../game/engine/actions'
 import { useGameStore } from '../game/store'
-import type { RunState } from '../game/types'
-import { speciesNames } from './DraftAppealChips'
+import type { RunState, SpeciesId } from '../game/types'
 import { useFirstStepsStatus } from './FirstSteps'
 import { useSeenTips } from './TipsCoach'
 
@@ -13,6 +12,13 @@ import { useSeenTips } from './TipsCoach'
  * The first ten minutes: the First steps checklist, the welcome tip it folds
  * in, and the blueprint draft naming who wants what.
  */
+
+/** "Humans and Beavers", "Humans, Beavers and Foxes". */
+function speciesNames(species: SpeciesId[]): string {
+  const names = species.map((sp) => SPECIES[sp].name)
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
 
 function currentRun(): RunState {
   const run = useGameStore.getState().run

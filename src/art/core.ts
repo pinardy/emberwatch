@@ -135,5 +135,3 @@ export const MENU_ICONS = {
 } satisfies Record<string, IconArt>
 
 export const CORE_ICONS = { ...SPECIES_ICONS, ...METER_ICONS, ...MENU_ICONS }
-
-export type CoreIconId = keyof typeof CORE_ICONS

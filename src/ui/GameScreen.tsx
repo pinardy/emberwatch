@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { RESOURCES } from '../game/content/resources'
 import { canAfford } from '../game/engine/queries'
 import {
   useGameStore,
@@ -19,6 +18,7 @@ import { ResourceBar } from './ResourceBar'
 import { LogPanel, OrdersPanel, TradePanel } from './SidePanels'
 import { TipsCoach } from './TipsCoach'
 import { describeStrike, describeWhileActive } from './threatText'
+import { BagIcons } from './BagIcons'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
 import { TopBar } from './TopBar'
@@ -225,16 +225,7 @@ function ThreatBar() {
               onClick={() => appease(threat.id)}
               title={affordable ? 'Pay it off' : 'You cannot afford this yet'}
             >
-              Appease:{' '}
-              {Object.entries(threat.appease).map(([id, amount]) => (
-                <span key={id}>
-                  <Icon
-                    of={RESOURCES[id as keyof typeof RESOURCES]}
-                    label={RESOURCES[id as keyof typeof RESOURCES]?.name}
-                  />
-                  {amount}{' '}
-                </span>
-              ))}
+              Appease: <BagIcons bag={threat.appease} label />
             </button>
           </div>
         )

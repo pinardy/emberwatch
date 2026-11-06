@@ -865,18 +865,7 @@ useGameStore.subscribe((s, prev) => {
  * - `subscribeHud(fn)` / `subscribeSteps(fn)`: call `fn(run)` outside React
  *   on each HUD tick / each sim step (toasts, sound cues, imperative
  *   drawing). Returns the unsubscribe function.
- * - `useRun()`: the run, re-rendering on every sim step. Only for things that
- *   really must move every frame.
  */
-
-/**
- * Subscribes to the mutation counter and returns the (stable) run object, so
- * the component re-renders on every sim step. Prefer the narrower hooks below.
- */
-export function useRun(): RunState | null {
-  useGameStore((s) => s.version)
-  return useGameStore((s) => s.run)
-}
 
 /** The current run object; re-renders only when a different run is loaded. */
 export function useRunRef(): RunState | null {

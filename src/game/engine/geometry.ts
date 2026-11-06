@@ -10,12 +10,6 @@ export function dist(a: Vec2, b: Vec2): number {
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
-export function dist2(a: Vec2, b: Vec2): number {
-  const dx = a.x - b.x
-  const dy = a.y - b.y
-  return dx * dx + dy * dy
-}
-
 /** Ray-casting point-in-polygon. Polygons are simple and small (~10 verts). */
 export function pointInPolygon(p: Vec2, polygon: Vec2[]): boolean {
   let inside = false
@@ -59,15 +53,6 @@ export function polygonBounds(polygon: Vec2[]): { minX: number; minY: number; ma
     maxY = Math.max(maxY, p.y)
   }
   return { minX, minY, maxX, maxY }
-}
-
-/** Shoelace area; polygons from the Voronoi are simple, orientation ignored. */
-export function polygonArea(polygon: Vec2[]): number {
-  let sum = 0
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    sum += (polygon[j].x + polygon[i].x) * (polygon[j].y - polygon[i].y)
-  }
-  return Math.abs(sum / 2)
 }
 
 /**
