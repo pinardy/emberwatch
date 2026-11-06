@@ -1,5 +1,5 @@
 import { DECREES } from '../game/content/decrees'
-import { describeTimedGoal } from '../game/engine/structure'
+import { decreeGoal, describeTimedGoal } from '../game/engine/structure'
 import { useGameStore, useRun } from '../game/store'
 import type { ActiveCondition, ConditionOutcome } from '../game/types'
 import { clockText } from './DecreeCard'
@@ -37,7 +37,7 @@ export function ConditionsBar() {
               {decreeDef.name}
               <em className="condition-clock">⏱ {clockText(decree.timeLeft)}</em>
             </strong>
-            <small>{describeTimedGoal(decreeDef.goal)}</small>
+            <small>{describeTimedGoal(decreeGoal(decree) ?? decreeDef.goal)}</small>
             <Progress value={decree.progress} />
           </span>
         </button>

@@ -27,8 +27,9 @@ npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
 | **Placement** | Ground matters: fertile glades speed farms, rocky ones masons and miners (and break ploughs), marsh yields rich clay but slows construction, forest speeds gatherers. Buildings have several adjacency partners each, and every service venue reaches more villagers with homes around it (+10% capacity per home, up to three) and its supplier next door. The placement ghost and the Inspector spell all of it out. |
 | **Roads** | Lay roads point to point (click or tap each bend; Esc, right-click or Done ends one) for a pace of wood each, over cleared ground and around crags and deposits. A workplace joined by road to the hearth or a warehouse works up to 15% faster — the full amount for a road as straight as the crow flies, less for a winding one. A settlement without roads works exactly as before. The placement ghost and the Inspector say what a spot or a building earns. |
 | **Caravans** | Once a Trading Post stands, caravans call on a cycle with rotating lots to buy — and pay double for one good they want that visit. Amber also rerolls drafts, rushes construction, and soothes the Queen. |
-| **Reputation** | Fills from completed orders, glade events, reclaimed land, and high resolve — which only pays in full for species whose service needs are met. Fill it and you win. |
-| **Decrees & charter** | Every few minutes the Queen issues a timed decree: meet it before the countdown ends for extra reputation and amber, or miss it and her patience frays — and each further miss frays it more, until you meet one again. At 10 reputation she grants a one-time charter — a run-shaping perk, more patience, or a guaranteed blueprint. |
+| **Reputation** | Fills from completed orders, decrees, glade events, reclaimed land, and high resolve — which only pays in full for species whose service needs are met. Fill it and you win. Within a point of victory, milestones no longer interrupt with a draft. |
+| **Orders** | Three standing orders. Each is drawn only from goals the settlement has a whole chain of blueprints for, that are within reach of where it stands, and that are not already mostly met — so none completes the moment it is chosen and none clogs a slot all run; when nothing fits, the Queen asks for a counting goal ("produce 40 more Stone") sized from what the settlement makes. When an order is met, the empty slot is refilled by a choice of two (cards show goal, reward and current progress), and once a year you may ask for a different pair for half a point of impatience. The run opens on the **founding writ**: one of three small Year-1 goals (claim two glades, welcome ten settlers, staff four camps) worth the first point of reputation. **Citadel shipments** ask for tools, parts or copper bars, handed over when met, so the deeper industry has a route to reputation too. |
+| **Decrees & charter** | Every few minutes the Queen's herald offers a choice of two timed decrees (one for goods, one for building or clearing, when both suit the settlement), or you may beg off both for half a point of impatience. Production decrees are only asked of goods with a staffed producer, and are sized from what those producers turn out over the time allowed. Meet one in time for its reward — reputation for service goods, a full larder, a glade or a new hall; patience restored for staples — and decrees met in a row pay a growing purse of amber. Miss one and her patience frays, more with each further miss until you meet one again. At 10 reputation she grants a one-time charter — a run-shaping perk, more patience, or a guaranteed blueprint. |
 | **Impatience** | The Queen's patience. Grows over time, when villagers leave, and sharply once hostility is high. From Year 5 her deadline has passed and it climbs steeper every day, so every run ends by ~40 minutes. Fill it and you lose. |
 | **Hostility** | Rises with time, population and cleared glades. Drags resolve down for everyone, gently at first and three times as hard past 15, so the late game squeezes settlements that leave needs unserved. |
 | **Drafts** | The run opens on a blueprint draft, and reputation milestones alternate blueprints and cornerstones. You can never unlock everything, so which needs you *can* satisfy is the run's central decision. |
@@ -72,8 +73,11 @@ src/
       roads.ts          #   road rules, and the derived (never saved) road
                         #   graph behind the work bonus, cached per run
       society.ts        #   food, resolve, reputation, impatience, departures
-      events.ts         #   glade clearing, drafts, threats, orders, newcomers
-      structure.ts      #   mid-run beats: timed decrees, the charter,
+      events.ts         #   glade clearing, drafts, threats, newcomers
+      orders.ts         #   the Queen's orders: fitting draws, choices of
+                        #   two, the founding writ, counting orders
+      structure.ts      #   mid-run beats: timed decrees (sized from live
+                        #   output, offered in pairs), the charter,
                         #   lingering glade conditions
       traits.ts         #   species quirks & villager quirks as multipliers
       trade.ts          #   caravan visits, offers, buying and selling
@@ -110,10 +114,10 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs thirty-two test files:
+`npm test` runs thirty-three test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
-- **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), joins its workplaces to the hearth by road when it has wood to spare, and clears glades. It plays 24 seeds for each of four species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
+- **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), joins its workplaces to the hearth by road when it has wood to spare, clears glades, takes the more promising of each pair of orders, and answers the decree it is most likely to meet (staffing that decree's producers first) or begs off when neither looks likely. It plays 24 seeds for each of four species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
 
   ```
   human/fox/harpy      won 19/24 lost 5 stall 0 early-collapse 0 · avg win 23.4min · longest 32.0min · rep in wins: orders 8.5 glades 2.0 events 3.2 resolve 6.6
@@ -122,6 +126,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
   `PLAYTEST_SEEDS=8 PLAYTEST_VERBOSE=1 npx vitest run playtest --reporter=verbose --silent=false` runs a quicker sweep and adds a per-seed diagnosis (resolve vs threshold, unmet needs, service chains, drafts); `PLAYTEST_SEED=<n>` replays one seed across the trios.
 
   This harness is what the numbers in `balance.ts` were tuned against, and it caught several real design faults during development — most notably that service buildings were originally locked behind reputation, which required the resolve that services provide.
+- **`orders.test.ts`** — the Queen's orders and decrees: no order is offered already met or mostly met, even to a mature settlement; only goals with a whole blueprint chain (and a deposit to work) are offered; far-off goals wait; the counting fallback is sized from live output; the choice of two, the yearly swap and its price; the founding writ; decrees sized from staffed producers' output, offered in pairs and begged off; decree streaks; no milestone draft within a point of victory; and old saves without the new fields.
 - **`App.test.tsx`** — UI smoke tests that mount the real app in jsdom and click the path a player takes: menu → setup → blueprint draft → placing a building → switching panels → winning.
 - **`forecast.test.ts`** — the HUD's forward-looking numbers (Storm countdown, wood and food runways, meter rates, building status), checked against what a real tick applies.
 - **`citadel.test.ts`** — meta progression: save migration, upgrade prerequisites, Queen's Edicts, locked cornerstones, draft sizes and the reward breakdown.

@@ -14,14 +14,16 @@ import { useGameStore, useRun } from '../game/store'
 import type { ResourceBag } from '../game/types'
 import { DialogTip } from './TipsCoach'
 import { CharterChoice } from './CharterChoice'
+import { DecreeChoice, OrderChoice } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
 import { DraftAppealChips } from './DraftAppealChips'
 import { Icon } from './Icon'
 import { conditionArt, cornerstoneArt, gladeEventArt, ongoingArt, threatArt } from '../game/content/artFamilies'
 
 /**
- * Blocking modal for the three things that interrupt play: cornerstone picks,
- * blueprint picks, and glade events. The sim is paused while it is open.
+ * Blocking modal for the things that interrupt play: cornerstone and
+ * blueprint picks, glade events, the charter, and the Queen's order and
+ * decree offers. The sim is paused while it is open.
  */
 export function ChoiceModal() {
   const run = useRun()
@@ -135,6 +137,22 @@ export function ChoiceModal() {
     return (
       <Overlay>
         <CharterChoice choice={choice} />
+      </Overlay>
+    )
+  }
+
+  if (choice.kind === 'order') {
+    return (
+      <Overlay>
+        <OrderChoice run={run} choice={choice} />
+      </Overlay>
+    )
+  }
+
+  if (choice.kind === 'decree') {
+    return (
+      <Overlay>
+        <DecreeChoice run={run} choice={choice} />
       </Overlay>
     )
   }

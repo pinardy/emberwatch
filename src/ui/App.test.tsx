@@ -11,7 +11,8 @@ import { findPlacement } from '../game/engine/actions'
 import { drawRunModifiers } from '../game/engine/runModifiers'
 import { pushLog } from '../game/engine/createRun'
 import { CHARTER_REPUTATION, REWARD_MILESTONES } from '../game/engine/balance'
-import { addCondition, issueDecree } from '../game/engine/structure'
+import { addCondition, issueDecree, offerDecrees } from '../game/engine/structure'
+import { offerOrders } from '../game/engine/orders'
 import { MAX_FRAME_REAL_SECONDS, frameBudget, useGameStore } from '../game/store'
 import type { BuildingInstance, RunState } from '../game/types'
 import { CONFIRM_WINDOW_MS } from './useConfirm'
@@ -46,7 +47,7 @@ function takeOpeningDraft() {
   let guard = 0
   while (currentRun().pendingChoices.length > 0 && guard++ < 10) {
     const heading = screen.getByRole('heading', { level: 2 })
-    expect(heading.textContent).toMatch(/New Blueprint|Cornerstone/)
+    expect(heading.textContent).toMatch(/New Blueprint|Cornerstone|Founding Writ/)
     // Each option is a button whose accessible name starts with the icon+name.
     const options = screen
       .getAllByRole('button')
@@ -530,6 +531,76 @@ function bump() {
   useGameStore.setState({ version: useGameStore.getState().version + 1 })
 }
 
+describe("the Queen's offers", () => {
+  /** The option cards in the open dialog. */
+  const cardsIn = (dialog: HTMLElement) =>
+    within(dialog)
+      .getAllByRole('button')
+      .filter((b) => b.className.includes('option'))
+
+  it('opens on the founding writ, with reward, goal and progress on each card', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    let guard = 0
+    while (currentRun().pendingChoices[0]?.kind === 'blueprint' && guard++ < 10) {
+      fireEvent.click(cardsIn(screen.getByRole('dialog'))[0])
+    }
+    const dialog = screen.getByRole('dialog', { name: /Founding Writ/i })
+    const cards = cardsIn(dialog)
+    expect(cards).toHaveLength(3)
+    for (const card of cards) {
+      expect(card.textContent).toMatch(/% done now/)
+      expect(card.textContent).toMatch(/\+1/)
+    }
+    // The writ cannot be swapped for another.
+    expect(within(dialog).queryByText(/Ask for different orders/)).toBeNull()
+    fireEvent.click(cards[0])
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(currentRun().orders.some((o) => o.writ)).toBe(true)
+    act(() => useGameStore.getState().setPanel('orders'))
+    expect(screen.getByText('founding writ')).toBeTruthy()
+  })
+
+  it('offers two orders for an empty slot, with one swap a year', () => {
+    startPlaying()
+    act(() => {
+      const run = currentRun()
+      run.orders.pop()
+      offerOrders(run)
+      bump()
+    })
+    const dialog = screen.getByRole('dialog', { name: /Queen's Orders/i })
+    expect(cardsIn(dialog)).toHaveLength(2)
+    const swap = within(dialog).getByRole('button', { name: /Ask for different orders/ })
+    const before = currentRun().impatienceProgress + currentRun().impatience
+    fireEvent.click(swap)
+    expect(currentRun().impatienceProgress + currentRun().impatience).toBeCloseTo(before + 0.5)
+    const again = screen.getByRole('button', { name: /Ask for different orders/ }) as HTMLButtonElement
+    expect(again.disabled).toBe(true)
+    fireEvent.click(cardsIn(screen.getByRole('dialog'))[0])
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(currentRun().orders).toHaveLength(3)
+  })
+
+  it('offers two decrees, each with its countdown, reward and miss cost', () => {
+    startPlaying()
+    act(() => {
+      offerDecrees(currentRun())
+      bump()
+    })
+    const dialog = screen.getByRole('dialog', { name: /Royal Decree/i })
+    const cards = cardsIn(dialog)
+    expect(cards.length).toBeGreaterThan(0)
+    for (const card of cards) expect(card.textContent).toMatch(/within \d+:\d\d.*Miss it/)
+    expect(within(dialog).getByRole('button', { name: /Beg off both/ })).toBeTruthy()
+    const id = currentRun().pendingChoices[0].options[0]
+    fireEvent.click(cards[0])
+    expect(currentRun().decree?.id).toBe(id)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
 describe('mid-run structure UI', () => {
   it('shows decrees and lingering conditions, and takes the charter', () => {
     render(<App />)
@@ -939,11 +1010,15 @@ describe('auto-pause', () => {
     })
     runUntilPaused()
     expect(useGameStore.getState().speed).toBe(0)
-    const run = currentRun()
-    expect(run.decree).not.toBeNull()
+    // The herald's choice of decrees is what arrives; the clock stays stopped
+    // while the player picks one.
+    expect(currentRun().pendingChoices[0]?.kind).toBe('decree')
     expect(useGameStore.getState().notice).toBe(
-      `Paused: the Queen decrees "${DECREES[run.decree!.defId].name}".`,
+      "Paused: the Queen's herald brings a choice of decrees.",
     )
+    act(() => useGameStore.getState().chooseOption(currentRun().pendingChoices[0].options[0]))
+    expect(currentRun().decree).not.toBeNull()
+    expect(useGameStore.getState().speed).toBe(0)
   })
 
   it('pauses when a species starts to despair', () => {
