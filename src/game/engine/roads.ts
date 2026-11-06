@@ -321,20 +321,21 @@ interface CacheEntry {
 }
 
 /**
- * Derived, never serialised. Keyed by the run object, so a loaded save (a new
+ * Derived, never serialised. Keyed by the run's buildings record (shared by the
+ * season-shifted copies the forecasts make), so a loaded save (a new
  * object) simply rebuilds on first use. Invalidated explicitly when buildings
  * are placed or torn down, and implicitly when roads or the count of finished
  * buildings change — three integer compares per lookup.
  */
-const cache = new WeakMap<RunState, CacheEntry>()
+const cache = new WeakMap<RunState['buildings'], CacheEntry>()
 
 export function invalidateRoadNetwork(s: RunState): void {
-  cache.delete(s)
+  cache.delete(s.buildings)
 }
 
 /** The run's road graph, rebuilt only when roads or buildings changed. */
 export function roadNetwork(s: RunState): RoadNetwork {
-  const entry = cache.get(s)
+  const entry = cache.get(s.buildings)
   const roadCounter = s.roadCounter ?? 0
   const roads = s.roads?.length ?? 0
   const built = s.stats.buildingsBuilt
@@ -342,7 +343,7 @@ export function roadNetwork(s: RunState): RoadNetwork {
     return entry.net
   }
   const net = buildRoadNetwork(s)
-  cache.set(s, { net, roadCounter, roads, built })
+  cache.set(s.buildings, { net, roadCounter, roads, built })
   return net
 }
 

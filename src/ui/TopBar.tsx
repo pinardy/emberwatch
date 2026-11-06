@@ -1,25 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { IMPATIENCE_HOSTILITY_THRESHOLD, SEASON_INFO } from '../game/engine/balance'
 import { MAX_HOSTILITY } from '../game/engine/tick'
 import {
   RUNWAY_WARNING_SECONDS,
-  deadlineForecast,
   formatDuration,
   hearthForecast,
-  meterRates,
   secondsUntilStorm,
   type DeadlineForecast,
 } from '../game/engine/forecast'
-import { computeModifiers } from '../game/engine/modifiers'
-import {
-  idleVillagers,
-  population,
-  secondsUntilDeparture,
-  totalHousing,
-} from '../game/engine/queries'
-import { resolveBreakdowns } from '../game/engine/society'
+import { idleVillagers, population, totalHousing } from '../game/engine/queries'
 import { SPECIES } from '../game/content/species'
-import { useGameStore, useRun } from '../game/store'
+import { useFrameDerived } from '../game/frameDerived'
+import { useGameStore, useHudRun } from '../game/store'
 import { SPEED_OPTIONS } from '../game/engine/balance'
 import type { RunState, SpeciesId } from '../game/types'
 import type { IconId } from '../art/icons'
@@ -82,7 +74,7 @@ interface StatusAlert {
 type Popover = 'status' | 'settings' | 'speed' | null
 
 export function TopBar() {
-  const run = useRun()
+  const run = useHudRun()
   const speed = useGameStore((s) => s.speed)
   const setSpeed = useGameStore((s) => s.setSpeed)
   const goToScreen = useGameStore((s) => s.goToScreen)
@@ -91,24 +83,12 @@ export function TopBar() {
   const updateSettings = useGameStore((s) => s.updateSettings)
   const repFloats = useFloaters(run?.reputation ?? 0, 'up-good')
   const impFloats = useFloaters(run?.impatience ?? 0, 'up-bad')
-  const version = useGameStore((s) => s.version)
   const [popover, setPopover] = useState<Popover>(null)
   const statusRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
   const speedRef = useRef<HTMLDivElement>(null)
-  // Modifiers and resolve walk the whole settlement: once per sim step only.
-  const derived = useMemo(() => {
-    if (!run) return null
-    const mods = computeModifiers(run)
-    return {
-      breakdowns: resolveBreakdowns(run, mods),
-      rates: meterRates(run, mods),
-      hearth: hearthForecast(run, mods),
-      departures: secondsUntilDeparture(run),
-      deadline: deadlineForecast(run, mods),
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run, version])
+  // Modifiers and resolve walk the whole settlement: once per sim step, shared.
+  const derived = useFrameDerived()?.topBar ?? null
 
   useEscapeLayer(popover !== null, () => setPopover(null))
 
@@ -252,6 +232,7 @@ export function TopBar() {
       <div className="topbar-meters">
         <Meter
           label="Reputation"
+          short="Rep."
           icon="👑"
           art={METER_ART.reputation}
           value={run.reputation}
@@ -263,6 +244,7 @@ export function TopBar() {
         />
         <Meter
           label="Impatience"
+          short="Impat."
           icon="⏳"
           art={METER_ART.impatience}
           value={run.impatience}
@@ -282,6 +264,7 @@ export function TopBar() {
         />
         <Meter
           label="Hostility"
+          short="Host."
           icon="🌩️"
           art={METER_ART.hostility}
           value={Math.floor(run.hostility)}
@@ -619,6 +602,8 @@ function hearthTitle(
 
 interface MeterProps {
   label: string
+  /** The label where the meter is too narrow for it (phones). */
+  short?: string
   icon: string
   art?: IconId
   value: number
@@ -629,7 +614,7 @@ interface MeterProps {
   /** Close to losing: the meter turns urgent so it reads at a glance. */
   critical?: boolean
   hint: string
-  /** Compact growth rate shown beside the label, e.g. "+0.2/min". */
+  /** Compact growth rate on the line under the bar, e.g. "+0.2/min". */
   rate?: string
   floats?: Float[]
   /** Changing this key replays the pulse animation (impatience ticking up). */
@@ -640,6 +625,7 @@ interface MeterProps {
 
 function Meter({
   label,
+  short,
   icon,
   art,
   value,
@@ -657,12 +643,16 @@ function Meter({
   return (
     <div className={`meter meter-${tone} ${critical ? 'is-critical' : ''}`} title={hint}>
       <div className="meter-head">
-        <span>
+        <span className="meter-icon">
           <Icon id={art} emoji={icon} />
         </span>
         <span className="meter-label">
-          {label}
-          {rate && <small className="meter-rate"> {rate}</small>}
+          <span className="meter-label-long">{label}</span>
+          {short && (
+            <span className="meter-label-short" aria-hidden>
+              {short}
+            </span>
+          )}
         </span>
         {/* Only the number remounts to replay its pulse; the bar keeps its transition. */}
         <strong
@@ -683,7 +673,17 @@ function Meter({
       >
         <div className="meter-fill" style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
-      {note}
+      {/* Label, value and rate never share a line, so none is cut short. */}
+      {(rate || note) && (
+        <div className="meter-sub">
+          {rate && (
+            <small className="meter-rate" title={`${label} ${rate} right now`}>
+              {rate}
+            </small>
+          )}
+          {note}
+        </div>
+      )}
       {floats && floats.length > 0 && (
         <div className="floaters" aria-hidden>
           {floats.map((f) => (

@@ -37,6 +37,7 @@ import {
 } from './balance'
 import type { Modifiers } from './modifiers'
 import { makeRng } from './rng'
+import { touchVillagers } from './runCache'
 import { needsReductionFor, resolveBonusFor } from './modifiers'
 import {
   SERVICE_COVERAGE_RATIO,
@@ -453,6 +454,7 @@ export function removeVillager(s: RunState, id: string): void {
   if (!villager) return
   if (villager.assignment) unassign(s, id)
   delete s.villagers[id]
+  touchVillagers(s)
 }
 
 /** Removes a villager from whatever they are doing. */

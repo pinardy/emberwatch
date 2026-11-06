@@ -300,11 +300,11 @@ describe('Queen’s Edicts in createRun', () => {
     expect(run({ edict: -3 }).edict).toBe(0)
   })
 
-  it('cannot start above the edict the Citadel has earned', () => {
+  it('cannot start above the edict the Citadel has earned', async () => {
     stubStorage()
     try {
       useGameStore.setState({ meta: { ...defaultMeta(), edictUnlocked: 2 } })
-      useGameStore.getState().startRun(SEED, [...SPECIES], 5)
+      await useGameStore.getState().startRun(SEED, [...SPECIES], 5)
       expect(useGameStore.getState().run?.edict).toBe(2)
     } finally {
       useGameStore.setState({ run: null, screen: 'menu' })

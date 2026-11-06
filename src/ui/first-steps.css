@@ -1,6 +1,6 @@
 /* ==========================================================================
-   First steps checklist — shares the tip coach's slot in the HUD stack
-   (.hud-stack > .tip-coach), so it inherits its placement on every layout.
+   First steps checklist — shares the tip coach's slot in the overlay dock
+   (.hud-context > .tip-coach), so it inherits its placement on every layout.
    ========================================================================== */
 
 .tip-coach.first-steps {
@@ -31,11 +31,14 @@
 }
 
 .tip-coach .first-steps-close {
+  min-width: 32px;
+  min-height: 32px;
+  margin: -6px -6px -6px 0;
   border: none;
   background: transparent;
   color: var(--muted);
   padding: 2px 6px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
 }
 
@@ -69,6 +72,7 @@
   padding: 4px 6px;
   font-size: 12.5px;
   border-radius: 6px;
+  min-height: 32px;
 }
 
 .tip-coach .first-steps-list button:hover:not(:disabled) {
@@ -94,7 +98,7 @@
   border-radius: 4px;
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 
@@ -111,19 +115,19 @@
 .first-steps-text em {
   color: var(--muted);
   font-style: normal;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .first-steps-text small {
   display: block;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
   margin-top: 1px;
 }
 
-/* Beside the inspector on desktop the card keeps to its header and next step. */
-.hud-stack:has(> .inspector) > .first-steps .first-steps-goal,
-.hud-stack:has(> .inspector) > .first-steps li.is-done {
+/* Above the inspector the card keeps to its header and next step. */
+.hud-context:has(> .inspector) > .first-steps .first-steps-goal,
+.hud-context:has(> .inspector) > .first-steps li.is-done {
   display: none;
 }
 
@@ -132,7 +136,7 @@
      scrolls if the map is short. */
   .tip-coach.first-steps {
     width: 100%;
-    max-height: 168px;
+    max-height: min(168px, 30cqh);
     padding: 8px 10px;
   }
 

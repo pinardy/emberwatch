@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 611 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
+npm test           # 627 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -63,9 +63,12 @@ src/
       balance.ts        #   every tunable number, in one place
       rng.ts            #   counter-based RNG: a value is f(seed, cursor)
       geometry.ts       #   plain 2D maths: distances, point-in-polygon
-      mapgen.ts         #   continuous world: Voronoi glades, scattered
-                        #   deposits & obstacles
+      mapgen.ts         #   continuous world: glades, terrain, lookups
+      worldgen.ts       #   generating one: Voronoi glades, scattered deposits
+                        #   & obstacles (loaded only to create a run)
       tick.ts           #   one fixed step of the world
+      runCache.ts       #   adjacency & settlement counts remembered across
+                        #   ticks, so a tick costs what changed
       production.ts     #   construction, recipes, deposits, terrain yields
       adjacency.ts      #   neighbourhood bonuses (speed & service capacity)
       placement.ts      #   the placement-ghost hint shared by both maps
@@ -81,7 +84,10 @@ src/
       diagnostics.ts    #   "what is quietly going wrong" for the warning strip
       timeline.ts       #   bounded run history & key moments for the end-screen
                         #   chart; never touches the RNG
-    store.ts            # zustand store + the game loop's entry point
+    store.ts            # zustand store + the game loop's entry point; its
+                        # subscription hooks (see the comment there) keep a
+                        # sim step from re-rendering the whole HUD
+    frameDerived.ts     # the HUD's settlement-wide numbers, once per sim step
   ui/                   # React components; read the sim, never contain rules
                         # (audio.ts synthesises all cues & rain through a
                         # volume mixer; music.ts is the generative score,
@@ -113,7 +119,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs thirty-three test files:
+`npm test` runs thirty-six test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), joins its workplaces to the hearth by road when it has wood to spare, and clears glades. It plays 24 seeds for each of four species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
@@ -126,6 +132,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
   This harness is what the numbers in `balance.ts` were tuned against, and it caught several real design faults during development — most notably that service buildings were originally locked behind reputation, which required the resolve that services provide.
 - **`App.test.tsx`** — UI smoke tests that mount the real app in jsdom and click the path a player takes: menu → setup → blueprint draft → placing a building → switching panels → winning.
+- **`HudDock.test.tsx`** — the HUD over the map: the overlay dock's regions (warnings and notices on top, the tip or the inspector bottom-left, decree and threats bottom-centre, toasts bottom-right), the side panel folding to a bottom sheet, the resource bar's grouping by purpose, its rolling stock trends (rising, falling, about to run dry), the empty goods holding a building up and the "All stock" drawer, and the meters' rate line and short labels.
 - **`forecast.test.ts`** — the HUD's forward-looking numbers (Storm countdown, wood and food runways, meter rates, building status), checked against what a real tick applies.
 - **`citadel.test.ts`** — meta progression: save migration, upgrade prerequisites, Queen's Edicts, locked cornerstones, draft sizes and the reward breakdown.
 - **`upgrades.test.ts`** and **`UpgradeSection.test.tsx`** — building upgrades: every tier effect (housing, comfort, insulation, storage, service capacity, slots, speed, reach, warmth, recipes and ratios), the upgrade construction flow with builders and rush, decree counting, save/load mid-upgrade and old saves; and the Inspector's upgrade block.
@@ -135,18 +142,19 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`balanceTuning.test.ts`** — the rules the harness was last tuned with: the late-game hostility squeeze, escalating decree misses, and the harpies' Education and lizards' Brawling floors.
 - **`saves.test.ts`** and **`SavesScreen.test.tsx`** — save slots: the slot index and its repair, migration of the single save, overwrite protection, full storage, the export/import round trip, and rejecting malformed and hostile files (prototype keys, mangled fields) without throwing.
 - **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, district plates, building badges, obstacles, the Storm's ground wash, warmth, roads and villagers, that static geometry is not rebuilt on every tick, and that the 2D layers re-derive on structural change but throttle what ticking changes.
+- **`runCache.test.ts`** and **`frameDerived.test.ts`** — the performance layer: the cached adjacency and settlement counts answer exactly what the plain queries do, before and after hand edits and engine changes mid-tick and through a played run; the HUD's shared per-step numbers equal the engine functions they stand for; the HUD clock throttles sim steps but not commands, pauses or season turns; the idle-time autosave.
 - **`roads.test.ts`** — the road graph and its bonus (directness, junctions, warehouse hubs), the rules for laying roads, the cache that keeps the per-tick cost a lookup, and old saves without roads.
 - **`villagerRoutes.test.ts`** — the walking villagers' routes: a pure function of the run, following roads where they run and walking straight where they do not.
 - **`audio.test.ts`**, **`music.test.ts`** and **`SoundSettings.test.tsx`** — sound, against a small fake `AudioContext` (`src/test/fakeAudio.ts`): no context before a user gesture, each volume bus wired into the master at its saved level, mute, ducking, older settings migrating to the default levels, and the sliders in both settings panels. For the score: seasonal palettes, a seeded composer that stays in key and does not loop, look-ahead scheduling, the crossfade on a change of season, and holding while paused or hidden.
-- **`LazyScreens.test.tsx`** — the lazily loaded screens from cold: each shows its loading state, then renders, and all are preloaded in idle time. The other UI tests preload them first (`src/test/setup-ui.ts`) and click straight through.
+- **`LazyScreens.test.tsx`** — the lazily loaded screens from cold: each shows its loading state, then renders, and all are preloaded in idle time (the game screen at once when there is a save to continue). The other UI tests preload them first (`src/test/setup-ui.ts`) and click straight through.
 - **`icons.test.ts`**, **`Icon.test.tsx`** and **`sprites.test.tsx`** — the icon set: every resource, building, species, need, meter, season, deposit, glade kind and terrain, and every cornerstone, glade event, threat, pact, condition, land, charter, Citadel upgrade, edict, achievement, trait, tab and status badge has drawn art (anything still on its emoji fallback must be listed on purpose), framed families stay distinct, the menu draws only from the eager core, the `<Icon>` component's accessibility and fallback, the text-to-icon swap for sim messages, and that the 3D map rasterises each icon once.
 - **`parts.test.tsx`** — the 3D map's draw-call budget: every building in every state, and every deposit and obstacle, draws from a small fixed set of instanced meshes that does not grow with the number of buildings; the sprite atlas paints a tile once, shares it and evicts only unused tiles; smoke sits on the rotated chimney; the model key holds still while only work and stock change.
 
 ## PWA
 
-`vite-plugin-pwa` generates the manifest and a Workbox service worker precaching the whole app shell, so after one load the game runs fully offline — there is no server component. Runs autosave to `localStorage` every 8 seconds, on tab hide, and on page unload; the game pauses itself when the tab is backgrounded rather than fast-forwarding on return.
+`vite-plugin-pwa` generates the manifest and a Workbox service worker precaching the whole app shell, so after one load the game runs fully offline — there is no server component. Runs autosave to `localStorage` every 8 seconds (written when the browser is next idle, so the write never lands inside a frame), and at once on tab hide and page unload; the game pauses itself when the tab is backgrounded rather than fast-forwarding on return.
 
-Only the menu ships in the startup chunk (about 185 kB minified, 60 kB gzipped, plus React). The setup, Citadel, saves, achievements and game screens, the end-of-run summary with its timeline chart, the 3D map (three.js) and the music engine are separate chunks: the screens are preloaded in idle time once the menu is up and then render without a loading state, the 3D map loads when it is shown, and the music engine loads only when music is audible. The service worker precaches every chunk.
+Only the menu ships in the startup chunks (about 220 kB minified, 72 kB gzipped, plus React). The setup, Citadel, saves, achievements and game screens, the end-of-run summary with its timeline chart, the map generator (only needed to create a run), the 3D map (three.js) and the music engine are separate chunks: the screens and the map generator are preloaded in idle time once the menu is up (the game screen right after the first paint when there is a save to continue) and then render without a loading state, the 3D map loads when it is shown, and the music engine loads only when music is audible. The service worker precaches every chunk.
 
 **Save slots.** There are four run slots — Autosave plus Slots 1–3 — listed on the menu's *Saved settlements* screen with their species, edict, season, reputation, impatience, modifiers, seed and when they were last played. Each run autosaves to its own slot; *Continue* resumes the most recently played one. A new settlement takes a free slot and only replaces a run when the player picks that slot and confirms. The Autosave slot keeps the original `emberwatch.run.v1` key, so a save from before slots simply appears there; a small index (`emberwatch.slots.v1`) holds the metadata and is rebuilt from the slots whenever it disagrees with them (`src/game/saveSlots.ts`). A save that no longer fits in storage leaves the previous one intact and says so once.
 

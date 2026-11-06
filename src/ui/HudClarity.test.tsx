@@ -135,7 +135,7 @@ describe('warning strip', () => {
     return run
   }
 
-  it('folds to the most urgent warning, in full, and opens to show the rest', () => {
+  it('folds to the two most urgent warnings, in full, and opens to show the rest', () => {
     const run = troubledRun()
     const expected = collectWarnings(run)
     expect(expected.length).toBeGreaterThanOrEqual(3)
@@ -151,21 +151,27 @@ describe('warning strip', () => {
     expect(items[0].textContent).toMatch(/Beavers will start leaving/)
     // The advice is in the text, not cut off.
     expect(region.textContent).toContain("Build a Foragers' Camp.")
+    // Two show; the rest are folded (still in the live region).
+    expect(items.map((el) => el.classList.contains('is-folded'))).toEqual(
+      items.map((_, i) => i >= 2),
+    )
 
     const strip = region.parentElement!
     const toggle = screen.getByRole('button', { name: `Show all ${items.length} warnings` })
-    expect(toggle.textContent).toBe(`+${items.length - 1} more ▾`)
+    expect(toggle.textContent).toBe(`+${items.length - 2} more ▾`)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(toggle.getAttribute('aria-controls')).toBe(region.id)
     expect(strip.className).not.toContain('is-expanded')
 
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(toggle.getAttribute('aria-label')).toBe('Show only the most urgent warning')
+    expect(toggle.getAttribute('aria-label')).toBe('Show only the most urgent warnings')
     expect(strip.className).toContain('is-expanded')
+    expect(region.querySelectorAll('.warning.is-folded')).toHaveLength(0)
 
     fireEvent.click(toggle)
     expect(strip.className).not.toContain('is-expanded')
+    expect(region.querySelectorAll('.warning.is-folded')).toHaveLength(items.length - 2)
   })
 
   it('has nothing to fold with a single warning', () => {
