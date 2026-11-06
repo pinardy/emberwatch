@@ -9,6 +9,9 @@ import { useMapOverlays } from './mapShared'
 import { roadKey } from './map3d/layerKeys'
 import { roadGeometry } from './map3d/Roads'
 import { ROAD_TOOL, placeRoad } from '../game/engine/roads'
+import { DISTRICT_STYLE, districtOf, obstacleTitle, plateShape } from './map2dArt'
+import { useThrottledRunValue } from './map2dState'
+import { BUILDINGS } from '../game/content/buildings'
 
 /**
  * Map renderer checks that need a DOM: static geometry survives sim ticks,
@@ -227,4 +230,102 @@ describe('2D map parity', () => {
     const badge = document.querySelector('g.status-badge.is-construction')
     expect(badge?.querySelector('title')?.textContent).toBe('Under construction')
   })
+
+  it('stands each building on a plate shaped and tinted by its district', () => {
+    startGame()
+    const run = currentRun()
+    const spot = findPlacement(run, 'shelter')
+    expect(spot).not.toBeNull()
+    act(() => {
+      useGameStore.getState().setBuildMode('shelter')
+      useGameStore.getState().place(spot!)
+      useGameStore.getState().setBuildMode(null)
+    })
+    const hearth = document.querySelector('g.building.is-hearth')
+    const home = document.querySelector('g.building.is-housing')
+    expect(hearth).not.toBeNull()
+    expect(home).not.toBeNull()
+    const outline = (g: Element) => g.querySelector('path.building-plate')!
+    // Different silhouettes and tints, not one disc for everything.
+    expect(outline(hearth!).getAttribute('d')).not.toBe(outline(home!).getAttribute('d'))
+    expect(outline(home!).getAttribute('stroke')).toBe(DISTRICT_STYLE.housing.edge)
+    expect(outline(hearth!).getAttribute('stroke')).toBe(DISTRICT_STYLE.hearth.edge)
+    // Hovering names the building and its district.
+    expect(home!.querySelector('title')?.textContent).toMatch(/Shelter — Housing/)
+  })
+
+  it('gives every district its own silhouette', () => {
+    expect(districtOf(BUILDINGS.ancientHearth)).toBe('hearth')
+    expect(districtOf(BUILDINGS.brazier)).toBe('fire')
+    expect(districtOf(BUILDINGS.shelter)).toBe('housing')
+    expect(districtOf(BUILDINGS.smallFarm)).toBe('farm')
+    expect(districtOf(BUILDINGS.woodcuttersCamp)).toBe('camp')
+    expect(districtOf(BUILDINGS.lumberMill)).toBe('industry')
+    expect(districtOf(BUILDINGS.tavern)).toBe('service')
+    expect(districtOf(BUILDINGS.warehouse)).toBe('storage')
+    const shapes = Object.keys(DISTRICT_STYLE).map((d) => plateShape(d as keyof typeof DISTRICT_STYLE, 20).d)
+    expect(new Set(shapes).size).toBe(shapes.length)
+    const tints = Object.values(DISTRICT_STYLE).map((s) => s.edge)
+    expect(new Set(tints).size).toBe(tints.length)
+  })
+
+  it('names obstacles and how to deal with them', () => {
+    useGameStore.getState().startRun(77)
+    const run = currentRun()
+    const home = Object.values(run.glades).find((g) => g.cleared)!
+    run.obstacles.push({ id: 'oTest', kind: 'crag', pos: home.center, radius: 0.5, gladeId: home.id })
+    render(<App />)
+    const crag = document.querySelector('g.obstacle-2d.is-crag')
+    expect(crag).not.toBeNull()
+    expect(crag!.querySelector('use')?.getAttribute('data-icon')).toBe('crag')
+    expect(crag!.querySelector('title')?.textContent).toBe(obstacleTitle('crag'))
+    expect(obstacleTitle('crag')).toMatch(/never be cleared/)
+    expect(obstacleTitle('mire')).toMatch(/never be drained/)
+  })
+
+  it('darkens the ground in the Storm, under the buildings', () => {
+    startGame()
+    expect(document.querySelector('g.weather-ground.is-storm')).toBeNull()
+    act(() => {
+      currentRun().season.season = 'storm'
+      useGameStore.setState({ version: useGameStore.getState().version + 1 })
+    })
+    const wash = document.querySelector('g.weather-ground.is-storm')
+    expect(wash).not.toBeNull()
+    // Drawn before (beneath) every building plate.
+    const firstBuilding = document.querySelector('g.building')!
+    expect(wash!.compareDocumentPosition(firstBuilding) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
 })
+
+describe('2D map subscriptions', () => {
+  it('re-derives on structural change at once, and throttles what ticking changes', () => {
+    useGameStore.getState().startRun(77)
+    const store = useGameStore.getState()
+    for (const choice of [...currentRun().pendingChoices]) store.chooseOption(choice.options[0])
+    let derived = 0
+    let structure = 'a'
+    const { result } = renderHook(() =>
+      useThrottledRunValue(
+        (run) => {
+          derived++
+          return { key: `${structure}:${Math.floor(run.clock)}`, value: `${structure}:${Math.floor(run.clock)}` }
+        },
+        () => structure,
+        60_000,
+      ),
+    )
+    const first = result.current
+    const afterMount = derived
+    // A burst of sim steps inside the throttle window derives nothing new.
+    tickSome(12)
+    expect(derived).toBe(afterMount)
+    expect(result.current).toBe(first)
+    // A structural change (a placement, an assignment) lands immediately.
+    structure = 'b'
+    act(() => useGameStore.setState({ version: useGameStore.getState().version + 1 }))
+    expect(derived).toBe(afterMount + 1)
+    expect(result.current).toMatch(/^b:/)
+  })
+})
+

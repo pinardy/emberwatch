@@ -340,7 +340,7 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
                 <GladeLayer2D run={run} />
                 {/* The season's wash darkens the ground only: roads, features
                     and buildings stay crisp above it. */}
-                <WeatherGround2D x={box.x} y={box.y} width={box.w} height={box.h} />
+                <WeatherGround2D x={-w / 2} y={-h / 2} width={w} height={h} />
                 <RoadLayer2D run={run} />
                 <ObstacleLayer2D run={run} />
                 <DepositLayer2D run={run} />

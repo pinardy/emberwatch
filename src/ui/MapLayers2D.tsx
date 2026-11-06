@@ -629,7 +629,7 @@ interface RainStyle {
 }
 
 const RAIN: Partial<Record<string, RainStyle>> = {
-  storm: { area: 3200, vx: -150, vy: 520, length: 0.034, width: 1.3, color: 'rgba(205, 222, 242, 0.42)' },
+  storm: { area: 2400, vx: -150, vy: 520, length: 0.036, width: 1.3, color: 'rgba(205, 222, 242, 0.5)' },
   drizzle: { area: 14000, vx: -40, vy: 210, length: 0.045, width: 1, color: 'rgba(185, 205, 230, 0.22)' },
 }
 
