@@ -3,7 +3,7 @@ import { VILLAGER_TRAIT_ART } from '../game/content/artFamilies'
 import { BUILDINGS } from '../game/content/buildings'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NEED_LABELS, SPECIES, VILLAGER_TRAITS } from '../game/content/species'
 import {
   demolishRefund,
@@ -83,16 +83,9 @@ export function Inspector() {
     return (
       <div className="inspector">
         <div className="inspector-body">
-          <header className="inspector-head">
-            <span className="inspector-icon">
-              <Icon id={DEPOSIT_ART[deposit.kind]} />
-            </span>
-            <div>
-              <strong>{DEPOSIT_INFO[deposit.kind].name}</strong>
-              <small>{run.glades[deposit.gladeId]?.name}</small>
-            </div>
-            <CloseButton />
-          </header>
+          <InspectorHead icon={<Icon id={DEPOSIT_ART[deposit.kind]} />} name={DEPOSIT_INFO[deposit.kind].name}>
+            {run.glades[deposit.gladeId]?.name}
+          </InspectorHead>
           <p className="muted">
             {deposit.amount === null
               ? 'Renewable — this deposit never runs out.'
@@ -107,17 +100,25 @@ export function Inspector() {
   return null
 }
 
-function CloseButton() {
+/** The inspector's title row: icon, name, a line under it, and Close. */
+function InspectorHead({ icon, name, children }: { icon: ReactNode; name: ReactNode; children: ReactNode }) {
   const clearSelection = useGameStore((s) => s.clearSelection)
   return (
-    <button
-      type="button"
-      className="icon-btn inspector-close"
-      aria-label="Close"
-      onClick={clearSelection}
-    >
-      ✕
-    </button>
+    <header className="inspector-head">
+      <span className="inspector-icon">{icon}</span>
+      <div>
+        <strong>{name}</strong>
+        <small>{children}</small>
+      </div>
+      <button
+        type="button"
+        className="icon-btn inspector-close"
+        aria-label="Close"
+        onClick={clearSelection}
+      >
+        ✕
+      </button>
+    </header>
   )
 }
 
@@ -149,24 +150,15 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
   return (
     <div className="inspector-body">
-      <header className="inspector-head">
-        <span className="inspector-icon">
-          <Icon of={def} />
-        </span>
-        <div>
-          <strong>{displayName(building)}</strong>
-          <small>
-            {tierMark(building) && (
-              <span className="tier-stars" aria-label={`Tier ${building.tier}`}>
-                {tierMark(building)}{' '}
-              </span>
-            )}
-            {run.glades[building.gladeId]?.name}
-            {building.paused ? ' · paused' : ''}
-          </small>
-        </div>
-        <CloseButton />
-      </header>
+      <InspectorHead icon={<Icon of={def} />} name={displayName(building)}>
+        {tierMark(building) && (
+          <span className="tier-stars" aria-label={`Tier ${building.tier}`}>
+            {tierMark(building)}{' '}
+          </span>
+        )}
+        {run.glades[building.gladeId]?.name}
+        {building.paused ? ' · paused' : ''}
+      </InspectorHead>
 
       {!building.built ? (
         <>
@@ -634,16 +626,9 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
   return (
     <div className="inspector">
       <div className="inspector-body">
-        <header className="inspector-head">
-          <span className="inspector-icon">
-            <Icon id={GLADE_ART[glade.kind]} />
-          </span>
-          <div>
-            <strong>{glade.name}</strong>
-            <small>{GLADE_KIND_STYLE[glade.kind].title}</small>
-          </div>
-          <CloseButton />
-        </header>
+        <InspectorHead icon={<Icon id={GLADE_ART[glade.kind]} />} name={glade.name}>
+          {GLADE_KIND_STYLE[glade.kind].title}
+        </InspectorHead>
 
         {glade.cleared ? (
           <p className="muted">Cleared. You can build here.</p>
