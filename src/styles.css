@@ -2531,7 +2531,6 @@ code {
   align-self: center;
   display: grid;
   gap: 6px;
-  max-width: min(560px, 100%);
 }
 
 .threat-card {
@@ -3237,7 +3236,6 @@ button.is-armed {
   grid-area: toasts;
   align-self: end;
   justify-self: end;
-  position: static;
   width: 100%;
   max-height: 30cqh;
 }
@@ -3835,12 +3833,6 @@ button.is-armed {
 
 .bottom-stack > * {
   pointer-events: auto;
-}
-
-.bottom-stack .threat-bar {
-  position: static;
-  transform: none;
-  max-width: none;
 }
 
 .conditions-bar {
