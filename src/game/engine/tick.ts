@@ -15,6 +15,11 @@ import {
 } from './balance'
 import { pushLog } from './createRun'
 import {
+  breakStormBlights,
+  forecastStormBlight,
+  passStormConditions,
+} from './blights'
+import {
   checkMilestones,
   stepClearing,
   stepNewcomers,
@@ -154,9 +159,12 @@ function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
       `The Blightstorm breaks over the settlement. Keep the hearth burning.`,
       'bad',
     )
+    // Whatever the forest promised at Clearance arrives with the rain.
+    breakStormBlights(s)
   } else if (next === 'drizzle') {
     recordEvent(s, 'year', String(s.season.year))
     pushLog(s, `Year ${s.season.year} begins. The storm has passed.`, 'good')
+    passStormConditions(s)
     if (s.season.year === QUEEN_DEADLINE_YEAR - 1 && s.clock < QUEEN_DEADLINE_SECONDS) {
       pushLog(
         s,
@@ -166,6 +174,11 @@ function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
     }
   } else {
     pushLog(s, `${SEASON_INFO[next].name}. ${SEASON_INFO[next].blurb}`, 'info')
+    if (next === 'clearance') {
+      // The forest's mood sets the coming Storm's blight, said (as a
+      // lingering condition) while there is still a Clearance to prepare in.
+      forecastStormBlight(s)
+    }
   }
 }
 

@@ -414,7 +414,8 @@ describe('rule-bending cornerstones for braziers, terrain, adjacency, decrees an
   const withCornerstone = (id: string) => {
     expect(CORNERSTONES[id], id).toBeDefined()
     const state = runWith([])
-    state.cornerstones.push(id)
+    // Only this cornerstone: the opening pick would muddy the comparison.
+    state.cornerstones = [id]
     return state
   }
 
@@ -555,7 +556,7 @@ describe('the first royal decree on modified land', () => {
     for (const modifiers of [['longStorms'], ['earlyFrost'], []]) {
       const state = runWith(modifiers)
       // A decree cornerstone shapes the decree itself, not when it comes.
-      state.cornerstones.push('royalCouriers')
+      state.cornerstones = ['royalCouriers']
       while (state.season.year === 1) {
         tick(state, 0.125)
         state.pendingChoices = []

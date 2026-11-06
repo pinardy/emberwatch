@@ -271,13 +271,19 @@ describe('run setup', () => {
     expect(idleVillagers(state)).toHaveLength(STARTING_VILLAGERS)
   })
 
-  it('opens on a blueprint draft that offers something useful', () => {
+  it('opens on a blueprint draft that offers something useful, then a cornerstone', () => {
     const state = freshRun()
-    expect(state.pendingChoices).toHaveLength(OPENING_BLUEPRINT_PICKS)
+    expect(state.pendingChoices).toHaveLength(OPENING_BLUEPRINT_PICKS + 1)
     expect(state.pendingChoices[0].kind).toBe('blueprint')
-    // The guaranteed-relevant slot must advance a service the settlers want.
+    // The run's first draft is owed a piece of a service the settlers want.
     const wanted = relevantBlueprints(state)
     expect(state.pendingChoices[0].options).toContain(wanted[0])
+    // Opening drafts are blueprints only; every run then lays a cornerstone.
+    for (const choice of state.pendingChoices.slice(0, OPENING_BLUEPRINT_PICKS)) {
+      expect(choice.mixed).toBeUndefined()
+      for (const id of choice.options) expect(BUILDINGS[id], id).toBeDefined()
+    }
+    expect(state.pendingChoices[OPENING_BLUEPRINT_PICKS].kind).toBe('cornerstone')
   })
 
   it('never grants the same blueprint twice across a multi-pick draft', () => {
@@ -970,7 +976,10 @@ describe('cornerstone content invariants', () => {
   it('has unique ids, and every effect actually moves the modifiers', () => {
     const ids = CORNERSTONE_LIST.map((d) => d.id)
     expect(new Set(ids).size).toBe(ids.length)
-    const neutral = JSON.stringify(computeModifiers(newRun()))
+    // Every run opens on a cornerstone pick; compare against none at all.
+    const bare = newRun()
+    bare.cornerstones = []
+    const neutral = JSON.stringify(computeModifiers(bare))
     for (const def of CORNERSTONE_LIST) {
       expect(def.effects.length, def.id).toBeGreaterThan(0)
       const state = newRun()
@@ -1480,12 +1489,31 @@ describe('pacing: departures, hunger and the Queen', () => {
     for (const sp of state.speciesPool) state.resolve[sp] = 40
 
     state.reputationProgress = 0
-    const idle = stepReputation(state, 10, mods, breakdowns.map((b) => ({ ...b, needsMet: 0 })))
+    const idle = stepReputation(
+      state,
+      10,
+      mods,
+      breakdowns.map((b) => ({ ...b, needsMet: 0, builtMet: 0 })),
+    )
     state.reputationProgress = 0
-    const full = stepReputation(state, 10, mods, breakdowns.map((b) => ({ ...b, needsMet: 1 })))
+    const full = stepReputation(
+      state,
+      10,
+      mods,
+      breakdowns.map((b) => ({ ...b, needsMet: 1, builtMet: 1 })),
+    )
+    // Needs a species meets for itself (a floor) raise resolve, not reputation.
+    state.reputationProgress = 0
+    const selfServed = stepReputation(
+      state,
+      10,
+      mods,
+      breakdowns.map((b) => ({ ...b, needsMet: 1, builtMet: 0 })),
+    )
 
     expect(idle).toBeGreaterThan(0)
     expect(idle / full).toBeCloseTo(REPUTATION_UNSERVED_SHARE)
+    expect(selfServed).toBeCloseTo(idle)
   })
 })
 

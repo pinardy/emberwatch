@@ -259,8 +259,11 @@ export function createRun({
   // The run begins on a choice: which buildings this settlement will have. It
   // also guarantees a route to satisfying at least one service need.
   const openingPicks = OPENING_BLUEPRINT_PICKS + loadout.openingPicks
-  for (let i = 0; i < openingPicks; i++) offerBlueprint(state)
-  // The Viceroy's Signet adds a cornerstone pick to the opening.
+  for (let i = 0; i < openingPicks; i++) offerBlueprint(state, false)
+  // Every run lays a cornerstone before the first tick, so a perk shapes the
+  // run from its first minute — a founding one, drawn from the commons; the
+  // Viceroy's Signet adds a second from the whole pool.
+  offerCornerstone(state, true)
   if (loadout.startCornerstoneChoice) offerCornerstone(state)
 
   const land = runModifierDefs(state.runModifiers)

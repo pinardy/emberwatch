@@ -6,22 +6,29 @@ import { ORDERS, describeGoal, evaluateGoal } from '../content/orders'
 import { SPECIES, VILLAGER_TRAIT_LIST, speciesSingular, villagerName } from '../content/species'
 import { EDIBLE, resourceName } from '../content/resources'
 import type {
+  ActiveThreat,
   BuildingDef,
+  Glade,
   GladeEventOptionDef,
   ResourceBag,
   ResourceId,
   RunState,
   ServiceNeed,
   SpeciesId,
+  ThreatSpec,
 } from '../types'
 import {
   CLEAR_RATE_PER_VILLAGER,
+  DRAFT_PITY,
   GLADES_PER_REPUTATION,
   HOSTILITY_PER_GLADE_CLEARED,
   IMPATIENCE_PER_VILLAGER_LOST,
   REROLL_BASE_COST,
   REROLL_COST_GROWTH,
   REWARD_MILESTONES,
+  THREAT_APPEASE_GROWTH,
+  THREAT_STRIKE_GROWTH,
+  THREAT_STRIKES_BEFORE_LOSS,
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import {
@@ -110,6 +117,56 @@ export function stepClearing(s: RunState, dt: number, mods: Modifiers): void {
       })
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// What a glade's event puts at stake
+// ---------------------------------------------------------------------------
+
+/** Kinds of outcome a glade's waiting event can lead to, worst first. */
+export type GladeStake = 'lives' | 'threat' | 'condition' | 'reputation' | 'pact'
+
+/**
+ * What the event waiting in a glade could lead to — read from its options,
+ * never naming the event — so the map can say "a threat may wait here" and
+ * clearing order is a decision rather than whichever glade is cheapest.
+ * Empty for a glade with no event (or one already cleared).
+ */
+export function gladeStakes(s: RunState, gladeId: string): GladeStake[] {
+  const glade = s.glades[gladeId]
+  return glade ? gladeStakesOf(glade) : []
+}
+
+/** `gladeStakes` for a glade in hand (pure: reads only its waiting event). */
+export function gladeStakesOf(glade: Pick<Glade, 'cleared' | 'eventId'>): GladeStake[] {
+  const def = !glade.cleared && glade.eventId ? GLADE_EVENTS[glade.eventId] : undefined
+  if (!def) return []
+  const found = new Set<GladeStake>()
+  for (const o of def.options) {
+    if (o.villagerLoss || o.threat?.strike.villagerLoss) found.add('lives')
+    if (o.threat) found.add('threat')
+    if (o.condition) found.add('condition')
+    if (o.reputation || o.condition?.onResolve?.reputation) found.add('reputation')
+    if (o.ongoing) found.add('pact')
+  }
+  const order: GladeStake[] = ['lives', 'threat', 'condition', 'reputation', 'pact']
+  return order.filter((k) => found.has(k))
+}
+
+/** Short words for each stake, for plates and the Inspector. */
+export const GLADE_STAKE_LABEL: Record<GladeStake, { icon: string; text: string }> = {
+  lives: { icon: '🪦', text: 'lives' },
+  threat: { icon: '🐺', text: 'a threat' },
+  condition: { icon: '⏳', text: 'a lingering task' },
+  reputation: { icon: '👑', text: 'reputation' },
+  pact: { icon: '✨', text: 'a pact' },
+}
+
+/** "a threat, lives or reputation" — the stakes in a sentence. */
+export function describeStakes(stakes: GladeStake[]): string {
+  const words = stakes.map((k) => GLADE_STAKE_LABEL[k].text)
+  if (words.length <= 1) return words[0] ?? ''
+  return `${words.slice(0, -1).join(', ')} or ${words[words.length - 1]}`
 }
 
 // ---------------------------------------------------------------------------
@@ -215,17 +272,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
     for (let i = 0; i < option.villagerGain; i++) addVillager(s)
   }
 
-  if (option.threat) {
-    const gladeId = choice.gladeId ?? ''
-    s.threats.push({
-      ...option.threat,
-      id: `t${s.threatCounter++}`,
-      gladeId,
-      timer: option.threat.interval,
-    })
-    recordEvent(s, 'threat', option.threat.name)
-    pushLog(s, `${option.threat.name} is loose. Appease it before it strikes.`, 'bad')
-  }
+  if (option.threat) unleashThreat(s, option.threat, choice.gladeId ?? '')
 
   if (option.ongoing) {
     s.ongoing.push({ ...option.ongoing, id: `g${s.ongoing.length}_${def.id}` })
@@ -243,8 +290,57 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
 // ---------------------------------------------------------------------------
 
 /**
+ * Sets a threat loose. Its numbers are copied, never shared with the content
+ * that declared it: an ignored threat raises them in place as it grows bolder.
+ */
+export function unleashThreat(s: RunState, spec: ThreatSpec, gladeId: string): ActiveThreat {
+  const threat: ActiveThreat = {
+    ...spec,
+    appease: { ...spec.appease },
+    strike: {
+      ...spec.strike,
+      ...(spec.strike.stockLoss ? { stockLoss: { ...spec.strike.stockLoss } } : {}),
+    },
+    id: `t${s.threatCounter++}`,
+    gladeId,
+    timer: spec.interval,
+    strikes: 0,
+  }
+  s.threats.push(threat)
+  recordEvent(s, 'threat', spec.name)
+  pushLog(s, `${spec.name} is loose. Appease it before it strikes.`, 'bad')
+  return threat
+}
+
+/**
+ * An ignored threat grows bolder: after each strike its next one hits
+ * `THREAT_STRIKE_GROWTH` harder and paying it off costs `THREAT_APPEASE_GROWTH`
+ * more. From `THREAT_STRIKES_BEFORE_LOSS` strikes on it also takes a villager.
+ * The numbers are raised on the threat itself, so the threat bar always shows
+ * the next strike and today's price.
+ */
+export function escalateThreat(threat: ActiveThreat): void {
+  threat.strikes = (threat.strikes ?? 0) + 1
+  const strike = threat.strike
+  const grow = 1 + THREAT_STRIKE_GROWTH
+  if (strike.stockLoss) {
+    for (const [id, amount] of Object.entries(strike.stockLoss)) {
+      strike.stockLoss[id as ResourceId] = Math.ceil((amount ?? 0) * grow)
+    }
+  }
+  if (strike.hostility) strike.hostility = Math.round(strike.hostility * grow * 2) / 2
+  if (strike.impatience) strike.impatience = Math.round(strike.impatience * grow * 100) / 100
+  if (threat.strikes >= THREAT_STRIKES_BEFORE_LOSS && !strike.villagerLoss) strike.villagerLoss = 1
+  for (const [id, amount] of Object.entries(threat.appease)) {
+    // Amber prices climb too; everything rounds up to whole units.
+    threat.appease[id as ResourceId] = Math.ceil((amount ?? 0) * (1 + THREAT_APPEASE_GROWTH))
+  }
+}
+
+/**
  * Threats strike on a timer until they are appeased. Each strike is logged, so
- * a player who ignores one can read exactly what it is costing them.
+ * a player who ignores one can read exactly what it is costing them — and
+ * each one makes the next worse (see `escalateThreat`).
  */
 export function stepThreats(s: RunState, dt: number): void {
   for (const threat of s.threats) {
@@ -283,7 +379,17 @@ export function stepThreats(s: RunState, dt: number): void {
         parts.push(`${victim.name} is taken`)
       }
     }
-    pushLog(s, `${threat.icon} ${threat.name} strikes — ${parts.join(', ') || 'the settlement shudders'}.`, 'bad')
+    const before = threat.strike.villagerLoss ?? 0
+    escalateThreat(threat)
+    const bolder =
+      !before && threat.strike.villagerLoss
+        ? ' It grows bold: its next strike will take a villager.'
+        : ' It grows bolder.'
+    pushLog(
+      s,
+      `${threat.icon} ${threat.name} strikes — ${parts.join(', ') || 'the settlement shudders'}.${bolder}`,
+      'bad',
+    )
   }
 }
 
@@ -339,20 +445,35 @@ export function checkMilestones(s: RunState): void {
   }
 }
 
-export function offerCornerstone(s: RunState): void {
+export function offerCornerstone(s: RunState, commonOnly = false): void {
   const rng = makeRng(s.seed, s.rngCursor)
-  const pool = cornerstonePool(s).filter((c) => !s.cornerstones.includes(c.id))
+  const options = drawCornerstones(s, rng, cornerstoneDraftSize(s), [], commonOnly)
+  s.rngCursor = rng.cursor()
+  if (options.length === 0) return
+  s.pendingChoices.push({ kind: 'cornerstone', options })
+}
+
+/** Up to `size` cornerstones not yet laid (nor in `exclude`), by rarity weight. */
+function drawCornerstones(
+  s: RunState,
+  rng: ReturnType<typeof makeRng>,
+  size: number,
+  exclude: string[] = [],
+  commonOnly = false,
+): string[] {
+  const remaining = cornerstonePool(s).filter(
+    (c) =>
+      !s.cornerstones.includes(c.id) &&
+      !exclude.includes(c.id) &&
+      (!commonOnly || c.rarity === 'common'),
+  )
   const options: string[] = []
-  const remaining = [...pool]
-  const size = cornerstoneDraftSize(s)
   for (let i = 0; i < size && remaining.length > 0; i++) {
     const pickDef = rng.weighted(remaining, (c) => RARITY_WEIGHTS[c.rarity])
     options.push(pickDef.id)
     remaining.splice(remaining.indexOf(pickDef), 1)
   }
-  s.rngCursor = rng.cursor()
-  if (options.length === 0) return
-  s.pendingChoices.push({ kind: 'cornerstone', options })
+  return options
 }
 
 /**
@@ -458,39 +579,78 @@ export function draftAppeal(s: RunState, defId: string): DraftAppeal {
   return appeal
 }
 
+/** True when a draft is owed a piece of a wanted service chain (the pity rule). */
+export function draftOwesChain(s: RunState): boolean {
+  return (s.draftDrought ?? DRAFT_PITY) >= DRAFT_PITY
+}
+
 /**
- * Three blueprint options: one guaranteed to advance a service the settlement
- * actually wants (so a draft can never leave you unable to raise resolve), plus
- * two at random for variety.
+ * A blueprint draft's options, drawn at random from the locked pool and laid
+ * out in random order. Nothing is guaranteed — except that after `DRAFT_PITY`
+ * drafts in a row with nothing toward a wanted service, the next one carries
+ * the most useful chain piece, so a needed service is never starved for good
+ * (the run's first draft is owed one too). A `mixed` draft trades one
+ * blueprint slot for a cornerstone, so "finish the chain" competes with a
+ * run-long perk.
  */
-function buildBlueprintOptions(s: RunState): string[] {
+function buildBlueprintOptions(
+  s: RunState,
+  mixed: boolean,
+  { exclude = [], pity = true }: { exclude?: string[]; pity?: boolean } = {},
+): string[] {
   const rng = makeRng(s.seed, s.rngCursor)
-  const pool = BLUEPRINT_POOL.filter((id) => !s.unlockedBuildings.includes(id))
+  const pool = BLUEPRINT_POOL.filter(
+    (id) => !s.unlockedBuildings.includes(id) && !exclude.includes(id),
+  )
   if (pool.length === 0) {
     s.rngCursor = rng.cursor()
     return []
   }
-  // `relevantBlueprints` is priority-ordered, so take from the front.
-  const relevant = relevantBlueprints(s)
-  const options: string[] = []
-  if (relevant.length > 0) options.push(relevant[0])
   const size = blueprintDraftSize(s)
+  const cornerstone = mixed ? drawCornerstones(s, rng, 1, exclude) : []
+  const blueprintSlots = Math.max(1, size - cornerstone.length)
+  const options: string[] = []
+  // `relevantBlueprints` is priority-ordered, so take from the front.
+  const relevant = relevantBlueprints(s).filter((id) => !exclude.includes(id))
+  if (pity && relevant.length > 0 && draftOwesChain(s)) options.push(relevant[0])
   for (const id of rng.shuffle(pool)) {
-    if (options.length >= size) break
+    if (options.length >= blueprintSlots) break
     if (!options.includes(id)) options.push(id)
   }
+  const out = rng.shuffle([...options, ...cornerstone])
   s.rngCursor = rng.cursor()
-  return options
+  return out
 }
 
-export function offerBlueprint(s: RunState): void {
-  const options = buildBlueprintOptions(s)
+/**
+ * Offers a blueprint draft. Milestone drafts are `mixed` (one option is a
+ * cornerstone); the opening drafts, dealt before the clock starts, are not.
+ */
+export function offerBlueprint(s: RunState, mixed = s.clock > 0): void {
+  const options = buildBlueprintOptions(s, mixed)
   if (options.length === 0) {
     // Nothing left to unlock — hand out a cornerstone instead.
     offerCornerstone(s)
     return
   }
-  s.pendingChoices.push({ kind: 'blueprint', options })
+  s.pendingChoices.push({ kind: 'blueprint', options, ...(mixed ? { mixed } : {}) })
+}
+
+/** Lays a cornerstone (the caller retires the choice). */
+function layCornerstone(s: RunState, optionId: string): void {
+  s.cornerstones.push(optionId)
+  recordEvent(s, 'cornerstone', CORNERSTONES[optionId]?.name ?? optionId)
+  pushLog(s, `Cornerstone laid: ${CORNERSTONES[optionId]?.name ?? optionId}.`, 'good')
+}
+
+/**
+ * Counts blueprint drafts that passed without a piece of a wanted chain on
+ * offer (judged before the pick changes what is wanted), for the pity rule.
+ */
+function noteDraftOffer(s: RunState, options: string[]): void {
+  const relevant = relevantBlueprints(s)
+  if (relevant.length === 0 || options.some((id) => relevant.includes(id))) s.draftDrought = 0
+  else s.draftDrought = (s.draftDrought ?? DRAFT_PITY) + 1
 }
 
 export function takeChoice(s: RunState, optionId: string): void {
@@ -499,13 +659,18 @@ export function takeChoice(s: RunState, optionId: string): void {
   if (choice.kind === 'cornerstone') {
     if (!choice.options.includes(optionId)) return
     if (s.cornerstones.includes(optionId)) return
-    s.cornerstones.push(optionId)
-    recordEvent(s, 'cornerstone', CORNERSTONES[optionId]?.name ?? optionId)
-    pushLog(s, `Cornerstone laid: ${CORNERSTONES[optionId]?.name ?? optionId}.`, 'good')
+    layCornerstone(s, optionId)
   } else if (choice.kind === 'blueprint') {
     if (!choice.options.includes(optionId)) return
-    if (!s.unlockedBuildings.includes(optionId)) s.unlockedBuildings.push(optionId)
-    pushLog(s, `Blueprint acquired: ${BUILDINGS[optionId]?.name ?? optionId}.`, 'good')
+    noteDraftOffer(s, choice.options)
+    if (!BUILDINGS[optionId] && CORNERSTONES[optionId]) {
+      // A mixed draft's cornerstone.
+      if (s.cornerstones.includes(optionId)) return
+      layCornerstone(s, optionId)
+    } else {
+      if (!s.unlockedBuildings.includes(optionId)) s.unlockedBuildings.push(optionId)
+      pushLog(s, `Blueprint acquired: ${BUILDINGS[optionId]?.name ?? optionId}.`, 'good')
+    }
   } else if (choice.kind === 'charter') {
     if (!takeCharter(s, choice, optionId)) return
   } else {
@@ -528,7 +693,7 @@ function refreshQueuedChoices(s: RunState): void {
   for (let i = 0; i < stale.length; i++) {
     const choice = stale[i]
     if (choice.kind === 'blueprint') {
-      const fresh = buildBlueprintOptions(s)
+      const fresh = buildBlueprintOptions(s, !!choice.mixed)
       if (fresh.length === 0) {
         // Nothing left to draft — swap in a cornerstone offer instead.
         stale.splice(i, 1)
@@ -568,27 +733,16 @@ export function rerollChoice(s: RunState): string | null {
   if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
 
   if (choice.kind === 'blueprint') {
-    const rng = makeRng(s.seed, s.rngCursor)
-    const pool = BLUEPRINT_POOL.filter(
-      (id) => !s.unlockedBuildings.includes(id) && !choice.options.includes(id),
-    )
-    const fresh = rng.shuffle(pool).slice(0, blueprintDraftSize(s))
-    s.rngCursor = rng.cursor()
+    // A redraw is a fresh hand: none of what was shown, and no pity piece.
+    const fresh = buildBlueprintOptions(s, !!choice.mixed, {
+      exclude: choice.options,
+      pity: false,
+    })
     if (fresh.length === 0) return 'There is nothing else to offer.'
     choice.options = fresh
   } else {
     const rng = makeRng(s.seed, s.rngCursor)
-    const pool = cornerstonePool(s).filter(
-      (c) => !s.cornerstones.includes(c.id) && !choice.options.includes(c.id),
-    )
-    const options: string[] = []
-    const remaining = [...pool]
-    const size = cornerstoneDraftSize(s)
-    for (let i = 0; i < size && remaining.length > 0; i++) {
-      const pick = rng.weighted(remaining, (c) => RARITY_WEIGHTS[c.rarity])
-      options.push(pick.id)
-      remaining.splice(remaining.indexOf(pick), 1)
-    }
+    const options = drawCornerstones(s, rng, cornerstoneDraftSize(s), choice.options)
     s.rngCursor = rng.cursor()
     if (options.length === 0) return 'There is nothing else to offer.'
     choice.options = options

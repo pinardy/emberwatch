@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../content/buildings'
+import { RESOURCES } from '../content/resources'
 import { SPECIES } from '../content/species'
 import type {
   BuildingInstance,
@@ -505,6 +506,28 @@ export function sootheQueen(s: RunState): ActionError {
   s.impatience = Math.max(0, s.impatience - 1)
   s.soothesUsed++
   pushLog(s, `A gift of ${cost} amber reaches the Citadel. The Queen is soothed.`, 'good')
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Stockpile
+// ---------------------------------------------------------------------------
+
+/** Units thrown out per press of "dump". */
+export const DUMP_LOT = 20
+
+/**
+ * Throws `amount` of a good out of the stockpile (at most what is there), to
+ * make room when the store is full of something nobody needs. Amber takes no
+ * space and cannot be dumped. Returns an error, or null on success.
+ */
+export function dumpStock(s: RunState, resource: ResourceId, amount: number = DUMP_LOT): ActionError {
+  if (resource === 'amber') return 'Amber takes no room in the stockpile.'
+  const have = Math.floor(s.stock[resource] ?? 0)
+  const qty = Math.min(have, Math.max(0, Math.floor(amount)))
+  if (qty <= 0) return 'There is none to dump.'
+  spend(s.stock, { [resource]: qty })
+  pushLog(s, `${qty} ${RESOURCES[resource]?.name ?? resource} dumped to make room in the stockpile.`, 'info')
   return null
 }
 

@@ -15,6 +15,8 @@ import {
   IMPATIENCE_OVERTIME_RAMP,
   IMPATIENCE_PER_HOSTILITY_OVER,
   IMPATIENCE_PER_VILLAGER_LOST,
+  IMPATIENCE_STALL_FROM_YEAR,
+  IMPATIENCE_STALL_RATE,
   IMPATIENCE_YEAR_SCALING,
   QUEEN_DEADLINE_YEAR,
   REPUTATION_PER_RESOLVE_POINT,
@@ -195,6 +197,12 @@ export interface ResolveBreakdown {
   threshold: number
   /** 0..1 share of this species' needs that are met (partial coverage counts). */
   needsMet: number
+  /**
+   * 0..1 share of its needs met by services the settlement built (and
+   * cornerstones that waive one) — what a species does for itself, like the
+   * harpies' teaching, raises its resolve but not the Queen's opinion.
+   */
+  builtMet: number
 }
 
 /**
@@ -243,10 +251,12 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
     const needDetail: Record<string, boolean> = {}
     const needRatio: Record<string, number> = {}
     let satisfied = 0
+    let built = 0
     for (const need of def.needs) {
       const served = coverage[need].active
         ? Math.min(1, coverage[need].capacity / required)
         : 0
+      built += served
       // Some species meet part of a need among themselves (harpies teach).
       const ratio = Math.max(served, needFloor(sp, need))
       needRatio[need] = ratio
@@ -289,6 +299,8 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
       needRatio,
       threshold: def.resolveTarget,
       needsMet: def.needs.length > 0 ? satisfied / def.needs.length : 1,
+      builtMet:
+        def.needs.length > 0 ? Math.min(def.needs.length, built + reduction) / def.needs.length : 1,
     }
   })
 }
@@ -337,7 +349,7 @@ export function stepReputation(
     const share = counts[b.species] / pop
     if (share <= 0) continue
     const over = Math.max(0, s.resolve[b.species] - b.threshold)
-    const served = REPUTATION_UNSERVED_SHARE + (1 - REPUTATION_UNSERVED_SHARE) * b.needsMet
+    const served = REPUTATION_UNSERVED_SHARE + (1 - REPUTATION_UNSERVED_SHARE) * b.builtMet
     gain += share * over * served * REPUTATION_PER_RESOLVE_POINT * dt * mods.reputationRate
   }
   s.reputationProgress += gain
@@ -360,8 +372,32 @@ export function impatienceRate(s: RunState, mods: Modifiers): number {
   if (s.hostility > IMPATIENCE_HOSTILITY_THRESHOLD) {
     rate += (s.hostility - IMPATIENCE_HOSTILITY_THRESHOLD) * IMPATIENCE_PER_HOSTILITY_OVER
   }
+  rate += stallingImpatienceRate(s)
   // The deadline is not softened by cornerstones: it is what ends every run.
   return rate * mods.impatienceRate + deadlineOvertimeRate(s)
+}
+
+/**
+ * The Queen's view of a settlement that is not earning: from Year 2, extra
+ * impatience per second in proportion to the share of villagers whose species
+ * sits below its reputation threshold. Nothing at all while every species is
+ * above it — keep earning and she keeps her peace.
+ */
+export function stallingImpatienceRate(s: RunState): number {
+  if (s.season.year < IMPATIENCE_STALL_FROM_YEAR) return 0
+  return IMPATIENCE_STALL_RATE * stalledShare(s)
+}
+
+/** 0..1 share of villagers whose species is below its reputation threshold. */
+export function stalledShare(s: RunState): number {
+  const pop = population(s)
+  if (pop === 0) return 0
+  const counts = speciesCounts(s)
+  let stalled = 0
+  for (const sp of s.speciesPool) {
+    if (counts[sp] > 0 && s.resolve[sp] < SPECIES[sp].resolveTarget) stalled += counts[sp]
+  }
+  return stalled / pop
 }
 
 /**
