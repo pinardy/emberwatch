@@ -45,7 +45,7 @@ const LOOKS: Record<Season, SeasonLook> = {
     rimIntensity: 0.45,
     rainCount: 420,
     rainSpeed: 8,
-    rainOpacity: 0.32,
+    rainOpacity: 0.4,
   },
   clearance: {
     bg: '#1f2419',
@@ -79,27 +79,32 @@ const LOOKS: Record<Season, SeasonLook> = {
     rimIntensity: 0.9,
     rainCount: 1400,
     rainSpeed: 17,
-    rainOpacity: 0.5,
+    rainOpacity: 0.6,
   },
 }
 
 const RAIN_CEILING = 14
 const RAIN_AREA = 44
 
+/** Length of a falling streak, world units. */
+const STREAK = 0.32
+
 const RAIN_VERTEX = /* glsl */ `
 attribute float aSpeed;
+attribute float aTail;
 uniform float uTime;
 uniform float uCeiling;
-uniform float uScale;
+uniform float uStreak;
+varying float vTail;
 #include <fog_pars_vertex>
 void main() {
   vec3 p = position;
-  p.y = mod(position.y - aSpeed * uTime, uCeiling);
+  p.y = mod(position.y - aSpeed * uTime, uCeiling) - aTail * uStreak;
   // A slight slant, as if blown.
   p.x += (uCeiling - p.y) * 0.06;
+  vTail = aTail;
   vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mvPosition;
-  gl_PointSize = uScale / -mvPosition.z;
   #include <fog_vertex>
 }
 `
@@ -107,40 +112,44 @@ void main() {
 const RAIN_FRAGMENT = /* glsl */ `
 uniform vec3 uColor;
 uniform float uOpacity;
+varying float vTail;
 #include <fog_pars_fragment>
 void main() {
-  // A thin vertical streak inside the point sprite.
-  vec2 c = gl_PointCoord - 0.5;
-  float streak = smoothstep(0.09, 0.0, abs(c.x + c.y * 0.12)) * smoothstep(0.5, 0.15, abs(c.y));
-  if (streak < 0.02) discard;
-  gl_FragColor = vec4(uColor, uOpacity * streak);
+  // Bright at the head, fading up the tail.
+  gl_FragColor = vec4(uColor, uOpacity * (1.0 - vTail * 0.7));
   #include <fog_fragment>
 }
 `
 
 /**
- * Rain as one `Points` draw call whose fall happens in the vertex shader
- * (`mod(y - speed·t, ceiling)`): no per-frame CPU loop, no buffer upload.
+ * Rain as one `LineSegments` draw call of short streaks whose fall happens in
+ * the vertex shader (`mod(y - speed·t, ceiling)`): no per-frame CPU loop, no
+ * buffer upload, and a streak shades only the pixels of a one-pixel line.
  */
 function Rain({ count, speed, opacity }: { count: number; speed: number; opacity: number }) {
   const { geometry, material } = useMemo(() => {
-    const positions = new Float32Array(count * 3)
-    const speeds = new Float32Array(count)
+    const positions = new Float32Array(count * 6)
+    const speeds = new Float32Array(count * 2)
+    const tails = new Float32Array(count * 2)
     for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * RAIN_AREA
-      positions[i * 3 + 1] = Math.random() * RAIN_CEILING
-      positions[i * 3 + 2] = (Math.random() - 0.5) * RAIN_AREA
-      speeds[i] = speed * (0.7 + Math.random() * 0.6)
+      const x = (Math.random() - 0.5) * RAIN_AREA
+      const y = Math.random() * RAIN_CEILING
+      const z = (Math.random() - 0.5) * RAIN_AREA
+      const v = speed * (0.7 + Math.random() * 0.6)
+      positions.set([x, y, z, x, y, z], i * 6)
+      speeds[i * 2] = speeds[i * 2 + 1] = v
+      tails[i * 2 + 1] = 1
     }
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     g.setAttribute('aSpeed', new THREE.BufferAttribute(speeds, 1))
+    g.setAttribute('aTail', new THREE.BufferAttribute(tails, 1))
     const m = new THREE.ShaderMaterial({
       uniforms: {
         ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
         uTime: { value: 0 },
         uCeiling: { value: RAIN_CEILING },
-        uScale: { value: 60 },
+        uStreak: { value: STREAK },
         uColor: { value: new THREE.Color('#b9cbe0') },
         uOpacity: { value: opacity },
       },
@@ -160,13 +169,11 @@ function Rain({ count, speed, opacity }: { count: number; speed: number; opacity
     [geometry, material],
   )
 
-  useFrame(({ clock, size, viewport }) => {
+  useFrame(({ clock }) => {
     material.uniforms.uTime.value = clock.elapsedTime
-    // Point size in pixels at 1 unit away, scaled with the canvas height.
-    material.uniforms.uScale.value = size.height * viewport.dpr * 0.09
   })
 
-  return <points geometry={geometry} material={material} frustumCulled={false} renderOrder={5} />
+  return <lineSegments geometry={geometry} material={material} frustumCulled={false} renderOrder={5} />
 }
 
 /** Occasional storm lightning: a cold flash that decays over a few frames. */
