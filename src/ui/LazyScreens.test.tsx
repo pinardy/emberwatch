@@ -94,4 +94,28 @@ describe('lazily loaded screens', () => {
       vi.useRealTimers()
     }
   })
+
+  it('fetches the game screen right away when there is a save to continue', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.resetModules()
+      const { saveToSlot } = await import('../game/saveSlots')
+      const { createRun } = await import('../game/engine/createRun')
+      expect(saveToSlot('1', createRun({ seed: 3 })).ok).toBe(true)
+      const lazy = await import('./lazyScreens')
+      const game = vi.spyOn(lazy.GameScreen, 'preload')
+      const setup = vi.spyOn(lazy.SetupScreen, 'preload')
+      const { default: App } = await import('../App')
+      render(<App />)
+      // Before any idle time: Continue should not wait on the game's code.
+      expect(game).toHaveBeenCalled()
+      expect(setup).not.toHaveBeenCalled()
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
+      expect(setup).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

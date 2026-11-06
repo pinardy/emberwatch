@@ -1,7 +1,13 @@
 import { useEffect } from 'react'
 import { RESOURCES } from '../game/content/resources'
 import { canAfford } from '../game/engine/queries'
-import { useGameStore, useRun, type SidePanel } from '../game/store'
+import {
+  useGameStore,
+  useHudRun,
+  useRunRef,
+  useRunSelector,
+  type SidePanel,
+} from '../game/store'
 import { BuildPanel } from './BuildPanel'
 import { ChoiceModal } from './ChoiceModal'
 import { ConditionsBar } from './ConditionsBar'
@@ -32,7 +38,11 @@ const TABS: { id: Exclude<SidePanel, null>; label: string; icon: string }[] = [
 ]
 
 export function GameScreen() {
-  const run = useRun()
+  // The screen re-renders only for what it shows itself (the season tint, the
+  // run's end, the Log tab's unread badge); everything inside subscribes to
+  // its own data, so a sim step does not re-render the whole HUD.
+  const run = useRunRef()
+  useRunSelector((r) => `${r.season.season}|${r.phase}|${r.log[0]?.id ?? -1}`)
   const panel = useGameStore((s) => s.panel)
   const setPanel = useGameStore((s) => s.setPanel)
   const notice = useGameStore((s) => s.notice)
@@ -172,7 +182,7 @@ export function GameScreen() {
 
 /** Active threats: what they cost, when they strike next, how to buy them off. */
 function ThreatBar() {
-  const run = useRun()
+  const run = useHudRun()
   const appease = useGameStore((s) => s.appease)
   const focusCamera = useGameStore((s) => s.focusCamera)
   if (!run || run.threats.length === 0) return null

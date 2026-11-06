@@ -21,7 +21,7 @@ import {
   DECREE_MISS_IMPATIENCE,
   IMPATIENCE_PER_VILLAGER_LOST,
 } from './balance'
-import { pushLog } from './createRun'
+import { pushLog } from './runLog'
 import { relevantBlueprints } from './events'
 import { computeModifiers } from './modifiers'
 import { grant, spend, storageUsed } from './queries'

@@ -24,6 +24,7 @@ import { extraOutputChance, productionMultiplier } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { roadMultiplier } from './roads'
+import { touchBuildings } from './runCache'
 import { buildMultiplier, workTraitMultiplier } from './traits'
 import {
   gatherRadiusOf,
@@ -338,6 +339,7 @@ export function advanceUpgrade(s: RunState, b: BuildingInstance, work: number): 
 /** Raises a building to its next tier (construction finished or rushed). */
 export function completeUpgrade(s: RunState, b: BuildingInstance): void {
   b.tier = tierOf(b) + 1
+  touchBuildings(s)
   delete b.upgradeProgress
   // A longer reach can bring new deposits within range.
   const radius = gatherRadiusOf(b)

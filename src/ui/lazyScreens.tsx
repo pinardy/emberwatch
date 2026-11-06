@@ -1,5 +1,7 @@
 import { Component, Suspense, lazy, useRef } from 'react'
 import type { ComponentType, ReactNode } from 'react'
+import { latestSlot } from '../game/saveSlots'
+import { loadRunFactory } from '../game/store'
 import { loadIcons } from './Icon'
 import './lazy-screens.css'
 
@@ -120,6 +122,8 @@ export function preloadScreens(): Promise<unknown> {
   return Promise.all([
     SetupScreen.preload(),
     GameScreen.preload(),
+    // The run factory and map generator, for "New settlement" and the daily.
+    loadRunFactory(),
     CitadelScreen.preload(),
     SavesScreen.preload(),
     EndModal.preload(),
@@ -130,8 +134,13 @@ export function preloadScreens(): Promise<unknown> {
 /**
  * Preloads once the browser is idle after first paint. A failure here is
  * quiet: the screen retries when it is actually opened, and says so then.
+ *
+ * With a save to continue, the game screen and its icons are fetched at once
+ * instead (this runs right after the first paint), so a player who presses
+ * Continue straight away does not wait on the "Lighting the hearth" screen.
  */
 export function preloadScreensWhenIdle(): () => void {
+  if (hasSave()) void GameScreen.preload().catch(() => undefined)
   const warmUp = () => void preloadScreens().catch(() => undefined)
   const w = window as Window & {
     requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
@@ -143,4 +152,12 @@ export function preloadScreensWhenIdle(): () => void {
   }
   const id = window.setTimeout(warmUp, 300)
   return () => window.clearTimeout(id)
+}
+
+function hasSave(): boolean {
+  try {
+    return latestSlot() !== null
+  } catch {
+    return false
+  }
 }
