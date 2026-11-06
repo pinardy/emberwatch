@@ -77,25 +77,36 @@ export function GameScreen() {
       <main className="game-main">
         <div className="map-column">
           <MapView />
-          {/* One coordinated stack over the map, so the overlays never pile up. */}
+          {/*
+            One overlay dock over the map, in fixed regions so nothing piles up
+            or covers the map's middle: critical warnings and passing notices
+            at the top; the tip or the inspector bottom-left (tips wait while
+            the player inspects or places); the decree, conditions and threats
+            bottom-centre; news toasts bottom-right, clear of the map controls.
+            Phones keep the same regions along the map's edges.
+          */}
           <div className="hud-stack">
-            <Warnings />
-            {notice && (
-              <div className="notice" role="status" onClick={dismissNotice}>
-                {notice}
-              </div>
-            )}
-            <EventToasts />
+            <div className="hud-top">
+              <Warnings />
+              {notice && (
+                <div className="notice" role="status" onClick={dismissNotice}>
+                  {notice}
+                </div>
+              )}
+            </div>
+            <div className="hud-context">
+              <TipsCoach />
+              <Inspector />
+            </div>
             <div className="bottom-stack">
               <ConditionsBar />
               <ThreatBar />
             </div>
-            <TipsCoach />
-            <Inspector />
+            <EventToasts />
           </div>
         </div>
 
-        <aside className="sidebar">
+        <aside className={`sidebar ${panel ? 'is-open' : 'is-folded'}`}>
           <nav className="tabs" role="tablist" aria-label="Side panels" onKeyDown={onTabKey}>
             {TABS.map((tab) => (
               <button
@@ -123,6 +134,19 @@ export function GameScreen() {
               </button>
             ))}
           </nav>
+          {/* Phones: the side panel is a bottom sheet, and this folds it down
+              to its tabs so the map gets the height. Desktop hides it. */}
+          <button
+            type="button"
+            className="sheet-handle"
+            aria-expanded={panel !== null}
+            aria-controls="side-panel"
+            aria-label={panel ? 'Fold the panel away' : 'Open the panel'}
+            title={panel ? 'Fold the panel away' : 'Open the panel'}
+            onClick={() => setPanel(panel ? null : 'build')}
+          >
+            <span aria-hidden>{panel ? '▾' : '▴'}</span>
+          </button>
           <div
             key={panel ?? 'none'}
             className="panel-scroll"
