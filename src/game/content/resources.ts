@@ -1,4 +1,4 @@
-import type { ResourceDef, ResourceId } from '../types'
+import type { ResourceBag, ResourceDef, ResourceId } from '../types'
 import { RESOURCE_ART } from './art'
 
 const defs: ResourceDef[] = [
@@ -63,10 +63,15 @@ export const COMPLEX_FOOD: ResourceId[] = defs
   .filter((d) => d.category === 'food')
   .map((d) => d.id)
 
-export function resourceName(id: ResourceId): string {
-  return RESOURCES[id]?.name ?? id
+/** Everything in `bag` whose resource belongs to `category`. */
+export function categoryTotal(bag: ResourceBag, category: string): number {
+  let sum = 0
+  for (const [id, amount] of Object.entries(bag)) {
+    if (RESOURCES[id as ResourceId]?.category === category) sum += amount ?? 0
+  }
+  return sum
 }
 
-export function resourceIcon(id: ResourceId): string {
-  return RESOURCES[id]?.icon ?? '❔'
+export function resourceName(id: ResourceId): string {
+  return RESOURCES[id]?.name ?? id
 }

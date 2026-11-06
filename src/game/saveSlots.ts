@@ -39,10 +39,6 @@ export const SLOT_LABELS: Record<SlotId, string> = {
 
 export const SLOT_INDEX_KEY = 'emberwatch.slots.v1'
 
-export function isSlotId(value: unknown): value is SlotId {
-  return typeof value === 'string' && (SLOT_IDS as readonly string[]).includes(value)
-}
-
 /** The localStorage key holding a slot's run. */
 export function slotKey(id: SlotId): string {
   return id === 'auto' ? RUN_KEY : `emberwatch.run.slot${id}.v1`
