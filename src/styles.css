@@ -2344,13 +2344,6 @@ code {
   }
 }
 
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 8px);
-  }
-}
-
 /* Placed by the overlay dock (.hud-top): top centre of the map. */
 .warnings {
   display: grid;
@@ -2607,7 +2600,7 @@ code {
   border-radius: var(--radius);
   padding: 8px 12px;
   box-shadow: var(--shadow);
-  animation: rise 180ms ease;
+  animation: rise-in 180ms ease;
 }
 
 .threat-icon {
@@ -4041,7 +4034,7 @@ button.is-armed {
   padding: 6px 10px;
   box-shadow: var(--shadow);
   color: var(--text);
-  animation: rise 180ms ease;
+  animation: rise-in 180ms ease;
 }
 
 .condition-card.is-decree {
