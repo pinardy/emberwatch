@@ -72,28 +72,28 @@ export function OrderChoice({ run, choice }: { run: RunState; choice: PendingCho
   )
 }
 
+/** The small tag after an order's name: what kind of order it is. */
+export function orderTag(order: Order): string | null {
+  if (order.writ) return 'founding writ'
+  if (ORDERS[order.defId]?.consume) return 'Citadel shipment'
+  return order.baseline !== undefined ? 'counts from its draw' : null
+}
+
 function OrderOption({ run, order, onPick }: { run: RunState; order: Order; onPick: () => void }) {
   const def = ORDERS[order.defId]
   const goal = orderGoal(order)
   if (!def || !goal) return null
-  const counting = order.baseline !== undefined
+  const tag = orderTag(order)
   return (
     <button type="button" className="option queen-option" onClick={onPick}>
       <strong>{def.name}</strong>
-      {order.writ ? (
-        <em className="rarity-tag">founding writ</em>
-      ) : def.consume ? (
-        <em className="rarity-tag">Citadel shipment</em>
-      ) : counting ? (
-        <em className="rarity-tag">counts from now</em>
-      ) : null}
+      {tag && <em className="rarity-tag">{tag}</em>}
       <small>{describeOrder(order)}</small>
       {def.consume && <small>The goods are handed over when it is met.</small>}
       <Progress value={order.progress} />
       <div className="option-effects">
         <span className="is-good">
-          <Icon id="reputation" label="reputation" /> +
-          {order.writ ? def.reputationReward : orderReputation(run, def.reputationReward)}
+          <Icon id="reputation" label="reputation" /> +{orderReputation(run, order)}
         </span>
         {def.reward?.amber ? (
           <span className="is-good">

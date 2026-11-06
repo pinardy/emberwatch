@@ -1171,8 +1171,7 @@ function playRun(
     const stillOpen = new Set(s.orders.map((o) => o.defId))
     for (const id of openOrders) {
       if (stillOpen.has(id)) continue
-      const base = ORDERS[id]?.reputationReward ?? 0
-      sources.orders += id.startsWith('writ_') ? base : orderReputation(s, base)
+      sources.orders += orderReputation(s, { defId: id, writ: id.startsWith('writ_') })
     }
     sources.glades +=
       Math.floor(s.stats.gladesCleared / GLADES_PER_REPUTATION) -

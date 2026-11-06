@@ -8,6 +8,7 @@ import { modifierOngoingId } from '../game/engine/runModifiers'
 import { caravanAvailable, hasTradingPost, offerPrice, sellPrice } from '../game/engine/trade'
 import { useGameStore, useHudRun } from '../game/store'
 import { DecreeCard } from './DecreeCard'
+import { orderTag } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
 import { RaceSparkline } from './RaceSparkline'
 import type { ResourceId } from '../game/types'
@@ -39,13 +40,7 @@ export function OrdersPanel() {
         {run.orders.map((order) => {
           const def = ORDERS[order.defId]
           if (!def) return null
-          const tag = order.writ
-            ? 'founding writ'
-            : def.consume
-              ? 'shipment'
-              : order.baseline !== undefined
-                ? 'counts from its draw'
-                : null
+          const tag = orderTag(order)
           return (
             <div className={`order-card ${order.writ ? 'is-writ' : ''}`} key={order.id}>
               <div className="row-between">
@@ -54,8 +49,7 @@ export function OrdersPanel() {
                   {tag && <em className="order-tag">{tag}</em>}
                 </strong>
                 <span className="order-reward">
-                  <Icon id="reputation" label="reputation" /> +
-                  {order.writ ? def.reputationReward : orderReputation(run, def.reputationReward)}
+                  <Icon id="reputation" label="reputation" /> +{orderReputation(run, order)}
                 </span>
               </div>
               <small>{describeOrder(order)}</small>
