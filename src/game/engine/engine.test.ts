@@ -105,12 +105,12 @@ import {
   checkCharter,
   decreeCandidate,
   goalProgress,
-  issueDecree,
   stepConditions,
   stepDecree,
 } from './structure'
 import { orderFeasible } from './orders'
 import { tick } from './tick'
+import { proclaimFirstDecree } from '../../test/decrees'
 import { loadRun } from '../persistence'
 import {
   buyOffer,
@@ -1084,7 +1084,7 @@ describe("royal decrees (timed Queen's orders)", () => {
     }
     for (let i = 0; i < 40 && state.decree?.defId !== 'decree_planks'; i++) {
       state.decree = null
-      issueDecree(state)
+      proclaimFirstDecree(state)
     }
     expect(state.decree?.defId).toBe('decree_planks')
     expect(state.decree!.baseline).toBe(500)
@@ -1144,7 +1144,7 @@ describe("royal decrees (timed Queen's orders)", () => {
     state.unlockedBuildings = [...STARTING_BLUEPRINTS]
     for (let i = 0; i < 40; i++) {
       state.decree = null
-      issueDecree(state)
+      proclaimFirstDecree(state)
       const def = DECREES[state.decree!.defId]
       expect(decreeCandidate(state, def), def.id).not.toBeNull()
       expect(['decree_ale', 'decree_fabric', 'decree_service']).not.toContain(def.id)

@@ -375,23 +375,6 @@ function proclaim(s: RunState, decree: RoyalDecree): void {
 }
 
 /**
- * Issues a decree straight away, without offering a choice, from the goals
- * the settlement can actually pursue and has not already mostly met. If none
- * qualify, the Queen asks again shortly.
- */
-export function issueDecree(s: RunState): boolean {
-  const rng = makeRng(s.seed, s.rngCursor)
-  const [decree] = drawDecrees(s, rng)
-  s.rngCursor = rng.cursor()
-  if (!decree) {
-    s.decreeTimer = 30
-    return false
-  }
-  proclaim(s, decree)
-  return true
-}
-
-/**
  * Applies a pick from a decree offer: the chosen decree goes live, or with
  * `DECLINE_CHOICE` both are turned down for a little of the Queen's patience
  * (and any streak ends). Returns true when the offer is settled.
