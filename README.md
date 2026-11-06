@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 600 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
+npm test           # 606 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -41,7 +41,7 @@ npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
 
 Idle villagers are your builders and your clearing crews, so every worker you assign is a builder you gave up. That tension is deliberate — the top bar always shows the idle count.
 
-The game plays RTS-style in continuous space: there is no grid. Buildings are placed anywhere on cleared ground with a live ghost cursor, camps must stand within reach of the deposits they work, and warmth and adjacency are real distances. The settlement renders as a 3D scene — low-poly buildings, a wild instanced forest over uncleared glades, season-driven light and rain — with a 2D vector map available from the top-bar toggle (and used automatically where WebGL is missing).
+The game plays RTS-style in continuous space: there is no grid. Buildings are placed anywhere on cleared ground with a live ghost cursor, camps must stand within reach of the deposits they work, and warmth and adjacency are real distances. The settlement renders as a 3D scene — low-poly buildings, a wild instanced forest over uncleared glades, season-driven light and rain — with a 2D vector map available from the top-bar toggle (and used automatically where WebGL is missing). On the 2D map every building stands on a plate shaped and tinted by its district (homes, camps, farms, workshops, services, storage, fires), so a grown settlement reads as quarters; crags and mires carry an icon and say on hover that they can never be cleared; the Storm darkens the ground and drives rain and lightning across the map.
 
 ## Architecture
 
@@ -89,7 +89,9 @@ src/
     lazyScreens.tsx     #   setup, Citadel, game and end-of-run screens as
                         #   lazy chunks, preloaded once the menu is idle
     MapView.tsx         #   picks the map renderer: 3D by default, 2D fallback
-    MapView2D.tsx       #   SVG vector map of the same world (no-WebGL, tests)
+    MapView2D.tsx       #   SVG vector map of the same world (no-WebGL, tests): camera,
+                        #   pointer, build ghost; MapLayers2D/MapBuildings2D hold the
+                        #   keyed, memoised layers and the villager + weather canvas
     villagerRoutes.ts   #   walking villagers for both maps: routes derived
                         #   from assignments, homes and roads, played back
                         #   against the clock (presentation only)
@@ -131,7 +133,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`onboarding.test.ts`** and **`Onboarding.test.tsx`** — the opening: the first-steps checklist (including a scripted newcomer who does only what it says and must still be standing after the first Storm on every harness trio), the first royal decree, and how the blueprint draft presents its options.
 - **`balanceTuning.test.ts`** — the rules the harness was last tuned with: the late-game hostility squeeze, escalating decree misses, and the harpies' Education and lizards' Brawling floors.
 - **`saves.test.ts`** and **`SavesScreen.test.tsx`** — save slots: the slot index and its repair, migration of the single save, overwrite protection, full storage, the export/import round trip, and rejecting malformed and hostile files (prototype keys, mangled fields) without throwing.
-- **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, building badges, warmth, roads and villagers, and that static geometry is not rebuilt on every tick.
+- **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, district plates, building badges, obstacles, the Storm's ground wash, warmth, roads and villagers, that static geometry is not rebuilt on every tick, and that the 2D layers re-derive on structural change but throttle what ticking changes.
 - **`roads.test.ts`** — the road graph and its bonus (directness, junctions, warehouse hubs), the rules for laying roads, the cache that keeps the per-tick cost a lookup, and old saves without roads.
 - **`villagerRoutes.test.ts`** — the walking villagers' routes: a pure function of the run, following roads where they run and walking straight where they do not.
 - **`audio.test.ts`**, **`music.test.ts`** and **`SoundSettings.test.tsx`** — sound, against a small fake `AudioContext` (`src/test/fakeAudio.ts`): no context before a user gesture, each volume bus wired into the master at its saved level, mute, ducking, older settings migrating to the default levels, and the sliders in both settings panels. For the score: seasonal palettes, a seeded composer that stays in key and does not loop, look-ahead scheduling, the crossfade on a change of season, and holding while paused or hidden.
