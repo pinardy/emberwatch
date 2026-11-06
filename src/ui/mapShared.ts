@@ -414,6 +414,11 @@ export function useCameraFocus(onFocus: (p: Vec2) => void): void {
 // Subscriptions
 // ---------------------------------------------------------------------------
 
+/** The world is moving: unpaused, playing, and not waiting on a choice. */
+export function isWorldRunning(speed: number, run: RunState | null): boolean {
+  return speed > 0 && run?.phase === 'playing' && run.pendingChoices.length === 0
+}
+
 /**
  * A value a map layer derives from the run, on the HUD clock: `derive(run,
  * version)` runs again only when `hudVersion` moves (about 8 Hz while the sim

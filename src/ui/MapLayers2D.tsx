@@ -30,6 +30,7 @@ import {
   gladeFill,
   gladeLook,
   gladePlateInfo,
+  isWorldRunning,
   useWarmthRingVisible,
   type GladeAccess,
 } from './mapShared'
@@ -558,15 +559,8 @@ export const VillagerCanvas2D = memo(function VillagerCanvas2D({
       drawWeather(ctx, run.season.season, weatherClock.current, cssW, cssH, dpr)
     }
 
-    const running = () => {
-      const { speed } = useGameStore.getState()
-      return (
-        speed > 0 &&
-        run.phase === 'playing' &&
-        run.pendingChoices.length === 0 &&
-        document.visibilityState !== 'hidden'
-      )
-    }
+    const running = () =>
+      isWorldRunning(useGameStore.getState().speed, run) && document.visibilityState !== 'hidden'
 
     let frame = 0
     let last = 0

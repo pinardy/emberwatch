@@ -11,6 +11,7 @@ import type { RunState, Vec2 } from '../game/types'
 import {
   GLADE_STAKE_ART,
   MAP_KEYS,
+  isWorldRunning,
   placementHint,
   useCameraFocus,
   useMapKey,
@@ -82,7 +83,7 @@ export function MapView2D() {
 
 const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
   const buildMode = useGameStore((s) => s.buildMode)
-  const paused = useGameStore(isStill)
+  const paused = useGameStore((s) => !isWorldRunning(s.speed, s.run))
   const svgRef = useRef<SVGSVGElement>(null)
   const viewRef = useRef<SVGGElement>(null)
   const worldRef = useRef<SVGGElement>(null)
@@ -472,11 +473,6 @@ export function WarmthToggle() {
       <Icon id="settlement" emoji="🔥" />
     </button>
   )
-}
-
-/** The world is standing still: paused, over, or waiting on a choice. */
-function isStill(s: { speed: number; run: RunState | null }): boolean {
-  return s.speed === 0 || s.run?.phase !== 'playing' || (s.run?.pendingChoices.length ?? 0) > 0
 }
 
 function clamp(v: number, min: number, max: number): number {
