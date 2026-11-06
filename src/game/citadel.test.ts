@@ -329,8 +329,9 @@ describe('Citadel upgrades in createRun', () => {
     expect(s.unlockedBuildings).toContain('tradingPost')
     const kinds = s.pendingChoices.map((c) => c.kind)
     expect(kinds.filter((k) => k === 'blueprint')).toHaveLength(OPENING_BLUEPRINT_PICKS + 1)
-    // Every run opens on one cornerstone draft; the Signet adds a second.
-    expect(kinds.slice(-2)).toEqual(['cornerstone', 'cornerstone'])
+    // Every run opens on one cornerstone draft; the Signet adds a second; the
+    // founding writ comes last.
+    expect(kinds.slice(-3)).toEqual(['cornerstone', 'cornerstone', 'order'])
     expect(kinds.filter((k) => k === 'cornerstone')).toHaveLength(2)
   })
 

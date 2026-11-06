@@ -49,7 +49,8 @@ export interface RunWatch {
 export function watchRun(run: RunState): RunWatch {
   return {
     threats: run.threats.map((t) => t.id),
-    decree: run.decree?.id ?? null,
+    // A decree now arrives as a choice; the herald's offer counts as its arrival.
+    decree: run.decree?.id ?? run.pendingChoices.find((c) => c.kind === 'decree')?.options[0] ?? null,
     departing: Object.keys(secondsUntilDeparture(run)) as SpeciesId[],
     season: run.season.season,
     caravanHere: run.caravan.here,
@@ -82,9 +83,14 @@ export function autoPauseHits(
 
   if (enabled.decree && after.decree !== null && after.decree !== before.decree) {
     const name = run.decree ? DECREES[run.decree.defId]?.name : undefined
+    const offered = !run.decree && run.pendingChoices.some((c) => c.kind === 'decree')
     hits.push({
       trigger: 'decree',
-      reason: name ? `the Queen decrees "${name}"` : 'the Queen has issued a decree',
+      reason: name
+        ? `the Queen decrees "${name}"`
+        : offered
+          ? "the Queen's herald brings a choice of decrees"
+          : 'the Queen has issued a decree',
     })
   }
 

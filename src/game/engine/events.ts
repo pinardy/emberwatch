@@ -2,7 +2,6 @@ import { feats } from './feats'
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CORNERSTONES, RARITY_WEIGHTS } from '../content/cornerstones'
 import { GLADE_EVENTS } from '../content/gladeEvents'
-import { ORDERS, describeGoal, evaluateGoal } from '../content/orders'
 import { SPECIES, VILLAGER_TRAIT_LIST, speciesSingular, villagerName } from '../content/species'
 import { EDIBLE, resourceName } from '../content/resources'
 import type {
@@ -38,14 +37,13 @@ import {
   freeRerollsLeft,
   gladeEventOptions,
 } from './citadel'
-import { drawOrder } from './drawOrder'
 import { pushLog } from './runLog'
-import { computeModifiers, type Modifiers } from './modifiers'
+import type { Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
 import { canAfford, grant, population, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { touchVillagers } from './runCache'
-import { addCondition, refreshCharterOffer, takeCharter } from './structure'
+import { addCondition, refreshCharterOffer, takeCharter, takeQueenChoice } from './structure'
 import { addImpatience, addReputation, pickVictim, removeVillager, unassign } from './society'
 import { clearMultiplier } from './traits'
 import { recordEvent } from './timeline'
@@ -439,6 +437,12 @@ export function addVillager(s: RunState): string | null {
  */
 export function checkMilestones(s: RunState): void {
   const reached = REWARD_MILESTONES.filter((m) => s.reputation >= m).length
+  // A pick laid as the run ends is noise: within a point of victory, the
+  // milestones pass without a draft.
+  if (s.reputation >= s.maxReputation - 1) {
+    s.cornerstonesTaken = Math.max(s.cornerstonesTaken, reached)
+    return
+  }
   while (s.cornerstonesTaken < reached) {
     const index = s.cornerstonesTaken
     s.cornerstonesTaken++
@@ -676,6 +680,8 @@ export function takeChoice(s: RunState, optionId: string): void {
     }
   } else if (choice.kind === 'charter') {
     if (!takeCharter(s, choice, optionId)) return
+  } else if (choice.kind === 'order' || choice.kind === 'decree') {
+    if (!takeQueenChoice(s, choice, optionId)) return
   } else {
     return
   }
@@ -732,6 +738,7 @@ export function rerollChoice(s: RunState): string | null {
   if (!choice) return 'Nothing to reroll.'
   if (choice.kind === 'gladeEvent') return 'The forest does not renegotiate.'
   if (choice.kind === 'charter') return 'A royal charter is not up for negotiation.'
+  if (choice.kind === 'order' || choice.kind === 'decree') return 'The Queen does not haggle.'
   const cost = rerollCost(s)
   if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
 
@@ -763,47 +770,8 @@ export function rerollChoice(s: RunState): string | null {
   return null
 }
 
-// ---------------------------------------------------------------------------
-// Orders
-// ---------------------------------------------------------------------------
-
-/** Reputation an order pays, after any run-long bonus to orders. */
-export function orderReputation(s: RunState, base: number): number {
-  return Math.max(0, base + computeModifiers(s).orderReputation)
-}
-
-export function stepOrders(s: RunState): void {
-  let completedAny = false
-  for (const order of s.orders) {
-    if (order.complete) continue
-    const def = ORDERS[order.defId]
-    if (!def) continue
-    order.progress = evaluateGoal(def.goal, s)
-    if (order.progress >= 1) {
-      order.complete = true
-      completedAny = true
-      s.stats.ordersCompleted++
-      const reputation = orderReputation(s, def.reputationReward)
-      addReputation(s, reputation)
-      if (def.reward) {
-        const added = grant(s.stock, def.reward, s.storageCap, storageUsed(s))
-        s.stats.resourcesProduced += added
-      }
-      pushLog(
-        s,
-        `Order complete — ${describeGoal(def.goal)}. +${reputation} reputation.`,
-        'good',
-      )
-    }
-  }
-  if (completedAny) {
-    // Retire completed orders and top the list back up to three.
-    s.orders = s.orders.filter((o) => !o.complete)
-    while (s.orders.length < 3) {
-      if (!drawOrder(s)) break
-    }
-  }
-}
+// Orders live in ./orders; re-exported here for the tick and older imports.
+export { orderReputation, stepOrders } from './orders'
 
 // ---------------------------------------------------------------------------
 // Newcomers

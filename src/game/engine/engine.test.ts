@@ -273,8 +273,10 @@ describe('run setup', () => {
 
   it('opens on a blueprint draft that offers something useful, then a cornerstone', () => {
     const state = freshRun()
-    expect(state.pendingChoices).toHaveLength(OPENING_BLUEPRINT_PICKS + 1)
+    // The blueprint picks, the founding cornerstone, then the founding writ.
+    expect(state.pendingChoices).toHaveLength(OPENING_BLUEPRINT_PICKS + 2)
     expect(state.pendingChoices[0].kind).toBe('blueprint')
+    expect(state.pendingChoices.at(-1)!.kind).toBe('order')
     // The run's first draft is owed a piece of a service the settlers want.
     const wanted = relevantBlueprints(state)
     expect(state.pendingChoices[0].options).toContain(wanted[0])
@@ -494,7 +496,7 @@ describe('orders', () => {
     }
   })
 
-  it('grants reputation and redraws when an order completes', () => {
+  it('grants reputation and offers a choice of replacements when an order completes', () => {
     const state = newRun()
     // Force a stock order to completion.
     state.orders = [{ id: 'test', defId: 'stock_plank_30', progress: 0, complete: false }]
@@ -503,6 +505,11 @@ describe('orders', () => {
     tick(state, 0.125)
     expect(state.reputation).toBeGreaterThan(0)
     expect(state.orders.some((o) => o.defId === 'stock_plank_30')).toBe(false)
+    // Every empty slot is offered as a choice of two.
+    const offers = state.pendingChoices.filter((c) => c.kind === 'order')
+    expect(offers).toHaveLength(3)
+    for (const offer of offers) expect(offer.options).toHaveLength(2)
+    drainChoices(state)
     expect(state.orders.length).toBe(3)
   })
 })
@@ -1050,6 +1057,10 @@ describe("royal decrees (timed Queen's orders)", () => {
     expect(state.decreeTimer).toBe(DECREE_FIRST_DELAY)
     state.decreeTimer = 0.1
     stepDecree(state, 0.125)
+    // The herald offers a choice; the chosen decree goes live.
+    expect(state.pendingChoices[0].kind).toBe('decree')
+    expect(state.log[0].text).toContain('royal herald')
+    takeChoice(state, state.pendingChoices[0].options[0])
     expect(state.decree).not.toBeNull()
     const def = DECREES[state.decree!.defId]
     expect(state.decree!.timeLeft).toBe(def.timeLimit)
@@ -1059,8 +1070,17 @@ describe("royal decrees (timed Queen's orders)", () => {
   it('counts produce/build/clear goals from the moment it is issued', () => {
     const state = newRun()
     state.producedTotals.plank = 500
-    // Only the lumber mill is unlocked, so plank and wood levies are on offer.
+    // Only a staffed lumber mill makes planks, so the plank levy is on offer.
     state.unlockedBuildings = ['lumberMill', 'woodcuttersCamp']
+    const mill = Object.values(state.buildings).find((b) => b.defId === 'ancientHearth')!
+    state.buildings.mill = {
+      ...mill,
+      id: 'mill',
+      defId: 'lumberMill',
+      workers: [Object.keys(state.villagers)[0]],
+      activeRecipeId: 'plank',
+      depositsInRange: {},
+    }
     for (let i = 0; i < 40 && state.decree?.defId !== 'decree_planks'; i++) {
       state.decree = null
       issueDecree(state)
@@ -1088,6 +1108,7 @@ describe("royal decrees (timed Queen's orders)", () => {
     state.producedTotals.plank = (state.producedTotals.plank ?? 0) + 30
     stepDecree(state, 0.125)
     expect(state.reputation).toBe(reputation + DECREES.decree_planks.reputationReward)
+    expect(DECREES.decree_planks.impatienceRelief).toBeGreaterThan(0)
     expect(state.stock.amber ?? 0).toBe(amber + (DECREES.decree_planks.reward?.amber ?? 0))
     expect(state.stats.ordersCompleted).toBe(completed + 1)
     expect(state.decree).toBeNull()
@@ -1112,9 +1133,9 @@ describe("royal decrees (timed Queen's orders)", () => {
     expect(impatienceOf(state)).toBeCloseTo(before + DECREE_MISS_IMPATIENCE)
     expect(state.log[0].text).toContain('lapsed')
     expect(state.log[0].tone).toBe('bad')
-    // After the interval, a fresh decree takes its place.
+    // After the interval, the herald brings a fresh choice.
     stepDecree(state, DECREE_INTERVAL + 0.1)
-    expect(state.decree).not.toBeNull()
+    expect(state.pendingChoices.at(-1)?.kind).toBe('decree')
   })
 
   it('only decrees goals the settlement can actually pursue', () => {
@@ -1126,13 +1147,16 @@ describe("royal decrees (timed Queen's orders)", () => {
       const def = DECREES[state.decree!.defId]
       expect(goalFeasible(def.goal, state), def.id).toBe(true)
       expect(['decree_ale', 'decree_fabric', 'decree_service']).not.toContain(def.id)
+      // Nothing is staffed yet, so no production decree is asked for.
+      expect(def.goal.kind, def.id).not.toBe('produced')
     }
   })
 
   it('every decree has a positive time limit and a reward', () => {
     for (const def of DECREE_LIST) {
       expect(def.timeLimit).toBeGreaterThan(0)
-      expect(def.reputationReward).toBeGreaterThan(0)
+      // Every decree pays in favour or in patience.
+      expect(def.reputationReward + (def.impatienceRelief ?? 0), def.id).toBeGreaterThan(0)
     }
   })
 })
@@ -1192,10 +1216,12 @@ describe("the Queen's charter (mid-run milestone)", () => {
     const state = atCharter()
     checkCharter(state)
     state.pendingChoices[0].options[0] = 'guildCharter'
+    // Relative to whatever the opening cornerstone already gives.
+    const before = computeModifiers(state)
     takeChoice(state, 'guildCharter')
     const mods = computeModifiers(state)
-    expect(mods.productionSpeed.all).toBeCloseTo(0.15)
-    expect(mods.buildSpeed).toBeCloseTo(1.2)
+    expect((mods.productionSpeed.all ?? 0) - (before.productionSpeed.all ?? 0)).toBeCloseTo(0.15)
+    expect(mods.buildSpeed / before.buildSpeed).toBeCloseTo(1.2)
   })
 
   it("the architect's warrant unlocks a blueprint and delivers its materials", () => {
@@ -1247,10 +1273,12 @@ describe('lingering glade conditions', () => {
   it('a chosen option leaves a condition whose effects weigh on the sim', () => {
     const state = newRun()
     state.stock.plank = 0
+    // Relative to whatever the opening cornerstone already gives.
+    const before = computeModifiers(state).buildSpeed
     chooseEvent(state, 'sunkenGranary', 'Breach the dyke')
     expect(state.conditions).toHaveLength(1)
     expect(state.conditions[0].name).toBe('Flooded Paths')
-    expect(computeModifiers(state).buildSpeed).toBeCloseTo(0.75)
+    expect(computeModifiers(state).buildSpeed / before).toBeCloseTo(0.75)
     tick(state, 0.125)
     expect(state.conditions).toHaveLength(1)
   })

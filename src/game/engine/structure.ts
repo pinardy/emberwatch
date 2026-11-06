@@ -2,30 +2,41 @@ import { feats } from './feats'
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CHARTERS, CHARTER_LIST } from '../content/charters'
 import { DECREES, DECREE_LIST } from '../content/decrees'
-import { describeGoal, evaluateGoal } from '../content/orders'
+import { categoryWords, describeGoal, evaluateGoal, producedInCategory } from '../content/orders'
 import { RESOURCES, resourceName } from '../content/resources'
 import type {
   ActiveCondition,
   ConditionOutcome,
   ConditionSpec,
+  DecreeDef,
   OrderGoal,
   PendingChoice,
+  ResourceId,
+  RoyalDecree,
   RunState,
 } from '../types'
 import {
   CHARTER_REPUTATION,
   DECREE_FIRST_DELAY,
   DECREE_INTERVAL,
+  DECREE_DECLINE_IMPATIENCE,
+  DECREE_MAX_SHARE,
   DECREE_MAX_START_PROGRESS,
+  DECREE_MIN_SHARE,
   DECREE_MISS_ESCALATION,
   DECREE_MISS_IMPATIENCE,
+  DECREE_RATE_SHARE,
+  DECREE_STREAK_AMBER,
+  DECREE_STREAK_AMBER_CAP,
   IMPATIENCE_PER_VILLAGER_LOST,
 } from './balance'
 import { pushLog } from './runLog'
 import { relevantBlueprints, unleashThreat } from './events'
-import { computeModifiers } from './modifiers'
+import { productionRate } from './forecast'
+import { computeModifiers, type Modifiers } from './modifiers'
+import { DECLINE_CHOICE, takeOrderChoice } from './orders'
 import { grant, spend, storageUsed } from './queries'
-import { makeRng } from './rng'
+import { makeRng, type Rng } from './rng'
 import { tierOf } from './upgrades'
 import { addImpatience, addReputation, removeVillager } from './society'
 import { recordEvent } from './timeline'
@@ -58,6 +69,8 @@ export function goalCount(goal: OrderGoal, s: RunState): number | null {
   switch (goal.kind) {
     case 'produced':
       return s.producedTotals[goal.resource] ?? 0
+    case 'producedCategory':
+      return producedInCategory(s, goal.category)
     case 'gladesCleared':
       return s.stats.gladesCleared
     /*
@@ -96,6 +109,8 @@ export function describeTimedGoal(goal: OrderGoal): string {
   switch (goal.kind) {
     case 'produced':
       return `Produce ${goal.amount} more ${resourceName(goal.resource)}`
+    case 'producedCategory':
+      return `Produce ${goal.amount} more ${categoryWords(goal.category)}`
     case 'gladesCleared':
       return `Clear ${goal.amount} more glade${goal.amount === 1 ? '' : 's'}`
     case 'buildingId':
@@ -123,6 +138,7 @@ export function goalFeasible(goal: OrderGoal, s: RunState): boolean {
     case 'produced':
       return (s.stock[goal.resource] ?? 0) > 0 || canProduce(s, goal.resource)
     case 'stockCategory':
+    case 'producedCategory':
       return Object.values(RESOURCES).some(
         (r) => r.category === goal.category && canProduce(s, r.id),
       )
@@ -152,39 +168,75 @@ export function decreeMissImpatience(s: RunState): number {
   return base * computeModifiers(s).decreeMissPenalty
 }
 
+/** The goal a live (or offered) decree is measured against. */
+export function decreeGoal(decree: RoyalDecree): OrderGoal | undefined {
+  return decree.goal ?? DECREES[decree.defId]?.goal
+}
+
+/**
+ * What meeting a decree pays on top of its own reward, on a streak of
+ * `streak` decrees met in a row (counting this one): a purse from the court
+ * that grows with the streak. It pays no reputation — decrees are something
+ * an idle economy can farm, so the favour that wins runs stays with services.
+ */
+export function decreeStreakBonus(streak: number): { reputation: number; amber: number } {
+  if (streak < 2) return { reputation: 0, amber: 0 }
+  return { reputation: 0, amber: Math.min(DECREE_STREAK_AMBER_CAP, DECREE_STREAK_AMBER * (streak - 1)) }
+}
+
+/** "+2 reputation", "the Queen's patience returns (−1 impatience)". */
+function decreePayText(def: DecreeDef, reputation: number): string {
+  const parts: string[] = []
+  if (reputation > 0) parts.push(`+${reputation} reputation`)
+  if (def.impatienceRelief) parts.push(`−${def.impatienceRelief} impatience`)
+  return parts.join(', ') || 'The Queen is satisfied'
+}
+
 /** Counts down to the next decree, and runs the live one against its deadline. */
 export function stepDecree(s: RunState, dt: number): void {
   const decree = s.decree
   if (!decree) {
     s.decreeTimer -= dt
-    if (s.decreeTimer <= 0) issueDecree(s)
+    if (s.decreeTimer <= 0) offerDecrees(s)
     return
   }
 
   const def = DECREES[decree.defId]
-  if (!def) {
+  const goal = decreeGoal(decree)
+  if (!def || !goal) {
     s.decree = null
     s.decreeTimer = DECREE_INTERVAL
     return
   }
 
-  decree.progress = goalProgress(def.goal, s, decree.baseline)
+  decree.progress = goalProgress(goal, s, decree.baseline)
   if (decree.progress >= 1) {
     decree.complete = true
     s.stats.ordersCompleted++
     const reputation = Math.max(0, def.reputationReward + computeModifiers(s).decreeReputation)
     addReputation(s, reputation)
+    if (def.impatienceRelief) s.impatience = Math.max(0, s.impatience - def.impatienceRelief)
     if (def.reward) {
       s.stats.resourcesProduced += grant(s.stock, def.reward, s.storageCap, storageUsed(s))
     }
     s.decreeStrikes = Math.max(0, (s.decreeStrikes ?? 0) - 1)
+    const streak = (s.decreeStreak ?? 0) + 1
+    s.decreeStreak = streak
     recordEvent(s, 'decreeMet', def.name)
     feats(s).decreesMet++
     pushLog(
       s,
-      `📯 Decree fulfilled with ${Math.ceil(decree.timeLeft)}s to spare — ${def.name}. +${reputation} reputation.`,
+      `📯 Decree fulfilled with ${Math.ceil(decree.timeLeft)}s to spare — ${def.name}. ${decreePayText(def, reputation)}.`,
       'good',
     )
+    const bonus = decreeStreakBonus(streak)
+    if (bonus.reputation > 0) {
+      addReputation(s, bonus.reputation)
+      pushLog(s, `👑 ${streak} decrees met in a row — the Queen's favour. +${bonus.reputation} reputation.`, 'good')
+    } else if (bonus.amber > 0) {
+      s.stats.resourcesProduced += grant(s.stock, { amber: bonus.amber }, s.storageCap, storageUsed(s))
+      pushLog(s, `👑 ${streak} decrees met in a row — a purse from the court. +${bonus.amber} amber.`, 'good')
+    }
     s.decree = null
     s.decreeTimer = DECREE_INTERVAL
     return
@@ -195,6 +247,7 @@ export function stepDecree(s: RunState, dt: number): void {
     const penalty = decreeMissImpatience(s)
     if (penalty > 0) addImpatience(s, penalty)
     s.decreeStrikes = (s.decreeStrikes ?? 0) + 1
+    s.decreeStreak = 0
     recordEvent(s, 'decreeMissed', def.name)
     pushLog(s, `📯 The decree lapsed unmet — ${def.name}. The Queen is displeased.`, 'bad')
     s.decree = null
@@ -202,40 +255,206 @@ export function stepDecree(s: RunState, dt: number): void {
   }
 }
 
-/**
- * Issues a decree from the goals the settlement can actually pursue and has
- * not already mostly met. If none qualify, the Queen asks again shortly.
- */
-export function issueDecree(s: RunState): boolean {
-  const pool = DECREE_LIST.filter(
-    (d) =>
-      goalFeasible(d.goal, s) &&
-      goalProgress(d.goal, s, goalCount(d.goal, s) ?? 0) < DECREE_MAX_START_PROGRESS,
-  )
-  if (pool.length === 0) {
-    s.decreeTimer = 30
-    return false
+/** Units per second of everything in a resource category, from staffed producers. */
+function categoryRate(s: RunState, mods: Modifiers, category: string): number {
+  let rate = 0
+  for (const r of Object.values(RESOURCES)) {
+    if (r.category === category) rate += productionRate(s, mods, r.id as ResourceId)
   }
-  const rng = makeRng(s.seed, s.rngCursor)
-  const def = rng.pick(pool)
-  s.rngCursor = rng.cursor()
-  const timeLimit = Math.round(def.timeLimit * computeModifiers(s).decreeTime)
-  s.decree = {
-    id: `d${s.orderCounter++}`,
+  return rate
+}
+
+function categoryStock(s: RunState, category: string): number {
+  let sum = 0
+  for (const [id, amount] of Object.entries(s.stock)) {
+    if (RESOURCES[id as ResourceId]?.category === category) sum += amount ?? 0
+  }
+  return sum
+}
+
+/** Rounds up to an even number: decrees ask for round amounts. */
+const evenUp = (n: number) => Math.ceil(n / 2) * 2
+
+/**
+ * A decree drawn from `def`, sized to this settlement, or null when it does
+ * not suit it now. Production decrees need a staffed producer and ask for
+ * about what those producers make over the time limit at their current rate
+ * (within a band around the listed amount); expansion decrees need something
+ * to build or clear. Either way, nothing already mostly met is decreed.
+ */
+export function decreeCandidate(
+  s: RunState,
+  def: DecreeDef,
+  mods: Modifiers = computeModifiers(s),
+): RoyalDecree | null {
+  if (!goalFeasible(def.goal, s)) return null
+  const timeLimit = Math.round(def.timeLimit * mods.decreeTime)
+  let goal: OrderGoal = def.goal
+  switch (def.goal.kind) {
+    case 'produced': {
+      const rate = productionRate(s, mods, def.goal.resource)
+      if (rate <= 0) return null
+      const listed = def.goal.amount
+      const amount = Math.min(
+        Math.ceil(listed * DECREE_MAX_SHARE),
+        Math.max(Math.ceil(listed * DECREE_MIN_SHARE), evenUp(rate * timeLimit * DECREE_RATE_SHARE)),
+      )
+      goal = { ...def.goal, amount }
+      break
+    }
+    case 'producedCategory': {
+      const rate = categoryRate(s, mods, def.goal.category)
+      if (rate <= 0) return null
+      const listed = def.goal.amount
+      const amount = Math.min(
+        Math.ceil(listed * DECREE_MAX_SHARE),
+        Math.max(Math.ceil(listed * DECREE_MIN_SHARE), evenUp(rate * timeLimit * DECREE_RATE_SHARE)),
+      )
+      goal = { ...def.goal, amount }
+      break
+    }
+    case 'stockCategory': {
+      const rate = categoryRate(s, mods, def.goal.category)
+      if (rate <= 0) return null
+      const listed = def.goal.amount
+      // Food is eaten as it is cooked, so only a quarter of the output is
+      // counted on to stay in the larder.
+      const reach =
+        categoryStock(s, def.goal.category) + rate * timeLimit * DECREE_RATE_SHARE * 0.25
+      const amount = Math.min(
+        listed,
+        Math.max(Math.ceil(listed * DECREE_MIN_SHARE), evenUp(reach)),
+      )
+      goal = { ...def.goal, amount }
+      break
+    }
+    case 'gladesCleared': {
+      const open = Object.values(s.glades).some(
+        (g) => !g.cleared && g.neighbors.some((id) => s.glades[id]?.cleared),
+      )
+      if (!open) return null
+      break
+    }
+    default:
+      break
+  }
+  const baseline = goalCount(goal, s) ?? 0
+  const progress = goalProgress(goal, s, baseline)
+  if (progress >= DECREE_MAX_START_PROGRESS) return null
+  return {
+    id: '',
     defId: def.id,
-    progress: 0,
+    progress,
     complete: false,
     timeLeft: timeLimit,
     timeLimit,
-    baseline: goalCount(def.goal, s) ?? 0,
+    baseline,
+    ...(goal !== def.goal ? { goal } : {}),
   }
-  s.decree.progress = goalProgress(def.goal, s, s.decree.baseline)
+}
+
+/** Production decrees (goods) versus expansion decrees (building, clearing). */
+export function isProductionDecree(def: DecreeDef): boolean {
+  const kind = def.goal.kind
+  return kind === 'produced' || kind === 'producedCategory' || kind === 'stockCategory' || kind === 'stock'
+}
+
+/**
+ * Up to two decree candidates for the Queen to offer: one production and one
+ * expansion when both kinds suit the settlement, otherwise two of one kind.
+ */
+export function drawDecrees(s: RunState, rng: Rng): RoyalDecree[] {
+  const mods = computeModifiers(s)
+  const all: { def: DecreeDef; decree: RoyalDecree }[] = []
+  for (const def of DECREE_LIST) {
+    const decree = decreeCandidate(s, def, mods)
+    if (decree) all.push({ def, decree })
+  }
+  const picks: RoyalDecree[] = []
+  const take = (pool: typeof all) => {
+    const left = pool.filter((c) => !picks.some((p) => p.defId === c.def.id))
+    if (left.length > 0) picks.push(rng.pick(left).decree)
+  }
+  take(all.filter((c) => isProductionDecree(c.def)))
+  take(all.filter((c) => !isProductionDecree(c.def)))
+  if (picks.length < 2) take(all)
+  for (const decree of picks) decree.id = `d${s.orderCounter++}`
+  return picks
+}
+
+/**
+ * The Queen's next decree arrives as a choice of two. If none suits the
+ * settlement, she asks again shortly.
+ */
+export function offerDecrees(s: RunState): boolean {
+  const rng = makeRng(s.seed, s.rngCursor)
+  const decrees = drawDecrees(s, rng)
+  s.rngCursor = rng.cursor()
+  if (decrees.length === 0) {
+    s.decreeTimer = 30
+    return false
+  }
+  s.decreeTimer = DECREE_INTERVAL
+  s.pendingChoices.push({ kind: 'decree', options: decrees.map((d) => d.id), decrees })
+  pushLog(s, '📯 A royal herald arrives: the Queen offers a choice of decrees.', 'info')
+  return true
+}
+
+/** Makes a decree live and announces it. */
+function proclaim(s: RunState, decree: RoyalDecree): void {
+  const def = DECREES[decree.defId]
+  const goal = decreeGoal(decree)
+  if (!def || !goal) return
+  s.decree = decree
+  decree.progress = goalProgress(goal, s, decree.baseline)
   pushLog(
     s,
-    `📯 Royal decree: ${def.name} — ${describeTimedGoal(def.goal)} within ${Math.round(timeLimit / 60)} minutes.`,
+    `📯 Royal decree: ${def.name} — ${describeTimedGoal(goal)} within ${Math.round(decree.timeLimit / 60)} minutes.`,
     'info',
   )
+}
+
+/**
+ * Issues a decree straight away, without offering a choice, from the goals
+ * the settlement can actually pursue and has not already mostly met. If none
+ * qualify, the Queen asks again shortly.
+ */
+export function issueDecree(s: RunState): boolean {
+  const rng = makeRng(s.seed, s.rngCursor)
+  const [decree] = drawDecrees(s, rng)
+  s.rngCursor = rng.cursor()
+  if (!decree) {
+    s.decreeTimer = 30
+    return false
+  }
+  proclaim(s, decree)
   return true
+}
+
+/**
+ * Applies a pick from a decree offer: the chosen decree goes live, or with
+ * `DECLINE_CHOICE` both are turned down for a little of the Queen's patience
+ * (and any streak ends). Returns true when the offer is settled.
+ */
+export function takeDecreeChoice(s: RunState, choice: PendingChoice, optionId: string): boolean {
+  if (optionId === DECLINE_CHOICE) {
+    addImpatience(s, DECREE_DECLINE_IMPATIENCE)
+    s.decreeStreak = 0
+    s.decreeTimer = DECREE_INTERVAL
+    pushLog(s, '📯 You beg off both decrees. The Queen will remember it.', 'bad')
+    return true
+  }
+  const decree = (choice.decrees ?? []).find((d) => d.id === optionId)
+  if (!decree || !choice.options.includes(optionId)) return false
+  proclaim(s, decree)
+  return true
+}
+
+/** Settles an order or decree offer (the caller retires it when true). */
+export function takeQueenChoice(s: RunState, choice: PendingChoice, optionId: string): boolean {
+  return choice.kind === 'order'
+    ? takeOrderChoice(s, choice, optionId)
+    : takeDecreeChoice(s, choice, optionId)
 }
 
 /** Fresh-run defaults for the decree fields (also used to upgrade old saves). */

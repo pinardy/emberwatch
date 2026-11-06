@@ -3,6 +3,8 @@ import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
 import { CORNERSTONES } from '../content/cornerstones'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS } from '../content/orders'
+import { DECREES } from '../content/decrees'
+import { RESOURCE_LIST } from '../content/resources'
 import { ALL_RUN_MODIFIER_LIST } from '../content/runModifiers'
 import { SPECIES } from '../content/species'
 import { EDIBLE } from '../content/resources'
@@ -10,8 +12,11 @@ import type {
   BuildingInstance,
   ConditionSpec,
   GladeEventOptionDef,
+  Order,
+  PendingChoice,
   ResourceBag,
   ResourceId,
+  RoyalDecree,
   RunState,
   ServiceNeed,
   SpeciesId,
@@ -67,6 +72,9 @@ import {
   roadNetwork,
 } from './roads'
 import { tick } from './tick'
+import { productionRate } from './forecast'
+import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal } from './orders'
+import { decreeGoal, decreeStreakBonus } from './structure'
 import { baseServiceCapacity, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 
 /**
@@ -104,6 +112,9 @@ interface BotReport {
   population: number
   gladesCleared: number
   ordersCompleted: number
+  /** Decrees met / lapsed. */
+  decreesMet: number
+  decreesMissed: number
   buildings: number
   minutes: number
   /** Diagnostics — these are what tell you *why* a run went the way it did. */
@@ -128,6 +139,12 @@ interface BotReport {
   /** Road stretches laid, and workplaces joined to a hub by road at the end. */
   roads: number
   roadLinked: number
+  /** Minute the first whole point of reputation landed (Infinity if never). */
+  firstRepMinute: number
+  /** Share of the final reputation earned in the run's last three minutes. */
+  lateShare: number
+  /** Reputation at the end of each whole minute. */
+  curve: number[]
   /** Why a lost run was lost: the deadline, impatience before it, or an empty hearth. */
   cause: string
   /** Storm blights forecast, struck and turned aside. */
@@ -253,6 +270,8 @@ function build(s: RunState, economyOnly = false): void {
 
   // Housing and storage need no workers, so they are never gated.
   if (totalHousing(s) < pop + 4 && buildHousing(s)) return
+  // A decree for homes is worth raising them early.
+  if (decreeWants(s)?.housing && buildHousing(s)) return
   if (
     storageUsed(s) > s.storageCap * 0.8 &&
     (tryPlace(s, 'warehouse') || tryUpgrade(s, ['warehouse']))
@@ -648,6 +667,8 @@ function saturated(s: RunState, b: BuildingInstance): boolean {
   const recipe = activeRecipe(b)
   const outputs = Object.keys(recipe?.outputs ?? {}) as ResourceId[]
   if (outputs.length === 0) return false
+  // Output an open order or the live decree is counting is never surplus.
+  if (servesDecree(s, b) || servesOrder(s, b)) return false
   if (EDIBLE.some((id) => outputs.includes(id))) {
     return foodStock(s) >= stockTarget(s, outputs[0])
   }
@@ -702,6 +723,8 @@ function staff(s: RunState): void {
     if (saturated(s, b)) return -1
     // Then services and their supply chains — they are what keeps resolve up.
     if (def.category === 'service') return 5
+    // A live decree's producers come next: the deadline is real.
+    if (servesDecree(s, b)) return 4.5
     if (serviceProducers.has(b.defId)) return 4
     if (def.tags.includes('cooking')) return 3
     if (MATERIAL_CHAIN.has(b.defId)) return 3
@@ -891,6 +914,10 @@ function answerChoices(s: RunState): void {
         buildings[0] ??
         choice.options[0]
       takeChoice(s, pick)
+    } else if (choice.kind === 'order') {
+      takeChoice(s, pickOrder(s, choice))
+    } else if (choice.kind === 'decree') {
+      takeChoice(s, pickDecree(s, choice))
     } else if (choice.kind === 'cornerstone') {
       const best = [...choice.options].sort((a, b) => cornerstoneScore(b) - cornerstoneScore(a))[0]
       takeChoice(s, best)
@@ -947,6 +974,134 @@ function cornerstoneScore(id: string): number {
   return score
 }
 
+/** What the live decree asks the bot to push, if anything. */
+function decreeWants(s: RunState): { resources: ResourceId[]; housing: boolean } | null {
+  const goal = s.decree ? decreeGoal(s.decree) : undefined
+  if (!goal) return null
+  if (goal.kind === 'produced') return { resources: [goal.resource], housing: false }
+  if (goal.kind === 'stockCategory' || goal.kind === 'producedCategory') {
+    const ids = RESOURCE_LIST.filter((r) => r.category === goal.category).map((r) => r.id)
+    return { resources: ids, housing: false }
+  }
+  if (goal.kind === 'buildingsOfCategory' && goal.category === 'housing') {
+    return { resources: [], housing: true }
+  }
+  return null
+}
+
+/** True when the building's current recipe makes what the live decree asks for. */
+function servesDecree(s: RunState, b: BuildingInstance): boolean {
+  const wants = decreeWants(s)
+  if (!wants || wants.resources.length === 0) return false
+  const outputs = activeRecipe(b)?.outputs ?? {}
+  return wants.resources.some((id) => ((outputs as Record<string, number>)[id] ?? 0) > 0)
+}
+
+/** True when the building's current recipe makes what an open order counts. */
+function servesOrder(s: RunState, b: BuildingInstance): boolean {
+  const outputs = (activeRecipe(b)?.outputs ?? {}) as Record<string, number>
+  return s.orders.some((order) => {
+    const goal = orderGoal(order)
+    if (!goal) return false
+    if (goal.kind === 'produced' || goal.kind === 'stock') return (outputs[goal.resource] ?? 0) > 0
+    if (goal.kind === 'producedCategory' || goal.kind === 'stockCategory') {
+      return RESOURCE_LIST.some((r) => r.category === goal.category && (outputs[r.id] ?? 0) > 0)
+    }
+    return false
+  })
+}
+
+/**
+ * How promising an order looks to a competent player: how far along it is,
+ * plus whether the settlement is already making what it asks for. It reads
+ * only what the order card shows and what the player can see in the panels.
+ */
+function orderPromise(s: RunState, order: Order): number {
+  const goal = orderGoal(order)
+  const def = ORDERS[order.defId]
+  if (!goal || !def) return 0
+  const mods = computeModifiers(s)
+  let score = order.progress + 0.1 * def.reputationReward
+  switch (goal.kind) {
+    case 'stock':
+    case 'produced':
+      // Nothing makes it yet: a slot that would sit idle.
+      score += productionRate(s, mods, goal.resource) > 0 ? 0.5 : -0.2
+      break
+    case 'stockCategory':
+    case 'producedCategory':
+      if (RESOURCE_LIST.some((r) => r.category === goal.category && productionRate(s, mods, r.id) > 0)) {
+        score += 0.5
+      }
+      break
+    case 'gladesCleared':
+    case 'staffed':
+      score += 0.5
+      break
+    case 'population':
+    case 'housing':
+      score += 0.4
+      break
+    case 'buildingsOfCategory':
+    case 'buildingId':
+      score += 0.2
+      break
+    default:
+      break
+  }
+  return score
+}
+
+/** Takes the more promising order; asks for another pair if both look hopeless. */
+function pickOrder(s: RunState, choice: PendingChoice): string {
+  const ranked = [...(choice.orders ?? [])].sort((a, b) => orderPromise(s, b) - orderPromise(s, a))
+  const best = ranked[0]
+  if (!best) return choice.options[0]
+  if (orderPromise(s, best) < 0.3 && !orderDeclineBlocked(s, choice)) return DECLINE_CHOICE
+  return best.id
+}
+
+/** Rough chance of meeting a decree in time, from what the settlement does now. */
+function decreeOdds(s: RunState, decree: RoyalDecree): number {
+  const goal = decreeGoal(decree)
+  if (!goal) return 0
+  const mods = computeModifiers(s)
+  switch (goal.kind) {
+    case 'produced':
+      return (productionRate(s, mods, goal.resource) * decree.timeLimit) / goal.amount
+    case 'stockCategory': {
+      const rate = RESOURCE_LIST.filter((r) => r.category === goal.category).reduce(
+        (sum, r) => sum + productionRate(s, mods, r.id),
+        0,
+      )
+      return (decree.progress * goal.amount + rate * decree.timeLimit * 0.25) / goal.amount
+    }
+    case 'producedCategory': {
+      const rate = RESOURCE_LIST.filter((r) => r.category === goal.category).reduce(
+        (sum, r) => sum + productionRate(s, mods, r.id),
+        0,
+      )
+      return (rate * decree.timeLimit) / goal.amount
+    }
+    case 'gladesCleared':
+      return Object.values(s.glades).some((g) => !g.cleared && g.clearers > 0) ? 0.9 : 0.6
+    case 'buildingsOfCategory':
+      return goal.category === 'housing' ? 0.8 : 0.4
+    default:
+      return 0.4
+  }
+}
+
+/** Takes the decree most likely to be met; begs off when neither looks likely. */
+function pickDecree(s: RunState, choice: PendingChoice): string {
+  const ranked = [...(choice.decrees ?? [])]
+    .map((d) => ({ d, odds: decreeOdds(s, d) + 0.05 * (DECREES[d.defId]?.reputationReward ?? 0) }))
+    .sort((a, b) => b.odds - a.odds)
+  const best = ranked[0]
+  if (!best || best.odds < 0.5) return DECLINE_CHOICE
+  return best.d.id
+}
+
 interface PlayOptions {
   /** Never builds service venues or their supply chains — the idle economy. */
   economyOnly?: boolean
@@ -958,6 +1113,7 @@ interface PlayOptions {
 /** Where a run's reputation came from. */
 interface ReputationSources {
   orders: number
+  decrees: number
   glades: number
   events: number
   resolve: number
@@ -973,9 +1129,13 @@ function playRun(
   const s = createRun({ seed, species, modifiers })
   let sinceDecision = Infinity
   const maxSeconds = maxMinutes * 60
-  const sources: ReputationSources = { orders: 0, glades: 0, events: 0, resolve: 0 }
+  const sources: ReputationSources = { orders: 0, decrees: 0, glades: 0, events: 0, resolve: 0 }
   let wardSeconds = 0
   let stallImpatience = 0
+  let firstRepMinute = Infinity
+  let decreesMissed = 0
+  /** `[clock, reputation]` every few seconds, for the shape of the climb. */
+  const repCurve: [number, number][] = [[0, 0]]
 
   while (s.phase === 'playing' && s.clock < maxSeconds) {
     const beforeChoices = s.reputation
@@ -1000,20 +1160,40 @@ function playRun(
 
     const openOrders = s.orders.map((o) => o.defId)
     const gladesBefore = s.stats.gladesCleared
+    const liveDecree = s.decree?.defId
+    const decreesBefore = s.feats?.decreesMet ?? 0
     tick(s, STEP)
+    if (liveDecree && !s.decree && (s.feats?.decreesMet ?? 0) === decreesBefore) decreesMissed++
+    if (liveDecree && (s.feats?.decreesMet ?? 0) > decreesBefore) {
+      sources.decrees +=
+        Math.max(0, (DECREES[liveDecree]?.reputationReward ?? 0) + computeModifiers(s).decreeReputation) +
+        decreeStreakBonus(s.decreeStreak ?? 0).reputation
+    }
     sinceDecision += STEP
     const stillOpen = new Set(s.orders.map((o) => o.defId))
     for (const id of openOrders) {
-      if (!stillOpen.has(id)) sources.orders += orderReputation(s, ORDERS[id]?.reputationReward ?? 0)
+      if (stillOpen.has(id)) continue
+      const base = ORDERS[id]?.reputationReward ?? 0
+      sources.orders += id.startsWith('writ_') ? base : orderReputation(s, base)
     }
     sources.glades +=
       Math.floor(s.stats.gladesCleared / GLADES_PER_REPUTATION) -
       Math.floor(gladesBefore / GLADES_PER_REPUTATION)
+    if (firstRepMinute === Infinity && s.reputation >= 1) firstRepMinute = s.clock / 60
+    if (s.clock - repCurve[repCurve.length - 1][0] >= 5) repCurve.push([s.clock, s.reputation])
   }
+  const finalRep = Math.max(1, s.reputation)
+  const lateFrom = [...repCurve].reverse().find(([t]) => t <= s.clock - 180)?.[1] ?? 0
+  const lateShare = Math.max(0, s.reputation - lateFrom) / finalRep
   // Resolve is whatever the discrete sources do not explain.
   sources.resolve = Math.max(
     0,
-    s.reputation + s.reputationProgress - sources.orders - sources.glades - sources.events,
+    s.reputation +
+      s.reputationProgress -
+      sources.orders -
+      sources.decrees -
+      sources.glades -
+      sources.events,
   )
 
   return {
@@ -1024,6 +1204,8 @@ function playRun(
     population: population(s),
     gladesCleared: s.stats.gladesCleared,
     ordersCompleted: s.stats.ordersCompleted,
+    decreesMet: s.feats?.decreesMet ?? 0,
+    decreesMissed,
     buildings: Object.values(s.buildings).filter((b) => b.built).length,
     minutes: Math.round(s.clock / 60),
     exactMinutes: s.clock / 60,
@@ -1044,6 +1226,11 @@ function playRun(
     openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),
     roads: s.roads?.length ?? 0,
     roadLinked: Object.values(s.buildings).filter((b) => roadLinkOf(s, b).percent > 0).length,
+    firstRepMinute,
+    lateShare,
+    curve: Array.from({ length: Math.floor(s.clock / 60) }, (_, m) =>
+      [...repCurve].reverse().find(([t]) => t <= (m + 1) * 60)?.[1] ?? 0,
+    ),
     cause: lossCause(s),
     blights: s.stormBlights ?? { forecast: 0, struck: 0, blunted: 0 },
     wardMinutes: wardSeconds / 60,
@@ -1103,6 +1290,12 @@ const VERDICT_BY_MINUTES = 40
 const isEarlyCollapse = (r: BotReport) => r.phase === 'lost' && r.population === 0 && r.exactMinutes < 12
 const winShare = (rs: BotReport[]) => rs.filter((r) => r.phase === 'won').length / rs.length
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0)
+const median = (xs: number[]) => {
+  if (xs.length === 0) return 0
+  const sorted = [...xs].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
 
 function summarise(label: string, reports: BotReport[]): string {
   const wins = reports.filter((r) => r.phase === 'won')
@@ -1112,17 +1305,19 @@ function summarise(label: string, reports: BotReport[]): string {
   return (
     `${label.padEnd(20)} won ${wins.length}/${reports.length} lost ${losses.length} stall ${stalls.length} early-collapse ${reports.filter(isEarlyCollapse).length}` +
     ` · avg win ${mean(wins.map((r) => r.exactMinutes)).toFixed(1)}min · longest ${Math.max(...reports.map((r) => r.exactMinutes)).toFixed(1)}min` +
-    ` · rep in wins: orders ${src('orders')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')}` +
+    ` · rep in wins: orders ${src('orders')} decrees ${src('decrees')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')}` +
     ` · upgrades/run ${mean(reports.map((r) => r.upgrades)).toFixed(1)}` +
-    ` · roads/run ${mean(reports.map((r) => r.roads)).toFixed(1)} linked ${mean(reports.map((r) => r.roadLinked)).toFixed(1)}`
+    ` · roads/run ${mean(reports.map((r) => r.roads)).toFixed(1)} linked ${mean(reports.map((r) => r.roadLinked)).toFixed(1)}` +
+    ` · first rep ${median(reports.map((r) => r.firstRepMinute)).toFixed(1)}min (median)` +
+    ` · last-3min share in wins ${(mean(wins.map((r) => r.lateShare)) * 100).toFixed(0)}%`
   )
 }
 
 function logRun(seed: number, r: BotReport): void {
   console.log(
-    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
+    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · decrees ${r.decreesMet}/${r.decreesMet + r.decreesMissed} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · first rep ${r.firstRepMinute.toFixed(1)}min · late ${(r.lateShare * 100).toFixed(0)}% · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
       ` · cause ${r.cause} · blights ${r.blights.struck}/${r.blights.blunted} of ${r.blights.forecast} · wards ${r.wardMinutes.toFixed(1)} · stallImp ${r.stallImpatience.toFixed(1)}` +
-      `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}`,
+      `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}\n    reputation by minute: ${r.curve.join(' ')}`,
   )
 }
 
