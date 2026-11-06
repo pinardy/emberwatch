@@ -145,21 +145,33 @@ export function gladeFill(glade: Glade, palette: MapPalette): string {
  */
 export type GladeAccess = 'locked' | 'reachable' | 'clearing'
 
+export function gladeAccess(run: RunState, glade: Glade): GladeAccess {
+  if (glade.clearers > 0) return 'clearing'
+  return isReachable(run, glade.id) ? 'reachable' : 'locked'
+}
+
+/** Clearing progress of a glade, 0..1. */
+export function gladeProgress(glade: Glade): number {
+  return glade.clearWork > 0 ? Math.min(1, glade.clearProgress / glade.clearWork) : 0
+}
+
 export interface GladePlateInfo {
   access: GladeAccess
-  reachable: boolean
   /** Clearing progress, 0..1. */
   pct: number
   clearers: number
   /** What the glade's waiting event could lead to (empty: no event). */
-  stakes?: GladeStake[]
+  stakes: GladeStake[]
 }
 
+/** Everything on a fogged glade's name plate. */
 export function gladePlateInfo(run: RunState, glade: Glade): GladePlateInfo {
-  const reachable = isReachable(run, glade.id)
-  const pct = glade.clearWork > 0 ? Math.min(1, glade.clearProgress / glade.clearWork) : 0
-  const access: GladeAccess = glade.clearers > 0 ? 'clearing' : reachable ? 'reachable' : 'locked'
-  return { access, reachable, pct, clearers: glade.clearers, stakes: gladeStakesOf(glade) }
+  return {
+    access: gladeAccess(run, glade),
+    pct: gladeProgress(glade),
+    clearers: glade.clearers,
+    stakes: gladeStakesOf(glade),
+  }
 }
 
 /**
@@ -180,12 +192,10 @@ export function gladeStakesTitle(stakes: readonly GladeStake[]): string {
   return stakes.length > 0 ? `Clearing it could bring ${describeStakes([...stakes])}` : ''
 }
 
-/** One-line status under a glade's name. */
-export function gladeAccessText(info: GladePlateInfo): string {
-  if (info.access === 'clearing') return `⛏ ${info.clearers} clearing · ${Math.floor(info.pct * 100)}%`
-  if (info.access === 'reachable') {
-    return info.pct > 0 ? `Reachable · ${Math.floor(info.pct * 100)}%` : 'Reachable'
-  }
+/** One-line status under a glade's name; `pct` is clearing progress, 0..1. */
+export function gladeAccessText(access: GladeAccess, pct: number, clearers: number): string {
+  if (access === 'clearing') return `⛏ ${clearers} clearing · ${Math.floor(pct * 100)}%`
+  if (access === 'reachable') return pct > 0 ? `Reachable · ${Math.floor(pct * 100)}%` : 'Reachable'
   return `🔒 Out of reach`
 }
 

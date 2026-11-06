@@ -25,8 +25,9 @@ import { Villagers } from './Villagers'
 import { BuildBanner, WarmthToggle } from '../MapView2D'
 import {
   MAP_KEYS,
+  gladeAccess,
   gladeLook,
-  gladePlateInfo,
+  gladeProgress,
   useCameraFocus,
   useHudValue,
   useMapKey,
@@ -453,14 +454,13 @@ const GladePlates = memo(function GladePlates({ run }: { run: RunState }) {
     <>
       {Object.values(run.glades).map((glade) => {
         if (gladeLook(glade) !== 'fogged') return null
-        const info = gladePlateInfo(run, glade)
         return (
           <GladePlate
             key={glade.id}
             glade={glade}
-            access={info.access}
-            percent={Math.floor(info.pct * 100)}
-            clearers={info.clearers}
+            access={gladeAccess(run, glade)}
+            percent={Math.floor(gladeProgress(glade) * 100)}
+            clearers={glade.clearers}
           />
         )
       })}

@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { distToPolygonEdge, pointInPolygon } from '../../game/engine/geometry'
 import type { Glade, RunState, Vec2 } from '../../game/types'
-import { GLADE_KIND_STYLE, gladeFill, gladeLook, gladePlateInfo, type GladeAccess } from '../mapShared'
+import { GLADE_KIND_STYLE, gladeAccess, gladeFill, gladeLook, type GladeAccess } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import { gladeSurfaceKey, useRunKey } from './layerKeys'
 import { NO_RAYCAST } from './models'
@@ -323,7 +323,7 @@ export const GladeEdges = memo(function GladeEdges({ run }: { run: RunState }) {
     const c: Glade[] = []
     for (const glade of Object.values(run.glades)) {
       if (gladeLook(glade) !== 'fogged') continue
-      const access = gladePlateInfo(run, glade).access
+      const access = gladeAccess(run, glade)
       if (access === 'clearing') c.push(glade)
       else s.push({ glade, access })
     }

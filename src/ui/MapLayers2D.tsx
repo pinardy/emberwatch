@@ -26,6 +26,7 @@ import {
   gladeAccessText,
   gladeStakesTitle,
   GLADE_STAKE_ART,
+  gladeAccess,
   gladeFill,
   gladeLook,
   gladePlateInfo,
@@ -90,7 +91,7 @@ export const GladeLayer2D = memo(function GladeLayer2D({ run }: { run: RunState 
             id={glade.id}
             points={points[glade.id]}
             kind={glade.kind}
-            access={gladePlateInfo(run, glade).access}
+            access={gladeAccess(run, glade)}
           />
         ) : null,
       )}
@@ -381,7 +382,8 @@ export const GladePlateLayer2D = memo(function GladePlateLayer2D({ run }: { run:
       {Object.values(run.glades).map((glade) => {
         if (!glade.discovered || glade.cleared) return null
         const info = gladePlateInfo(run, glade)
-        const { reachable, pct } = info
+        const { pct } = info
+        const reachable = info.access !== 'locked'
         const kindStyle = GLADE_KIND_STYLE[glade.kind]
         return (
           <g
@@ -418,9 +420,9 @@ export const GladePlateLayer2D = memo(function GladePlateLayer2D({ run }: { run:
               </>
             )}
             <text y={28} className="glade-crew" style={reachable ? undefined : { fill: '#6d7a7a' }}>
-              {gladeAccessText(info)}
+              {gladeAccessText(info.access, pct, info.clearers)}
             </text>
-            {info.stakes && info.stakes.length > 0 && (
+            {info.stakes.length > 0 && (
               <g className="glade-stakes">
                 <title>{gladeStakesTitle(info.stakes)}</title>
                 <rect
@@ -435,7 +437,7 @@ export const GladePlateLayer2D = memo(function GladePlateLayer2D({ run }: { run:
                   <IconUse
                     key={k}
                     id={GLADE_STAKE_ART[k]}
-                    x={-(info.stakes!.length - 1) * 7.5 + i * 15}
+                    x={-(info.stakes.length - 1) * 7.5 + i * 15}
                     y={45}
                     size={13}
                   />

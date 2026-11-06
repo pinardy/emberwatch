@@ -15,7 +15,7 @@ import { drawIcon, type SpriteTile } from './sprites'
 export function plateTile(glade: Glade, access: GladeAccess, percent: number, clearers: number): SpriteTile {
   const locked = access === 'locked'
   const style = GLADE_KIND_STYLE[glade.kind]
-  const text = gladeAccessText({ access, reachable: !locked, pct: percent / 100, clearers })
+  const text = gladeAccessText(access, percent / 100, clearers)
   const stakes = gladeStakesOf(glade)
   return {
     key: `p:${glade.id}:${access}:${percent}:${clearers}:${stakes.join(',')}`,

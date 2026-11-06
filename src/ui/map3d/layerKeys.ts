@@ -4,8 +4,9 @@ import { frameDerived } from '../../game/frameDerived'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, RunState } from '../../game/types'
 import {
+  gladeAccess,
   gladeLook,
-  gladePlateInfo,
+  gladeProgress,
   isColdHousing,
   isUnlitWarmthSource,
   upgradeFraction,
@@ -34,7 +35,7 @@ export function gladeSurfaceKey(run: RunState): string {
   for (const glade of Object.values(run.glades)) {
     const look = gladeLook(glade)
     key += `${glade.id}:${look}`
-    if (look === 'fogged') key += `:${gladePlateInfo(run, glade).access}`
+    if (look === 'fogged') key += `:${gladeAccess(run, glade)}`
     key += ','
   }
   return key
@@ -45,8 +46,7 @@ export function gladePlateKey(run: RunState): string {
   let key = ''
   for (const glade of Object.values(run.glades)) {
     if (gladeLook(glade) !== 'fogged') continue
-    const info = gladePlateInfo(run, glade)
-    key += `${glade.id}:${info.access}:${Math.floor(info.pct * 100)}:${info.clearers},`
+    key += `${glade.id}:${gladeAccess(run, glade)}:${Math.floor(gladeProgress(glade) * 100)}:${glade.clearers},`
   }
   return key
 }
