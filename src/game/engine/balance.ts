@@ -121,7 +121,7 @@ export const RESOLVE_PER_HOSTILITY = 0.1
  * it starts clearing glades in earnest: a newcomer following the first-steps
  * checklist meets its first Storm at hostility ~10-15 and feels nothing, an
  * expanding one at ~25 loses two points, and the squeeze tightens from there:
- * at hostility 50 resolve drops 12 instead of 5, at 70 it drops 18. That is
+ * at hostility 50 resolve drops ~13 instead of 5, at 70 ~19. That is
  * more than one served need is worth, so a species with half its needs met
  * sinks to within a few points of its threshold and earns little reputation,
  * while one with both served still clears it — the late game rewards serving
@@ -129,10 +129,12 @@ export const RESOLVE_PER_HOSTILITY = 0.1
  *
  * Tuned against the balance harness: with the old flat 0.1 the competent bot
  * won 92% of the fixed seeds (96% once its labour bug was fixed), against a
- * 95% ceiling; this brings it to ~80% on fixed and fresh seeds alike.
+ * 95% ceiling; this brings it to ~80% on fixed and fresh seeds alike. The late
+ * rate went from 0.2 to 0.22 when lizards gained their Brawling floor, to
+ * keep the four-trio harness inside its band.
  */
 export const HOSTILITY_SQUEEZE_THRESHOLD = 15
-export const RESOLVE_PER_HOSTILITY_LATE = 0.2
+export const RESOLVE_PER_HOSTILITY_LATE = 0.22
 
 /** Resolve every species loses to the forest at `hostility`. */
 export function hostilityResolvePenalty(hostility: number): number {

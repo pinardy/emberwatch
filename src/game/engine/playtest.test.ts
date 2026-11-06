@@ -493,6 +493,18 @@ function wantedRecipes(s: RunState): Map<string, Set<string>> {
   for (const need of neededServices(s)) {
     const chain = SERVICE_CHAIN[need]
     const set = out.get(chain.producer) ?? new Set<string>()
+    /*
+     * A recipe whose input comes off the same workshop (training gear is cut
+     * from fabric, both at the weaver) needs that recipe running too, ahead
+     * of it. Without this, a settlement that wanted brawling but not rest set
+     * its only weaver to gear and waited forever for fabric nobody wove.
+     */
+    const recipes = BUILDINGS[chain.producer]?.recipes ?? []
+    const target = recipes.find((r) => r.id === chain.recipe)
+    for (const input of Object.keys(target?.inputs ?? {})) {
+      const feeder = recipes.find((r) => r.id !== chain.recipe && input in r.outputs)
+      if (feeder) set.add(feeder.id)
+    }
     set.add(chain.recipe)
     out.set(chain.producer, set)
   }
@@ -849,11 +861,18 @@ function playRun(
   }
 }
 
-/** One trio from the starting species and two that need a charter. */
+/**
+ * One trio from the starting species and three that need a charter. The
+ * fourth, beaver/lizard/fox, was the weakest of all ten possible trios when
+ * it was added (lizards' and foxes' deep needs, brawling and rest, both sat
+ * behind the weaver at the end of the draft), so the parity check now
+ * covers it.
+ */
 const TRIOS: SpeciesId[][] = [
   ['human', 'beaver', 'lizard'],
   ['human', 'fox', 'harpy'],
   ['beaver', 'lizard', 'harpy'],
+  ['beaver', 'lizard', 'fox'],
 ]
 
 const ALL_SEEDS = [

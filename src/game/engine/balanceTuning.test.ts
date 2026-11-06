@@ -149,13 +149,27 @@ describe('decree strikes', () => {
   })
 })
 
-describe('harpies teach one another', () => {
-  it('only harpies, and only for Education, get a floor', () => {
+describe('harpies teach one another, lizards spar', () => {
+  it('only harpies (Education) and lizards (Brawling) get a floor', () => {
     expect(needFloor('harpy', 'education')).toBe(0.75)
     expect(needFloor('harpy', 'rest')).toBe(0)
-    for (const sp of ['human', 'beaver', 'lizard', 'fox'] as SpeciesId[]) {
+    expect(needFloor('lizard', 'brawling')).toBe(0.75)
+    expect(needFloor('lizard', 'treatment')).toBe(0)
+    for (const sp of ['human', 'beaver', 'fox'] as SpeciesId[]) {
       for (const need of SPECIES[sp].needs) expect(needFloor(sp, need), `${sp} ${need}`).toBe(0)
     }
+  })
+
+  it('counts Brawling three-quarters met for lizards without an Arena', () => {
+    const state = newRun(['beaver', 'lizard', 'fox'])
+    const lizard = breakdownOf(state, 'lizard')
+    expect(lizard.needRatio.brawling).toBe(0.75)
+    expect(lizard.needDetail.brawling).toBe(false)
+    expect(lizard.needRatio.treatment).toBe(0)
+    expect(lizard.needs).toBeCloseTo(0.75 * RESOLVE_PER_NEED)
+    // The fox shares Treatment with the lizard but gains nothing from it.
+    expect(breakdownOf(state, 'fox').needs).toBe(0)
+    expect(breakdownOf(state, 'beaver').needs).toBe(0)
   })
 
   it('counts Education three-quarters met without a Guild House, and no more', () => {
