@@ -390,12 +390,22 @@ export function secondsPastDeadline(s: RunState): number {
   return Math.max(0, s.clock - QUEEN_DEADLINE_SECONDS)
 }
 
+/**
+ * Moves the Queen's impatience by `amount`, up or down. Whole points carry
+ * through the fractional progress both ways: relief borrows from whole points
+ * (7 and a half, less 2, is 5 and a half), and the meter never drops below 0.
+ */
 export function addImpatience(s: RunState, amount: number): void {
   s.impatienceProgress += amount
   while (s.impatienceProgress >= 1 && s.impatience < s.maxImpatience) {
     s.impatienceProgress -= 1
     s.impatience += 1
   }
+  while (s.impatienceProgress < 0 && s.impatience > 0) {
+    s.impatienceProgress += 1
+    s.impatience -= 1
+  }
+  if (s.impatienceProgress < 0) s.impatienceProgress = 0
   if (s.impatience >= s.maxImpatience) s.impatienceProgress = 0
 }
 
