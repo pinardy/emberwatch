@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 592 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
+npm test           # 600 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -47,9 +47,14 @@ The game plays RTS-style in continuous space: there is no grid. Buildings are pl
 
 ```
 src/
-  art/                  # the icon set: every resource, building, species, need,
-                        # meter, season, deposit and glade kind as SVG path
-                        # data on a 24×24 grid — no image files
+  art/                  # the icon set, as SVG path data on a 24×24 grid — no
+                        # image files. Base icons (resources, buildings,
+                        # species, needs, meters, seasons, deposits, glades,
+                        # motifs) plus family frames composed as
+                        # `frame/motif` ids (cornerstones, events, threats,
+                        # pacts, conditions, lands, charters, Citadel,
+                        # edicts, achievements). core.ts is the small eager
+                        # set the menu draws; the rest loads with the screens
   game/
     types.ts            # the whole domain model; RunState is plain & serialisable
     content/            # data-only definitions: resources, buildings, species,
@@ -131,7 +136,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`villagerRoutes.test.ts`** — the walking villagers' routes: a pure function of the run, following roads where they run and walking straight where they do not.
 - **`audio.test.ts`**, **`music.test.ts`** and **`SoundSettings.test.tsx`** — sound, against a small fake `AudioContext` (`src/test/fakeAudio.ts`): no context before a user gesture, each volume bus wired into the master at its saved level, mute, ducking, older settings migrating to the default levels, and the sliders in both settings panels. For the score: seasonal palettes, a seeded composer that stays in key and does not loop, look-ahead scheduling, the crossfade on a change of season, and holding while paused or hidden.
 - **`LazyScreens.test.tsx`** — the lazily loaded screens from cold: each shows its loading state, then renders, and all are preloaded in idle time. The other UI tests preload them first (`src/test/setup-ui.ts`) and click straight through.
-- **`icons.test.ts`**, **`Icon.test.tsx`** and **`sprites.test.tsx`** — the icon set: every resource, building, species, need, meter, season, deposit, glade kind and terrain has drawn art (anything still on its emoji fallback must be listed on purpose), the `<Icon>` component's accessibility and fallback, the text-to-icon swap for sim messages, and that the 3D map rasterises each icon once.
+- **`icons.test.ts`**, **`Icon.test.tsx`** and **`sprites.test.tsx`** — the icon set: every resource, building, species, need, meter, season, deposit, glade kind and terrain, and every cornerstone, glade event, threat, pact, condition, land, charter, Citadel upgrade, edict, achievement, trait, tab and status badge has drawn art (anything still on its emoji fallback must be listed on purpose), framed families stay distinct, the menu draws only from the eager core, the `<Icon>` component's accessibility and fallback, the text-to-icon swap for sim messages, and that the 3D map rasterises each icon once.
 
 ## PWA
 

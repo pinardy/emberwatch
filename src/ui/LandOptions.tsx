@@ -1,5 +1,6 @@
 import { modifierPool, type LandChoice, type LandPowers } from '../game/engine/runModifiers'
 import './replay.css'
+import { Icon } from './Icon'
 
 /**
  * Setup-screen controls for the Citadel's land upgrades: the Second Survey's
@@ -33,12 +34,16 @@ export function LandOptions({
             onChange({ ...choice, reroll: !choice.reroll })
           }}
         >
-          {choice.reroll ? "↩ Back to the seed's own land" : '🔭 Re-roll the land (Second Survey)'}
+          {choice.reroll ? "↩ Back to the seed's own land" : <>
+                <Icon id="telescope" emoji="🔭" /> Re-roll the land (Second Survey)
+              </>}
         </button>
       )}
       {powers.chooseModifier && (
         <label>
-          <span>📌 Chosen ground</span>
+          <span>
+            <Icon id="pin" emoji="📌" /> Chosen ground
+          </span>
           <select
             value={choice.chosen ?? ''}
             onChange={(e) => {

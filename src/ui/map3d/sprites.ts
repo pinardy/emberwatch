@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { ICONS, toneColor, type IconId } from '../../art/icons'
+import { iconShapes, toneColor, type IconId } from '../../art/icons'
 
 /**
  * Canvas-baked textures for the 3D map. Drawn icons, emoji and short strings (worker
@@ -54,14 +54,20 @@ const SPRITE_CURRENT = '#dfe6e3'
 export function iconTexture(id: IconId): THREE.CanvasTexture {
   return bake(`i:${id}`, (ctx, size) => {
     const scale = (size * 0.72) / 24 // the footprint the emoji glyphs had
-    const offset = (size - 24 * scale) / 2
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-    const shapes = ICONS[id].map((shape) => ({ shape, path: new Path2D(shape.d) }))
-    const place = (m?: readonly number[]) => {
-      ctx.setTransform(scale, 0, 0, scale, offset, offset)
-      if (m) ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5])
-    }
+    drawIcon(ctx, id, scale, (size - 24 * scale) / 2, true)
+  })
+}
+
+/** Replays an icon's paths at `scale`, offset by `offset` on both axes. */
+function drawIcon(ctx: CanvasRenderingContext2D, id: IconId, scale: number, offset: number, halo: boolean) {
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  const shapes = iconShapes(id).map((shape) => ({ shape, path: new Path2D(shape.d) }))
+  const place = (m?: readonly number[]) => {
+    ctx.setTransform(scale, 0, 0, scale, offset, offset)
+    if (m) ctx.transform(m[0], m[1], m[2], m[3], m[4], m[5])
+  }
+  if (halo) {
     // Halo: each shape's silhouette, widened, in translucent ink.
     ctx.globalAlpha = 0.45
     ctx.fillStyle = ctx.strokeStyle = 'rgb(0, 0, 0)'
@@ -71,22 +77,22 @@ export function iconTexture(id: IconId): THREE.CanvasTexture {
       if (shape.fill) ctx.fill(path)
       ctx.stroke(path)
     }
-    for (const { shape, path } of shapes) {
-      place(shape.m)
-      ctx.globalAlpha = shape.o ?? 1
-      if (shape.fill) {
-        ctx.fillStyle = toneColor(shape.fill, SPRITE_CURRENT)
-        ctx.fill(path)
-      }
-      if (shape.stroke) {
-        ctx.strokeStyle = toneColor(shape.stroke, SPRITE_CURRENT)
-        ctx.lineWidth = shape.w ?? 1.3
-        ctx.stroke(path)
-      }
+  }
+  for (const { shape, path } of shapes) {
+    place(shape.m)
+    ctx.globalAlpha = shape.o ?? 1
+    if (shape.fill) {
+      ctx.fillStyle = toneColor(shape.fill, SPRITE_CURRENT)
+      ctx.fill(path)
     }
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.globalAlpha = 1
-  })
+    if (shape.stroke) {
+      ctx.strokeStyle = toneColor(shape.stroke, SPRITE_CURRENT)
+      ctx.lineWidth = shape.w ?? 1.3
+      ctx.stroke(path)
+    }
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.globalAlpha = 1
 }
 
 export function labelTexture(text: string): THREE.CanvasTexture {
@@ -107,9 +113,12 @@ export function labelTexture(text: string): THREE.CanvasTexture {
   })
 }
 
-/** A round status badge: a coloured disc with a dark rim and a glyph. */
-export function badgeTexture(icon: string, color: string): THREE.CanvasTexture {
-  return bake(`b:${icon}:${color}`, (ctx, size) => {
+/**
+ * A round status badge: a coloured disc with a dark rim and a glyph — the
+ * drawn `art` (a white `mono/` icon) when given, else the emoji.
+ */
+export function badgeTexture(icon: string, color: string, art?: IconId): THREE.CanvasTexture {
+  return bake(`b:${art ?? icon}:${color}`, (ctx, size) => {
     ctx.beginPath()
     ctx.arc(size / 2, size / 2, size * 0.44, 0, Math.PI * 2)
     ctx.fillStyle = color
@@ -117,6 +126,11 @@ export function badgeTexture(icon: string, color: string): THREE.CanvasTexture {
     ctx.lineWidth = size * 0.07
     ctx.strokeStyle = 'rgba(9, 13, 16, 0.9)'
     ctx.stroke()
+    if (art) {
+      const scale = (size * 0.56) / 24
+      drawIcon(ctx, art, scale, (size - 24 * scale) / 2, false)
+      return
+    }
     ctx.font = `${Math.floor(size * 0.5)}px "Segoe UI Emoji", "Noto Color Emoji", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'

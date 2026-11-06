@@ -18,6 +18,7 @@ import { RunModifierList } from './RunModifierList'
 import './replay.css'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
+import { edictArt } from '../game/content/art'
 
 /**
  * Today's UTC date key, refreshed when UTC midnight passes while the page is
@@ -90,7 +91,9 @@ export function DailyMenuEntry() {
   return (
     <button type="button" className="daily-entry" onClick={() => goToScreen('daily')}>
       <span className="daily-entry-head">
-        <strong>📅 Daily expedition</strong>
+        <strong>
+          <Icon id="calendar" emoji="📅" /> Daily expedition
+        </strong>
         <time dateTime={today}>{today}</time>
       </span>
       <span className="daily-entry-body">
@@ -103,7 +106,11 @@ export function DailyMenuEntry() {
         <span className={result ? (result.won ? 'is-good' : '') : 'muted'}>
           · {result ? <IconText text={describeDaily(result)} /> : 'Not attempted yet'}
         </span>
-        {streak > 0 && <span className="chip">🔥 {streak}-day streak</span>}
+        {streak > 0 && (
+          <span className="chip">
+            <Icon id="settlement" emoji="🔥" /> {streak}-day streak
+          </span>
+        )}
       </span>
     </button>
   )
@@ -133,7 +140,9 @@ export function DailyScreen() {
     <div className="screen daily-screen">
       <div className="menu-card wide">
         <header className="row-between">
-          <h2>📅 Daily expedition</h2>
+          <h2>
+            <Icon id="calendar" emoji="📅" /> Daily expedition
+          </h2>
           <time className="chip big" dateTime={today}>
             {today} UTC
           </time>
@@ -161,9 +170,15 @@ export function DailyScreen() {
         </p>
 
         <div className="citadel-stats">
-          <span className="chip">🔥 {streak}-day streak</span>
-          <span className="chip">🏆 Best streak {ledger.bestStreak}</span>
-          <span className="chip">📜 {ledger.results.length} days played</span>
+          <span className="chip">
+            <Icon id="settlement" emoji="🔥" /> {streak}-day streak
+          </span>
+          <span className="chip">
+            <Icon id="medal" emoji="🏆" /> Best streak {ledger.bestStreak}
+          </span>
+          <span className="chip">
+            <Icon id="scroll" emoji="📜" /> {ledger.results.length} days played
+          </span>
         </div>
 
         <section className="setup-section">
@@ -181,7 +196,7 @@ export function DailyScreen() {
           <ul className="daily-edicts">
             {edicts.map((e) => (
               <li key={e.level}>
-                {e.icon} <strong>{e.name}</strong> — {e.description}
+                <Icon id={edictArt(e.level)} emoji={e.icon} /> <strong>{e.name}</strong> — {e.description}
               </li>
             ))}
           </ul>
@@ -238,7 +253,9 @@ export function DailyScreen() {
                             <Icon id="reputation" emoji="👑" /> Held
                           </>
                         ) : (
-                          '🌫️ Lost'
+                          <>
+                            <Icon id="fog" emoji="🌫️" /> Lost
+                          </>
                         )}
                       </td>
                       <td>{r.years}</td>

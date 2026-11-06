@@ -25,7 +25,7 @@ export function DecreeCard() {
   if (!decree || !def) {
     return (
       <p className="muted decree-next">
-        📯 The next royal decree arrives in about {clockText(run.decreeTimer)}.
+        <Icon id="horn" emoji="📯" /> The next royal decree arrives in about {clockText(run.decreeTimer)}.
       </p>
     )
   }
@@ -36,7 +36,9 @@ export function DecreeCard() {
   return (
     <div className={`order-card decree-card ${urgent ? 'is-urgent' : ''}`}>
       <div className="row-between">
-        <strong>📯 {def.name}</strong>
+        <strong>
+          <Icon id="horn" emoji="📯" /> {def.name}
+        </strong>
         <span className="order-reward">
           <Icon id="reputation" label="reputation" /> +{def.reputationReward + mods.decreeReputation}
           {def.reward?.amber ? (

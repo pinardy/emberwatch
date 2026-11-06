@@ -220,7 +220,7 @@ export function TopBar() {
             aria-label={`Game speed: ${speed === 0 ? 'paused' : `${speed}×`}`}
             title="Game speed"
           >
-            {speed === 0 ? '⏸' : `${speed}×`}
+            {speed === 0 ? <Icon id="pause" emoji="⏸" /> : `${speed}×`}
             <span className="speed-chevron" aria-hidden>
               ▾
             </span>
@@ -242,7 +242,7 @@ export function TopBar() {
                 }}
                 title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
               >
-                {option === 0 ? '⏸' : `${option}×`}
+                {option === 0 ? <Icon id="pause" emoji="⏸" label="Pause" /> : `${option}×`}
               </button>
             ))}
           </div>
@@ -303,7 +303,7 @@ export function TopBar() {
           title={renderer === '3d' ? 'Switch to 2D map' : 'Switch to 3D map'}
           aria-label={renderer === '3d' ? 'Switch to 2D map' : 'Switch to 3D map'}
         >
-          {renderer === '3d' ? '🗺️' : '🏔️'}
+          {renderer === '3d' ? <Icon id="map" emoji="🗺️" /> : <Icon id="mountain" emoji="🏔️" />}
         </button>
         <button
           type="button"
@@ -324,7 +324,7 @@ export function TopBar() {
             aria-expanded={popover === 'settings'}
             aria-controls="game-settings"
           >
-            ⚙️
+            <Icon id="part" emoji="⚙️" />
           </button>
           {popover === 'settings' && (
             <div
@@ -360,7 +360,8 @@ export function TopBar() {
             </span>
           ))}
           <span className="status-toggle-idle" aria-hidden>
-            💤<strong className={idle > 0 ? 'is-warn' : ''}>{idle}</strong>
+            <Icon id="zzz" emoji="💤" />
+            <strong className={idle > 0 ? 'is-warn' : ''}>{idle}</strong>
           </span>
           {alerts.length > 0 && (
             <span className="status-badge" aria-hidden>
@@ -396,7 +397,9 @@ export function TopBar() {
             </ul>
           )}
           <div className="stat" title="Population and housing">
-            <span>🧑‍🤝‍🧑</span>
+            <span>
+              <Icon id="people" emoji="🧑‍🤝‍🧑" />
+            </span>
             <strong className={pop > housing ? 'is-bad' : ''}>
               {pop}/{housing}
             </strong>
@@ -421,7 +424,9 @@ export function TopBar() {
             )}
           </div>
           <div className="stat" title="Idle villagers — they also act as builders">
-            <span>💤</span>
+            <span>
+              <Icon id="zzz" emoji="💤" />
+            </span>
             <strong className={idle > 0 ? 'is-warn' : ''}>{idle}</strong>
           </div>
           <div className="resolve-chips">
@@ -491,12 +496,13 @@ function statusAlerts(input: {
     })
   }
   if (run.starving) {
-    out.push({ id: 'starving', icon: '🍽️', text: 'Villagers are starving', severity: 'danger' })
+    out.push({ id: 'starving', icon: '🍽️', art: 'plate', text: 'Villagers are starving', severity: 'danger' })
   }
   for (const [sp, seconds] of Object.entries(input.departures)) {
     out.push({
       id: `leaving-${sp}`,
       icon: '🚪',
+      art: 'door',
       text: `${SPECIES[sp as SpeciesId].name} leave in ${Math.ceil(seconds ?? 0)}s`,
       severity: 'danger',
     })
@@ -511,7 +517,7 @@ function statusAlerts(input: {
     })
   }
   if (input.overcrowded) {
-    out.push({ id: 'housing', icon: '🏚️', text: 'Not enough housing', severity: 'caution' })
+    out.push({ id: 'housing', icon: '🏚️', art: 'bed', text: 'Not enough housing', severity: 'caution' })
   }
   for (const b of input.breakdowns) {
     if (b.current < 0 && input.departures[b.species] === undefined) {

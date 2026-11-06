@@ -58,7 +58,9 @@ describe('glade-event prices', () => {
     const button = optionButton(feed.label)
     expect(button.disabled).toBe(true)
     const cost = within(button).getByText(/^Cost:/)
-    expect(cost.textContent).toContain(`🍽️ ${feed.foodCost} food`)
+    // The food glyph is drawn, and announced as "food".
+    expect(within(cost).getByRole('img', { name: 'food' })).toBeTruthy()
+    expect(cost.textContent).toContain(` ${feed.foodCost} food`)
     expect(cost.getAttribute('title')).toBe(
       `Costs ${feed.foodCost} food, paid from your largest food stacks`,
     )
@@ -72,7 +74,9 @@ describe('glade-event prices', () => {
     render(<ChoiceModal />)
 
     const button = optionButton(host.label)
-    expect(within(button).getByText(/^Cost:/).textContent).toMatch(/🍽️ 10 food .*5/)
+    const cost = within(button).getByText(/^Cost:/)
+    expect(within(cost).getByRole('img', { name: 'food' })).toBeTruthy()
+    expect(cost.textContent).toMatch(/ 10 food .*5/)
     expect(
       within(button).getByText('Needs 10 food — you have 3; 5 Ale — you have 2'),
     ).toBeTruthy()
@@ -86,7 +90,9 @@ describe('glade-event prices', () => {
 
     const button = optionButton(feed.label)
     expect(button.disabled).toBe(false)
-    expect(within(button).getByText(/^Cost:/).textContent).toContain(`🍽️ ${feed.foodCost} food`)
+    const cost = within(button).getByText(/^Cost:/)
+    expect(within(cost).getByRole('img', { name: 'food' })).toBeTruthy()
+    expect(cost.textContent).toContain(` ${feed.foodCost} food`)
     expect(within(button).queryByText(/^Needs/)).toBeNull()
   })
 

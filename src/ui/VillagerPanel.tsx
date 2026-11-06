@@ -18,6 +18,7 @@ import { useConfirm } from './useConfirm'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
 import { NEED_ART } from '../game/content/art'
+import { VILLAGER_TRAIT_ART } from '../game/content/artFamilies'
 
 /** Where the player diagnoses "why is resolve dropping?". */
 export function VillagerPanel() {
@@ -209,7 +210,7 @@ function VillagerRow({ run, villager: v }: { run: RunState; villager: Villager }
         {trait && (
           <em className="villager-trait">
             {' '}
-            {trait.icon} {trait.name}
+            <Icon id={VILLAGER_TRAIT_ART[trait.id]} emoji={trait.icon} /> {trait.name}
           </em>
         )}
       </strong>

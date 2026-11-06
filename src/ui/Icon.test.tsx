@@ -4,6 +4,9 @@ import type { IconId } from '../art/icons'
 import { RESOURCES } from '../game/content/resources'
 import { Icon, IconSymbols, IconUse } from './Icon'
 import { IconText, tokenizeIconText } from './IconText'
+import { MenuScreen } from './MenuScreen'
+import { CORE_ICONS } from '../art/core'
+import { useGameStore } from '../game/store'
 
 afterEach(cleanup)
 
@@ -118,5 +121,21 @@ describe('IconText', () => {
       'impatience',
       'wood',
     ])
+  })
+})
+
+describe('the menu draws from the eager core', () => {
+  it('needs nothing from the lazy registry, so its first frame shows no emoji', () => {
+    // A run in progress puts the Continue line on the menu too.
+    localStorage.clear()
+    useGameStore.getState().startRun(77)
+    useGameStore.getState().goToScreen('menu')
+    const { container } = render(<MenuScreen />)
+    const drawn = [...container.querySelectorAll('svg[data-icon]')].map((s) => s.getAttribute('data-icon'))
+    expect(drawn).toEqual(expect.arrayContaining(['small', 'folder', 'guildHouse', 'medal', 'calendar']))
+    // Every icon the menu shows ships in the startup chunk…
+    for (const id of drawn) expect(Object.keys(CORE_ICONS), String(id)).toContain(id)
+    // …and nothing falls back to its emoji.
+    expect(container.querySelectorAll('.icon-emoji')).toHaveLength(0)
   })
 })

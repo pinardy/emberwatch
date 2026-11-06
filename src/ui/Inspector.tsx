@@ -1,4 +1,5 @@
 import { DEPOSIT_ART, GLADE_ART, NEED_ART } from '../game/content/art'
+import { VILLAGER_TRAIT_ART } from '../game/content/artFamilies'
 import { BUILDINGS } from '../game/content/buildings'
 import { GLADE_EVENTS } from '../game/content/gladeEvents'
 import { RESOURCES } from '../game/content/resources'
@@ -181,7 +182,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             disabled={(run.stock.amber ?? 0) < rushCost(run, building.id)}
             onClick={() => useGameStore.getState().rush(building.id)}
           >
-            ⚡ Rush for {rushCost(run, building.id)} <Icon of={RESOURCES.amber} label="amber" />
+            <Icon id="lightning" emoji="⚡" /> Rush for {rushCost(run, building.id)} <Icon of={RESOURCES.amber} label="amber" />
           </button>
         </>
       ) : (
@@ -263,7 +264,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             <section className="inspector-section">
               <h4>Warmth</h4>
               <p className="muted">
-                {building.unlit ? '❄ Cold — no wood to burn.' : '🔥 Lit.'} Keeps{' '}
+                <IconText text={building.unlit ? '❄ Cold — no wood to burn.' : '🔥 Lit.'} /> Keeps{' '}
                 {homesWithin(run, building.pos, warmthRadiusOf(building)).length} home
                 {homesWithin(run, building.pos, warmthRadiusOf(building)).length === 1 ? '' : 's'} within{' '}
                 {warmthRadiusOf(building)} warm during the Storm, burning{' '}
@@ -276,11 +277,15 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             <section className="inspector-section">
               <h4>Warmth</h4>
               <p className="muted">
-                {isInsulated(building)
-                  ? '🔥 Warm — insulated by its upgrade, it needs no fire nearby.'
-                  : isWarmAt(run, building.pos)
-                    ? '🔥 Warm — inside the reach of the hearth or a lit brazier.'
-                    : '❄ Cold in the Storm — beyond every fire. A brazier nearby would warm it.'}
+                <IconText
+                  text={
+                    isInsulated(building)
+                      ? '🔥 Warm — insulated by its upgrade, it needs no fire nearby.'
+                      : isWarmAt(run, building.pos)
+                        ? '🔥 Warm — inside the reach of the hearth or a lit brazier.'
+                        : '❄ Cold in the Storm — beyond every fire. A brazier nearby would warm it.'
+                  }
+                />
               </p>
             </section>
           )}
@@ -332,7 +337,13 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
       <footer className="inspector-foot">
         {building.built && def.recipes.length > 0 && (
           <button type="button" onClick={() => pauseBuilding(building.id)}>
-            {building.paused ? '▶ Resume' : '⏸ Pause'}
+            {building.paused ? (
+                  '▶ Resume'
+                ) : (
+                  <>
+                    <Icon id="pause" emoji="⏸" /> Pause
+                  </>
+                )}
           </button>
         )}
         {def.category !== 'hearth' && (
@@ -510,7 +521,7 @@ function WorkerSection({
                 <strong>{villager.name}</strong>
                 {trait && (
                   <span className="worker-trait" title={`${trait.name}: ${trait.description}`}>
-                    {trait.icon}
+                    <Icon id={VILLAGER_TRAIT_ART[trait.id]} emoji={trait.icon} />
                     <span className="sr-only"> {trait.name}</span>
                   </span>
                 )}
@@ -578,7 +589,15 @@ function WorkerSection({
                         <Icon of={SPECIES[v.species]} />
                       </span>
                       <strong>{v.name}</strong>
-                      <small>{trait ? `${trait.icon} ${trait.name}` : SPECIES[v.species].name}</small>
+                      <small>
+                        {trait ? (
+                          <>
+                            <Icon id={VILLAGER_TRAIT_ART[trait.id]} emoji={trait.icon} /> {trait.name}
+                          </>
+                        ) : (
+                          SPECIES[v.species].name
+                        )}
+                      </small>
                       <MultiplierTag mult={mult} />
                       {rank === 0 && candidates.length > 1 && <span className="best-tag">★ best</span>}
                     </button>
@@ -617,7 +636,9 @@ export function RecipeLabel({ recipe }: { recipe: Recipe }) {
           </span>
         ))
       ) : (
-        <span>🛎</span>
+        <span>
+          <Icon id="bell" emoji="🛎" />
+        </span>
       )}
     </span>
   )
@@ -696,7 +717,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
               </div>
               {event && (
                 <p className="muted warn-text">
-                  ⚠ Something is waiting here. Clearing it will force a decision.
+                  <Icon id="dangerous" emoji="⚠" /> Something is waiting here. Clearing it will force a decision.
                 </p>
               )}
               <ScoutReport run={run} gladeId={gladeId} />

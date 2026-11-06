@@ -65,19 +65,31 @@ export function BuildPanel() {
                       <small>{def.description}</small>
                       <span className="build-tags">
                         {!affordable && <em className="tag-short">✕ Can't afford yet</em>}
-                        {def.workerSlots > 0 && <em>👷 {def.workerSlots}</em>}
-                        {def.housing ? <em>🛏 {def.housing}</em> : null}
-                        {def.storage ? <em>📦 {def.storage}</em> : null}
+                        {def.workerSlots > 0 && (
+                          <em>
+                            <Icon id="worker" emoji="👷" /> {def.workerSlots}
+                          </em>
+                        )}
+                        {def.housing ? (
+                          <em>
+                            <Icon id="bed" emoji="🛏" /> {def.housing}
+                          </em>
+                        ) : null}
+                        {def.storage ? (
+                          <em>
+                            <Icon id="warehouse" emoji="📦" /> {def.storage}
+                          </em>
+                        ) : null}
                         {def.gatherRadius ? <em>◎ {def.gatherRadius}</em> : null}
                         {(def.adjacency ?? []).map((bonus, i) => (
                           <em key={`adj-${i}`} title={describeBonus(bonus)}>
-                            🔗 <PartnerIcon bonus={bonus} /> +{bonus.percent}%
+                            <Icon id="chain" emoji="🔗" /> <PartnerIcon bonus={bonus} /> +{bonus.percent}%
                             {bonus.effect === 'capacity' ? ' cap' : ''}
                           </em>
                         ))}
                         {def.warmth ? (
                           <em title={`Keeps homes within ${def.warmth.radius} warm during the Storm`}>
-                            🔥 ◎ {def.warmth.radius}
+                            <Icon id="settlement" emoji="🔥" /> ◎ {def.warmth.radius}
                           </em>
                         ) : null}
                         {def.service ? (
@@ -91,7 +103,7 @@ export function BuildPanel() {
                             className="tag-upgrade"
                             title={`Upgradable once built: ${def.upgrades.map((u) => u.name).join(' → ')}`}
                           >
-                            ⬆ {def.upgrades.length} upgrade{def.upgrades.length > 1 ? 's' : ''}
+                            <Icon id="upArrow" emoji="⬆" /> {def.upgrades.length} upgrade{def.upgrades.length > 1 ? 's' : ''}
                           </em>
                         ) : null}
                       </span>

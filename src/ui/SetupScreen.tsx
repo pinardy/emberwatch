@@ -171,7 +171,7 @@ export function SetupScreen() {
               title="Random seed"
               onClick={() => setSeedText(String(randomSeed()))}
             >
-              🎲
+              <Icon id="die" emoji="🎲" />
             </button>
           </div>
           <div className="setup-land" aria-live="polite">
