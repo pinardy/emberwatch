@@ -358,24 +358,22 @@ code {
   grid-area: left;
 }
 
-.topbar-tools {
-  grid-area: tools;
-}
-
 .topbar-status-wrap {
   grid-area: status;
 }
 
 .topbar-left,
-.topbar-tools,
 .topbar-status {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-/* Icon buttons carry their own padding. */
+/* Icon buttons carry their own padding, so the tools sit close. */
 .topbar-tools {
+  grid-area: tools;
+  display: flex;
+  align-items: center;
   gap: 2px;
 }
 
@@ -489,6 +487,7 @@ code {
 /* Each meter adapts to its own width: label, value and rate never share a
    line, so none is cut short; a narrow meter swaps to short forms. */
 .meter {
+  position: relative;
   min-width: 0;
   container: meter / inline-size;
 }
@@ -889,6 +888,7 @@ code {
 
   .topbar-left {
     flex: 1 0 auto;
+    gap: 6px;
   }
 
   /* The full basis puts the meters on row 2, under everything else. */
@@ -903,10 +903,6 @@ code {
   .topbar-status-wrap {
     order: 2;
     flex: 0 0 auto;
-  }
-
-  .topbar-left {
-    gap: 6px;
   }
 
   .status-toggle {
@@ -1678,6 +1674,7 @@ code {
 }
 
 .tabs button {
+  position: relative;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -1929,26 +1926,12 @@ code {
   gap: 4px;
 }
 
-.villager {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 8px;
-  align-items: center;
-  text-align: left;
-  padding: 5px 9px;
-  font-size: 12.5px;
-}
-
 .villager small {
   color: var(--muted);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.villager.is-idle {
-  border-color: #5c5330;
 }
 
 /* --- orders / log / trade ------------------------------------------------ */
@@ -2561,6 +2544,7 @@ code {
 }
 
 .threat-text small {
+  display: block;
   color: #d8a9a2;
   font-size: 12px;
 }
@@ -2623,10 +2607,6 @@ code {
 /* ==========================================================================
    Meters: floating deltas & the impatience pulse.
    ========================================================================== */
-
-.meter {
-  position: relative;
-}
 
 .floaters {
   position: absolute;
@@ -3510,8 +3490,13 @@ button.is-armed {
  * ------------------------------------------------------------------------- */
 
 .villager {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  text-align: left;
   padding: 3px 4px 3px 0;
+  font-size: 12.5px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--panel-2);
@@ -3566,8 +3551,7 @@ button.is-armed {
 }
 
 /* Storage filling up: stripes on the gauge, and a "!" when nearly full. */
-.storage.is-warn .storage-fill,
-.storage.is-bad .storage-fill {
+.storage.is-warn .storage-fill {
   background: repeating-linear-gradient(
     -45deg,
     var(--warn) 0 4px,
