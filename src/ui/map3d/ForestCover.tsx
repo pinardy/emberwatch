@@ -128,7 +128,7 @@ function ForestInstances({ trees }: { trees: TreeInstance[] }) {
           ref={conifer}
           args={[GEOS.conifer, TREE_MAT, split.c.length]}
           castShadow
-          receiveShadow
+          receiveShadow={false}
           raycast={NO_RAYCAST}
         />
       )}
@@ -137,7 +137,7 @@ function ForestInstances({ trees }: { trees: TreeInstance[] }) {
           ref={broadleaf}
           args={[GEOS.broadleaf, TREE_MAT, split.b.length]}
           castShadow
-          receiveShadow
+          receiveShadow={false}
           raycast={NO_RAYCAST}
         />
       )}

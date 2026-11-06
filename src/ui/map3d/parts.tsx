@@ -294,7 +294,7 @@ function GroupMesh({
 export function PartInstances({
   parts,
   castShadow = false,
-  receiveShadow = true,
+  receiveShadow = false,
   pops,
 }: {
   parts: Part[]

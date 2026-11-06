@@ -125,7 +125,7 @@ export function HearthModel({ scale }: { scale: number }) {
   return (
     <group scale={[scale, scale, scale]}>
       <mesh geometry={PLATFORM_GEO} material={PLATFORM_MAT} receiveShadow raycast={NO_RAYCAST} />
-      <mesh geometry={KERB_GEO} material={STONE_MAT} position={[0, 0.05, 0]} castShadow receiveShadow raycast={NO_RAYCAST} />
+      <mesh geometry={KERB_GEO} material={STONE_MAT} position={[0, 0.05, 0]} castShadow raycast={NO_RAYCAST} />
       <mesh geometry={EMBER_GEO} material={cold ? COLD_EMBER : look.ember} position={[0, 0.056, 0]} raycast={NO_RAYCAST} />
       <mesh geometry={LOGS_GEO} material={LOG_MAT} position={[0, 0.03, 0]} castShadow raycast={NO_RAYCAST} />
       {!cold && (

@@ -239,8 +239,8 @@ const BorderForest = memo(function BorderForest({ width, height }: { width: numb
   }, [trees])
   return (
     <>
-      <instancedMesh ref={conifer} args={[GEOS.conifer, MATS.tree, trees.c.length]} receiveShadow raycast={NO_RAYCAST} />
-      <instancedMesh ref={broadleaf} args={[GEOS.broadleaf, MATS.tree, trees.b.length]} receiveShadow raycast={NO_RAYCAST} />
+      <instancedMesh ref={conifer} args={[GEOS.conifer, MATS.tree, trees.c.length]} raycast={NO_RAYCAST} />
+      <instancedMesh ref={broadleaf} args={[GEOS.broadleaf, MATS.tree, trees.b.length]} raycast={NO_RAYCAST} />
     </>
   )
 })
@@ -286,7 +286,7 @@ export const GroundSurface = memo(function GroundSurface({ run }: { run: RunStat
   return (
     <>
       <mesh geometry={grid.geometry} material={material} position={[0, 0.012, 0]} receiveShadow raycast={NO_RAYCAST} />
-      <mesh geometry={hills} material={HILLS_MAT} receiveShadow raycast={NO_RAYCAST} />
+      <mesh geometry={hills} material={HILLS_MAT} raycast={NO_RAYCAST} />
       <BorderForest width={run.world.width} height={run.world.height} />
     </>
   )
