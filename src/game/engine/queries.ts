@@ -180,6 +180,15 @@ export function speciesCounts(s: RunState): Record<SpeciesId, number> {
   return { ...counts }
 }
 
+/** Average resolve across the species living here (0 with nobody). */
+export function averageResolve(s: RunState): number {
+  const present = s.speciesPool.filter((sp) =>
+    Object.values(s.villagers).some((v) => v.species === sp),
+  )
+  if (present.length === 0) return 0
+  return present.reduce((sum, sp) => sum + s.resolve[sp], 0) / present.length
+}
+
 export function presentSpecies(s: RunState): SpeciesId[] {
   const counts = speciesCounts(s)
   return (Object.keys(counts) as SpeciesId[]).filter((sp) => counts[sp] > 0)

@@ -2,8 +2,8 @@ import { feats } from './feats'
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CHARTERS, CHARTER_LIST } from '../content/charters'
 import { DECREES, DECREE_LIST } from '../content/decrees'
-import { categoryWords, describeGoal, evaluateGoal, producedInCategory } from '../content/orders'
-import { RESOURCES, resourceName } from '../content/resources'
+import { categoryWords, describeGoal, evaluateGoal } from '../content/orders'
+import { RESOURCES, categoryTotal, resourceName } from '../content/resources'
 import type {
   ActiveCondition,
   ConditionOutcome,
@@ -70,7 +70,7 @@ export function goalCount(goal: OrderGoal, s: RunState): number | null {
     case 'produced':
       return s.producedTotals[goal.resource] ?? 0
     case 'producedCategory':
-      return producedInCategory(s, goal.category)
+      return categoryTotal(s.producedTotals, goal.category)
     case 'gladesCleared':
       return s.stats.gladesCleared
     /*
@@ -233,14 +233,6 @@ export function categoryRate(s: RunState, mods: Modifiers, category: string): nu
   return rate
 }
 
-function categoryStock(s: RunState, category: string): number {
-  let sum = 0
-  for (const [id, amount] of Object.entries(s.stock)) {
-    if (RESOURCES[id as ResourceId]?.category === category) sum += amount ?? 0
-  }
-  return sum
-}
-
 /** Rounds up to an even number: decrees ask for round amounts. */
 const evenUp = (n: number) => Math.ceil(n / 2) * 2
 
@@ -281,7 +273,7 @@ export function decreeCandidate(
       // Food is eaten as it is cooked, so only a quarter of the output is
       // counted on to stay in the larder.
       const reach =
-        categoryStock(s, def.goal.category) + rate * timeLimit * DECREE_RATE_SHARE * 0.25
+        categoryTotal(s.stock, def.goal.category) + rate * timeLimit * DECREE_RATE_SHARE * 0.25
       const amount = Math.min(
         listed,
         Math.max(Math.ceil(listed * DECREE_MIN_SHARE), evenUp(reach)),
