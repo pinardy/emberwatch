@@ -119,6 +119,15 @@ export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
   },
 }
 
+// ---------------------------------------------------------------------------
+// Placement
+// ---------------------------------------------------------------------------
+
+/** The build ghost's bubble: why it cannot go here, else what it would join. */
+export function placementHint(reason: string | null, parts: readonly string[]): string | null {
+  return reason ?? (parts.length > 0 ? parts.join(' · ') : null)
+}
+
 /** Ground fill of a glade that is not (yet) cleared ground. */
 export const HIDDEN_FILL = '#0c1013'
 

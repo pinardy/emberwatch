@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
-import { Html, MapControls } from '@react-three/drei'
+import { MapControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
 import { threatArt } from '../../game/content/artFamilies'
@@ -32,6 +32,7 @@ import {
   useMapKey,
   useMapOverlays,
   useWarmthRingVisible,
+  placementHint,
   type GladeAccess,
 } from '../mapShared'
 import { useEscapeLayer } from '../useGameLoop'
@@ -55,7 +56,7 @@ import {
   useRunKey,
   warmthKey,
 } from './layerKeys'
-import { GHOST_BAD_MAT, GHOST_OK_MAT, GOLD, IconSprite, NO_RAYCAST } from './models'
+import { GHOST_BAD_MAT, GHOST_OK_MAT, GhostConfirm3D, GhostHint3D, GOLD, IconSprite, NO_RAYCAST } from './models'
 import { plateTile } from './plates'
 import { BatchSprite, ICON_BATCH, PLATE_BATCH, SpriteBatchMesh } from './spriteBatch'
 
@@ -179,11 +180,7 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
   const radius = buildMode ? footprintOf(buildMode) : 0
 
   // What the floating hint should say, if anything.
-  let hint: string | null = null
-  if (cursor && def) {
-    if (!cursor.ok) hint = cursor.reason
-    else hint = cursor.parts.length > 0 ? cursor.parts.join(' · ') : null
-  }
+  const hint = cursor && def ? placementHint(cursor.reason, cursor.parts) : null
 
   return (
     <>
@@ -241,39 +238,16 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
               </mesh>
             )}
             <IconSprite icon={def.icon} art={def.art} y={1.1} size={0.8} />
-            {hint && (
-              <Html
-                position={[0, 1.9, 0]}
-                center
-                distanceFactor={12}
-                zIndexRange={[20, 0]}
-                style={{ pointerEvents: 'none' }}
-              >
-                <div className={`ghost-hint ${cursor.ok ? 'is-ok' : 'is-bad'}`}>{hint}</div>
-              </Html>
-            )}
+            {hint && <GhostHint3D y={1.9} ok={cursor.ok} hint={hint} />}
             {cursor.pending && (
-              <Html position={[0, 2.7, 0]} center distanceFactor={12} zIndexRange={[25, 0]}>
-                <div className="ghost-confirm">
-                  <button
-                    type="button"
-                    className="ok"
-                    disabled={!cursor.ok}
-                    onClick={confirmPending}
-                    aria-label="Confirm placement"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    type="button"
-                    className="no"
-                    onClick={() => setCursor(null)}
-                    aria-label="Cancel placement"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </Html>
+              <GhostConfirm3D
+                y={2.7}
+                ok={cursor.ok}
+                confirmLabel="Confirm placement"
+                cancelLabel="Cancel placement"
+                onConfirm={confirmPending}
+                onCancel={() => setCursor(null)}
+              />
             )}
           </group>
 
