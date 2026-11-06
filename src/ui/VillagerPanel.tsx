@@ -11,7 +11,7 @@ import {
 } from '../game/engine/queries'
 import { resolveBreakdowns } from '../game/engine/society'
 import { workerMultiplier } from '../game/engine/traits'
-import { useGameStore, useRun } from '../game/store'
+import { useFrameDerived, useGameStore, useHudRun } from '../game/store'
 import type { RunState, Villager } from '../game/types'
 import { formatMultiplier } from './Inspector'
 import { useConfirm } from './useConfirm'
@@ -22,13 +22,15 @@ import { VILLAGER_TRAIT_ART } from '../game/content/artFamilies'
 
 /** Where the player diagnoses "why is resolve dropping?". */
 export function VillagerPanel() {
-  const run = useRun()
+  const run = useHudRun()
   const recallAll = useGameStore((s) => s.recallAll)
   const confirmRecall = useConfirm('recall-all', recallAll)
+  // Shared with the top bar: computed once per sim step.
+  const frame = useFrameDerived()
   if (!run) return null
 
-  const mods = computeModifiers(run)
-  const breakdowns = resolveBreakdowns(run, mods)
+  const mods = frame?.mods ?? computeModifiers(run)
+  const breakdowns = frame?.topBar.breakdowns ?? resolveBreakdowns(run, mods)
   const counts = speciesCounts(run)
   const coverage = serviceCoverage(run)
   const pop = population(run)

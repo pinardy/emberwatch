@@ -1,7 +1,7 @@
 import { RESOURCES } from '../game/content/resources'
 import { ROAD_MAX_LENGTH, ROAD_WOOD_PER_UNIT, ROAD_WORK_BONUS } from '../game/engine/balance'
 import { ROAD_TOOL } from '../game/engine/roads'
-import { useGameStore, useRun } from '../game/store'
+import { useGameStore, useHudRun } from '../game/store'
 import { Icon } from './Icon'
 
 /**
@@ -11,7 +11,7 @@ import { Icon } from './Icon'
  */
 
 export function RoadCard() {
-  const run = useRun()
+  const run = useHudRun()
   const active = useGameStore((s) => s.buildMode === ROAD_TOOL)
   if (!run) return null
   const roads = run.roads?.length ?? 0

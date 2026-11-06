@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useStoreWithEqualityFn } from 'zustand/traditional'
 import {
   autoPauseHits,
   autoPauseNotice,
@@ -55,6 +56,7 @@ import {
   type SlotId,
 } from './saveSlots'
 import type { MetaState, ResourceId, RunState, SpeciesId, Vec2 } from './types'
+import { frameDerived, type FrameDerived } from './frameDerived'
 
 /** Fewest simulated seconds a single frame may consume, at any speed. */
 const MAX_FRAME_BUDGET = 2
@@ -98,6 +100,33 @@ let watched: { run: RunState; snapshot: RunWatch } | null = null
  */
 let saveFailing = false
 
+/**
+ * Real milliseconds between HUD refreshes while the game loop runs: the HUD
+ * clock (`hudVersion`) ticks at about 8 Hz however fast the sim steps.
+ */
+export const HUD_INTERVAL_MS = 125
+
+/** Longest an idle-time autosave may wait for the browser to be idle. */
+export const IDLE_SAVE_TIMEOUT_MS = 2000
+
+/** Cancels the pending idle-time autosave, if one is waiting. */
+let cancelIdleSave: (() => void) | null = null
+
+/** `performance.now()` of the game loop's last HUD refresh. */
+let lastHudFrame = Number.NEGATIVE_INFINITY
+
+/** True while `advance` publishes a sim step that leaves the HUD clock alone. */
+let quietStep = false
+
+/**
+ * The things that refresh the HUD at once when a sim step changes them,
+ * rather than at the next HUD tick: a season turning, the run ending, a
+ * choice or a threat appearing, a building finishing, a new log line.
+ */
+function hudMark(run: RunState): string {
+  return `${run.season.season}|${run.season.year}|${run.phase}|${run.pendingChoices.length}|${run.threats.length}|${run.stats.buildingsBuilt}|${run.log[0]?.id ?? -1}`
+}
+
 export type Screen =
   | 'menu'
   | 'setup'
@@ -118,6 +147,13 @@ interface GameStore {
 
   /** Bumped on every mutation so React re-renders against the mutable run. */
   version: number
+  /**
+   * The HUD clock: bumped with `version` by every command, but by the game
+   * loop's sim steps at most every `HUD_INTERVAL_MS` (and at once on the
+   * changes in `hudMark`). Components that show many live numbers render on
+   * this rather than on every step.
+   */
+  hudVersion: number
   speed: GameSpeed
   /** Toast-style message for rejected actions. */
   notice: string | null
@@ -170,7 +206,12 @@ interface GameStore {
   importRun: (run: RunState, slot: SlotId) => string | null
 
   // --- loop ----------------------------------------------------------------
-  advance: (realSeconds: number) => void
+  /**
+   * Feeds `realSeconds` of real time to the sim. The game loop passes its
+   * frame time as `now`, which throttles the HUD clock; without it (tests,
+   * scripts) every step refreshes the HUD.
+   */
+  advance: (realSeconds: number, now?: number) => void
   setSpeed: (speed: GameSpeed) => void
   togglePlay: () => void
 
@@ -217,7 +258,13 @@ interface GameStore {
   /** Wears an earned achievement title on the menu, or none. */
   setTitle: (title: string | null) => void
   updateSettings: (patch: Partial<Settings>) => void
+  /** Saves the run to its slot right away (choices, leaving the page). */
   saveNow: () => void
+  /**
+   * The autosave: saves when the browser is next idle (within
+   * `IDLE_SAVE_TIMEOUT_MS`), so the storage write never lands inside a frame.
+   */
+  saveSoon: () => void
 }
 
 /** The notice shown once a run is banked. */
@@ -242,7 +289,13 @@ function runCommand(
   const run = get().run
   if (!run) return
   const error = fn(run) ?? null
-  set({ version: get().version + 1, notice: error })
+  set({ ...bump(get), notice: error })
+}
+
+/** The counters a command bumps: the run changed and the HUD should say so now. */
+function bump(get: () => GameStore): Pick<GameStore, 'version' | 'hudVersion'> {
+  const { version, hudVersion } = get()
+  return { version: version + 1, hudVersion: hudVersion + 1 }
 }
 
 /**
@@ -316,7 +369,7 @@ function beginRun(
     run,
     activeSlot: target,
     screen: 'game',
-    version: get().version + 1,
+    ...bump(get),
     speed: 1,
     buildMode: null,
     roadAnchor: null,
@@ -336,6 +389,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   meta: defaultMeta(),
   settings: loadSettings(),
   version: 0,
+  hudVersion: 0,
   speed: 1,
   notice: null,
   buildMode: null,
@@ -395,7 +449,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       run,
       activeSlot: id,
       screen: 'game',
-      version: get().version + 1,
+      ...bump(get),
       speed: 0,
       panel: 'build',
       buildMode: null,
@@ -409,9 +463,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   deleteSave: (slot) => {
     deleteSlot(slot)
     if (slot === get().activeSlot) {
-      set({ run: null, activeSlot: null, speed: 0, version: get().version + 1 })
+      set({ run: null, activeSlot: null, speed: 0, ...bump(get) })
     }
-    set({ version: get().version + 1, notice: `${SLOT_LABELS[slot]} deleted.` })
+    set({ ...bump(get), notice: `${SLOT_LABELS[slot]} deleted.` })
   },
 
   saveCopy: (slot) => {
@@ -419,7 +473,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!run || slot === activeSlot) return
     const saved = saveToSlot(slot, run)
     set({
-      version: get().version + 1,
+      ...bump(get),
       notice: saved.ok ? `Copy saved to ${SLOT_LABELS[slot]}.` : saved.message,
     })
   },
@@ -434,14 +488,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (slot === get().activeSlot) {
       set({ run: null, activeSlot: null, speed: 0 })
     }
-    set({ version: get().version + 1, notice: `Imported into ${SLOT_LABELS[slot]}.` })
+    set({ ...bump(get), notice: `Imported into ${SLOT_LABELS[slot]}.` })
     return null
   },
 
   abandonRun: () => {
     const slot = get().activeSlot
     if (slot) deleteSlot(slot)
-    set({ run: null, activeSlot: null, screen: 'menu', speed: 0, version: get().version + 1 })
+    set({ run: null, activeSlot: null, screen: 'menu', speed: 0, ...bump(get) })
   },
 
   /**
@@ -465,7 +519,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // A daily returns to its own page, where the result can be shared.
       screen: run.daily ? 'daily' : 'citadel',
       speed: 0,
-      version: get().version + 1,
+      ...bump(get),
       notice: settlementNotice(settled, unlockedEdict),
     })
   },
@@ -475,12 +529,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // -------------------------------------------------------------------------
   // Simulation loop
   // -------------------------------------------------------------------------
-  advance: (realSeconds) => {
+  advance: (realSeconds, now) => {
     const { run, speed, settings } = get()
     const watching = Object.values(settings.autoPause).some(Boolean)
     const autoPause = (hits: AutoPauseHit[]) => {
       simCarry = 0
-      set({ speed: 0, notice: autoPauseNotice(hits), version: get().version + 1 })
+      set({ speed: 0, notice: autoPauseNotice(hits), ...bump(get) })
     }
     if (!run || speed === 0 || run.phase !== 'playing' || run.pendingChoices.length > 0) {
       // Nothing is running, so nothing may carry into the next frame.
@@ -520,6 +574,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
      * low frame rate at 4× or 5× is not silently slowed to the 1× budget.
      */
     simCarry = Math.min(simCarry + realSeconds * speed, frameBudget(speed))
+    const mark = simCarry >= TICK_SECONDS ? hudMark(run) : ''
     let steps = 0
     while (simCarry >= TICK_SECONDS && steps < MAX_STEPS_PER_FRAME) {
       tick(run, TICK_SECONDS)
@@ -542,11 +597,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
     if (steps === 0) return
-    set({ version: get().version + 1 })
+    if (now === undefined || now - lastHudFrame >= HUD_INTERVAL_MS || hudMark(run) !== mark) {
+      if (now !== undefined) lastHudFrame = now
+      set(bump(get))
+    } else {
+      quietStep = true
+      try {
+        set({ version: get().version + 1 })
+      } finally {
+        quietStep = false
+      }
+    }
   },
 
-  setSpeed: (speed) => set({ speed }),
-  togglePlay: () => set({ speed: get().speed === 0 ? 1 : 0 }),
+  // Pausing or changing speed refreshes the HUD, so a paused game shows
+  // exactly where it stopped.
+  setSpeed: (speed) => set({ speed, hudVersion: get().hudVersion + 1 }),
+  togglePlay: () => set({ speed: get().speed === 0 ? 1 : 0, hudVersion: get().hudVersion + 1 }),
 
   // -------------------------------------------------------------------------
   // Commands
@@ -664,6 +731,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   saveNow: () => {
+    // Anything waiting for idle time is covered by this save.
+    cancelIdleSave?.()
+    cancelIdleSave = null
     const run = get().run
     if (!run) return
     let slot = get().activeSlot
@@ -681,13 +751,140 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ notice: saved.message })
     }
   },
+
+  saveSoon: () => {
+    if (cancelIdleSave || !get().run) return
+    const save = () => {
+      cancelIdleSave = null
+      get().saveNow()
+    }
+    if (typeof requestIdleCallback === 'function') {
+      const handle = requestIdleCallback(save, { timeout: IDLE_SAVE_TIMEOUT_MS })
+      cancelIdleSave = () => cancelIdleCallback(handle)
+    } else {
+      const handle = setTimeout(save, 0)
+      cancelIdleSave = () => clearTimeout(handle)
+    }
+  },
 }))
 
+/*
+ * Every other `version` bump ticks the HUD clock too, so code (and tests) that
+ * change the run and bump only `version` still refresh the whole HUD.
+ */
+useGameStore.subscribe((s, prev) => {
+  if (!quietStep && s.version !== prev.version && s.hudVersion === prev.hudVersion) {
+    useGameStore.setState({ hudVersion: s.hudVersion + 1 })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Subscriptions
+// ---------------------------------------------------------------------------
+/*
+ * The run is one mutable object; `version` says it moved on (every sim step,
+ * up to 64 a frame at 5x) and `hudVersion` is the same news at about 8 Hz.
+ * Pick the narrowest subscription that shows what a component shows:
+ *
+ * - `useRunSelector(select, equal?)`: re-renders only when `select(run)`
+ *   changes (`Object.is`, or pass `shallowEqual` for arrays and flat
+ *   objects). The selector runs on every store change, so keep it cheap and
+ *   return primitives or stable values (a key string, a count, a flag).
+ * - `useHudRun()`: the run, re-rendering on the HUD clock. For panels full of
+ *   live numbers (the top bar, the stockpile, the inspector).
+ * - `useFrameDerived()`: the shared per-step derivations (`FrameDerived`:
+ *   modifiers, storage use and blocked producers, the food forecast, the
+ *   warnings, the top bar's meters, building statuses), on the HUD clock.
+ *   Use `frameDerived(run, version)` outside React; one computation per
+ *   version is shared by every caller.
+ * - `useRunRef()`: the run object only; re-renders when a run starts, ends or
+ *   is loaded. Pair it with a selector or read the run in handlers.
+ * - `subscribeHud(fn)` / `subscribeSteps(fn)`: call `fn(run)` outside React
+ *   on each HUD tick / each sim step (toasts, sound cues, imperative
+ *   drawing). Returns the unsubscribe function.
+ * - `useRun()`: the run, re-rendering on every sim step. Only for things that
+ *   really must move every frame.
+ */
+
 /**
- * Subscribes to the mutation counter and returns the (stable) run object.
- * Components can then read the run directly and derive whatever they need.
+ * Subscribes to the mutation counter and returns the (stable) run object, so
+ * the component re-renders on every sim step. Prefer the narrower hooks below.
  */
 export function useRun(): RunState | null {
   useGameStore((s) => s.version)
   return useGameStore((s) => s.run)
 }
+
+/** The current run object; re-renders only when a different run is loaded. */
+export function useRunRef(): RunState | null {
+  return useGameStore((s) => s.run)
+}
+
+/** The HUD clock (see `hudVersion`). */
+export function useHudVersion(): number {
+  return useGameStore((s) => s.hudVersion)
+}
+
+/** The run, re-rendering on the HUD clock rather than every sim step. */
+export function useHudRun(): RunState | null {
+  useGameStore((s) => s.hudVersion)
+  return useGameStore((s) => s.run)
+}
+
+/** Equality for arrays and flat objects (same length/keys, `Object.is` values). */
+export function shallowEqual<T>(a: T, b: T): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false
+  const ka = Object.keys(a)
+  if (ka.length !== Object.keys(b).length) return false
+  for (const k of ka) {
+    if (!Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * `select(run)`, re-rendering only when it changes by `equal`. Undefined while
+ * no run is loaded.
+ */
+export function useRunSelector<T>(
+  select: (run: RunState) => T,
+  equal: (a: T | undefined, b: T | undefined) => boolean = Object.is,
+): T | undefined {
+  return useStoreWithEqualityFn(
+    useGameStore,
+    (s) => (s.run ? select(s.run) : undefined),
+    equal,
+  )
+}
+
+/** The shared per-step derivations, on the HUD clock; null without a run. */
+export function useFrameDerived(): FrameDerived | null {
+  useGameStore((s) => s.hudVersion)
+  const run = useGameStore((s) => s.run)
+  return run ? frameDerived(run, useGameStore.getState().version) : null
+}
+
+/** The shared derivations for the current run and version, outside React. */
+export function currentFrameDerived(): FrameDerived | null {
+  const { run, version } = useGameStore.getState()
+  return run ? frameDerived(run, version) : null
+}
+
+/** Calls `fn(run)` on every HUD tick (and when a run is loaded). */
+export function subscribeHud(fn: (run: RunState) => void): () => void {
+  return useGameStore.subscribe((s, prev) => {
+    if (s.run && (s.hudVersion !== prev.hudVersion || s.run !== prev.run)) fn(s.run)
+  })
+}
+
+/** Calls `fn(run)` after every sim step or command (and when a run is loaded). */
+export function subscribeSteps(fn: (run: RunState) => void): () => void {
+  return useGameStore.subscribe((s, prev) => {
+    if (s.run && (s.version !== prev.version || s.run !== prev.run)) fn(s.run)
+  })
+}
+
+export { frameDerived, type FrameDerived }

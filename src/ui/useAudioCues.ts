@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { useGameStore } from '../game/store'
+import {
+  frameDerived,
+  shallowEqual,
+  subscribeHud,
+  useGameStore,
+  useRunSelector,
+} from '../game/store'
 import type { RunState } from '../game/types'
-import { storageBlocked } from '../game/engine/forecast'
-import { computeModifiers } from '../game/engine/modifiers'
 import { population } from '../game/engine/queries'
 import {
   cue,
@@ -38,9 +42,10 @@ function useDocumentHidden(): boolean {
 }
 
 /**
- * Watches the run between renders and turns state transitions into sound:
+ * Watches the run on every HUD tick and turns state transitions into sound:
  * seasons turning, orders landing, villagers leaving, threats waking. The sim
- * stays pure — sound is derived here, in the UI, from what changed.
+ * stays pure — sound is derived here, in the UI, from what changed. It
+ * subscribes to the store rather than re-rendering the screen per sim step.
  */
 export function useAudioCues(run: RunState | null): void {
   const sound = useGameStore((s) => s.settings.sound)
@@ -94,7 +99,7 @@ export function useAudioCues(run: RunState | null): void {
 
   // The score follows the season and the mood, and holds while the game is
   // paused or the tab is hidden (timers are throttled there anyway).
-  const mood = run ? musicMoodFor(run) : null
+  const mood = useRunSelector(musicMoodFor, shallowEqual) ?? null
   useEffect(() => {
     setMusicMood(mood)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,18 +110,25 @@ export function useAudioCues(run: RunState | null): void {
   }, [speed, hidden])
 
   // Rain ambience follows the season while a run is on screen.
+  const season = useRunSelector((r) => r.season.season)
   useEffect(() => {
-    if (!run) return
-    setRainSeason(run.season.season)
+    if (!run || !season) return
+    setRainSeason(season)
     return () => setRainSeason(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run?.season.season, run === null])
+  }, [season, run === null])
 
   useEffect(() => {
     if (!run) {
       prev.current = null
       return
     }
+    listen(run)
+    return subscribeHud(listen)
+  }, [run])
+
+  /** Compares this HUD tick's run with the last one and plays what changed. */
+  function listen(run: RunState): void {
     const now = {
       season: run.season.season,
       orders: run.stats.ordersCompleted,
@@ -128,7 +140,8 @@ export function useAudioCues(run: RunState | null): void {
       threats: run.threats.length,
       threatTimers: Object.fromEntries(run.threats.map((t) => [t.id, t.timer])),
       glades: run.stats.gladesCleared,
-      storageFull: storageBlocked(run, computeModifiers(run)).length > 0,
+      // Shared with the stockpile strip and the toasts, once per sim step.
+      storageFull: frameDerived(run, useGameStore.getState().version).storageBlocked.length > 0,
       caravanHere: run.caravan.here,
       phase: run.phase,
     }
@@ -162,5 +175,5 @@ export function useAudioCues(run: RunState | null): void {
     if (struck) cue('threatStrike')
     if (now.glades > before.glades) cue('gladeCleared')
     if (now.storageFull && !before.storageFull) cue('storageFull')
-  })
+  }
 }

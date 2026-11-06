@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { storageBlocked } from '../game/engine/forecast'
-import { computeModifiers } from '../game/engine/modifiers'
-import { useRun } from '../game/store'
+import { frameDerived, subscribeHud, useGameStore, useRunRef } from '../game/store'
 import type { LogEntry, RunState } from '../game/types'
 import { IconText } from './IconText'
 
 /**
  * A non-blocking stream of what just happened. The sim already narrates every
- * event into `run.log`; this diffs the log by entry id between renders and
+ * event into `run.log`; this diffs the log by entry id on every HUD tick and
  * shows the new lines in the foreground, so a departure or a threat strike is
  * not buried behind the Log tab. Two conditions the log does not narrate — the
  * hearth going cold and the stockpile filling up — are derived here too.
@@ -65,15 +63,21 @@ export function useLogUnread(run: RunState | null, logOpen: boolean): number {
 }
 
 export function EventToasts() {
-  const run = useRun()
+  const run = useRunRef()
   const [toasts, setToasts] = useState<Toast[]>([])
   const seen = useRef(-1)
   const flags = useRef({ run: null as RunState | null, cold: false, full: false })
   const counter = useRef(0)
 
-  // Diff the log (and two derived conditions) after every sim step.
+  // Diff the log (and two derived conditions) on every HUD tick, from a store
+  // subscription: nothing re-renders unless there is news.
   useEffect(() => {
     if (!run) return
+    diff(run)
+    return subscribeHud(diff)
+  }, [run])
+
+  function diff(run: RunState): void {
     const fresh: { text: string; tone: ToastTone }[] = []
 
     if (flags.current.run !== run) {
@@ -101,7 +105,9 @@ export function EventToasts() {
       if (run.coldHearth && !flags.current.cold) {
         fresh.push({ text: '🔥 The hearth has gone cold. It needs wood.', tone: 'bad' })
       }
-      const full = storageBlocked(run, computeModifiers(run)).length > 0
+      // Shared with the stockpile strip and the sound cues, once per sim step.
+      const full =
+        frameDerived(run, useGameStore.getState().version).storageBlocked.length > 0
       if (full && !flags.current.full) {
         fresh.push({
           text: '📦 The stockpile is full — producers have stopped.',
@@ -131,7 +137,7 @@ export function EventToasts() {
       // Older toasts make way; everything stays readable in the Log.
       return next.slice(-MAX_VISIBLE_TOASTS)
     })
-  })
+  }
 
   // One timer for whichever toast expires first.
   useEffect(() => {
