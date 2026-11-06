@@ -846,9 +846,10 @@ code {
   }
 }
 
-/* Tablets: the chips keep their numbers; the extras (each resolve
-   threshold, the hearth's Storm runway) stay in their tooltips. */
-@media (max-width: 1180px) and (min-width: 861px) {
+/* Up to 1500px the chips keep their numbers and the extras (each resolve
+   threshold, the hearth's Storm runway) stay in their tooltips, so the
+   meters keep room for their full labels. */
+@media (max-width: 1500px) and (min-width: 861px) {
   .topbar-status {
     gap: 8px;
   }
@@ -857,7 +858,9 @@ code {
   .topbar .hearth-storm {
     display: none;
   }
+}
 
+@media (max-width: 1180px) and (min-width: 861px) {
   .speed-group button {
     min-width: 32px;
     padding: 6px 7px;
@@ -1311,7 +1314,7 @@ code {
   }
 }
 
-@container resbar (max-width: 1419px) {
+@container resbar (max-width: 1439px) {
   .resource-group.group-crafted .resource:not(.is-flagged) {
     display: none;
   }
@@ -2574,27 +2577,14 @@ code {
   background: linear-gradient(180deg, rgba(233, 210, 140, 0.05), rgba(200, 180, 120, 0.02));
 }
 
+/* A static storm tint and vignette. The tint covers the whole screen, so it
+   must never animate: an animated full-screen background repaints every
+   frame (it once cost the Storm two-thirds of its frame rate). The moving
+   rain belongs to the maps, which draw it inside their own layers. */
 .game[data-season='storm'] .season-tint {
   background:
-    repeating-linear-gradient(
-      112deg,
-      transparent 0px,
-      transparent 7px,
-      rgba(150, 180, 210, 0.05) 7px,
-      rgba(150, 180, 210, 0.05) 8px
-    ),
     radial-gradient(ellipse at 50% 120%, transparent 52%, rgba(20, 16, 40, 0.34) 100%),
     linear-gradient(180deg, rgba(40, 44, 80, 0.15), rgba(24, 28, 52, 0.1));
-  animation: rain-drift 0.5s linear infinite;
-}
-
-@keyframes rain-drift {
-  from {
-    background-position: 0 0, 0 0, 0 0;
-  }
-  to {
-    background-position: -20px 8px, 0 0, 0 0;
-  }
 }
 
 /* ==========================================================================
