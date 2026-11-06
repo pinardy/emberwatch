@@ -24,7 +24,6 @@ import {
   demolishBuilding,
   demolishRefund,
   demolishRefundShare,
-  isUnstartedSite,
 } from './actions'
 import {
   ADJACENCY_RANGE,
@@ -1855,7 +1854,6 @@ describe('demolition refunds', () => {
     const wood = state.stock.wood ?? 0
     const camp = site(state, 'woodcuttersCamp')
     expect(state.stock.wood).toBe(wood - BUILDINGS.woodcuttersCamp.cost.wood!)
-    expect(isUnstartedSite(camp)).toBe(true)
     expect(demolishRefundShare(camp)).toBe(1)
     expect(demolishRefund(camp)).toEqual(BUILDINGS.woodcuttersCamp.cost)
 
@@ -1873,7 +1871,6 @@ describe('demolition refunds', () => {
     const seconds = BUILDINGS.cabin.buildSeconds
 
     cabin.buildProgress = seconds / 2
-    expect(isUnstartedSite(cabin)).toBe(false)
     expect(demolishRefundShare(cabin)).toBeCloseTo(0.75)
     expect(demolishRefund(cabin)).toEqual({ plank: 6, brick: 3 })
 
@@ -1899,7 +1896,6 @@ describe('demolition refunds', () => {
     state.stock.amber = 500
     const camp = site(state, 'woodcuttersCamp')
     expect(rushConstruction(state, camp.id)).toBeNull()
-    expect(isUnstartedSite(camp)).toBe(false)
     expect(demolishRefundShare(camp)).toBe(0.5)
     // Something built on placement keeps its progress at zero but is finished.
     expect(demolishRefundShare({ defId: 'woodcuttersCamp', built: true, buildProgress: 0 })).toBe(

@@ -189,11 +189,6 @@ export function averageResolve(s: RunState): number {
   return present.reduce((sum, sp) => sum + s.resolve[sp], 0) / present.length
 }
 
-export function presentSpecies(s: RunState): SpeciesId[] {
-  const counts = speciesCounts(s)
-  return (Object.keys(counts) as SpeciesId[]).filter((sp) => counts[sp] > 0)
-}
-
 /**
  * Seconds until the next villager of each species walks out, for every present
  * species whose resolve is at or below the leaving threshold. Species that are
@@ -317,12 +312,6 @@ export function grant(
     added += qty
   }
   return added
-}
-
-export function bagTotal(bag: ResourceBag): number {
-  let sum = 0
-  for (const amount of Object.values(bag)) sum += amount ?? 0
-  return sum
 }
 
 export function sortBag(bag: ResourceBag): [ResourceId, number][] {

@@ -1,4 +1,4 @@
-import { RESOURCES, resourceName } from '../content/resources'
+import { resourceName } from '../content/resources'
 import { STORM_BLIGHT_LIST, type StormBlightDef } from '../content/stormBlights'
 import type { ActiveCondition, RunState } from '../types'
 import {
@@ -27,11 +27,6 @@ export function blightsAt(hostility: number): StormBlightDef[] {
 /** The live forecast for the coming Storm, if one is pending. */
 export function pendingBlight(s: RunState): ActiveCondition | undefined {
   return s.conditions.find((c) => c.breaksWithStorm)
-}
-
-/** Which blight a forecast condition announces. */
-export function blightOf(c: ActiveCondition): StormBlightDef | undefined {
-  return STORM_BLIGHT_LIST.find((b) => b.name === c.name)
 }
 
 function tally(s: RunState): NonNullable<RunState['stormBlights']> {
@@ -117,10 +112,4 @@ export function passStormConditions(s: RunState): void {
 export function blightPrepAmount(s: RunState, def: StormBlightDef): number {
   const years = Math.max(0, s.season.year - 2)
   return Math.round(def.prep.amount * (1 + BLIGHT_PREP_GROWTH * years))
-}
-
-/** "12 Planks" — what a forecast asks to be made this year. */
-export function blightPrepText(s: RunState, def: StormBlightDef): string {
-  const r = RESOURCES[def.prep.resource]
-  return `${blightPrepAmount(s, def)} ${r?.name ?? def.prep.resource}`
 }

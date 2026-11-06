@@ -75,7 +75,3 @@ export function categoryTotal(bag: ResourceBag, category: string): number {
 export function resourceName(id: ResourceId): string {
   return RESOURCES[id]?.name ?? id
 }
-
-export function resourceIcon(id: ResourceId): string {
-  return RESOURCES[id]?.icon ?? '❔'
-}
