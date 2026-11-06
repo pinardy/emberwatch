@@ -11,6 +11,8 @@ import { tick } from '../game/engine/tick'
 import type { BuildingInstance, RunState } from '../game/types'
 import {
   GLADE_KIND_STYLE,
+  GLADE_STAKE_ART,
+  gladeStakesTitle,
   STATUS_BADGE,
   buildingStatusKind,
   gladeAccessText,
@@ -119,6 +121,17 @@ describe('glade visual language', () => {
     expect(info.access).toBe('clearing')
     expect(gladeAccessText(info)).toMatch(/⛏ 1 clearing/)
   })
+
+  it('draws a glade\'s stakes as icons, never as emoji in the plate text', () => {
+    const run = newRun()
+    const withStakes = Object.values(run.glades).find((g) => (gladePlateInfo(run, g).stakes ?? []).length > 0)!
+    const info = gladePlateInfo(run, withStakes)
+    for (const k of info.stakes!) expect(GLADE_STAKE_ART[k]).toBeTruthy()
+    expect(gladeAccessText(info)).not.toMatch(/[🪦🐺⏳👑✨]/u)
+    expect(gladeStakesTitle(info.stakes!)).toMatch(/^Clearing it could bring /)
+    expect(gladeStakesTitle([])).toBe('')
+  })
+
 
   it('derives the 3D palette from the shared one instead of shadowing it', () => {
     expect(shade('#405060', 1.5)).toBe('#607890')
