@@ -59,6 +59,7 @@ import {
   useRunKey,
   warmthKey,
 } from './layerKeys'
+import { gladeStakesOf } from '../../game/engine/events'
 import {
   GHOST_BAD_MAT,
   GHOST_OK_MAT,
@@ -624,7 +625,7 @@ const GladePlate = memo(function GladePlate({
           </span>
         )}
         <em>
-          {gladeAccessText({ access, reachable: !locked, pct: percent / 100, clearers })}
+          {gladeAccessText({ access, reachable: !locked, pct: percent / 100, clearers }, gladeStakesOf(glade))}
         </em>
       </button>
     </Html>
