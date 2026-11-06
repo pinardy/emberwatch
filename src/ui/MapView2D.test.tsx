@@ -4,7 +4,7 @@ import App from '../App'
 import { findPlacement } from '../game/engine/actions'
 import { HUD_INTERVAL_MS, useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
-import { gladeFillGeometry, mapStats, useStaticGeometry } from './map3d/staticGeometry'
+import { gladeEdgeGeometry, mapStats, useStaticGeometry } from './map3d/staticGeometry'
 import { useHudValue, useMapOverlays } from './mapShared'
 import { roadKey } from './map3d/layerKeys'
 import { roadGeometry } from './map3d/Roads'
@@ -63,7 +63,7 @@ describe('static map geometry', () => {
     const { result, rerender, unmount } = renderHook(() => {
       // Subscribe to the tick counter the way a careless layer would.
       useGameStore((s) => s.version)
-      return useStaticGeometry(() => gladeFillGeometry(glade.polygon), [glade.polygon])
+      return useStaticGeometry(() => gladeEdgeGeometry(glade.polygon, null, 0.2), [glade.polygon])
     })
     const first = result.current
     expect(mapStats.geometriesCreated).toBe(created + 1)
@@ -311,8 +311,8 @@ describe('2D map parity', () => {
 })
 
 describe('2D map subscriptions', () => {
-  it('re-derives at once after a command, and at most once per HUD tick while the sim steps', () => {
-    useGameStore.getState().startRun(77)
+  it('re-derives at once after a command, and at most once per HUD tick while the sim steps', async () => {
+    await act(() => useGameStore.getState().startRun(77))
     const store = useGameStore.getState()
     for (const choice of [...currentRun().pendingChoices]) store.chooseOption(choice.options[0])
     act(() => useGameStore.getState().setSpeed(1))
