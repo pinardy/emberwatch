@@ -11,7 +11,17 @@ import {
   rerollCost,
 } from '../game/engine/events'
 import { useGameStore, useHudRun } from '../game/store'
-import type { ResourceBag } from '../game/types'
+import type {
+  ConditionOutcome,
+  ConditionSpec,
+  CornerstoneDef,
+  ResourceBag,
+  ThreatSpec,
+} from '../game/types'
+import { formatDuration } from '../game/engine/forecast'
+import { describeTimedGoal } from '../game/engine/structure'
+import { IconText } from './IconText'
+import { describeStrike, describeWhileActive } from './threatText'
 import { DialogTip } from './TipsCoach'
 import { CharterChoice } from './CharterChoice'
 import { RunModifierList } from './RunModifierList'
@@ -103,9 +113,9 @@ export function ChoiceModal() {
                       </span>
                     ) : null}
                     {option.threat ? (
-                      <span className="is-bad">
+                      <span className="is-bad" data-testid="option-threat">
                         <Icon id={threatArt(option.threat)} emoji={option.threat.icon} /> Unleashes:{' '}
-                        {option.threat.name}
+                        {option.threat.name} — <IconText text={threatTerms(option.threat)} anywhere />
                       </span>
                     ) : null}
                     {option.ongoing ? (
@@ -115,9 +125,9 @@ export function ChoiceModal() {
                       </span>
                     ) : null}
                     {option.condition ? (
-                      <span className="is-bad" title={option.condition.description}>
+                      <span className="is-bad" title={option.condition.description} data-testid="option-condition">
                         <Icon id={conditionArt(option.condition)} emoji={option.condition.icon} />{' '}
-                        Lingering: {option.condition.name}
+                        Lingering: {option.condition.name} — <IconText text={conditionTerms(option.condition)} anywhere />
                       </span>
                     ) : null}
                   </div>
@@ -156,21 +166,7 @@ export function ChoiceModal() {
             {choice.options.map((id) => {
               const def = CORNERSTONES[id]
               if (!def) return null
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={`option rarity-${def.rarity}`}
-                  onClick={() => chooseOption(id)}
-                >
-                  <span className="option-icon">
-                    <Icon id={cornerstoneArt(def)} emoji={def.icon} />
-                  </span>
-                  <strong>{def.name}</strong>
-                  <em className="rarity-tag">{def.rarity}</em>
-                  <small>{def.description}</small>
-                </button>
-              )
+              return <CornerstoneOption key={id} def={def} onPick={() => chooseOption(id)} />
             })}
           </div>
           <RerollButton />
@@ -188,7 +184,11 @@ export function ChoiceModal() {
           </span>
           <div>
             <h2>New Blueprint</h2>
-            <small>Choose a building to add to this settlement's options.</small>
+            <small>
+              {choice.mixed
+                ? 'Choose a building to add to this settlement — or lay a cornerstone instead.'
+                : "Choose a building to add to this settlement's options."}
+            </small>
           </div>
         </header>
         <DialogTip id="first-draft" />
@@ -202,7 +202,12 @@ export function ChoiceModal() {
         <div className="option-list option-grid">
           {choice.options.map((id) => {
             const def = BUILDINGS[id]
-            if (!def) return null
+            if (!def) {
+              const stone = CORNERSTONES[id]
+              return stone ? (
+                <CornerstoneOption key={id} def={stone} onPick={() => chooseOption(id)} />
+              ) : null
+            }
             return (
               <button
                 key={id}
@@ -232,6 +237,56 @@ export function ChoiceModal() {
       </div>
     </Overlay>
   )
+}
+
+/** One cornerstone card, in a cornerstone draft or a mixed blueprint draft. */
+function CornerstoneOption({ def, onPick }: { def: CornerstoneDef; onPick: () => void }) {
+  return (
+    <button type="button" className={`option rarity-${def.rarity}`} onClick={onPick}>
+      <span className="option-icon">
+        <Icon id={cornerstoneArt(def)} emoji={def.icon} />
+      </span>
+      <strong>{def.name}</strong>
+      <em className="rarity-tag">{def.rarity} cornerstone</em>
+      <small>{def.description}</small>
+    </button>
+  )
+}
+
+/** "strikes every 75s: steals 6 Berries · hostility +3 · appease 12 Meat; grows bolder each strike". */
+function threatTerms(threat: ThreatSpec): string {
+  const price = Object.entries(threat.appease)
+    .map(([id, amount]) => `${amount} ${RESOURCES[id as keyof typeof RESOURCES]?.name ?? id}`)
+    .join(', ')
+  const standing = describeWhileActive(threat.whileActive)
+  return (
+    `strikes every ${threat.interval}s: ${describeStrike(threat)}` +
+    (standing ? ` · while loose: ${standing}` : '') +
+    ` · pay ${price} to end it; each strike makes it bolder and dearer`
+  )
+}
+
+/** "Clear 2 more glades within 5m · met: 👑 +2 · missed: ⏳ +1". */
+function conditionTerms(c: ConditionSpec): string {
+  const parts = [describeTimedGoal(c.resolveBy) + (c.deadline ? ` within ${formatDuration(c.deadline)}` : '')]
+  const won = outcomeWords(c.onResolve)
+  const lost = outcomeWords(c.onFail)
+  const standing = describeWhileActive(c.whileActive)
+  if (standing) parts.push(`until then: ${standing}`)
+  if (won) parts.push(`met: ${won}`)
+  if (lost) parts.push(`missed: ${lost}`)
+  return parts.join(' · ')
+}
+
+function outcomeWords(o: ConditionOutcome | undefined): string {
+  if (!o) return ''
+  const parts: string[] = []
+  if (o.reputation) parts.push(`👑 +${o.reputation}`)
+  if (o.hostility) parts.push(`🌩️ ${o.hostility > 0 ? '+' : ''}${o.hostility}`)
+  if (o.impatience) parts.push(`⏳ ${o.impatience > 0 ? '+' : ''}${o.impatience}`)
+  if (o.villagerLoss) parts.push(`🪦 −${o.villagerLoss}`)
+  if (o.gain) parts.push('supplies')
+  return parts.join(' ')
 }
 
 /** Amber lever on drafts: redraw the options at a steepening price. */

@@ -151,7 +151,7 @@ describe('first steps checklist', () => {
 })
 
 describe('blueprint draft', () => {
-  it('names the species that want a service, and what a producer supplies', () => {
+  it('says what a card does for services, but not which species want it', () => {
     startRun()
     takeOpeningDraft()
     act(() => {
@@ -159,30 +159,48 @@ describe('blueprint draft', () => {
       bump()
     })
     const run = currentRun()
-    const wanting = run.speciesPool.filter((sp) => SPECIES[sp].needs.includes('luxury'))
     const dialog = screen.getByRole('dialog')
     const chips = within(dialog).getAllByTestId('draft-need')
 
-    // The venue chip leads with the Luxury need's drawn icon, then its name.
+    // The venue chip leads with the Luxury need's drawn icon, then what it does.
     const venue = chips.find(
       (c) =>
         c.querySelector('svg[data-icon]')?.getAttribute('data-icon') === 'luxury' &&
-        c.textContent?.trim().startsWith('Luxury'),
+        c.textContent?.trim().startsWith('Serves Luxury'),
     )!
     expect(venue).toBeTruthy()
     const supplier = chips.find((c) => c.textContent?.includes('Supplies Luxury'))!
     expect(supplier).toBeTruthy()
+    // Which needs to chase is the draft's decision: no "wanted by" tell, no
+    // species icons, no wanted/unwanted colouring. The People panel shows needs.
     for (const chip of [venue, supplier]) {
-      if (wanting.length > 0) {
-        // Text for screen readers and on hover, icons for the eye.
-        expect(chip.textContent).toContain(`wanted by ${speciesNames(wanting)}`)
-        expect(chip.getAttribute('title')).toContain(speciesNames(wanting))
-        for (const sp of wanting) {
-          expect(chip.querySelector(`svg[data-icon="${SPECIES[sp].art}"]`)).not.toBeNull()
-        }
-      } else {
-        expect(chip.textContent).toContain('not wanted')
+      expect(chip.textContent).not.toMatch(/wanted/)
+      expect(chip.getAttribute('title') ?? '').not.toContain(speciesNames(run.speciesPool))
+      for (const sp of run.speciesPool) {
+        expect(chip.querySelector(`svg[data-icon="${SPECIES[sp].art}"]`)).toBeNull()
       }
+      expect(chip.className).toBe('draft-need')
     }
+  })
+
+  it('a milestone draft can offer a cornerstone beside the blueprints', () => {
+    startRun()
+    takeOpeningDraft()
+    act(() => {
+      currentRun().pendingChoices.push({
+        kind: 'blueprint',
+        options: ['tavern', 'campfireTales', 'brewery'],
+        mixed: true,
+      })
+      bump()
+    })
+    const unlocked = currentRun().unlockedBuildings.length
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText(/or lay a cornerstone/)).toBeTruthy()
+    const card = within(dialog).getByRole('button', { name: /Campfire Tales/ })
+    expect(card.textContent).toMatch(/cornerstone/)
+    fireEvent.click(card)
+    expect(currentRun().cornerstones).toContain('campfireTales')
+    expect(currentRun().unlockedBuildings).toHaveLength(unlocked)
   })
 })

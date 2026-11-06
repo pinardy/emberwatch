@@ -23,6 +23,8 @@ import {
   DEPOSIT_TINT,
   GLADE_KIND_STYLE,
   gladeAccessText,
+  gladeStakesTitle,
+  GLADE_STAKE_ART,
   gladeFill,
   gladeLook,
   gladePlateInfo,
@@ -417,6 +419,28 @@ export const GladePlateLayer2D = memo(function GladePlateLayer2D({ run }: { run:
             <text y={28} className="glade-crew" style={reachable ? undefined : { fill: '#6d7a7a' }}>
               {gladeAccessText(info)}
             </text>
+            {info.stakes && info.stakes.length > 0 && (
+              <g className="glade-stakes">
+                <title>{gladeStakesTitle(info.stakes)}</title>
+                <rect
+                  x={-(info.stakes.length * 15 + 6) / 2}
+                  y={36}
+                  width={info.stakes.length * 15 + 6}
+                  height={18}
+                  rx={9}
+                  className="glade-plate"
+                />
+                {info.stakes.map((k, i) => (
+                  <IconUse
+                    key={k}
+                    id={GLADE_STAKE_ART[k]}
+                    x={-(info.stakes!.length - 1) * 7.5 + i * 15}
+                    y={45}
+                    size={13}
+                  />
+                ))}
+              </g>
+            )}
           </g>
         )
       })}

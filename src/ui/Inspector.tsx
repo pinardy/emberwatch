@@ -40,6 +40,8 @@ import type {
   Villager,
 } from '../game/types'
 import { ScoutReport } from './ScoutReport'
+import { DumpStock } from './DumpStock'
+import { describeStakes, gladeStakes } from '../game/engine/events'
 import { useConfirm } from './useConfirm'
 import { UpgradeSection } from './UpgradeSection'
 import {
@@ -331,6 +333,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             </section>
           )}
           <UpgradeSection run={run} building={building} />
+          {(def.category === 'hearth' || def.storage) && <DumpStock run={run} />}
         </>
       )}
 
@@ -658,6 +661,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
       ? Math.ceil((glade.clearWork - glade.clearProgress) / glade.clearers)
       : null
   const event = glade.eventId ? GLADE_EVENTS[glade.eventId] : undefined
+  const stakes = gladeStakes(run, gladeId)
 
   return (
     <div className="inspector">
@@ -717,7 +721,8 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
               </div>
               {event && (
                 <p className="muted warn-text">
-                  <Icon id="dangerous" emoji="⚠" /> Something is waiting here. Clearing it will force a decision.
+                  <Icon id="dangerous" emoji="⚠" /> Something is waiting here. Clearing it will force a decision
+                  {stakes.length > 0 ? ` — it could cost or bring ${describeStakes(stakes)}.` : '.'}
                 </p>
               )}
               <ScoutReport run={run} gladeId={gladeId} />

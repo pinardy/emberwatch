@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { findPlacement } from '../game/engine/actions'
@@ -12,6 +12,8 @@ import { ROAD_TOOL, placeRoad } from '../game/engine/roads'
 import { DISTRICT_STYLE, districtOf, obstacleTitle, plateShape } from './map2dArt'
 import { useThrottledRunValue } from './map2dState'
 import { BUILDINGS } from '../game/content/buildings'
+import { iconSymbolId } from './Icon'
+import type { IconId } from '../art/icons'
 
 /**
  * Map renderer checks that need a DOM: static geometry survives sim ticks,
@@ -267,6 +269,17 @@ describe('2D map parity', () => {
     expect(new Set(shapes).size).toBe(shapes.length)
     const tints = Object.values(DISTRICT_STYLE).map((s) => s.edge)
     expect(new Set(tints).size).toBe(tints.length)
+  })
+
+  it('defines a symbol for every icon the map stamps, glade stakes included', async () => {
+    startGame()
+    const stakes = document.querySelectorAll('g.glade-stakes use')
+    expect(stakes.length).toBeGreaterThan(0)
+    await waitFor(() => expect(document.querySelector('svg defs symbol')).not.toBeNull())
+    const missing = [...document.querySelectorAll('svg use[data-icon]')]
+      .map((u) => u.getAttribute('data-icon') as IconId)
+      .filter((id) => !document.getElementById(iconSymbolId(id)))
+    expect([...new Set(missing)]).toEqual([])
   })
 
   it('names obstacles and how to deal with them', () => {
