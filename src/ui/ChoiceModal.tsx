@@ -26,6 +26,7 @@ import { CharterChoice } from './CharterChoice'
 import { DecreeChoice, OrderChoice } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
 import { DraftAppealChips } from './DraftAppealChips'
+import { BagIcons } from './BagIcons'
 import { Icon } from './Icon'
 import { conditionArt, cornerstoneArt, gladeEventArt, ongoingArt, threatArt } from '../game/content/artFamilies'
 
@@ -337,8 +338,7 @@ function Effect({
   tone: 'good' | 'bad'
   title?: string
 }) {
-  const entries = Object.entries(bag)
-  if (entries.length === 0 && !food) return null
+  if (Object.keys(bag).length === 0 && !food) return null
   return (
     <span className={tone === 'good' ? 'is-good' : 'is-bad'} title={title}>
       {label}:{' '}
@@ -347,12 +347,7 @@ function Effect({
           <Icon id="plate" emoji="🍽️" label="food" /> {food} food{' '}
         </span>
       ) : null}
-      {entries.map(([id, amount]) => (
-        <span key={id}>
-          <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
-          {amount}{' '}
-        </span>
-      ))}
+      <BagIcons bag={bag} />
     </span>
   )
 }

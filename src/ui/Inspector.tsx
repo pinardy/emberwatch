@@ -27,6 +27,7 @@ import { benefitsFromRoad, describeRoadLink, roadLinkOf } from '../game/engine/r
 import { workerMultiplier } from '../game/engine/traits'
 import { useGameStore, useHudRun } from '../game/store'
 import { Bar } from './Bar'
+import { BagIcons } from './BagIcons'
 import { BuildingStatusLine } from './BuildingStatusLine'
 import { Icon } from './Icon'
 import { PartnerIcon } from './PartnerIcon'
@@ -396,16 +397,10 @@ export function multiplierReason(v: Villager, def: BuildingDef): string {
 }
 
 function BagLabel({ bag }: { bag: ResourceBag }) {
-  const entries = Object.entries(bag)
-  if (entries.length === 0) return <span>nothing</span>
+  if (Object.keys(bag).length === 0) return <span>nothing</span>
   return (
     <span className="bag-label">
-      {entries.map(([id, amount]) => (
-        <span key={id} title={RESOURCES[id as keyof typeof RESOURCES]?.name}>
-          <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
-          {amount}
-        </span>
-      ))}
+      <BagIcons bag={bag} title />
     </span>
   )
 }
@@ -601,28 +596,16 @@ function WorkerSection({
 }
 
 export function RecipeLabel({ recipe }: { recipe: Recipe }) {
-  const inputs = Object.entries(recipe.inputs)
-  const outputs = Object.entries(recipe.outputs)
   return (
     <span className="recipe-label">
-      {inputs.length > 0 ? (
-        inputs.map(([id, amount]) => (
-          <span key={id}>
-            <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
-            {amount}
-          </span>
-        ))
+      {Object.keys(recipe.inputs).length > 0 ? (
+        <BagIcons bag={recipe.inputs} />
       ) : (
         <span>{recipe.requiresDeposit ? <Icon id={DEPOSIT_ART[recipe.requiresDeposit]} /> : '—'}</span>
       )}
       <em>→</em>
-      {outputs.length > 0 ? (
-        outputs.map(([id, amount]) => (
-          <span key={id}>
-            <Icon of={RESOURCES[id as keyof typeof RESOURCES]} />
-            {amount}
-          </span>
-        ))
+      {Object.keys(recipe.outputs).length > 0 ? (
+        <BagIcons bag={recipe.outputs} />
       ) : (
         <span>
           <Icon id="bell" emoji="🛎" />
@@ -696,11 +679,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
             <section className="inspector-section">
               <h4>Expected haul</h4>
               <div className="chip-row">
-                {Object.entries(glade.reward).map(([id, amount]) => (
-                  <span key={id} className="chip">
-                    <Icon of={RESOURCES[id as keyof typeof RESOURCES]} /> {amount}
-                  </span>
-                ))}
+                <BagIcons bag={glade.reward} className="chip" />
               </div>
               {event && (
                 <p className="muted warn-text">
