@@ -17,6 +17,7 @@ import { computeModifiers, type Modifiers } from './engine/modifiers'
 import { secondsUntilDeparture, storageUsed } from './engine/queries'
 import { withRunCache } from './engine/runCache'
 import { resolveBreakdowns, type ResolveBreakdown } from './engine/society'
+import { useGameStore } from './store'
 import type { BuildingInstance, RunState, SpeciesId } from './types'
 
 /**
@@ -172,4 +173,17 @@ export function frameDerived(run: RunState, version: number): FrameDerived {
   lastClock = run.clock
   current = new Derived(run, version)
   return current
+}
+
+/** The shared per-step derivations, on the HUD clock; null without a run. */
+export function useFrameDerived(): FrameDerived | null {
+  useGameStore((s) => s.hudVersion)
+  const run = useGameStore((s) => s.run)
+  return run ? frameDerived(run, useGameStore.getState().version) : null
+}
+
+/** The shared derivations for the current run and version, outside React. */
+export function currentFrameDerived(): FrameDerived | null {
+  const { run, version } = useGameStore.getState()
+  return run ? frameDerived(run, version) : null
 }

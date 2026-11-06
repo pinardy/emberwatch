@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react'
-import { useFrameDerived, useHudRun } from '../game/store'
+import { useFrameDerived } from '../game/frameDerived'
+import { useHudRun } from '../game/store'
 import { IconText } from './IconText'
 
 /** Most warnings the strip shows at once; the rest wait their turn. */

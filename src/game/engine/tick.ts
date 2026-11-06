@@ -14,7 +14,7 @@ import {
   SEASON_INFO,
   SEASON_ORDER,
 } from './balance'
-import { pushLog } from './createRun'
+import { pushLog } from './runLog'
 import {
   checkMilestones,
   stepClearing,

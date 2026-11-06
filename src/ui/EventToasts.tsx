@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { frameDerived, subscribeHud, useGameStore, useRunRef } from '../game/store'
+import { frameDerived } from '../game/frameDerived'
+import { subscribeHud, useGameStore, useRunRef } from '../game/store'
 import type { LogEntry, RunState } from '../game/types'
 import { IconText } from './IconText'
 

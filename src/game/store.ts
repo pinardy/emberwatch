@@ -26,7 +26,6 @@ import {
   upgradeBuilding,
 } from './engine/actions'
 import { ROAD_MIN_LENGTH, SPEED_OPTIONS, TICK_SECONDS, type GameSpeed } from './engine/balance'
-import { createRun } from './engine/createRun'
 import {
   appeaseThreat,
   rerollChoice,
@@ -56,7 +55,32 @@ import {
   type SlotId,
 } from './saveSlots'
 import type { MetaState, ResourceId, RunState, SpeciesId, Vec2 } from './types'
-import { frameDerived, type FrameDerived } from './frameDerived'
+
+/**
+ * The run factory and the map generator (with the Delaunay library) are only
+ * needed to create a new run, so they are a chunk of their own, fetched the
+ * first time a run is started or by `loadRunFactory` (the menu preloads it
+ * in idle time). Once loaded, starting a run is synchronous again.
+ */
+type RunFactory = typeof import('./engine/createRun')
+let runFactory: RunFactory | null = null
+let runFactoryLoad: Promise<RunFactory> | null = null
+
+/** Fetches the run factory; safe to call any number of times, retried after a failure. */
+export function loadRunFactory(): Promise<RunFactory> {
+  runFactoryLoad ??= import('./engine/createRun').then(
+    (factory) => (runFactory = factory),
+    (error: unknown) => {
+      runFactoryLoad = null
+      throw error
+    },
+  )
+  return runFactoryLoad
+}
+
+/** Shown when the run factory cannot be fetched (offline before it was cached). */
+export const RUN_FACTORY_FAILED_NOTICE =
+  'Could not load the map generator. Check your connection and try again.'
 
 /** Fewest simulated seconds a single frame may consume, at any speed. */
 const MAX_FRAME_BUDGET = 2
@@ -157,6 +181,8 @@ interface GameStore {
   speed: GameSpeed
   /** Toast-style message for rejected actions. */
   notice: string | null
+  /** True while a new run waits for the run factory's code to arrive. */
+  creatingRun: boolean
 
   // --- UI selection --------------------------------------------------------
   buildMode: string | null
@@ -180,6 +206,8 @@ interface GameStore {
    * `edict` is clamped to the highest Queen's Edict the Citadel has earned.
    * Without a `slot` the run takes the first free one; with every slot full
    * it refuses rather than overwrite a run (the setup screen asks which).
+   * Resolves once the run has started: at once when the run factory is
+   * loaded, else after fetching it (`creatingRun` is true meanwhile).
    */
   startRun: (
     seed?: number,
@@ -187,12 +215,12 @@ interface GameStore {
     edict?: number,
     land?: LandChoice,
     slot?: SlotId,
-  ) => void
+  ) => Promise<void>
   /**
    * Sets out on today's (UTC) daily expedition: fixed map, trio and edict, no
    * Citadel upgrades. Takes a save slot the same way `startRun` does.
    */
-  startDaily: (now?: number, slot?: SlotId) => void
+  startDaily: (now?: number, slot?: SlotId) => Promise<void>
   abandonRun: () => void
   finishRun: () => void
   goToScreen: (screen: Screen) => void
@@ -335,6 +363,32 @@ function layRoadPoint(
   if (laid) set({ roadAnchor: snap })
 }
 
+/**
+ * Runs `start` with the run factory: right away when it is loaded, else once
+ * it arrives. A second start while one is waiting is ignored.
+ */
+function withRunFactory(
+  set: (partial: Partial<GameStore>) => void,
+  get: () => GameStore,
+  start: (factory: RunFactory) => void,
+): Promise<void> {
+  if (runFactory) {
+    start(runFactory)
+    return Promise.resolve()
+  }
+  const waiting = get().creatingRun
+  const load = loadRunFactory()
+  if (waiting) return load.then(() => undefined)
+  set({ creatingRun: true })
+  return load.then(
+    (factory) => {
+      set({ creatingRun: false })
+      start(factory)
+    },
+    () => set({ creatingRun: false, notice: RUN_FACTORY_FAILED_NOTICE }),
+  )
+}
+
 /** Shown when a new run is refused because every save slot holds one. */
 export const SLOTS_FULL_NOTICE =
   'Every save slot holds a settlement. Choose one to replace, or delete one first.'
@@ -392,6 +446,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   hudVersion: 0,
   speed: 1,
   notice: null,
+  creatingRun: false,
   buildMode: null,
   selectedBuilding: null,
   selectedDeposit: null,
@@ -405,29 +460,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ meta: loadMeta(), settings: loadSettings() })
   },
 
-  startRun: (seed, species, edict, land, slot) => {
-    const meta = get().meta
-    beginRun(set, get, slot, 'setup', () =>
-      createRun({
-        seed: seed ?? randomSeed(),
-        meta,
-        species,
-        edict: Math.min(edict ?? 0, meta.edictUnlocked),
-        land,
-      }),
-    )
-  },
+  startRun: (seed, species, edict, land, slot) =>
+    withRunFactory(set, get, ({ createRun }) => {
+      const meta = get().meta
+      beginRun(set, get, slot, 'setup', () =>
+        createRun({
+          seed: seed ?? randomSeed(),
+          meta,
+          species,
+          edict: Math.min(edict ?? 0, meta.edictUnlocked),
+          land,
+        }),
+      )
+    }),
 
   startDaily: (now, slot) => {
     const day = dailyExpedition(utcDateKey(now ?? Date.now()))
     // No `meta`: the daily is the same fair challenge for every Citadel.
-    beginRun(set, get, slot, 'daily', () =>
-      createRun({
-        seed: day.seed,
-        species: day.species,
-        edict: day.edict,
-        daily: day.date,
-      }),
+    return withRunFactory(set, get, ({ createRun }) =>
+      beginRun(set, get, slot, 'daily', () =>
+        createRun({
+          seed: day.seed,
+          species: day.species,
+          edict: day.edict,
+          daily: day.date,
+        }),
+      ),
     )
   },
 
@@ -792,10 +850,11 @@ useGameStore.subscribe((s, prev) => {
  *   return primitives or stable values (a key string, a count, a flag).
  * - `useHudRun()`: the run, re-rendering on the HUD clock. For panels full of
  *   live numbers (the top bar, the stockpile, the inspector).
- * - `useFrameDerived()`: the shared per-step derivations (`FrameDerived`:
- *   modifiers, storage use and blocked producers, the food forecast, the
- *   warnings, the top bar's meters, building statuses), on the HUD clock.
- *   Use `frameDerived(run, version)` outside React; one computation per
+ * - `useFrameDerived()` (in `frameDerived.ts`, which the startup bundle does
+ *   not need): the shared per-step derivations (modifiers, storage use and
+ *   blocked producers, the food forecast, the warnings, the top bar's
+ *   meters, building statuses), on the HUD clock. Use `frameDerived(run,
+ *   version)` or `currentFrameDerived()` outside React; one computation per
  *   version is shared by every caller.
  * - `useRunRef()`: the run object only; re-renders when a run starts, ends or
  *   is loaded. Pair it with a selector or read the run in handlers.
@@ -860,19 +919,6 @@ export function useRunSelector<T>(
   )
 }
 
-/** The shared per-step derivations, on the HUD clock; null without a run. */
-export function useFrameDerived(): FrameDerived | null {
-  useGameStore((s) => s.hudVersion)
-  const run = useGameStore((s) => s.run)
-  return run ? frameDerived(run, useGameStore.getState().version) : null
-}
-
-/** The shared derivations for the current run and version, outside React. */
-export function currentFrameDerived(): FrameDerived | null {
-  const { run, version } = useGameStore.getState()
-  return run ? frameDerived(run, version) : null
-}
-
 /** Calls `fn(run)` on every HUD tick (and when a run is loaded). */
 export function subscribeHud(fn: (run: RunState) => void): () => void {
   return useGameStore.subscribe((s, prev) => {
@@ -886,5 +932,3 @@ export function subscribeSteps(fn: (run: RunState) => void): () => void {
     if (s.run && (s.version !== prev.version || s.run !== prev.run)) fn(s.run)
   })
 }
-
-export { frameDerived, type FrameDerived }

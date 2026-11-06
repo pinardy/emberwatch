@@ -7,7 +7,8 @@ import {
   sortBag,
   storageUsed,
 } from '../game/engine/queries'
-import { useFrameDerived, useHudRun } from '../game/store'
+import { useFrameDerived } from '../game/frameDerived'
+import { useHudRun } from '../game/store'
 import type { ResourceCategory } from '../game/types'
 import { Icon } from './Icon'
 

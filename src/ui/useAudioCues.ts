@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  frameDerived,
-  shallowEqual,
-  subscribeHud,
-  useGameStore,
-  useRunSelector,
-} from '../game/store'
+import { frameDerived } from '../game/frameDerived'
+import { shallowEqual, subscribeHud, useGameStore, useRunSelector } from '../game/store'
 import type { RunState } from '../game/types'
 import { population } from '../game/engine/queries'
 import {

@@ -9,7 +9,7 @@ import {
   CARAVAN_WANT_BONUS,
   TRADE_LOT,
 } from './balance'
-import { pushLog } from './createRun'
+import { pushLog } from './runLog'
 import { computeModifiers, type Modifiers } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'

@@ -31,7 +31,8 @@ import {
   freeRerollsLeft,
   gladeEventOptions,
 } from './citadel'
-import { drawOrder, pushLog } from './createRun'
+import { drawOrder } from './drawOrder'
+import { pushLog } from './runLog'
 import { computeModifiers, type Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
 import { canAfford, grant, population, spend, storageUsed } from './queries'
