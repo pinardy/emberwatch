@@ -103,12 +103,13 @@ import {
 } from './society'
 import {
   checkCharter,
-  goalFeasible,
+  decreeCandidate,
   goalProgress,
   issueDecree,
   stepConditions,
   stepDecree,
 } from './structure'
+import { orderFeasible } from './orders'
 import { tick } from './tick'
 import { loadRun } from '../persistence'
 import {
@@ -483,7 +484,7 @@ describe('orders', () => {
     for (const id of ['produced_wood_250', 'glades_9', 'glades_12']) {
       const def = ORDER_LIST.find((d) => d.id === id)
       expect(def, id).toBeDefined()
-      expect(goalFeasible(def!.goal, state), id).toBe(true)
+      expect(orderFeasible(def!.goal, state), id).toBe(true)
     }
   })
 
@@ -1145,7 +1146,7 @@ describe("royal decrees (timed Queen's orders)", () => {
       state.decree = null
       issueDecree(state)
       const def = DECREES[state.decree!.defId]
-      expect(goalFeasible(def.goal, state), def.id).toBe(true)
+      expect(decreeCandidate(state, def), def.id).not.toBeNull()
       expect(['decree_ale', 'decree_fabric', 'decree_service']).not.toContain(def.id)
       // Nothing is staffed yet, so no production decree is asked for.
       expect(def.goal.kind, def.id).not.toBe('produced')

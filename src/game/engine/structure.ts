@@ -122,37 +122,6 @@ export function describeTimedGoal(goal: OrderGoal): string {
   }
 }
 
-/** True when an unlocked building can produce `resource`. */
-function canProduce(s: RunState, resource: string): boolean {
-  return s.unlockedBuildings.some((id) =>
-    BUILDINGS[id]?.recipes.some(
-      (r) => ((r.outputs as Record<string, number>)[resource] ?? 0) > 0,
-    ),
-  )
-}
-
-/** Whether the settlement has any route to meeting the goal at all. */
-export function goalFeasible(goal: OrderGoal, s: RunState): boolean {
-  switch (goal.kind) {
-    case 'stock':
-    case 'produced':
-      return (s.stock[goal.resource] ?? 0) > 0 || canProduce(s, goal.resource)
-    case 'stockCategory':
-    case 'producedCategory':
-      return Object.values(RESOURCES).some(
-        (r) => r.category === goal.category && canProduce(s, r.id),
-      )
-    case 'buildingId':
-      return s.unlockedBuildings.includes(goal.buildingId)
-    case 'buildingsOfCategory':
-      return BUILDING_LIST.some(
-        (b) => b.category === goal.category && s.unlockedBuildings.includes(b.id),
-      )
-    default:
-      return true
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Royal decrees
 // ---------------------------------------------------------------------------
@@ -287,7 +256,6 @@ export function decreeCandidate(
   def: DecreeDef,
   mods: Modifiers = computeModifiers(s),
 ): RoyalDecree | null {
-  if (!goalFeasible(def.goal, s)) return null
   const timeLimit = Math.round(def.timeLimit * mods.decreeTime)
   let goal: OrderGoal = def.goal
   switch (def.goal.kind) {
@@ -333,6 +301,13 @@ export function decreeCandidate(
         (g) => !g.cleared && g.neighbors.some((id) => s.glades[id]?.cleared),
       )
       if (!open) return null
+      break
+    }
+    case 'buildingsOfCategory': {
+      const category = def.goal.category
+      if (!BUILDING_LIST.some((b) => b.category === category && s.unlockedBuildings.includes(b.id))) {
+        return null
+      }
       break
     }
     default:
