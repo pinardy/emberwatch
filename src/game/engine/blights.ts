@@ -29,7 +29,8 @@ export function pendingBlight(s: RunState): ActiveCondition | undefined {
   return s.conditions.find((c) => c.breaksWithStorm)
 }
 
-function tally(s: RunState): NonNullable<RunState['stormBlights']> {
+/** The run's Storm-blight counts, created on first use (older saves lack them). */
+export function blightTally(s: RunState): NonNullable<RunState['stormBlights']> {
   s.stormBlights ??= { forecast: 0, struck: 0, blunted: 0 }
   return s.stormBlights
 }
@@ -71,7 +72,7 @@ export function announceBlight(s: RunState, def: StormBlightDef): ActiveConditio
   )
   // Counts down to the Storm; the outcome lands when it breaks, not on a timer.
   condition.timeLeft = Math.max(0, s.season.length - s.season.elapsed)
-  tally(s).forecast++
+  blightTally(s).forecast++
   return condition
 }
 
@@ -83,7 +84,7 @@ export function breakStormBlights(s: RunState): void {
   if (striking.length === 0) return
   s.conditions = remaining
   for (const c of striking) {
-    tally(s).struck++
+    blightTally(s).struck++
     const parts = applyOutcome(s, c.onFail)
     pushLog(
       s,

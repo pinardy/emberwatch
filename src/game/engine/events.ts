@@ -40,7 +40,7 @@ import {
 import { pushLog } from './runLog'
 import type { Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
-import { canAfford, grantProduced, population, spend } from './queries'
+import { canAfford, edibleTotal, grantProduced, population, spend } from './queries'
 import { makeRng } from './rng'
 import { touchVillagers } from './runCache'
 import { addCondition, refreshCharterOffer, takeCharter, takeQueenChoice } from './structure'
@@ -202,12 +202,6 @@ export function describeOptionShortfall(
 }
 
 /** Units of food of any kind in the stockpile: what a `foodCost` is paid from. */
-export function edibleTotal(stock: ResourceBag): number {
-  let sum = 0
-  for (const id of EDIBLE) sum += stock[id] ?? 0
-  return sum
-}
-
 /**
  * Plain-text price of an option, e.g. "10 food, 5 Ale". Pure, so the UI can
  * show `foodCost` alongside the resource bag without knowing the rule.

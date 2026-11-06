@@ -210,10 +210,15 @@ export function secondsUntilDeparture(s: RunState): Partial<Record<SpeciesId, nu
 // Food
 // ---------------------------------------------------------------------------
 
-export function foodStock(s: RunState): number {
+/** Everything edible in `stock`. */
+export function edibleTotal(stock: ResourceBag): number {
   let sum = 0
-  for (const id of EDIBLE) sum += s.stock[id] ?? 0
+  for (const id of EDIBLE) sum += stock[id] ?? 0
   return sum
+}
+
+export function foodStock(s: RunState): number {
+  return edibleTotal(s.stock)
 }
 
 /** Number of distinct edible resources with at least 1 in stock. */

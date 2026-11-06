@@ -31,6 +31,7 @@ import {
   IMPATIENCE_PER_VILLAGER_LOST,
 } from './balance'
 import { pushLog } from './runLog'
+import { blightTally } from './blights'
 import { relevantBlueprints, unleashThreat } from './events'
 import { productionRate } from './forecast'
 import { computeModifiers, type Modifiers } from './modifiers'
@@ -605,8 +606,7 @@ export function stepConditions(s: RunState, dt: number): void {
       }
       const parts = applyOutcome(s, condition.onResolve)
       if (condition.breaksWithStorm) {
-        s.stormBlights ??= { forecast: 0, struck: 0, blunted: 0 }
-        s.stormBlights.blunted++
+        blightTally(s).blunted++
         parts.push('turned aside before the Storm')
       }
       pushLog(
