@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 606 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
+npm test           # 611 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -41,7 +41,7 @@ npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
 
 Idle villagers are your builders and your clearing crews, so every worker you assign is a builder you gave up. That tension is deliberate — the top bar always shows the idle count.
 
-The game plays RTS-style in continuous space: there is no grid. Buildings are placed anywhere on cleared ground with a live ghost cursor, camps must stand within reach of the deposits they work, and warmth and adjacency are real distances. The settlement renders as a 3D scene — low-poly buildings, a wild instanced forest over uncleared glades, season-driven light and rain — with a 2D vector map available from the top-bar toggle (and used automatically where WebGL is missing). On the 2D map every building stands on a plate shaped and tinted by its district (homes, camps, farms, workshops, services, storage, fires), so a grown settlement reads as quarters; crags and mires carry an icon and say on hover that they can never be cleared; the Storm darkens the ground and drives rain and lightning across the map.
+The game plays RTS-style in continuous space: there is no grid. Buildings are placed anywhere on cleared ground with a live ghost cursor, camps must stand within reach of the deposits they work, and warmth and adjacency are real distances. The settlement renders as a 3D scene — low-poly buildings shaped by category (terracotta cottages whose windows glow when someone lives there, canvas camps beside what they gather, brick workshops with chimneys, teal-roofed halls, barns and a market stall), a fire-pit hearth with a flickering flame, villagers tinted by species, a mixed instanced forest over uncleared glades and wooded hills around the valley, season-driven light and rain that keep the Storm readable — drawn in about fifty draw calls whatever the settlement's size (instanced models, one atlas for every icon, label and glade plate), with a 2D vector map available from the top-bar toggle (and used automatically where WebGL is missing). On the 2D map every building stands on a plate shaped and tinted by its district (homes, camps, farms, workshops, services, storage, fires), so a grown settlement reads as quarters; crags and mires carry an icon and say on hover that they can never be cleared; the Storm darkens the ground and drives rain and lightning across the map.
 
 ## Architecture
 
@@ -95,10 +95,11 @@ src/
     villagerRoutes.ts   #   walking villagers for both maps: routes derived
                         #   from assignments, homes and roads, played back
                         #   against the clock (presentation only)
-    map3d/              #   three.js scene via react-three-fiber: glade
-                        #   polygons, instanced forest, procedural buildings,
-                        #   ghost placement cursor, season lighting & rain —
-                        #   all lazy-loaded
+    map3d/              #   three.js scene via react-three-fiber: vertex-
+                        #   coloured ground, instanced forest, buildings and
+                        #   props as instanced parts, icons/plates batched in
+                        #   a canvas atlas, ghost placement cursor, season
+                        #   lighting & shader rain — all lazy-loaded
 ```
 
 Two rules keep this maintainable:
@@ -112,7 +113,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs thirty-two test files:
+`npm test` runs thirty-three test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), joins its workplaces to the hearth by road when it has wood to spare, and clears glades. It plays 24 seeds for each of four species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
@@ -139,6 +140,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`audio.test.ts`**, **`music.test.ts`** and **`SoundSettings.test.tsx`** — sound, against a small fake `AudioContext` (`src/test/fakeAudio.ts`): no context before a user gesture, each volume bus wired into the master at its saved level, mute, ducking, older settings migrating to the default levels, and the sliders in both settings panels. For the score: seasonal palettes, a seeded composer that stays in key and does not loop, look-ahead scheduling, the crossfade on a change of season, and holding while paused or hidden.
 - **`LazyScreens.test.tsx`** — the lazily loaded screens from cold: each shows its loading state, then renders, and all are preloaded in idle time. The other UI tests preload them first (`src/test/setup-ui.ts`) and click straight through.
 - **`icons.test.ts`**, **`Icon.test.tsx`** and **`sprites.test.tsx`** — the icon set: every resource, building, species, need, meter, season, deposit, glade kind and terrain, and every cornerstone, glade event, threat, pact, condition, land, charter, Citadel upgrade, edict, achievement, trait, tab and status badge has drawn art (anything still on its emoji fallback must be listed on purpose), framed families stay distinct, the menu draws only from the eager core, the `<Icon>` component's accessibility and fallback, the text-to-icon swap for sim messages, and that the 3D map rasterises each icon once.
+- **`parts.test.tsx`** — the 3D map's draw-call budget: every building in every state, and every deposit and obstacle, draws from a small fixed set of instanced meshes that does not grow with the number of buildings; the sprite atlas paints a tile once, shares it and evicts only unused tiles; smoke sits on the rotated chimney; the model key holds still while only work and stock change.
 
 ## PWA
 

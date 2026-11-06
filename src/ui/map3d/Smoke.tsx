@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BUILDINGS } from '../../game/content/buildings'
@@ -40,6 +40,7 @@ function SmokeColumns({ emitters }: { emitters: [number, number, number][] }) {
     }))
     return { geometry: g, seeds: s }
   }, [count])
+  useEffect(() => () => geometry.dispose(), [geometry])
 
   useFrame(({ clock }) => {
     const attr = geometry.getAttribute('position') as THREE.BufferAttribute
