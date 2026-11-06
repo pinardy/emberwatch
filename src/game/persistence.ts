@@ -65,8 +65,16 @@ export function defaultSettings(): Settings {
     sound: true,
     volume: defaultVolume(),
     renderer: '3d',
-    shadows: true,
+    // Phones and small screens start without shadows (the main 3D GPU cost
+    // there); the menu's Shadows setting turns them back on.
+    shadows: !smallOrTouchScreen(),
   }
+}
+
+function smallOrTouchScreen(): boolean {
+  if (typeof window === 'undefined') return false
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false
+  return coarse || Math.min(window.innerWidth, window.innerHeight) < 600
 }
 
 export function read<T>(key: string): T | null {

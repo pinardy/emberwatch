@@ -195,3 +195,33 @@ export function miniMapKey(run: RunState): string {
 export function seasonKey(run: RunState): string {
   return run.season.season
 }
+
+/**
+ * What the instanced building models show: which buildings stand where, built
+ * or going up (in 10% steps), tier, upgrade scaffolding, lit fires, and — via
+ * the villager count, since homes fill in build order — whose windows glow.
+ * Storm chill follows from these plus the season. Ordinary ticks leave it be.
+ */
+export function buildingModelKey(run: RunState): string {
+  let villagers = 0
+  for (const id in run.villagers) if (id) villagers++
+  let key = `${run.season.season === 'storm' ? 's' : ''}${villagers}|`
+  for (const b of Object.values(run.buildings)) {
+    key += b.id
+    if (!b.built) {
+      const def = BUILDINGS[b.defId]
+      key += `~${Math.round((b.buildProgress / Math.max(1, def?.buildSeconds ?? 1)) * 10)}`
+    }
+    if (b.upgradeProgress !== undefined) key += '^'
+    if (b.unlit) key += 'u'
+    key += `${b.tier ?? 0},`
+  }
+  return key
+}
+
+/** Which deposits and obstacles stand on cleared ground (their props, not amounts). */
+export function propKey(run: RunState): string {
+  let key = ''
+  for (const d of Object.values(run.deposits)) if (run.glades[d.gladeId]?.cleared) key += `${d.id},`
+  return `${key}|${clearedKey(run)}`
+}
