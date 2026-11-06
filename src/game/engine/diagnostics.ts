@@ -1,7 +1,7 @@
 import { BUILDINGS } from '../content/buildings'
 import { NEED_LABELS, SPECIES, speciesSingular } from '../content/species'
 import { RESOURCES } from '../content/resources'
-import type { ResourceId, RunState, SpeciesId } from '../types'
+import type { BuildingInstance, ResourceId, RunState, SpeciesId } from '../types'
 import { DEPARTURE_GRACE, SECONDS_TO_LEAVE } from './balance'
 import {
   RUNWAY_WARNING_SECONDS,
@@ -13,10 +13,12 @@ import {
   secondsUntilStorm,
   storageBlocked,
   stormFoodForecast,
+  type StormFoodForecast,
 } from './forecast'
-import { computeModifiers } from './modifiers'
+import { computeModifiers, type Modifiers } from './modifiers'
 import { isFoodCamp } from './onboarding'
 import {
+  activeRecipe,
   canAfford,
   idleVillagers,
   population,
@@ -39,7 +41,18 @@ export interface Warning {
   severity: 'danger' | 'caution'
 }
 
-export function collectWarnings(s: RunState): Warning[] {
+/**
+ * Values a caller has already worked out for this state, so the HUD's shared
+ * per-step bundle does not compute them twice. `stormFood` may be a throttled
+ * stand-in for `stormFoodForecast`.
+ */
+export interface WarningInputs {
+  mods?: Modifiers
+  blocked?: BuildingInstance[]
+  stormFood?: (s: RunState, mods: Modifiers) => StormFoodForecast
+}
+
+export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warning[] {
   const out: Warning[] = []
   if (s.phase !== 'playing') return out
 
@@ -81,7 +94,7 @@ export function collectWarnings(s: RunState): Warning[] {
     })
   }
 
-  const mods = computeModifiers(s)
+  const mods = inputs.mods ?? computeModifiers(s)
 
   // Say so *before* the hearth goes out, while there is still time to chop.
   // The forecast counts every lit brazier, which shares the woodpile.
@@ -124,7 +137,7 @@ export function collectWarnings(s: RunState): Warning[] {
       // still a Drizzle or Clearance left to stock up in.
       const untilStorm = secondsUntilStorm(s)
       if (untilStorm !== null && untilStorm <= STORM_FOOD_WARNING_LEAD) {
-        const storm = stormFoodForecast(s, mods)
+        const storm = (inputs.stormFood ?? stormFoodForecast)(s, mods)
         if (storm.shortfall >= 1) {
           out.push({
             id: 'food-storm',
@@ -156,12 +169,12 @@ export function collectWarnings(s: RunState): Warning[] {
   }
 
   // A full stockpile silently halts every producer at the brim.
-  const blocked = storageBlocked(s, mods)
+  const blocked = inputs.blocked ?? storageBlocked(s, mods)
   if (blocked.length > 0) {
     out.push({
       id: 'storage-full',
       severity: 'caution',
-      text: `📦 Stockpile full — ${blocked.length} building${blocked.length > 1 ? 's have' : ' has'} stopped. Build a Warehouse or sell surplus.`,
+      text: storageAdvice(s, blocked),
     })
   }
 
@@ -256,6 +269,42 @@ function leftThisSpell(s: RunState, sp: SpeciesId, rate: number): boolean {
     if (e.k === 'left' && e.d === sp) return s.clock - e.t <= cycle + 1
   }
   return false
+}
+
+/**
+ * The full-stockpile warning, naming the fix that will actually work: the
+ * good filling the store, and whether a Warehouse is in reach — or blocked
+ * because the very producers it needs have stopped too, in which case
+ * dumping or spending the surplus is the way out.
+ */
+function storageAdvice(s: RunState, blocked: BuildingInstance[]): string {
+  const stopped = `${blocked.length} building${blocked.length > 1 ? 's have' : ' has'} stopped`
+  let top: ResourceId | null = null
+  for (const [id, amount] of Object.entries(s.stock) as [ResourceId, number][]) {
+    if (id === 'amber' || amount <= 0) continue
+    if (!top || amount > (s.stock[top] ?? 0)) top = id
+  }
+  const topName = top ? (RESOURCES[top]?.name ?? top) : 'goods'
+  const head = `📦 Stockpile full of ${topName} — ${stopped}.`
+  const dump = `dump some ${topName} (select the hearth or a warehouse)`
+  const warehouse = BUILDINGS.warehouse
+  if (!warehouse || !s.unlockedBuildings.includes('warehouse')) {
+    return `${head} Spend or ${dump} to make room.`
+  }
+  if (canAfford(s.stock, warehouse.cost)) {
+    return `${head} You can afford a Warehouse now — build one, or ${dump}.`
+  }
+  const missing = (Object.entries(warehouse.cost) as [ResourceId, number][])
+    .map(([id, amount]) => [id, Math.ceil(amount - (s.stock[id] ?? 0))] as const)
+    .filter(([, short]) => short > 0)
+  const need = missing.map(([id, short]) => `${short} more ${RESOURCES[id]?.name ?? id}`).join(' and ')
+  const stuck = missing.some(([id]) =>
+    blocked.some((b) => activeRecipe(b)?.outputs[id] !== undefined),
+  )
+  if (stuck) {
+    return `${head} A Warehouse needs ${need}, but the buildings that make it have stopped too: ${dump} to get them working.`
+  }
+  return `${head} A Warehouse needs ${need}; until then, ${dump}.`
 }
 
 /** The most useful next move for a larder that will not last the Storm. */

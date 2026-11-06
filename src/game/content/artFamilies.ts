@@ -122,6 +122,8 @@ export const THREAT_MOTIF: Partial<Record<string, BaseIconId>> = {
   'The Waking Titan': 'mountain',
   'The Restless Dead': 'forbidden',
   'The Drowned Choir': 'bell',
+  // Storm blights (content/stormBlights.ts)
+  'The Storm Stalker': 'lightning',
 }
 
 /** A threat: its motif in a spiked red ring. */
@@ -158,6 +160,17 @@ export const CONDITION_MOTIF: Partial<Record<string, BaseIconId>> = {
   'Broken Seals': 'envelope',
   "The Witch's Curse": 'witch',
   'The Royal Audit': 'ledger',
+  // Storm blights: the forecasts, then the damage some leave for the Storm
+  'Gathering Clouds': 'rain',
+  'Leaking Roofs': 'drop',
+  'Creeping Damp': 'moth',
+  'Rising Waters': 'ferry',
+  'Flooded Workshops': 'wave',
+  'Something Stirs': 'owl',
+  'Fever Winds': 'swirl',
+  'Storm Fever': 'sleepy',
+  'Black Frost': 'snowflake',
+  'Killing Frost': 'snowflake',
 }
 
 /** A lingering condition: its motif on a plum octagon. */

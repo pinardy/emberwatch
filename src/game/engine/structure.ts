@@ -30,8 +30,8 @@ import {
   DECREE_STREAK_AMBER_CAP,
   IMPATIENCE_PER_VILLAGER_LOST,
 } from './balance'
-import { pushLog } from './createRun'
-import { relevantBlueprints } from './events'
+import { pushLog } from './runLog'
+import { relevantBlueprints, unleashThreat } from './events'
 import { productionRate } from './forecast'
 import { computeModifiers, type Modifiers } from './modifiers'
 import { DECLINE_CHOICE, takeOrderChoice } from './orders'
@@ -590,7 +590,7 @@ export function addCondition(s: RunState, spec: ConditionSpec, gladeId: string):
 }
 
 /** Applies a condition's payout or penalty, returning log fragments. */
-function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined): string[] {
+export function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined): string[] {
   if (!outcome) return []
   const parts: string[] = []
   if (outcome.reputation) {
@@ -621,6 +621,29 @@ function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined): strin
       parts.push(`${victim.name} leaves`)
     }
   }
+  if (outcome.spoil) {
+    const { category, share } = outcome.spoil
+    let lost = 0
+    for (const [id, amount] of Object.entries(s.stock)) {
+      if (RESOURCES[id as keyof typeof RESOURCES]?.category !== category) continue
+      const take = Math.floor((amount ?? 0) * share)
+      if (take <= 0) continue
+      spend(s.stock, { [id]: take })
+      lost += take
+    }
+    if (lost > 0) parts.push(`${lost} ${category === 'rawFood' ? 'food' : 'goods'} spoiled`)
+  }
+  if (outcome.threat) {
+    unleashThreat(s, outcome.threat, '')
+    parts.push(`${outcome.threat.name} is loose`)
+  }
+  if (outcome.condition) {
+    const follow = addCondition(s, outcome.condition, '')
+    // Damage that lasts "for the Storm" counts down to the Storm's end.
+    if (follow.passesWithStorm && s.season.season === 'storm') {
+      follow.timeLeft = Math.max(0, s.season.length - s.season.elapsed)
+    }
+  }
   return parts
 }
 
@@ -628,7 +651,11 @@ function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined): strin
 export function stepConditions(s: RunState, dt: number): void {
   if (s.conditions.length === 0) return
   const remaining: ActiveCondition[] = []
-  for (const condition of s.conditions) {
+  // An outcome can start a follow-on condition: it is appended past `n`.
+  const all = s.conditions
+  const n = all.length
+  for (let i = 0; i < n; i++) {
+    const condition = all[i]
     const goal = condition.resolveBy
     condition.progress = goalProgress(goal, s, condition.baseline)
     if (condition.progress >= 1) {
@@ -636,6 +663,11 @@ export function stepConditions(s: RunState, dt: number): void {
         spend(s.stock, { [goal.resource]: goal.amount })
       }
       const parts = applyOutcome(s, condition.onResolve)
+      if (condition.breaksWithStorm) {
+        s.stormBlights ??= { forecast: 0, struck: 0, blunted: 0 }
+        s.stormBlights.blunted++
+        parts.push('turned aside before the Storm')
+      }
       pushLog(
         s,
         `${condition.icon} ${condition.name} is lifted${parts.length ? ` — ${parts.join(', ')}` : ''}.`,
@@ -645,7 +677,11 @@ export function stepConditions(s: RunState, dt: number): void {
     }
     if (condition.timeLeft !== undefined) {
       condition.timeLeft -= dt
-      if (condition.timeLeft <= 0) {
+      // Storm-bound conditions only count down to the Storm breaking or
+      // passing; `tick` settles them then, never on this timer.
+      if (condition.breaksWithStorm || condition.passesWithStorm) {
+        condition.timeLeft = Math.max(0, condition.timeLeft)
+      } else if (condition.timeLeft <= 0) {
         const parts = applyOutcome(s, condition.onFail)
         pushLog(
           s,
@@ -657,5 +693,5 @@ export function stepConditions(s: RunState, dt: number): void {
     }
     remaining.push(condition)
   }
-  s.conditions = remaining
+  s.conditions = all.length > n ? [...remaining, ...all.slice(n)] : remaining
 }

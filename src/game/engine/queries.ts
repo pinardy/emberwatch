@@ -3,6 +3,7 @@ import { COMPLEX_FOOD, EDIBLE, RESOURCES } from '../content/resources'
 import { serviceCapacity } from './adjacency'
 import { HEARTH_WARMTH_RADIUS, RESOLVE_LEAVE_THRESHOLD, SECONDS_TO_LEAVE } from './balance'
 import { dist } from './geometry'
+import { memoByBuildings, memoByVillagers } from './runCache'
 import { despairRate } from './traits'
 import {
   housingOf,
@@ -29,8 +30,14 @@ import type {
  * the sim and the UI can share them without duplicating rules.
  */
 
+/*
+ * The settlement-wide counts below are read many times a tick; inside a
+ * `withRunCache` scope (the tick) each is computed once per change of what it
+ * counts.
+ */
+
 export function population(s: RunState): number {
-  return Object.keys(s.villagers).length
+  return memoByVillagers(s, 'population', () => Object.keys(s.villagers).length)
 }
 
 export function villagerList(s: RunState): Villager[] {
@@ -42,12 +49,14 @@ export function idleVillagers(s: RunState): Villager[] {
 }
 
 export function totalHousing(s: RunState): number {
-  let sum = 0
-  for (const b of Object.values(s.buildings)) {
-    if (!b.built) continue
-    sum += housingOf(b)
-  }
-  return sum
+  return memoByBuildings(s, 'totalHousing', () => {
+    let sum = 0
+    for (const b of Object.values(s.buildings)) {
+      if (!b.built) continue
+      sum += housingOf(b)
+    }
+    return sum
+  })
 }
 
 /**
@@ -55,12 +64,14 @@ export function totalHousing(s: RunState): number {
  * do those in a home upgraded to comfort (a shelter made into a lodge).
  */
 export function comfortableHousing(s: RunState): number {
-  let sum = 0
-  for (const b of Object.values(s.buildings)) {
-    if (!b.built || !isComfortable(b)) continue
-    sum += housingOf(b)
-  }
-  return sum
+  return memoByBuildings(s, 'comfortableHousing', () => {
+    let sum = 0
+    for (const b of Object.values(s.buildings)) {
+      if (!b.built || !isComfortable(b)) continue
+      sum += housingOf(b)
+    }
+    return sum
+  })
 }
 
 /** A circle of warmth: the hearth's, or a lit brazier's. */
@@ -138,11 +149,14 @@ export function warmHousing(s: RunState, radius: number = HEARTH_WARMTH_RADIUS):
 }
 
 export function computeStorageCap(s: RunState, bonus = 0): number {
-  let cap = 0
-  for (const b of Object.values(s.buildings)) {
-    if (!b.built) continue
-    cap += storageOf(b)
-  }
+  const cap = memoByBuildings(s, 'storageCap', () => {
+    let sum = 0
+    for (const b of Object.values(s.buildings)) {
+      if (!b.built) continue
+      sum += storageOf(b)
+    }
+    return sum
+  })
   return cap + bonus
 }
 
@@ -157,9 +171,13 @@ export function storageUsed(s: RunState): number {
 }
 
 export function speciesCounts(s: RunState): Record<SpeciesId, number> {
-  const out = { human: 0, beaver: 0, lizard: 0, harpy: 0, fox: 0 }
-  for (const v of Object.values(s.villagers)) out[v.species]++
-  return out
+  const counts = memoByVillagers(s, 'speciesCounts', () => {
+    const out = { human: 0, beaver: 0, lizard: 0, harpy: 0, fox: 0 }
+    for (const v of Object.values(s.villagers)) out[v.species]++
+    return out
+  })
+  // A copy: callers own what they get.
+  return { ...counts }
 }
 
 export function presentSpecies(s: RunState): SpeciesId[] {

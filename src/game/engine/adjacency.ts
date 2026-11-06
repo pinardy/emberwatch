@@ -3,6 +3,7 @@ import type { AdjacencyBonus, BuildingDef, BuildingInstance, RunState, Vec2 } fr
 import type { Modifiers } from './modifiers'
 import { ADJACENCY_RANGE } from './balance'
 import { dist } from './geometry'
+import { memoPerBuilding } from './runCache'
 import { baseServiceCapacity } from './upgrades'
 
 /**
@@ -86,8 +87,15 @@ export function adjacencyStatusAt(
   })
 }
 
+/**
+ * The bonuses a placed building currently gets. Remembered per building inside
+ * a `withRunCache` scope (the tick, the HUD's per-step bundle): adjacency only
+ * changes when a building is placed, finished or torn down.
+ */
 export function adjacencyStatus(s: RunState, b: BuildingInstance): AdjacencyStatus[] {
-  return adjacencyStatusAt(s, BUILDINGS[b.defId], b.pos, b.id)
+  return memoPerBuilding(s, 'adjacency', b, () =>
+    adjacencyStatusAt(s, BUILDINGS[b.defId], b.pos, b.id),
+  )
 }
 
 function sumPercent(statuses: AdjacencyStatus[], effect: 'speed' | 'capacity'): number {
@@ -101,7 +109,7 @@ function sumPercent(statuses: AdjacencyStatus[], effect: 'speed' | 'capacity'): 
 /**
  * Work-speed multiplier from satisfied adjacencies (a mill beside its felling
  * grounds, a cookhouse beside the farm). Bonuses from different partners add
- * up. A linear scan over a few dozen buildings, cheap enough to read every tick.
+ * up. Remembered per building while the tick runs (see `adjacencyStatus`).
  */
 export function adjacencyMultiplier(
   s: RunState,

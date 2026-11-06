@@ -230,6 +230,12 @@ export interface BuildingDef {
   warmth?: { radius: number; fuelPerSecond: number }
   /** Footprint radius override; defaults to the category's footprint. */
   footprint?: number
+  /**
+   * A ward: each completed cycle of its (output-less) recipe calms the forest
+   * by this much hostility. Staffing it is optional, so an empty ward is not
+   * flagged as missing workers.
+   */
+  ward?: { hostilityPerCycle: number }
   description: string
   /**
    * Upgrade tiers, in order: `upgrades[0]` takes a building from tier 0 to 1.
@@ -727,6 +733,16 @@ export interface ConditionSpec {
   onResolve?: ConditionOutcome
   /** Applied if the deadline passes first. */
   onFail?: ConditionOutcome
+  /**
+   * A Storm-blight forecast: `onFail` lands the moment the next Storm breaks
+   * rather than on a timer (`timeLeft` then only counts down to it).
+   */
+  breaksWithStorm?: boolean
+  /**
+   * Lasts only for the current Storm: it lifts quietly, with no penalty, when
+   * the Storm passes (`timeLeft` counts down to that).
+   */
+  passesWithStorm?: boolean
 }
 
 export interface ConditionOutcome {
@@ -735,6 +751,12 @@ export interface ConditionOutcome {
   impatience?: number
   villagerLoss?: number
   gain?: ResourceBag
+  /** Rot or flood: this share of every stack in a resource category is lost. */
+  spoil?: { category: ResourceCategory; share: number }
+  /** Starts a follow-on condition (a Storm blight's lasting damage). */
+  condition?: ConditionSpec
+  /** Unleashes a threat. */
+  threat?: ThreatSpec
 }
 
 export interface ActiveCondition extends ConditionSpec {
@@ -776,6 +798,12 @@ export interface ThreatSpec {
 export interface ActiveThreat extends ThreatSpec {
   /** Instance id. */
   id: string
+  /**
+   * Strikes landed so far. Each one makes the next bolder and the price of
+   * peace higher (the numbers on the threat are raised in place). Absent on
+   * older saves, which read as 0.
+   */
+  strikes?: number
   /** Glade that unleashed it, for the log and the map. */
   gladeId: string
   /** Seconds until the next strike. */
@@ -850,6 +878,12 @@ export interface PendingChoice {
   gladeId?: string
   /** For charters: the blueprint the architect's warrant would grant. */
   blueprintId?: string
+  /**
+   * Blueprint drafts at a reputation milestone also offer a cornerstone, so
+   * finishing a chain competes with a run-long perk. Absent on opening drafts
+   * and on older saves (blueprints only).
+   */
+  mixed?: boolean
 }
 
 /**
@@ -995,6 +1029,18 @@ export interface RunState {
   /** Lingering glade conditions, lifted by meeting their goal. */
   conditions: ActiveCondition[]
   conditionCounter: number
+  /**
+   * Storm blights so far: forecast at each Clearance from the forest's
+   * hostility, and struck or blunted when the Storm breaks. Absent on older
+   * saves (none yet).
+   */
+  stormBlights?: { forecast: number; struck: number; blunted: number }
+  /**
+   * Blueprint drafts taken in a row that offered nothing toward a service the
+   * settlement wants. Past `DRAFT_PITY` the next draft guarantees one. Absent
+   * on new runs and older saves, which owe one straight away.
+   */
+  draftDrought?: number
   /** The live timed decree, if the Queen has issued one. */
   decree: RoyalDecree | null
   /** Seconds until the next decree while none is live. */

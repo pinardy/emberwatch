@@ -7,7 +7,7 @@ import {
   decreeStreakBonus,
   describeTimedGoal,
 } from '../game/engine/structure'
-import { useRun } from '../game/store'
+import { useHudRun } from '../game/store'
 import { Icon } from './Icon'
 
 /** Seconds as m:ss. */
@@ -22,7 +22,7 @@ export function clockText(seconds: number): string {
  * when the next one is due.
  */
 export function DecreeCard() {
-  const run = useRun()
+  const run = useHudRun()
   if (!run) return null
   const decree = run.decree
   const def = decree ? DECREES[decree.defId] : undefined

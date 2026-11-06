@@ -9,7 +9,7 @@ import {
   SEASON_ORDER,
 } from './balance'
 import { computeModifiers, seasonLengthFor, type Modifiers } from './modifiers'
-import { countOutputs, seasonMultiplier, workRate } from './production'
+import { countOutputs, seasonMultiplier, storageLimitFor, workRate } from './production'
 import { activeRecipe, canAfford, storageUsed } from './queries'
 import {
   QUEEN_DEADLINE_SECONDS,
@@ -364,7 +364,8 @@ export function buildingStatus(
   // `activeRecipe` and `workRate`, so the status matches what the tick does.
   if (!recipe || recipesOf(b).length === 0) return { kind: 'none' }
   if (b.paused) return { kind: 'paused' }
-  if (b.workers.length === 0) return { kind: 'noWorkers' }
+  // A ward is staffed only when the forest needs calming; empty is not a fault.
+  if (b.workers.length === 0) return def.ward ? { kind: 'none' } : { kind: 'noWorkers' }
 
   if (recipe.requiresDeposit) {
     const ids = b.depositsInRange[recipe.requiresDeposit] ?? []
@@ -387,7 +388,9 @@ export function buildingStatus(
   if (missing.length > 0) return { kind: 'waitingInputs', missing, held }
 
   const outputs = countOutputs(recipe)
-  if (outputs > 0 && used + outputs > s.storageCap) return { kind: 'storageFull', held }
+  if (outputs > 0 && used + outputs > storageLimitFor(recipe, s.storageCap)) {
+    return { kind: 'storageFull', held }
+  }
 
   const rate = workRate(s, b, mods) * multiplier
   return { kind: 'working', rate, batchSeconds: rate > 0 ? recipe.seconds / rate : Infinity }

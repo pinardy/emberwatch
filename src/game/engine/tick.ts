@@ -1,3 +1,4 @@
+import { withRunCache } from './runCache'
 import { feats } from './feats'
 import type { RunState, Season } from '../types'
 import {
@@ -13,7 +14,12 @@ import {
   SEASON_INFO,
   SEASON_ORDER,
 } from './balance'
-import { pushLog } from './createRun'
+import { pushLog } from './runLog'
+import {
+  breakStormBlights,
+  forecastStormBlight,
+  passStormConditions,
+} from './blights'
 import {
   checkMilestones,
   stepClearing,
@@ -58,7 +64,11 @@ const BRAZIER_COLD_LOG = 'A brazier has gone cold — the homes around it are fr
 export function tick(s: RunState, dt: number): void {
   if (s.phase !== 'playing') return
   if (s.pendingChoices.length > 0) return
+  // Settlement-wide derivations are remembered across ticks (see `withRunCache`).
+  withRunCache(s, () => tickPlaying(s, dt))
+}
 
+function tickPlaying(s: RunState, dt: number): void {
   const mods = computeModifiers(s)
   s.storageCap = computeStorageCap(s, BASE_STORAGE + mods.globalStorage)
   s.clock += dt
@@ -154,9 +164,12 @@ function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
       `The Blightstorm breaks over the settlement. Keep the hearth burning.`,
       'bad',
     )
+    // Whatever the forest promised at Clearance arrives with the rain.
+    breakStormBlights(s)
   } else if (next === 'drizzle') {
     recordEvent(s, 'year', String(s.season.year))
     pushLog(s, `Year ${s.season.year} begins. The storm has passed.`, 'good')
+    passStormConditions(s)
     if (s.season.year === QUEEN_DEADLINE_YEAR - 1 && s.clock < QUEEN_DEADLINE_SECONDS) {
       pushLog(
         s,
@@ -166,6 +179,11 @@ function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
     }
   } else {
     pushLog(s, `${SEASON_INFO[next].name}. ${SEASON_INFO[next].blurb}`, 'info')
+    if (next === 'clearance') {
+      // The forest's mood sets the coming Storm's blight, said (as a
+      // lingering condition) while there is still a Clearance to prepare in.
+      forecastStormBlight(s)
+    }
   }
 }
 

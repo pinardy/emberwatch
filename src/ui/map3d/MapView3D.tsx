@@ -3,7 +3,6 @@ import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Html, MapControls } from '@react-three/drei'
 import * as THREE from 'three'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
-import { GLADE_ART } from '../../game/content/art'
 import { threatArt } from '../../game/content/artFamilies'
 import { BUILDINGS } from '../../game/content/buildings'
 import { canPlaceBuilding, footprintOf } from '../../game/engine/actions'
@@ -23,13 +22,9 @@ import { Paths } from './Paths'
 import { RoadGhost3D, RoadLayer, type RoadCursor } from './Roads'
 import { Smoke } from './Smoke'
 import { Villagers } from './Villagers'
-import { Icon } from '../Icon'
 import { BuildBanner, WarmthToggle } from '../MapView2D'
 import {
-  GLADE_KIND_STYLE,
   MAP_KEYS,
-  gladeAccessText,
-  gladeFill,
   gladeLook,
   gladePlateInfo,
   useCameraFocus,
@@ -37,117 +32,51 @@ import {
   useMapOverlays,
   useWarmthRingVisible,
   type GladeAccess,
-  type GladeLook,
 } from '../mapShared'
 import { useEscapeLayer } from '../useGameLoop'
 import { REDUCED_MOTION } from '../motion'
 import {
+  BuildingInstances,
   BuildingNode,
+  DepositInstances,
   ThreatMarker,
   type ZoomBucket,
   DepositNode,
 } from './entities'
+import { GladeEdges, GroundSurface, gladeAt } from './Ground'
 import {
   buildingKey,
   buildingViews,
-  clearedKey,
   depositKey,
   forestKey,
   gladePlateKey,
-  gladeSurfaceKey,
+  propKey,
   threatKey,
   useRunKey,
   warmthKey,
 } from './layerKeys'
-import {
-  GHOST_BAD_MAT,
-  GHOST_OK_MAT,
-  GOLD,
-  IconSprite,
-  NO_RAYCAST,
-  ObstacleProp,
-} from './models'
-import { gladeEdgeGeometry, gladeFillGeometry, useStaticGeometry } from './staticGeometry'
+import { GHOST_BAD_MAT, GHOST_OK_MAT, GOLD, IconSprite, NO_RAYCAST } from './models'
+import { plateTile } from './plates'
+import { BatchSprite, ICON_BATCH, PLATE_BATCH, SpriteBatchMesh } from './spriteBatch'
 
 const CAMERA_HOME: [number, number, number] = [0, 15, 12]
+
+/**
+ * Pixel-ratio cap: phones and small screens render at up to 1.25× (a 3×
+ * phone screen at full density is ~6× the pixels for little visible gain),
+ * desktops at up to 1.75×.
+ */
+const MAX_DPR: [number, number] = smallScreen() ? [1, 1.25] : [1, 1.75]
+/** Glade plates: larger on a phone, where the DOM plates used to keep a fixed pixel size. */
+const PLATE_SIZE = smallScreen() ? 1.75 : 1.3
+
+function smallScreen(): boolean {
+  if (typeof window === 'undefined') return false
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false
+  return coarse || Math.min(window.innerWidth, window.innerHeight) < 600
+}
 const MIN_DISTANCE = 4
 const MAX_DISTANCE = 40
-
-/** Width of a fogged glade's kind border, in world units. */
-const EDGE_WIDTH = 0.16
-
-/**
- * Flat mesh of a glade polygon, sitting just above the forest floor.
- * Memoised on its look: the polygon never changes, so its geometry is built
- * once per mount and a sim tick never touches it.
- */
-const GladeSurface = memo(function GladeSurface({
-  glade,
-  look,
-  access,
-}: {
-  glade: Glade
-  look: GladeLook
-  access: GladeAccess
-}) {
-  const geometry = useStaticGeometry(() => gladeFillGeometry(glade.polygon), [glade.polygon])
-  const cleared = look === 'visible'
-  return (
-    <>
-      <mesh
-        geometry={geometry}
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, cleared ? 0.02 : 0.01, 0]}
-        receiveShadow
-        // Cleared ground lets clicks fall through to the placement plane.
-        raycast={cleared ? NO_RAYCAST : undefined}
-        onClick={
-          cleared
-            ? undefined
-            : (e) => {
-                if (e.delta > 6) return
-                e.stopPropagation()
-                if (look === 'fogged') useGameStore.getState().selectGlade(glade.id)
-              }
-        }
-      >
-        <meshStandardMaterial color={gladeFill(glade, '3d')} roughness={1} />
-      </mesh>
-      {look === 'fogged' && <GladeEdge glade={glade} access={access} />}
-    </>
-  )
-})
-
-/**
- * The kind border of a fogged glade: solid for small, long dashes for
- * dangerous, tight dots for forbidden. Bright when reachable, dim when out
- * of reach, breathing while a crew is clearing it.
- */
-function GladeEdge({ glade, access }: { glade: Glade; access: GladeAccess }) {
-  const style = GLADE_KIND_STYLE[glade.kind]
-  const geometry = useStaticGeometry(
-    () => gladeEdgeGeometry(glade.polygon, style.dash, EDGE_WIDTH),
-    [glade.polygon, style.dash],
-  )
-  const material = useRef<THREE.MeshBasicMaterial>(null)
-  const base = access === 'locked' ? 0.3 : 0.9
-  useFrame(({ clock }) => {
-    if (access !== 'clearing' || REDUCED_MOTION || !material.current) return
-    material.current.opacity = 0.55 + Math.sin(clock.elapsedTime * 4) * 0.35
-  })
-  return (
-    <mesh geometry={geometry} position={[0, 0.03, 0]} raycast={NO_RAYCAST}>
-      <meshBasicMaterial
-        ref={material}
-        color={access === 'clearing' ? '#9fe09a' : style.edge}
-        transparent
-        opacity={base}
-        depthWrite={false}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
-  )
-}
 
 interface CursorState {
   pos: Vec2
@@ -213,6 +142,12 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
     if (e.delta > 6) return
     const state = useGameStore.getState()
     const pos = { x: e.point.x, y: e.point.z }
+    // Uncleared ground: a fogged glade is selected, hidden ones ignore clicks.
+    const glade = gladeAt(run, pos)
+    if (glade && !glade.cleared) {
+      if (glade.discovered) state.selectGlade(glade.id)
+      return
+    }
     if (state.buildMode) {
       // Touch: first tap aims the ghost; its ✓ button places.
       if ((e.nativeEvent as PointerEvent).pointerType === 'touch') {
@@ -252,15 +187,15 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
 
   return (
     <>
+      {/* The invisible placement plane; the ground you see is GroundSurface. */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0, 0]}
-        receiveShadow
+        visible={false}
         onPointerMove={handleMove}
         onClick={handleClick}
       >
         <planeGeometry args={[run.world.width + 24, run.world.height + 24]} />
-        <meshStandardMaterial color="#0d1418" roughness={1} />
       </mesh>
 
       {roadMode && (
@@ -437,29 +372,10 @@ function WarmthRing({
  * props, so even a layer re-render touches only the nodes that moved.
  */
 
-function SeasonAtmosphere() {
+function SeasonAtmosphere({ shadows }: { shadows: boolean }) {
   const season = useGameStore((s) => s.run?.season.season ?? 'drizzle')
-  return <Atmosphere season={season} />
+  return <Atmosphere season={season} shadows={shadows} />
 }
-
-const GladeLayer = memo(function GladeLayer({ run }: { run: RunState }) {
-  useRunKey(gladeSurfaceKey)
-  return (
-    <>
-      {Object.values(run.glades).map((glade) => {
-        const look = gladeLook(glade)
-        return (
-          <GladeSurface
-            key={glade.id}
-            glade={glade}
-            look={look}
-            access={look === 'fogged' ? gladePlateInfo(run, glade).access : 'locked'}
-          />
-        )
-      })}
-    </>
-  )
-})
 
 const ForestLayer = memo(function ForestLayer({ run }: { run: RunState }) {
   useRunKey(forestKey)
@@ -471,24 +387,13 @@ const ForestLayer = memo(function ForestLayer({ run }: { run: RunState }) {
   )
 })
 
-const ObstacleLayer = memo(function ObstacleLayer({ run }: { run: RunState }) {
-  useRunKey(clearedKey)
-  return (
-    <>
-      {run.obstacles.map((obstacle) =>
-        run.glades[obstacle.gladeId]?.cleared ? (
-          <ObstacleAt key={obstacle.id} id={obstacle.id} kind={obstacle.kind} radius={obstacle.radius} pos={obstacle.pos} />
-        ) : null,
-      )}
-    </>
-  )
-})
-
 const DepositLayer = memo(function DepositLayer({ run, bucket }: { run: RunState; bucket: ZoomBucket }) {
   useRunKey(depositKey)
+  const props = useRunKey(propKey)
   const selectedDeposit = useGameStore((s) => s.selectedDeposit)
   return (
     <>
+      <DepositInstances run={run} signature={props} />
       {Object.values(run.deposits).map((deposit) =>
         run.glades[deposit.gladeId]?.cleared ? (
           <DepositNode
@@ -518,6 +423,7 @@ const BuildingLayer = memo(function BuildingLayer({
   const ghostDef = buildMode ? BUILDINGS[buildMode] : undefined
   return (
     <>
+      <BuildingInstances run={run} />
       {buildingViews(run).map(({ building, progress, workers, status, cold, lit, tier, upgrade }) => {
         // Buildings that pair with the blueprint in hand, in either direction.
         const partnerHint =
@@ -589,6 +495,10 @@ const GladePlates = memo(function GladePlates({ run }: { run: RunState }) {
   )
 })
 
+/**
+ * A plate painted into the plate atlas (one draw call for every plate).
+ * Clicking the glade's ground selects it, plate or not.
+ */
 const GladePlate = memo(function GladePlate({
   glade,
   access,
@@ -600,34 +510,15 @@ const GladePlate = memo(function GladePlate({
   percent: number
   clearers: number
 }) {
-  const locked = access === 'locked'
   return (
-    <Html
-      position={[glade.center.x, 1.7, glade.center.y]}
-      center
-      distanceFactor={14}
-      zIndexRange={[20, 0]}
-    >
-      <button
-        type="button"
-        className={`glade-plate-3d is-${glade.kind} is-${access} ${locked ? 'is-locked' : ''}`}
-        style={{ '--kind-color': GLADE_KIND_STYLE[glade.kind].edge } as React.CSSProperties}
-        onClick={() => useGameStore.getState().selectGlade(glade.id)}
-      >
-        <small>
-          <Icon id={GLADE_ART[glade.kind]} /> {GLADE_KIND_STYLE[glade.kind].label}
-        </small>
-        <strong>{glade.name}</strong>
-        {percent > 0 && (
-          <span className="glade-plate-3d-bar">
-            <span style={{ width: `${Math.min(100, percent)}%` }} />
-          </span>
-        )}
-        <em>
-          {gladeAccessText({ access, reachable: !locked, pct: percent / 100, clearers })}
-        </em>
-      </button>
-    </Html>
+    <BatchSprite
+      batch={PLATE_BATCH}
+      tile={plateTile(glade, access, percent, clearers)}
+      x={glade.center.x}
+      y={1.7}
+      z={glade.center.y}
+      size={PLATE_SIZE}
+    />
   )
 })
 
@@ -743,10 +634,10 @@ export function MapView3D() {
     >
       <Canvas
         shadows={shadowsEnabled}
-        dpr={[1, 1.75]}
+        dpr={MAX_DPR}
         camera={{ position: CAMERA_HOME, fov: 42, near: 0.5, far: 150 }}
       >
-        <SeasonAtmosphere />
+        <SeasonAtmosphere shadows={shadowsEnabled} />
 
         <MapControls
           ref={controls}
@@ -770,9 +661,9 @@ export function MapView3D() {
         <FlightAnimator controls={controls} flight={flight} />
 
         <GroundPlane run={run} buildMode={buildMode} />
+        <GroundSurface run={run} />
+        <GladeEdges run={run} />
         <Paths run={run} />
-
-        <GladeLayer run={run} />
         <RoadLayer run={run} />
         <ForestLayer run={run} />
 
@@ -790,7 +681,6 @@ export function MapView3D() {
           </group>
         )}
 
-        <ObstacleLayer run={run} />
         <DepositLayer run={run} bucket={bucket} />
         {/* Adjacency partners pulse inside their BuildingNode (partnerHint). */}
         <BuildingLayer run={run} bucket={bucket} buildMode={buildMode} />
@@ -800,6 +690,8 @@ export function MapView3D() {
 
         <ThreatLayer run={run} />
         <GladePlates run={run} />
+        <SpriteBatchMesh batch={ICON_BATCH} renderOrder={10} />
+        <SpriteBatchMesh batch={PLATE_BATCH} renderOrder={11} />
       </Canvas>
 
       <MiniMap run={run} controls={controls} />
@@ -853,25 +745,6 @@ export function MapView3D() {
 
       {buildMode && <BuildBanner buildMode={buildMode} />}
     </div>
-  )
-}
-
-/** Obstacle wrapper kept here — it has no interactions or LOD of its own. */
-function ObstacleAt({
-  id,
-  kind,
-  radius,
-  pos,
-}: {
-  id: string
-  kind: 'crag' | 'mire'
-  radius: number
-  pos: Vec2
-}) {
-  return (
-    <group position={[pos.x, 0, pos.y]}>
-      <ObstacleProp id={id} kind={kind} radius={radius} />
-    </group>
   )
 }
 

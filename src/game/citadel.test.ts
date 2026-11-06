@@ -300,11 +300,11 @@ describe('Queen’s Edicts in createRun', () => {
     expect(run({ edict: -3 }).edict).toBe(0)
   })
 
-  it('cannot start above the edict the Citadel has earned', () => {
+  it('cannot start above the edict the Citadel has earned', async () => {
     stubStorage()
     try {
       useGameStore.setState({ meta: { ...defaultMeta(), edictUnlocked: 2 } })
-      useGameStore.getState().startRun(SEED, [...SPECIES], 5)
+      await useGameStore.getState().startRun(SEED, [...SPECIES], 5)
       expect(useGameStore.getState().run?.edict).toBe(2)
     } finally {
       useGameStore.setState({ run: null, screen: 'menu' })
@@ -329,9 +329,10 @@ describe('Citadel upgrades in createRun', () => {
     expect(s.unlockedBuildings).toContain('tradingPost')
     const kinds = s.pendingChoices.map((c) => c.kind)
     expect(kinds.filter((k) => k === 'blueprint')).toHaveLength(OPENING_BLUEPRINT_PICKS + 1)
-    // The Signet's cornerstone draft comes after the blueprints, then the writ.
-    expect(kinds[kinds.length - 2]).toBe('cornerstone')
-    expect(kinds[kinds.length - 1]).toBe('order')
+    // Every run opens on one cornerstone draft; the Signet adds a second; the
+    // founding writ comes last.
+    expect(kinds.slice(-3)).toEqual(['cornerstone', 'cornerstone', 'order'])
+    expect(kinds.filter((k) => k === 'cornerstone')).toHaveLength(2)
   })
 
   it('offers one more option in blueprint and cornerstone drafts', () => {

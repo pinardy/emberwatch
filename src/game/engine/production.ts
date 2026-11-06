@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../content/buildings'
+import { EDIBLE } from '../content/resources'
 import { SPECIES } from '../content/species'
 import { TERRAIN } from '../content/terrain'
 import type {
@@ -16,6 +17,8 @@ import {
   BUILD_RATE_PER_VILLAGER,
   FARM_SEASON_MULTIPLIER,
   GATHER_SEASON_MULTIPLIER,
+  LARDER_HEADROOM_MIN,
+  LARDER_HEADROOM_SHARE,
   WORKER_RATE,
 } from './balance'
 import { dist } from './geometry'
@@ -24,6 +27,7 @@ import { extraOutputChance, productionMultiplier } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { roadMultiplier } from './roads'
+import { touchBuildings } from './runCache'
 import { buildMultiplier, workTraitMultiplier } from './traits'
 import {
   gatherRadiusOf,
@@ -283,7 +287,8 @@ export function stepProduction(
       }
       const outputTotal = countOutputs(recipe)
       const isService = outputTotal === 0
-      if (!isService && used + outputTotal > cap) {
+      const limit = storageLimitFor(recipe, cap)
+      if (!isService && used + outputTotal > limit) {
         b.recipeProgress = recipe.seconds
         result.storageFull = true
         break
@@ -291,6 +296,8 @@ export function stepProduction(
 
       b.recipeProgress -= recipe.seconds
       spend(s.stock, recipe.inputs)
+      // A ward's offering calms the forest.
+      if (def.ward) s.hostility = Math.max(0, s.hostility - def.ward.hostilityPerCycle)
 
       if (!isService) {
         let doubled = false
@@ -301,7 +308,7 @@ export function stepProduction(
           s.rngCursor = rng.cursor()
         }
         const gain = doubled ? doubleBag(recipe.outputs) : recipe.outputs
-        const added = grant(s.stock, gain, cap, used)
+        const added = grant(s.stock, gain, limit, used)
         used += added
         s.stats.resourcesProduced += added
         for (const [id, amount] of Object.entries(gain)) {
@@ -338,10 +345,35 @@ export function advanceUpgrade(s: RunState, b: BuildingInstance, work: number): 
 /** Raises a building to its next tier (construction finished or rushed). */
 export function completeUpgrade(s: RunState, b: BuildingInstance): void {
   b.tier = tierOf(b) + 1
+  touchBuildings(s)
   delete b.upgradeProgress
   // A longer reach can bring new deposits within range.
   const radius = gatherRadiusOf(b)
   if (radius) b.depositsInRange = depositsInRangeOf(s, b.pos, radius)
+}
+
+/**
+ * The stockpile limit a recipe's batch must fit under. Food has a larder
+ * reserve on top of the cap, so a store full of wood or stone never stops the
+ * foragers and starves the settlement while it saves for a warehouse.
+ */
+export function storageLimitFor(recipe: Recipe, cap: number): number {
+  return yieldsOnlyFood(recipe) ? cap + larderHeadroom(cap) : cap
+}
+
+/** Extra room food may take past the stockpile cap. */
+export function larderHeadroom(cap: number): number {
+  return Math.max(LARDER_HEADROOM_MIN, Math.round(cap * LARDER_HEADROOM_SHARE))
+}
+
+function yieldsOnlyFood(recipe: Recipe): boolean {
+  let any = false
+  for (const [id, amount] of Object.entries(recipe.outputs)) {
+    if (!amount || id === 'amber') continue
+    if (!EDIBLE.includes(id as ResourceId)) return false
+    any = true
+  }
+  return any
 }
 
 /** Stockpile space one batch of `recipe` needs (amber takes none). */

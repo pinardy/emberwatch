@@ -29,11 +29,13 @@ import {
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { offerBlueprint, offerCornerstone } from './events'
-import { drawOrder, offerWrit } from './orders'
+import { offerWrit } from './orders'
 import { defaultDecreeState } from './structure'
 import { emptyTimeline } from './timeline'
 import { defaultCaravan } from './trade'
-import { generateMap } from './mapgen'
+import { drawOrder } from './drawOrder'
+import { generateMap } from './worldgen'
+import { pushLog } from './runLog'
 import { computeModifiers, seasonLengthFor } from './modifiers'
 import { makeRng } from './rng'
 import { defaultFeats } from '../content/achievements'
@@ -262,8 +264,11 @@ export function createRun({
   // The run begins on a choice: which buildings this settlement will have. It
   // also guarantees a route to satisfying at least one service need.
   const openingPicks = OPENING_BLUEPRINT_PICKS + loadout.openingPicks
-  for (let i = 0; i < openingPicks; i++) offerBlueprint(state)
-  // The Viceroy's Signet adds a cornerstone pick to the opening.
+  for (let i = 0; i < openingPicks; i++) offerBlueprint(state, false)
+  // Every run lays a cornerstone before the first tick, so a perk shapes the
+  // run from its first minute — a founding one, drawn from the commons; the
+  // Viceroy's Signet adds a second from the whole pool.
+  offerCornerstone(state, true)
   if (loadout.startCornerstoneChoice) offerCornerstone(state)
   // The founding writ: a small first goal, worth a point in the opening minutes.
   offerWrit(state)
@@ -290,19 +295,5 @@ function yearOneLength(mods: ReturnType<typeof computeModifiers>): number {
   return SEASON_ORDER.reduce((sum, season) => sum + seasonLengthFor(season, 1, mods), 0)
 }
 
-export function pushLog(
-  s: RunState,
-  text: string,
-  tone: 'info' | 'good' | 'bad' = 'info',
-): void {
-  s.log.unshift({
-    id: s.logCounter++,
-    year: s.season.year,
-    season: s.season.season,
-    text,
-    tone,
-  })
-  if (s.log.length > 80) s.log.length = 80
-}
-
-export { drawOrder }
+// Moved to their own modules (see there); re-exported for existing callers.
+export { drawOrder, pushLog }

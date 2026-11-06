@@ -137,10 +137,11 @@ describe('run timeline events', () => {
     expect(storm.t).toBeGreaterThan(0)
     state.season.elapsed = state.season.length - 1
     run(state, 2)
-    expect(kinds(state)).toEqual(['storm', 'year'])
-    expect(state.timeline.events[1].d).toBe('2')
+    // The opening cornerstone is laid at the very start.
+    expect(kinds(state)).toEqual(['cornerstone', 'storm', 'year'])
+    expect(state.timeline.events[2].d).toBe('2')
     expect(stormPeriods(state.timeline, state.clock)).toEqual([
-      [storm.t, state.timeline.events[1].t],
+      [storm.t, state.timeline.events[2].t],
     ])
   })
 

@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useCursor } from '@react-three/drei'
 import * as THREE from 'three'
@@ -9,23 +9,21 @@ import { DEPOSIT_ART } from '../../game/content/art'
 import { STATUS_BADGE_ART } from '../../game/content/artFamilies'
 import { DEPOSIT_INFO } from '../../game/engine/mapgen'
 import { useGameStore } from '../../game/store'
-import type { BuildingInstance, DepositId, Vec2, WorldDeposit } from '../../game/types'
-import { DEPOSIT_TINT, STATUS_BADGE, type MapBuildingStatus } from '../mapShared'
+import type { BuildingInstance, RunState, Vec2, WorldDeposit } from '../../game/types'
+import { STATUS_BADGE, type MapBuildingStatus } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
+import { assignHomes } from '../villagerRoutes'
 import { requestGhost } from './ghostBus'
-import {
-  BadgeSprite,
-  BuildingModel,
-  ConstructionSite,
-  DepositProp,
-  GOLD,
-  IconSprite,
-  LabelSprite,
-  NO_RAYCAST,
-  TierTrim,
-  UpgradeScaffold,
-} from './models'
+import { HearthModel } from './Hearth'
+import { buildingModelKey, useRunKey } from './layerKeys'
+import { GOLD, NO_RAYCAST } from './models'
+import { buildingParts, depositParts, obstacleParts } from './modelParts'
+import { PartInstances, type Part, type PopMap } from './parts'
+import { BatchSprite } from './spriteBatch'
+import { artTile, badgeTile, labelTile } from './sprites'
 import { workerSlotsOf } from '../../game/engine/upgrades'
+import { isColdHousing, isUnlitWarmthSource } from '../mapShared'
+import { warmthSources } from '../../game/engine/queries'
 
 /**
  * Camera-distance buckets for label level-of-detail: everything up close,
@@ -84,25 +82,48 @@ function activate(e: ThreeEvent<MouseEvent>, select: () => void) {
   select()
 }
 
-/** Shared unit ring, scaled per deposit: one geometry for every tint. */
-const TINT_RING_GEO = new THREE.RingGeometry(0.8, 1, 28)
-const TINT_MATS = Object.fromEntries(
-  Object.entries(DEPOSIT_TINT).map(([kind, color]) => [
-    kind,
-    new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.42,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  ]),
-) as Record<DepositId, THREE.MeshBasicMaterial>
+/** One shared invisible hit disc per radius: clicks land on footprints, not thin models. */
+const HIT_GEOS = new Map<number, THREE.CircleGeometry>()
+function hitGeometry(radius: number): THREE.CircleGeometry {
+  const key = Math.round(radius * 100)
+  let g = HIT_GEOS.get(key)
+  if (!g) {
+    g = new THREE.CircleGeometry(key / 100, 12).rotateX(-Math.PI / 2) as THREE.CircleGeometry
+    HIT_GEOS.set(key, g)
+  }
+  return g
+}
 
 /**
- * A resource deposit. Memoised: the layer passes `amount` explicitly so a
- * harvest re-renders this one node and nothing else (the deposit object
- * itself is mutated in place and never changes identity).
+ * Every deposit and obstacle prop on cleared ground, instanced: rebuilt only
+ * when one appears or disappears (a harvest changes the amount label, not
+ * the props).
+ */
+export const DepositInstances = memo(function DepositInstances({
+  run,
+  signature,
+}: {
+  run: RunState
+  /** Which deposits and obstacles stand; the only thing the props depend on. */
+  signature: string
+}) {
+  const parts = useMemo(() => {
+    const out: Part[] = []
+    for (const d of Object.values(run.deposits)) {
+      if (run.glades[d.gladeId]?.cleared) out.push(...depositParts(d))
+    }
+    for (const o of run.obstacles) {
+      if (run.glades[o.gladeId]?.cleared) out.push(...obstacleParts(o))
+    }
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run, signature])
+  return <PartInstances parts={parts} />
+})
+
+/**
+ * A resource deposit's interactive footprint, icon and amount. Memoised: the
+ * layer passes `amount` explicitly so a harvest re-renders this one node.
  */
 export const DepositNode = memo(function DepositNode({
   deposit,
@@ -117,51 +138,103 @@ export const DepositNode = memo(function DepositNode({
 }) {
   const [hovered, setHovered] = useState(false)
   useCursor(hovered)
-  const r = deposit.radius
+  const { x, y: z } = deposit.pos
   return (
-    <group
-      position={[deposit.pos.x, 0, deposit.pos.y]}
-      onClick={(e) => activate(e, () => useGameStore.getState().selectDeposit(deposit.id))}
-      onPointerOver={(e) => {
-        e.stopPropagation()
-        setHovered(true)
-      }}
-      onPointerOut={() => setHovered(false)}
-    >
-      {/* Invisible hit disc so the cluster is easy to tap. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]} visible={false}>
-        <circleGeometry args={[deposit.radius, 12]} />
-      </mesh>
-      {/* Kind-coloured ground ring: tells deposits apart at any zoom. */}
-      <mesh
-        geometry={TINT_RING_GEO}
-        material={TINT_MATS[deposit.kind]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, 0.025, 0]}
-        scale={[r, r, 1]}
-        raycast={NO_RAYCAST}
-      />
-      <DepositProp id={deposit.id} kind={deposit.kind} radius={deposit.radius} />
+    <>
+      <group
+        position={[x, 0, z]}
+        onClick={(e) => activate(e, () => useGameStore.getState().selectDeposit(deposit.id))}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          setHovered(true)
+        }}
+        onPointerOut={() => setHovered(false)}
+      >
+        {/* Invisible hit disc so the cluster is easy to tap. */}
+        <mesh geometry={hitGeometry(deposit.radius)} position={[0, 0.015, 0]} visible={false} />
+        {selected && <SelectionRing radius={deposit.radius + 0.1} />}
+        {hovered && !selected && <SelectionRing radius={deposit.radius + 0.1} opacity={0.35} />}
+      </group>
       {/* The kind icon stays at every zoom, larger and higher from afar. */}
-      <IconSprite
-        icon={DEPOSIT_INFO[deposit.kind].icon}
-        art={DEPOSIT_ART[deposit.kind]}
+      <BatchSprite
+        tile={artTile(DEPOSIT_INFO[deposit.kind].icon, DEPOSIT_ART[deposit.kind])}
+        x={x}
         y={bucket === 'far' ? 1.7 : 1.35}
+        z={z}
         size={bucket === 'far' ? 1.05 : 0.7}
       />
       {bucket === 'near' && deposit.amount !== null && (
-        <LabelSprite text={String(deposit.amount)} y={0.85} size={0.6} />
+        <BatchSprite tile={labelTile(String(deposit.amount))} x={x} y={0.85} z={z} size={0.6} />
       )}
-      {selected && <SelectionRing radius={deposit.radius + 0.1} />}
-      {hovered && !selected && <SelectionRing radius={deposit.radius + 0.1} opacity={0.35} />}
-    </group>
+    </>
   )
 })
 
 /**
- * A building. Memoised: the building object is mutated in place, so the
- * layer passes the few values that change (`progress`, `workers`, `status`)
- * as props, and a sim tick re-renders only the nodes whose values moved.
+ * Every building's model as instanced parts. Rebuilt when what the models
+ * show changes (`buildingModelKey`: built, tier, upgrade, lit, cold, who is
+ * home, construction in 10% steps) — never on an ordinary tick. A building
+ * that just finished pops by scaling its own instances for a beat.
+ */
+export const BuildingInstances = memo(function BuildingInstances({ run }: { run: RunState }) {
+  const key = useRunKey(buildingModelKey)
+  const pops = useRef<PopMap>(new Map())
+  const prevBuilt = useRef<Set<string> | null>(null)
+
+  const parts = useMemo(() => {
+    const homes = assignHomes(run)
+    const occupied = new Set<string>()
+    for (const home of homes.values()) occupied.add(home.id)
+    const sources = warmthSources(run)
+    const out: Part[] = []
+    for (const b of Object.values(run.buildings)) {
+      const def = BUILDINGS[b.defId]
+      if (!def) continue
+      const raw = b.built ? 1 : b.buildProgress / Math.max(1, def.buildSeconds)
+      out.push(
+        ...buildingParts({
+          building: b,
+          progress: Math.min(1, Math.round(raw * 10) / 10),
+          occupied: occupied.has(b.id),
+          lit: !b.unlit,
+          tier: b.tier ?? 0,
+          upgrading: b.upgradeProgress !== undefined,
+          cold: isColdHousing(run, b, sources) || isUnlitWarmthSource(b),
+        }),
+      )
+    }
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run, key])
+
+  // A short "pop" when construction finishes.
+  useEffect(() => {
+    const built = new Set(Object.values(run.buildings).filter((b) => b.built).map((b) => b.id))
+    const prev = prevBuilt.current
+    prevBuilt.current = built
+    if (!prev || REDUCED_MOTION) return
+    const now = performance.now()
+    for (const id of built) {
+      if (prev.has(id)) continue
+      const b = run.buildings[id]
+      pops.current.set(id, { start: now, x: b.pos.x, z: b.pos.y })
+    }
+  }, [run, key])
+
+  useFrame(() => {
+    const now = performance.now()
+    for (const [id, pop] of pops.current) if (now - pop.start > 500) pops.current.delete(id)
+  })
+
+  return <PartInstances parts={parts} castShadow pops={pops.current} />
+})
+
+/**
+ * A building's interactive footprint, floating icon, labels and badges (the
+ * model itself is instanced by `BuildingInstances`). Memoised: the building
+ * object is mutated in place, so the layer passes the few values that change
+ * (`progress`, `workers`, `status`) as props, and a sim tick re-renders only
+ * the nodes whose values moved.
  */
 export const BuildingNode = memo(function BuildingNode({
   building,
@@ -172,7 +245,6 @@ export const BuildingNode = memo(function BuildingNode({
   progress: progressProp,
   workers: workersProp,
   status = 'none',
-  lit: litProp,
   tier = 0,
   upgrade = -1,
 }: {
@@ -189,7 +261,7 @@ export const BuildingNode = memo(function BuildingNode({
   workers?: number
   /** What it is doing right now; drives the status badge. */
   status?: MapBuildingStatus
-  /** Warmth sources: whether the fire burns. A prop so going out re-renders. */
+  /** Warmth sources: whether the fire burns (the model reads it itself). */
   lit?: boolean
   /** Upgrade tier: a prop so a new tier re-renders this node alone. */
   tier?: number
@@ -197,34 +269,8 @@ export const BuildingNode = memo(function BuildingNode({
   upgrade?: number
 }) {
   const def = BUILDINGS[building.defId]
-  // A cosmetic Citadel flame; read once per hearth, not per tick.
-  const flame = useGameStore((s) =>
-    building.defId === 'ancientHearth' ? s.run?.citadel?.hearthStyle : undefined,
-  )
   const [hovered, setHovered] = useState(false)
   useCursor(hovered)
-
-  // A short "pop" when construction finishes.
-  const body = useRef<THREE.Group>(null)
-  const prevBuilt = useRef(building.built)
-  const popAt = useRef<number | null>(null)
-  useEffect(() => {
-    if (!REDUCED_MOTION && building.built && !prevBuilt.current) {
-      popAt.current = performance.now()
-    }
-    prevBuilt.current = building.built
-  }, [building.built])
-  useFrame(() => {
-    const group = body.current
-    if (!group || popAt.current === null) return
-    const t = (performance.now() - popAt.current) / 450
-    if (t >= 1) {
-      popAt.current = null
-      group.scale.setScalar(1)
-      return
-    }
-    group.scale.setScalar(1 + 0.28 * Math.sin(t * Math.PI))
-  })
 
   if (!def) return null
   const radius = footprintOf(building.defId)
@@ -244,90 +290,65 @@ export const BuildingNode = memo(function BuildingNode({
   const badgeX = far ? 0 : 0.4
   const badgeY = far ? iconY : iconY + 0.32
   const badgeSize = far ? 0.95 : status === 'working' ? 0.28 : 0.4
+  const { x, y: z } = building.pos
+  const slots = building.built ? workerSlotsOf(building) : 0
 
   return (
-    <group
-      position={[building.pos.x, 0, building.pos.y]}
-      onClick={(e) => activate(e, () => useGameStore.getState().selectBuilding(building.id))}
-      onPointerOver={(e) => {
-        e.stopPropagation()
-        setHovered(true)
-      }}
-      onPointerOut={() => setHovered(false)}
-    >
-      {/* Invisible hit disc — models are thin, footprints are the target. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, 0]} visible={false}>
-        <circleGeometry args={[radius + 0.1, 12]} />
-      </mesh>
-      <group ref={body}>
-        {building.built ? (
-          <>
-            <BuildingModel category={def.category} scale={scale} defId={building.defId} lit={litProp ?? !building.unlit} flame={flame} />
-            <TierTrim tier={tier} scale={scale} />
-            {upgrade >= 0 && <UpgradeScaffold scale={scale} />}
-          </>
-        ) : (
-          <ConstructionSite progress={progress} scale={scale} />
-        )}
+    <>
+      <group
+        position={[x, 0, z]}
+        onClick={(e) => activate(e, () => useGameStore.getState().selectBuilding(building.id))}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          setHovered(true)
+        }}
+        onPointerOut={() => setHovered(false)}
+      >
+        {/* Invisible hit disc — models are thin, footprints are the target. */}
+        <mesh geometry={hitGeometry(radius + 0.1)} position={[0, 0.015, 0]} visible={false} />
+        {def.category === 'hearth' && building.built && <HearthModel scale={scale} />}
+        {selected && <SelectionRing radius={radius + 0.15} />}
+        {hovered && !selected && <SelectionRing radius={radius + 0.15} opacity={0.35} />}
+        {partnerHint && <PulseRing radius={radius + 0.35} />}
       </group>
-      {bucket !== 'far' && <IconSprite icon={def.icon} art={def.art} y={iconY} size={0.75} />}
-      {!building.built && bucket !== 'far' && (
-        <LabelSprite text={`${Math.round(progress * 10) * 10}%`} y={0.85} size={0.6} />
+
+      {!far && <BatchSprite tile={artTile(def.icon, def.art)} x={x} y={iconY} z={z} size={0.75} />}
+      {!building.built && !far && (
+        <BatchSprite tile={labelTile(`${Math.round(progress * 10) * 10}%`)} x={x} y={0.85} z={z} size={0.6} />
       )}
-      {building.built && workerSlotsOf(building) > 0 && bucket === 'near' && (
-        <LabelSprite text={`${workers}/${workerSlotsOf(building)}`} y={1.15 * scale} size={0.65} />
+      {slots > 0 && bucket === 'near' && (
+        <BatchSprite tile={labelTile(`${workers}/${slots}`)} x={x} y={1.15 * scale} z={z} size={0.65} />
       )}
-      {tier > 0 && bucket !== 'far' && (
-        <LabelSprite text={'★'.repeat(tier)} y={iconY + 0.48} size={0.5} />
-      )}
-      {upgrade >= 0 && bucket !== 'far' && (
-        <LabelSprite text={`⬆ ${Math.round(upgrade * 10) * 10}%`} y={0.85} size={0.6} />
+      {tier > 0 && !far && <BatchSprite tile={labelTile('★'.repeat(tier))} x={x} y={iconY + 0.48} z={z} size={0.5} />}
+      {upgrade >= 0 && !far && (
+        <BatchSprite tile={labelTile(`⬆ ${Math.round(upgrade * 10) * 10}%`)} x={x} y={0.85} z={z} size={0.6} />
       )}
       {showBadge && badge && (
-        <BadgeSprite icon={badge.icon} art={badge.art} color={badge.color} x={badgeX} y={badgeY} size={badgeSize} />
+        <BatchSprite
+          tile={badgeTile(badge.icon, badge.color, badge.art)}
+          x={x}
+          y={badgeY}
+          z={z}
+          size={badgeSize}
+          offsetX={badgeX}
+        />
       )}
-
       {cold && (
-        <>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]} raycast={NO_RAYCAST}>
-            <circleGeometry args={[radius + 0.35, 24]} />
-            <meshBasicMaterial color="#5f8fd4" transparent opacity={0.28} depthWrite={false} />
-          </mesh>
-          <BadgeSprite
-            icon="❄"
-            art={STATUS_BADGE_ART.cold}
-            color="#5f8fd4"
-            x={far ? (showBadge ? -0.9 : 0) : -0.4}
-            y={badgeY}
-            size={far ? 0.8 : 0.4}
-          />
-        </>
+        <BatchSprite
+          tile={badgeTile('❄', '#5f8fd4', STATUS_BADGE_ART.cold)}
+          x={x}
+          y={badgeY}
+          z={z}
+          size={far ? 0.8 : 0.4}
+          offsetX={far ? (showBadge ? -0.9 : 0) : -0.4}
+        />
       )}
-
-      {selected && <SelectionRing radius={radius + 0.15} />}
-      {hovered && !selected && <SelectionRing radius={radius + 0.15} opacity={0.35} />}
-      {partnerHint && <PulseRing radius={radius + 0.35} />}
-    </group>
+    </>
   )
 })
 
 /** Pulsing warning over a glade with an active threat. */
 /** `art` is the threat's own framed icon; the plain warning sign stands in without it. */
 export function ThreatMarker({ pos, art }: { pos: Vec2; art?: IconId }) {
-  const sprite = useRef<THREE.Group>(null)
-  useFrame(({ clock }) => {
-    if (REDUCED_MOTION) return
-    const group = sprite.current
-    if (!group) return
-    const pulse = 1 + Math.sin(clock.elapsedTime * 4.2) * 0.18
-    group.scale.setScalar(pulse)
-    group.position.y = 2.6 + Math.sin(clock.elapsedTime * 2.1) * 0.15
-  })
-  return (
-    <group position={[pos.x, 0, pos.y]} raycast={NO_RAYCAST}>
-      <group ref={sprite} position={[0, 2.6, 0]}>
-        <IconSprite icon="⚠️" art={art ?? 'dangerous'} y={0} size={1.1} />
-      </group>
-    </group>
-  )
+  return <BatchSprite tile={artTile('⚠️', art ?? 'dangerous')} x={pos.x} y={2.6} z={pos.y} size={1.1} pulse />
 }

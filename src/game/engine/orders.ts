@@ -11,7 +11,7 @@ import {
   ORDER_REACH,
   ORDER_SLOTS,
 } from './balance'
-import { pushLog } from './createRun'
+import { pushLog } from './runLog'
 import { productionRate } from './forecast'
 import { computeModifiers } from './modifiers'
 import { grant, spend, storageUsed, totalHousing } from './queries'

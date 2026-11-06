@@ -24,7 +24,8 @@ import {
 import { createRun } from './createRun'
 import { optionAffordable, resolveGladeEvent, stepOrders, takeChoice } from './events'
 import { hearthForecast, secondsUntilStorm } from './forecast'
-import { DEPOSIT_RADIUS, generateMap } from './mapgen'
+import { DEPOSIT_RADIUS } from './mapgen'
+import { generateMap } from './worldgen'
 import { computeModifiers, emptyModifiers } from './modifiers'
 import { seasonMultiplier, terrainBuildMultiplier, terrainWorkMultiplier } from './production'
 import { makeRng } from './rng'
@@ -414,7 +415,8 @@ describe('rule-bending cornerstones for braziers, terrain, adjacency, decrees an
   const withCornerstone = (id: string) => {
     expect(CORNERSTONES[id], id).toBeDefined()
     const state = runWith([])
-    state.cornerstones.push(id)
+    // Only this cornerstone: the opening pick would muddy the comparison.
+    state.cornerstones = [id]
     return state
   }
 
@@ -555,7 +557,7 @@ describe('the first royal decree on modified land', () => {
     for (const modifiers of [['longStorms'], ['earlyFrost'], []]) {
       const state = runWith(modifiers)
       // A decree cornerstone shapes the decree itself, not when it comes.
-      state.cornerstones.push('royalCouriers')
+      state.cornerstones = ['royalCouriers']
       while (state.season.year === 1) {
         tick(state, 0.125)
         state.pendingChoices = state.pendingChoices.filter((c) => c.kind === 'decree')

@@ -51,9 +51,11 @@ export const MAX_IMPATIENCE = 18
 /**
  * Reputation milestones that award a cornerstone or blueprint pick, alternating
  * between the two. Every second point, so the settlement keeps unlocking the
- * buildings it needs rather than stalling behind a reputation wall.
+ * buildings it needs rather than stalling behind a reputation wall — and on
+ * the odd points, so the first reward lands with the first reputation point
+ * instead of the second.
  */
-export const REWARD_MILESTONES = [2, 4, 6, 8, 10, 12, 14, 16, 18]
+export const REWARD_MILESTONES = [1, 3, 5, 7, 9, 11, 13, 15, 17]
 
 /** Blueprint picks offered before the first tick, as an opening draft. */
 export const OPENING_BLUEPRINT_PICKS = 3
@@ -191,8 +193,12 @@ export const REPUTATION_PER_RESOLVE_POINT = 0.001
  * housing and a varied larder keeps villagers from leaving, but the Queen
  * judges you on what you built for them — a settlement that idles above its
  * thresholds without services should not be able to win on resolve alone.
+ * Only built services count toward the rest (a species' own floor, like the
+ * harpies' teaching, raises resolve but not reputation). Halved from 0.2 when
+ * the opening cornerstone and the hearth's offerings lifted resolve across
+ * the board, to keep the economy-only control under its cap.
  */
-export const REPUTATION_UNSERVED_SHARE = 0.2
+export const REPUTATION_UNSERVED_SHARE = 0.1
 /** Impatience gained for each villager that leaves or dies. */
 export const IMPATIENCE_PER_VILLAGER_LOST = 0.6
 /** Baseline impatience per second (grows each year). */
@@ -487,3 +493,59 @@ export const ROAD_SNAP = 0.5
  * a settlement without roads works exactly as before.
  */
 export const ROAD_WORK_BONUS = 15
+
+// ---------------------------------------------------------------------------
+// Mid-run pressure: a Queen who notices stalling, a forest that strikes back
+// in the Storm, threats that grow bolder, and a full stockpile that never
+// starves the settlement (new section — kept apart from the pacing above)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extra impatience per second while the settlement is not earning: scaled by
+ * the share of villagers whose species sits below its reputation threshold
+ * (all of them below = the full rate; all above = nothing). It starts with
+ * Year 2 — nobody clears a threshold before the first services stand — so
+ * the opening is unchanged, and an idling settlement mid-run gains about a
+ * point every two minutes on top of the base rate (tuned with the harness).
+ */
+export const IMPATIENCE_STALL_RATE = 0.008
+/** The year the Queen starts to notice a settlement that is not earning. */
+export const IMPATIENCE_STALL_FROM_YEAR = 2
+
+/** Below this hostility the forest sends no blight with the Storm. */
+export const STORM_BLIGHT_MIN_HOSTILITY = 12
+/** The first year whose Storm can carry a blight (the first Storm never does). */
+export const STORM_BLIGHT_FROM_YEAR = 2
+/** Each year after the second, turning a blight aside takes this share more. */
+export const BLIGHT_PREP_GROWTH = 0.5
+
+/**
+ * Each strike of an ignored threat raises its next strike's damage by this
+ * share (compounding) and its appeasement price by `THREAT_APPEASE_GROWTH`.
+ */
+export const THREAT_STRIKE_GROWTH = 0.25
+export const THREAT_APPEASE_GROWTH = 0.2
+/** From this many strikes on, an ignored threat also takes a villager each time. */
+export const THREAT_STRIKES_BEFORE_LOSS = 3
+
+/**
+ * Food keeps coming in past the stockpile limit by this share of it (at least
+ * `LARDER_HEADROOM_MIN`): a store full of wood must never stop the foragers
+ * and starve the settlement while it saves for a warehouse.
+ */
+export const LARDER_HEADROOM_SHARE = 0.25
+export const LARDER_HEADROOM_MIN = 20
+
+/**
+ * Blueprint drafts in a row that may pass without offering a piece of a
+ * wanted service chain; the next one guarantees one.
+ */
+export const DRAFT_PITY = 1
+
+/**
+ * Hostility one firekeeper's offering at the hearth calms (two herbs, every
+ * 20 work-seconds): about a point a minute for a villager and most of a herb
+ * camp's output — enough to hold the forest's slow creep back, never to undo
+ * a cleared map.
+ */
+export const WARD_HOSTILITY_PER_OFFERING = 0.3

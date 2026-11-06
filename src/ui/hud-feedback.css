@@ -5,7 +5,7 @@
 
 /*
  * --- Event toasts ----------------------------------------------------------
- * Bottom-right of the map. Inside the game screen they live in .hud-stack
+ * Bottom-right of the map. Inside the game screen they live in the overlay dock
  * (styles.css), which places them beside the inspector, tips and threats so
  * nothing overlaps; the absolute positioning below is only a fallback.
  */
@@ -72,10 +72,11 @@
 .event-toast-count {
   flex-shrink: 0;
   font-weight: 700;
-  font-size: 11px;
-  padding: 1px 6px;
+  font-size: 12px;
+  padding: 1px 7px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
+  background: #2c363d;
+  color: #f2f5f4;
 }
 
 @keyframes toast-in {
@@ -95,15 +96,15 @@
   position: absolute;
   top: 3px;
   right: calc(50% - 22px);
-  min-width: 17px;
-  height: 17px;
+  min-width: 18px;
+  height: 18px;
   padding: 0 4px;
   border-radius: 9px;
-  background: var(--bad);
+  background: #b0453c;
   color: #fff;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
-  line-height: 17px;
+  line-height: 18px;
   text-align: center;
 }
 
@@ -120,7 +121,7 @@
 
 .meter-rate {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 400;
 }
 
@@ -134,7 +135,7 @@
 
 .hearth-stat small {
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 .hearth-stat.is-warn {
@@ -164,12 +165,13 @@
 
 .resolve-chip-threshold {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .resolve-trend {
   font-style: normal;
-  font-size: 8px;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .resolve-trend.is-up {
@@ -190,35 +192,62 @@
   font-style: normal;
   white-space: nowrap;
   font-weight: 700;
-  font-size: 10.5px;
+  font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 6px;
-  border-radius: 8px;
-  background: var(--bad);
+  letter-spacing: 0.03em;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: #a8433a;
   color: #fff;
 }
 
+/* The food runway is the most important number on the bar: its own chip,
+   big and coloured by how long the larder lasts. */
+.food-summary {
+  gap: 5px;
+  padding: 3px 4px 3px 9px;
+}
+
+.food-summary strong {
+  font-size: 14px;
+}
+
 .food-summary .food-runway {
-  color: var(--muted);
-  font-size: 10.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 3px;
+  padding: 2px 9px;
+  border-radius: 14px;
+  background: #1c2b22;
+  color: #cfe8c9;
+  font-size: 13px;
+}
+
+.food-runway b {
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .food-summary.is-warn {
   border-color: #7a6636;
 }
 
-.food-summary.is-warn .food-runway,
+.food-summary.is-warn .food-runway {
+  background: #3d3117;
+  color: #f6d9a0;
+}
+
 .food-summary.is-bad .food-runway {
-  color: var(--warn);
-  font-weight: 600;
+  background: #4d201c;
+  color: #ffdcd7;
 }
 
 /* --- Threat bills --------------------------------------------------------- */
 
 .threat-text .threat-timer {
   font-family: var(--font-ui);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 400;
   color: #f0b3aa;
   margin-left: 4px;
@@ -234,7 +263,7 @@
 
 .threat-text small.threat-standing {
   color: #d8a9a2;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 /* --- Inspector status line ------------------------------------------------ */

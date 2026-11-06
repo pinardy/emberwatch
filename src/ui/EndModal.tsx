@@ -4,7 +4,7 @@ import {
   edictLabel,
   supplyBreakdown,
 } from '../game/content/meta'
-import { useGameStore, useRun } from '../game/store'
+import { useGameStore, useHudRun } from '../game/store'
 import { Overlay } from './ChoiceModal'
 import { EndExtras } from './EndExtras'
 import { RunModifierList } from './RunModifierList'
@@ -12,7 +12,7 @@ import { RunTimelineChart } from './RunTimeline'
 import { Icon } from './Icon'
 
 export function EndModal() {
-  const run = useRun()
+  const run = useHudRun()
   const finishRun = useGameStore((s) => s.finishRun)
   const edictUnlocked = useGameStore((s) => s.meta.edictUnlocked)
   if (!run || run.phase === 'playing') return null
