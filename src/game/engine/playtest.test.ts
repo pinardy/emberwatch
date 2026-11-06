@@ -74,7 +74,7 @@ import {
 import { tick } from './tick'
 import { productionRate } from './forecast'
 import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal } from './orders'
-import { decreeGoal, decreeStreakBonus } from './structure'
+import { decreeGoal, decreeReputation } from './structure'
 import { baseServiceCapacity, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 
 /**
@@ -1165,9 +1165,7 @@ function playRun(
     tick(s, STEP)
     if (liveDecree && !s.decree && (s.feats?.decreesMet ?? 0) === decreesBefore) decreesMissed++
     if (liveDecree && (s.feats?.decreesMet ?? 0) > decreesBefore) {
-      sources.decrees +=
-        Math.max(0, (DECREES[liveDecree]?.reputationReward ?? 0) + computeModifiers(s).decreeReputation) +
-        decreeStreakBonus(s.decreeStreak ?? 0).reputation
+      sources.decrees += decreeReputation(s, DECREES[liveDecree])
     }
     sinceDecision += STEP
     const stillOpen = new Set(s.orders.map((o) => o.defId))

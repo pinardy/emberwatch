@@ -14,12 +14,13 @@ import {
 } from '../game/engine/orders'
 import {
   decreeGoal,
-  decreeMissImpatience,
+  decreeReputation,
   decreeStreakBonus,
   describeTimedGoal,
 } from '../game/engine/structure'
 import { useGameStore } from '../game/store'
 import type { Order, PendingChoice, RoyalDecree, RunState } from '../game/types'
+import { decreeMissCost } from './DecreeCard'
 import { Icon } from './Icon'
 import './queen-choice.css'
 
@@ -148,23 +149,19 @@ export function DecreeChoice({ run, choice }: { run: RunState; choice: PendingCh
 }
 
 function StreakNext({ streak }: { streak: number }) {
-  const bonus = decreeStreakBonus(streak)
-  if (bonus.reputation > 0) return <span className="is-good">Meet the next for +{bonus.reputation} reputation more.</span>
-  if (bonus.amber > 0) return <span className="is-good">Meet the next for +{bonus.amber} amber more.</span>
-  return null
+  const purse = decreeStreakBonus(streak)
+  return purse > 0 ? <span className="is-good">Meet the next for +{purse} amber more.</span> : null
 }
 
 function DecreeOption({ run, decree, onPick }: { run: RunState; decree: RoyalDecree; onPick: () => void }) {
   const def = DECREES[decree.defId]
   const goal = decreeGoal(decree)
   if (!def || !goal) return null
-  const mods = computeModifiers(run)
-  const missCost = Math.round(decreeMissImpatience(run) * 100) / 100
-  const reputation = Math.max(0, def.reputationReward + mods.decreeReputation)
+  const reputation = decreeReputation(run, def)
   // What the staffed producers make in the time allowed, at today's pace.
   const pace =
     goal.kind === 'produced'
-      ? Math.floor(productionRate(run, mods, goal.resource) * decree.timeLimit)
+      ? Math.floor(productionRate(run, computeModifiers(run), goal.resource) * decree.timeLimit)
       : null
   return (
     <button type="button" className="option queen-option" onClick={onPick}>
@@ -191,7 +188,7 @@ function DecreeOption({ run, decree, onPick }: { run: RunState; decree: RoyalDec
           </span>
         ) : null}
         <span className="is-bad">
-          Miss it: <Icon id="impatience" label="impatience" /> +{missCost}
+          Miss it: <Icon id="impatience" label="impatience" /> +{decreeMissCost(run)}
         </span>
       </div>
     </button>
