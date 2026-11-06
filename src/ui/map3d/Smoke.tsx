@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BUILDINGS } from '../../game/content/buildings'
+import { withRunCache } from '../../game/engine/runCache'
 import { frameDerived } from '../../game/frameDerived'
 import type { RunState } from '../../game/types'
 import { useHudValue } from '../mapShared'
@@ -75,6 +76,10 @@ type Emitter = [number, number, number]
 
 /** The hearth while lit, and every production chimney that is really working. */
 export function smokeEmitters(run: RunState, version: number): { key: string; value: Emitter[] } {
+  return withRunCache(run, () => emitters(run, version))
+}
+
+function emitters(run: RunState, version: number): { key: string; value: Emitter[] } {
   const derived = frameDerived(run, version)
   let key = run.coldHearth ? 'cold;' : 'lit;'
   const value: Emitter[] = run.coldHearth ? [] : [[0, 0.75, 0]]
