@@ -469,10 +469,8 @@ export function stepDepartures(s: RunState, dt: number): string[] {
         s.despair[sp] = -DEPARTURE_GRACE
         const victim = pickVictim(s, sp)
         if (!victim) continue
-        removeVillager(s, victim.id)
+        loseVillager(s, victim, 'left')
         departed.push(`${victim.name} the ${speciesSingular(sp)} left the settlement.`)
-        s.stats.villagersLost++
-        recordEvent(s, 'left', sp)
         addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
       }
     } else {
@@ -493,6 +491,13 @@ export function pickVictim(s: RunState, species?: SpeciesId): Villager | null {
   const victim = rng.pick(pool)
   s.rngCursor = rng.cursor()
   return victim
+}
+
+/** A villager gone for good: off the roster, counted, and on the timeline. */
+export function loseVillager(s: RunState, v: Villager, event: 'lost' | 'left' = 'lost'): void {
+  removeVillager(s, v.id)
+  s.stats.villagersLost++
+  recordEvent(s, event, v.species)
 }
 
 export function removeVillager(s: RunState, id: string): void {

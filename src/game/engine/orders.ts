@@ -14,7 +14,7 @@ import {
 import { pushLog } from './runLog'
 import { productionRate } from './forecast'
 import { computeModifiers } from './modifiers'
-import { grant, spend, storageUsed, totalHousing } from './queries'
+import { averageResolve, grantProduced, spend, totalHousing } from './queries'
 import { makeRng, type Rng } from './rng'
 import { addImpatience, addReputation } from './society'
 import { describeTimedGoal, goalCount, goalProgress } from './structure'
@@ -127,15 +127,6 @@ export function orderFeasible(goal: OrderGoal, s: RunState): boolean {
     default:
       return true
   }
-}
-
-/** Average resolve across the species living here (0 with nobody). */
-function averageResolve(s: RunState): number {
-  const present = s.speciesPool.filter((sp) =>
-    Object.values(s.villagers).some((v) => v.species === sp),
-  )
-  if (present.length === 0) return 0
-  return present.reduce((sum, sp) => sum + s.resolve[sp], 0) / present.length
 }
 
 /** Built buildings matching the goal's id or category. */
@@ -434,7 +425,7 @@ export function stepOrders(s: RunState): void {
     const reputation = orderReputation(s, order)
     addReputation(s, reputation)
     if (def.reward) {
-      s.stats.resourcesProduced += grant(s.stock, def.reward, s.storageCap, storageUsed(s))
+      grantProduced(s, def.reward)
     }
     pushLog(
       s,

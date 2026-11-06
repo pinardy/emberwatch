@@ -40,11 +40,11 @@ import {
 import { pushLog } from './runLog'
 import type { Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
-import { canAfford, grant, population, spend, storageUsed } from './queries'
+import { canAfford, edibleTotal, grantProduced, population, spend } from './queries'
 import { makeRng } from './rng'
 import { touchVillagers } from './runCache'
 import { addCondition, refreshCharterOffer, takeCharter, takeQueenChoice } from './structure'
-import { addImpatience, addReputation, pickVictim, removeVillager, unassign } from './society'
+import { addImpatience, addReputation, loseVillager, pickVictim, unassign } from './society'
 import { clearMultiplier } from './traits'
 import { recordEvent } from './timeline'
 
@@ -90,8 +90,7 @@ export function stepClearing(s: RunState, dt: number, mods: Modifiers): void {
     glade.discovered = true
 
     const loot = scaleBag(glade.reward, mods.gladeLoot)
-    const added = grant(s.stock, loot, s.storageCap, storageUsed(s))
-    s.stats.resourcesProduced += added
+    grantProduced(s, loot)
     s.hostility += HOSTILITY_PER_GLADE_CLEARED * mods.gladeHostility
 
     refreshDepositCaches(s)
@@ -203,12 +202,6 @@ export function describeOptionShortfall(
 }
 
 /** Units of food of any kind in the stockpile: what a `foodCost` is paid from. */
-export function edibleTotal(stock: ResourceBag): number {
-  let sum = 0
-  for (const id of EDIBLE) sum += stock[id] ?? 0
-  return sum
-}
-
 /**
  * Plain-text price of an option, e.g. "10 food, 5 Ale". Pure, so the UI can
  * show `foodCost` alongside the resource bag without knowing the rule.
@@ -252,8 +245,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
   if (option.cost) spend(s.stock, option.cost)
   if (option.foodCost) spendFood(s.stock, option.foodCost)
   if (option.gain) {
-    const added = grant(s.stock, option.gain, s.storageCap, storageUsed(s))
-    s.stats.resourcesProduced += added
+    grantProduced(s, option.gain)
   }
   if (option.hostility) s.hostility = Math.max(0, s.hostility + option.hostility)
   if (option.impatience) addImpatience(s, option.impatience)
@@ -262,9 +254,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
     for (let i = 0; i < option.villagerLoss; i++) {
       const victim = pickVictim(s)
       if (!victim) break
-      removeVillager(s, victim.id)
-      s.stats.villagersLost++
-      recordEvent(s, 'lost', victim.species)
+      loseVillager(s, victim)
       pushLog(s, `${victim.name} the ${speciesSingular(victim.species)} is lost.`, 'bad')
     }
   }
@@ -372,9 +362,7 @@ export function stepThreats(s: RunState, dt: number): void {
       for (let i = 0; i < strike.villagerLoss; i++) {
         const victim = pickVictim(s)
         if (!victim) break
-        removeVillager(s, victim.id)
-        s.stats.villagersLost++
-        recordEvent(s, 'lost', victim.species)
+        loseVillager(s, victim)
         addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
         parts.push(`${victim.name} is taken`)
       }
@@ -769,9 +757,6 @@ export function rerollChoice(s: RunState): string | null {
   pushLog(s, `The offer is redrawn for ${cost} amber.`, 'info')
   return null
 }
-
-// Orders live in ./orders; re-exported here for the tick and older imports.
-export { orderReputation, stepOrders } from './orders'
 
 // ---------------------------------------------------------------------------
 // Newcomers

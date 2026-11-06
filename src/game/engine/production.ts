@@ -69,10 +69,6 @@ export function refreshDepositCaches(s: RunState): void {
   }
 }
 
-// Adjacency moved to its own module (several partners per building); the
-// re-export keeps existing imports working.
-export { adjacencyMultiplier } from './adjacency'
-
 // ---------------------------------------------------------------------------
 // Terrain
 // ---------------------------------------------------------------------------
@@ -394,7 +390,7 @@ function doubleBag(bag: Recipe['outputs']): Recipe['outputs'] {
   return out
 }
 
-function hasLiveDeposit(s: RunState, b: BuildingInstance, id: DepositId): boolean {
+export function hasLiveDeposit(s: RunState, b: BuildingInstance, id: DepositId): boolean {
   const ids = b.depositsInRange[id]
   if (!ids || ids.length === 0) return false
   return ids.some((depositId) => {

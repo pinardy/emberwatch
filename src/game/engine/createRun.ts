@@ -24,19 +24,18 @@ import {
   MAX_IMPATIENCE,
   MAX_REPUTATION,
   ORDER_SLOTS,
-  SEASON_ORDER,
   YEAR_SECONDS,
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { offerBlueprint, offerCornerstone } from './events'
-import { offerWrit } from './orders'
+import { drawOrder, offerWrit } from './orders'
 import { defaultDecreeState } from './structure'
 import { emptyTimeline } from './timeline'
 import { defaultCaravan } from './trade'
-import { drawOrder } from './drawOrder'
 import { generateMap } from './worldgen'
 import { pushLog } from './runLog'
 import { computeModifiers, seasonLengthFor } from './modifiers'
+import { yearLengthFor } from './forecast'
 import { makeRng } from './rng'
 import { defaultFeats } from '../content/achievements'
 import {
@@ -253,7 +252,7 @@ export function createRun({
   // The first decree waits out Year 1 (DECREE_FIRST_DELAY is a base-length
   // year): follow the year this land actually has, so it still arrives as
   // Year 2 opens under Long Storms or an Early Frost.
-  state.decreeTimer += yearOneLength(landMods) - YEAR_SECONDS
+  state.decreeTimer += yearLengthFor(1, landMods) - YEAR_SECONDS
 
   // --- opening orders -------------------------------------------------------
   // Two standing orders, drawn to fit; the third slot is the founding writ,
@@ -289,11 +288,3 @@ export function createRun({
 
   return state
 }
-
-/** Seconds in Year 1 once season-length modifiers apply. */
-function yearOneLength(mods: ReturnType<typeof computeModifiers>): number {
-  return SEASON_ORDER.reduce((sum, season) => sum + seasonLengthFor(season, 1, mods), 0)
-}
-
-// Moved to their own modules (see there); re-exported for existing callers.
-export { drawOrder, pushLog }

@@ -1,6 +1,6 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE } from '../content/resources'
-import type { BuildingInstance, ResourceBag, ResourceId, RunState, Season } from '../types'
+import type { BuildingInstance, Recipe, ResourceBag, ResourceId, RunState, Season } from '../types'
 import {
   COMPLEX_FOOD_MULTIPLIER,
   HEARTH_FUEL_PER_SECOND,
@@ -9,7 +9,13 @@ import {
   SEASON_ORDER,
 } from './balance'
 import { computeModifiers, seasonLengthFor, type Modifiers } from './modifiers'
-import { countOutputs, seasonMultiplier, storageLimitFor, workRate } from './production'
+import {
+  countOutputs,
+  hasLiveDeposit,
+  seasonMultiplier,
+  storageLimitFor,
+  workRate,
+} from './production'
 import { activeRecipe, canAfford, storageUsed } from './queries'
 import {
   QUEEN_DEADLINE_SECONDS,
@@ -132,29 +138,7 @@ function mealValue(bag: ResourceBag): number {
  * bonus batch — but it never counts a farm's harvest during the Storm.
  */
 export function foodProductionRate(s: RunState, mods: Modifiers, season: Season): number {
-  // Some quirks work differently in the Storm, so rate workers in that season.
-  const inSeason: RunState =
-    s.season.season === season ? s : { ...s, season: { ...s.season, season } }
-  let rate = 0
-  for (const b of Object.values(s.buildings)) {
-    if (!b.built || b.paused || b.workers.length === 0) continue
-    const recipe = activeRecipe(b)
-    if (!recipe || recipe.seconds <= 0) continue
-    const net = mealValue(recipe.outputs) - mealValue(recipe.inputs)
-    if (net <= 0) continue
-    if (recipe.requiresDeposit) {
-      const live = (b.depositsInRange[recipe.requiresDeposit] ?? []).some((id) => {
-        const d = s.deposits[id]
-        return d && (d.amount === null || d.amount > 0)
-      })
-      if (!live) continue
-    }
-    if (!canAfford(s.stock, recipe.inputs)) continue
-    const multiplier = seasonMultiplier(b.defId, season, mods)
-    if (multiplier <= 0) continue
-    rate += (workRate(inSeason, b, mods) * multiplier * net) / recipe.seconds
-  }
-  return rate
+  return recipeRate(s, mods, season, (r) => mealValue(r.outputs) - mealValue(r.inputs))
 }
 
 /**
@@ -165,24 +149,35 @@ export function foodProductionRate(s: RunState, mods: Modifiers, season: Season)
  * producer whose deposit has run dry.
  */
 export function productionRate(s: RunState, mods: Modifiers, resource: ResourceId): number {
+  return recipeRate(s, mods, s.season.season, (r) => (r.outputs as ResourceBag)[resource] ?? 0)
+}
+
+/**
+ * Sum over staffed, running producers of `valueOf(recipe)` per second in
+ * `season`. Skips recipes worth nothing, a dry deposit, missing inputs and an
+ * off-season multiplier; workers are rated as if in `season` (some quirks work
+ * differently in the Storm).
+ */
+function recipeRate(
+  s: RunState,
+  mods: Modifiers,
+  season: Season,
+  valueOf: (recipe: Recipe) => number,
+): number {
+  const inSeason: RunState =
+    s.season.season === season ? s : { ...s, season: { ...s.season, season } }
   let rate = 0
   for (const b of Object.values(s.buildings)) {
     if (!b.built || b.paused || b.workers.length === 0) continue
     const recipe = activeRecipe(b)
     if (!recipe || recipe.seconds <= 0) continue
-    const out = (recipe.outputs as ResourceBag)[resource] ?? 0
-    if (out <= 0) continue
-    if (recipe.requiresDeposit) {
-      const live = (b.depositsInRange[recipe.requiresDeposit] ?? []).some((id) => {
-        const d = s.deposits[id]
-        return d && (d.amount === null || d.amount > 0)
-      })
-      if (!live) continue
-    }
+    const value = valueOf(recipe)
+    if (value <= 0) continue
+    if (recipe.requiresDeposit && !hasLiveDeposit(s, b, recipe.requiresDeposit)) continue
     if (!canAfford(s.stock, recipe.inputs)) continue
-    const multiplier = seasonMultiplier(b.defId, s.season.season, mods)
+    const multiplier = seasonMultiplier(b.defId, season, mods)
     if (multiplier <= 0) continue
-    rate += (workRate(s, b, mods) * multiplier * out) / recipe.seconds
+    rate += (workRate(inSeason, b, mods) * multiplier * value) / recipe.seconds
   }
   return rate
 }
@@ -367,13 +362,8 @@ export function buildingStatus(
   // A ward is staffed only when the forest needs calming; empty is not a fault.
   if (b.workers.length === 0) return def.ward ? { kind: 'none' } : { kind: 'noWorkers' }
 
-  if (recipe.requiresDeposit) {
-    const ids = b.depositsInRange[recipe.requiresDeposit] ?? []
-    const live = ids.some((id) => {
-      const d = s.deposits[id]
-      return d && (d.amount === null || d.amount > 0)
-    })
-    if (!live) return { kind: 'noDeposit' }
+  if (recipe.requiresDeposit && !hasLiveDeposit(s, b, recipe.requiresDeposit)) {
+    return { kind: 'noDeposit' }
   }
 
   const multiplier = seasonMultiplier(b.defId, s.season.season, mods)
