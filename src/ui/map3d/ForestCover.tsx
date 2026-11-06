@@ -6,6 +6,7 @@ import type { Glade, GladeKind } from '../../game/types'
 import { GLADE_KIND_STYLE } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import { NO_RAYCAST, hash01 } from './models'
+import { GEOS } from './parts'
 
 /**
  * The wild forest blanketing every glade you have not cleared yet. One
@@ -65,39 +66,89 @@ export function ForestCover({ glades }: { glades: Glade[] }) {
 const DISCOVERED_CANOPY = Object.fromEntries(
   Object.entries(GLADE_KIND_STYLE).map(([kind, style]) => [kind, new THREE.Color(style.canopy)]),
 ) as Record<GladeKind, THREE.Color>
-const HIDDEN_CANOPY = new THREE.Color('#1b2b22')
+const HIDDEN_CANOPY = new THREE.Color('#22362a')
+const HIDDEN_BROADLEAF = new THREE.Color('#2b3826')
 
+const TREE_MAT = new THREE.MeshStandardMaterial({
+  color: '#ffffff',
+  roughness: 1,
+  flatShading: true,
+  vertexColors: true,
+})
+
+/** Broadleaf share of the woods: a mixed forest reads less like a field of cones. */
+const BROADLEAF_SHARE = 0.32
+
+/**
+ * The forest as two instanced meshes (layered conifers and round broadleaves),
+ * each tree tinted by its glade kind with a little per-tree variation in
+ * shade and hue so the canopy is not one flat colour.
+ */
 function ForestInstances({ trees }: { trees: TreeInstance[] }) {
-  const mesh = useRef<THREE.InstancedMesh>(null)
-
-  useLayoutEffect(() => {
-    const instanced = mesh.current
-    if (!instanced) return
-    const helper = new THREE.Object3D()
-    trees.forEach((tree, i) => {
-      helper.position.set(tree.x, tree.s * 0.5, tree.z)
-      helper.scale.set(tree.s, tree.s, tree.s)
-      helper.rotation.y = tree.s * 7 // pseudo-random facing, stable per tree
-      helper.updateMatrix()
-      instanced.setMatrixAt(i, helper.matrix)
-      instanced.setColorAt(i, tree.discovered ? DISCOVERED_CANOPY[tree.kind] : HIDDEN_CANOPY)
-    })
-    instanced.instanceMatrix.needsUpdate = true
-    if (instanced.instanceColor) instanced.instanceColor.needsUpdate = true
+  const conifer = useRef<THREE.InstancedMesh>(null)
+  const broadleaf = useRef<THREE.InstancedMesh>(null)
+  const split = useMemo(() => {
+    const c: TreeInstance[] = []
+    const b: TreeInstance[] = []
+    for (const tree of trees) (treeNoise(tree, 5) < BROADLEAF_SHARE ? b : c).push(tree)
+    return { c, b }
   }, [trees])
 
+  useLayoutEffect(() => {
+    const helper = new THREE.Object3D()
+    const tint = new THREE.Color()
+    const fill = (mesh: THREE.InstancedMesh | null, list: TreeInstance[], broad: boolean) => {
+      if (!mesh) return
+      list.forEach((tree, i) => {
+        const h = treeNoise(tree, 1)
+        const s = tree.s * (broad ? 1.05 : 1.2)
+        helper.position.set(tree.x, 0, tree.z)
+        helper.scale.set(s * (0.9 + h * 0.2), s * (0.9 + treeNoise(tree, 2) * 0.3), s * (0.9 + h * 0.2))
+        helper.rotation.set(0, treeNoise(tree, 3) * Math.PI * 2, 0)
+        helper.updateMatrix()
+        mesh.setMatrixAt(i, helper.matrix)
+        const base = tree.discovered ? DISCOVERED_CANOPY[tree.kind] : broad ? HIDDEN_BROADLEAF : HIDDEN_CANOPY
+        tint.copy(base)
+        if (broad && tree.discovered) tint.offsetHSL(0.03, -0.02, 0.03)
+        tint.offsetHSL((treeNoise(tree, 4) - 0.5) * 0.04, 0, (h - 0.5) * 0.08)
+        mesh.setColorAt(i, tint)
+      })
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+      mesh.computeBoundingSphere()
+    }
+    fill(conifer.current, split.c, false)
+    fill(broadleaf.current, split.b, true)
+  }, [split])
+
   return (
-    <instancedMesh
-      ref={mesh}
-      args={[undefined, undefined, trees.length]}
-      castShadow
-      raycast={NO_RAYCAST}
-      frustumCulled={false}
-    >
-      <coneGeometry args={[0.42, 1.15, 6]} />
-      <meshStandardMaterial color="#ffffff" roughness={1} />
-    </instancedMesh>
+    <>
+      {split.c.length > 0 && (
+        <instancedMesh
+          ref={conifer}
+          args={[GEOS.conifer, TREE_MAT, split.c.length]}
+          castShadow
+          receiveShadow={false}
+          raycast={NO_RAYCAST}
+        />
+      )}
+      {split.b.length > 0 && (
+        <instancedMesh
+          ref={broadleaf}
+          args={[GEOS.broadleaf, TREE_MAT, split.b.length]}
+          castShadow
+          receiveShadow={false}
+          raycast={NO_RAYCAST}
+        />
+      )}
+    </>
   )
+}
+
+/** Stable per-tree noise in [0, 1). */
+function treeNoise(tree: TreeInstance, salt: number): number {
+  const v = Math.sin(tree.x * 12.9898 + tree.z * 78.233 + salt * 37.719) * 43758.5453
+  return v - Math.floor(v)
 }
 
 // ---------------------------------------------------------------------------

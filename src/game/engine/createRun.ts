@@ -1,6 +1,5 @@
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
 import { citadelLoadout, clampEdict, edictLabel, edictModifiers } from '../content/meta'
-import { ORDER_LIST } from '../content/orders'
 import {
   SPECIES,
   STARTING_SPECIES,
@@ -11,7 +10,6 @@ import type {
   BuildingInstance,
   MetaState,
   OngoingEffect,
-  Order,
   ResourceBag,
   ResourceId,
   RunState,
@@ -33,7 +31,9 @@ import { offerBlueprint, offerCornerstone } from './events'
 import { defaultDecreeState } from './structure'
 import { emptyTimeline } from './timeline'
 import { defaultCaravan } from './trade'
-import { generateMap } from './mapgen'
+import { drawOrder } from './drawOrder'
+import { generateMap } from './worldgen'
+import { pushLog } from './runLog'
 import { computeModifiers, seasonLengthFor } from './modifiers'
 import { makeRng } from './rng'
 import { defaultFeats } from '../content/achievements'
@@ -288,46 +288,5 @@ function yearOneLength(mods: ReturnType<typeof computeModifiers>): number {
   return SEASON_ORDER.reduce((sum, season) => sum + seasonLengthFor(season, 1, mods), 0)
 }
 
-/** Draws a fresh order the run has not seen yet and appends it. */
-export function drawOrder(s: RunState): Order | null {
-  const rng = makeRng(s.seed, s.rngCursor)
-  const activeDefIds = s.orders.filter((o) => !o.complete).map((o) => o.defId)
-  let pool = ORDER_LIST.filter(
-    (d) => !s.ordersSeen.includes(d.id) && !activeDefIds.includes(d.id),
-  )
-  // Once every order has been seen, allow repeats rather than running dry.
-  if (pool.length === 0) {
-    pool = ORDER_LIST.filter((d) => !activeDefIds.includes(d.id))
-  }
-  if (pool.length === 0) {
-    s.rngCursor = rng.cursor()
-    return null
-  }
-  const def = rng.pick(pool)
-  s.rngCursor = rng.cursor()
-  s.ordersSeen.push(def.id)
-
-  const order: Order = {
-    id: `o${s.orderCounter++}`,
-    defId: def.id,
-    progress: 0,
-    complete: false,
-  }
-  s.orders.push(order)
-  return order
-}
-
-export function pushLog(
-  s: RunState,
-  text: string,
-  tone: 'info' | 'good' | 'bad' = 'info',
-): void {
-  s.log.unshift({
-    id: s.logCounter++,
-    year: s.season.year,
-    season: s.season.season,
-    text,
-    tone,
-  })
-  if (s.log.length > 80) s.log.length = 80
-}
+// Moved to their own modules (see there); re-exported for existing callers.
+export { drawOrder, pushLog }

@@ -13,8 +13,9 @@ import {
   secondsUntilStorm,
   storageBlocked,
   stormFoodForecast,
+  type StormFoodForecast,
 } from './forecast'
-import { computeModifiers } from './modifiers'
+import { computeModifiers, type Modifiers } from './modifiers'
 import { isFoodCamp } from './onboarding'
 import {
   activeRecipe,
@@ -40,7 +41,18 @@ export interface Warning {
   severity: 'danger' | 'caution'
 }
 
-export function collectWarnings(s: RunState): Warning[] {
+/**
+ * Values a caller has already worked out for this state, so the HUD's shared
+ * per-step bundle does not compute them twice. `stormFood` may be a throttled
+ * stand-in for `stormFoodForecast`.
+ */
+export interface WarningInputs {
+  mods?: Modifiers
+  blocked?: BuildingInstance[]
+  stormFood?: (s: RunState, mods: Modifiers) => StormFoodForecast
+}
+
+export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warning[] {
   const out: Warning[] = []
   if (s.phase !== 'playing') return out
 
@@ -82,7 +94,7 @@ export function collectWarnings(s: RunState): Warning[] {
     })
   }
 
-  const mods = computeModifiers(s)
+  const mods = inputs.mods ?? computeModifiers(s)
 
   // Say so *before* the hearth goes out, while there is still time to chop.
   // The forecast counts every lit brazier, which shares the woodpile.
@@ -125,7 +137,7 @@ export function collectWarnings(s: RunState): Warning[] {
       // still a Drizzle or Clearance left to stock up in.
       const untilStorm = secondsUntilStorm(s)
       if (untilStorm !== null && untilStorm <= STORM_FOOD_WARNING_LEAD) {
-        const storm = stormFoodForecast(s, mods)
+        const storm = (inputs.stormFood ?? stormFoodForecast)(s, mods)
         if (storm.shortfall >= 1) {
           out.push({
             id: 'food-storm',
@@ -157,7 +169,7 @@ export function collectWarnings(s: RunState): Warning[] {
   }
 
   // A full stockpile silently halts every producer at the brim.
-  const blocked = storageBlocked(s, mods)
+  const blocked = inputs.blocked ?? storageBlocked(s, mods)
   if (blocked.length > 0) {
     out.push({
       id: 'storage-full',

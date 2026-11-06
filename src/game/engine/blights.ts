@@ -6,7 +6,7 @@ import {
   STORM_BLIGHT_FROM_YEAR,
   STORM_BLIGHT_MIN_HOSTILITY,
 } from './balance'
-import { pushLog } from './createRun'
+import { pushLog } from './runLog'
 import { makeRng } from './rng'
 import { addCondition, applyOutcome } from './structure'
 

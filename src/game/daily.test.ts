@@ -140,7 +140,7 @@ describe('the daily seed', () => {
     expect(isDateKey(20261105)).toBe(false)
   })
 
-  it('plays the fixed edict with no Citadel upgrades, whatever the Citadel owns', () => {
+  it('plays the fixed edict with no Citadel upgrades, whatever the Citadel owns', async () => {
     const day = dailyExpedition('2026-11-05')
     const rich = {
       ...defaultMeta(),
@@ -154,7 +154,7 @@ describe('the daily seed', () => {
       edictUnlocked: 7,
     }
     useGameStore.setState({ meta: rich })
-    useGameStore.getState().startDaily(NOV5)
+    await useGameStore.getState().startDaily(NOV5)
     const run = useGameStore.getState().run!
     expect(run.daily).toBe('2026-11-05')
     expect(run.seed).toBe(day.seed)

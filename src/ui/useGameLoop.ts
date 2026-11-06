@@ -23,11 +23,14 @@ export function useGameLoop(active: boolean): void {
     const step = (now: number) => {
       const dt = Math.min((now - lastFrame.current) / 1000, MAX_FRAME_REAL_SECONDS)
       lastFrame.current = now
-      useGameStore.getState().advance(dt)
+      // The frame time throttles the HUD clock (see `hudVersion`).
+      useGameStore.getState().advance(dt, now)
 
       if (now - lastSave.current > AUTOSAVE_INTERVAL_MS) {
         lastSave.current = now
-        useGameStore.getState().saveNow()
+        // In idle time, not inside this frame; tab hide and pagehide below
+        // still save synchronously.
+        useGameStore.getState().saveSoon()
       }
       frame = requestAnimationFrame(step)
     }

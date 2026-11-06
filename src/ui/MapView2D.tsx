@@ -1,41 +1,42 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { IconId } from '../art/icons'
 import { BUILDING_ART, DEPOSIT_ART, GLADE_ART } from '../game/content/art'
 import { STATUS_BADGE_ART } from '../game/content/artFamilies'
 import { BUILDINGS } from '../game/content/buildings'
-import { canPlaceBuilding, footprintOf } from '../game/engine/actions'
+import { canPlaceBuilding } from '../game/engine/actions'
 import { describePlacement } from '../game/engine/placement'
-import { warmthSources } from '../game/engine/queries'
 import { ROAD_TOOL, describeRoadTool, type RoadPreview } from '../game/engine/roads'
-import { displayName, workerSlotsOf } from '../game/engine/upgrades'
-import { useGameStore, useRun } from '../game/store'
-import type { GladeKind } from '../game/types'
-import {
-  DEPOSIT_TINT,
-  GLADE_KIND_STYLE,
-  MAP_KEYS,
-  STATUS_BADGE,
-  buildingStatusKind,
-  gladeAccessText,
-  gladeFill,
-  gladeLook,
-  gladePlateInfo,
-  isColdHousing,
-  isUnlitWarmthSource,
-  tierMark,
-  upgradeFraction,
-  useCameraFocus,
-  useMapKey,
-  useMapOverlays,
-  useWarmthRingVisible,
-  type GladeAccess,
-  type StatusContext,
-} from './mapShared'
+import { useGameStore } from '../game/store'
+import type { RunState, Vec2 } from '../game/types'
+import { MAP_KEYS, useCameraFocus, useMapKey, useMapOverlays } from './mapShared'
 import { panDirectionOf } from './usePanKeys'
-import { RoadGhost2D, RoadLayer2D, VillagerDots2D } from './MapLayers2D'
+import {
+  BuildGhost2D,
+  DepositLayer2D,
+  GladeLayer2D,
+  GladePlateLayer2D,
+  ObstacleLayer2D,
+  RoadGhost2D,
+  RoadLayer2D,
+  VillagerCanvas2D,
+  WarmthLayer2D,
+  WeatherGround2D,
+  type ViewBoxRect,
+} from './MapLayers2D'
+import { BuildingLayer2D } from './MapBuildings2D'
+import {
+  MapInteractionContext,
+  S,
+  ViewBusContext,
+  setGhost,
+  useGhost,
+  type MapInteraction,
+  type MapView,
+  type ViewBus,
+} from './map2dState'
 import { RoadBanner } from './RoadTool'
-import { roadKey, villagerRouteKey } from './map3d/layerKeys'
-import { Icon, IconSymbols, IconUse } from './Icon'
+import { Icon, IconSymbols } from './Icon'
+import './map2d.css'
 
 /** Every icon the 2D map stamps, defined once as `<symbol>`s. */
 const MAP_SYMBOLS: IconId[] = [
@@ -46,55 +47,78 @@ const MAP_SYMBOLS: IconId[] = [
     ...Object.values(STATUS_BADGE_ART),
     'snowflake',
     'upArrow',
+    'crag',
+    'marsh',
+    'mono/road',
   ] satisfies IconId[]),
 ]
-/** Smallest icon on the 2D map, in SVG units (the old emoji were 18px text). */
-const MAP_ICON = 22
 
-/** Pixels per world unit inside the SVG coordinate system. */
-const S = 30
 const PAD = 2 * S
 const MIN_SCALE = 0.45
 const MAX_SCALE = 2.4
 
 /**
  * 2D fallback renderer: the same continuous world as the 3D view, drawn as
- * SVG polygons and circles. Used where WebGL is missing and in tests.
+ * SVG polygons and plates, with the villagers on a canvas above. Used where
+ * WebGL is missing and in tests.
+ *
+ * This component renders once per run. It never subscribes to the sim's
+ * tick counter: each layer subscribes to exactly what it draws (see
+ * `MapLayers2D`), the camera is written to the transform group directly, and
+ * the build ghost lives in its own little store.
  */
 export function MapView2D() {
-  const run = useRun()
-  const buildMode = useGameStore((s) => s.buildMode)
-  const showWarmth = useWarmthRingVisible()
-  const selectedBuilding = useGameStore((s) => s.selectedBuilding)
-  const selectedDeposit = useGameStore((s) => s.selectedDeposit)
-  const selectedGlade = useGameStore((s) => s.selectedGlade)
+  const run = useGameStore((s) => s.run)
+  if (!run) return null
+  return <MapScene2D run={run} />
+}
 
+const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
+  const buildMode = useGameStore((s) => s.buildMode)
+  const paused = useGameStore(isStill)
   const svgRef = useRef<SVGSVGElement>(null)
+  const viewRef = useRef<SVGGElement>(null)
   const worldRef = useRef<SVGGElement>(null)
-  const [view, setView] = useState({ x: 0, y: 0, scale: 1 })
+  const view = useRef<MapView>({ x: 0, y: 0, scale: 1 })
   const drag = useRef<{ id: number; x: number; y: number; moved: number } | null>(null)
   const pinch = useRef<Map<number, { x: number; y: number }>>(new Map())
   const pinchDistance = useRef(0)
   /** Set when a pointer-up ends a pan, so the trailing click is ignored. */
   const suppressClick = useRef(false)
-  /** Build-mode ghost under the mouse: world position, screen anchor, verdict. */
-  const [ghost, setGhost] = useState<{
-    pos: { x: number; y: number }
-    screen: { x: number; y: number }
-    ok: boolean
-    hint: string | null
-    /** Road tool: the stretch it would lay or lift. */
-    road?: RoadPreview
-  } | null>(null)
+
+  // ---- camera -------------------------------------------------------------
+  const listeners = useRef(new Set<() => void>())
+  const bus = useMemo<ViewBus>(
+    () => ({
+      get: () => view.current,
+      subscribe: (listener) => {
+        listeners.current.add(listener)
+        return () => listeners.current.delete(listener)
+      },
+    }),
+    [],
+  )
+  /** Writes the camera to the transform group: no React render involved. */
+  const applyView = (next: MapView) => {
+    view.current = next
+    viewRef.current?.setAttribute('transform', `translate(${next.x} ${next.y}) scale(${next.scale})`)
+    for (const listener of listeners.current) listener()
+  }
+  const zoomBy = (factor: number) =>
+    applyView({ ...view.current, scale: clamp(view.current.scale * factor, MIN_SCALE, MAX_SCALE) })
+  const panBy = (dx: number, dy: number) =>
+    applyView({ ...view.current, x: view.current.x + dx, y: view.current.y + dy })
+
+  // A new run starts centred, with no ghost in hand.
+  useLayoutEffect(() => {
+    applyView({ x: 0, y: 0, scale: 1 })
+    setGhost(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run])
 
   useEffect(() => {
     if (!buildMode) setGhost(null)
   }, [buildMode])
-
-  // Centre the camera whenever a new run is shown.
-  useEffect(() => {
-    setView({ x: 0, y: 0, scale: 1 })
-  }, [run?.seed])
 
   /*
    * Wheel zoom has to be a native listener registered with `{ passive: false }`.
@@ -108,21 +132,19 @@ export function MapView2D() {
     if (!svg) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      setView((v) => ({
-        ...v,
-        scale: clamp(v.scale * (e.deltaY < 0 ? 1.12 : 0.89), MIN_SCALE, MAX_SCALE),
-      }))
+      zoomBy(e.deltaY < 0 ? 1.12 : 0.89)
     }
     svg.addEventListener('wheel', onWheel, { passive: false })
     return () => svg.removeEventListener('wheel', onWheel)
-  }, [run?.seed])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /*
    * WASD / arrow panning. Each keydown nudges the view; holding the key pans
    * via the OS key-repeat. Pressing "right" moves the camera right, so the
    * world slides left. H jumps back home to the hearth; R toggles warmth.
    */
-  useMapKey(MAP_KEYS.home, () => setView({ x: 0, y: 0, scale: 1 }))
+  useMapKey(MAP_KEYS.home, () => applyView({ x: 0, y: 0, scale: 1 }))
   useMapKey(MAP_KEYS.warmth, () => useMapOverlays.getState().toggleWarmth())
   useEffect(() => {
     const STEP = 46
@@ -130,18 +152,91 @@ export function MapView2D() {
       const direction = panDirectionOf(e)
       if (!direction || direction === 'rotateLeft' || direction === 'rotateRight') return
       if (e.code.startsWith('Arrow')) e.preventDefault()
-      setView((v) => ({
-        ...v,
-        x: v.x + (direction === 'left' ? STEP : direction === 'right' ? -STEP : 0),
-        y: v.y + (direction === 'up' ? STEP : direction === 'down' ? -STEP : 0),
-      }))
+      panBy(
+        direction === 'left' ? STEP : direction === 'right' ? -STEP : 0,
+        direction === 'up' ? STEP : direction === 'down' ? -STEP : 0,
+      )
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Fly-to requests from elsewhere in the UI (threat cards, the minimap).
-  useCameraFocus((p) => setView((v) => ({ ...v, x: -p.x * S * v.scale, y: -p.y * S * v.scale })))
+  useCameraFocus((p) => {
+    const v = view.current
+    applyView({ ...v, x: -p.x * S * v.scale, y: -p.y * S * v.scale })
+  })
+
+  // ---- pointer ------------------------------------------------------------
+
+  /** Converts a pointer position to world coordinates via the transform group. */
+  const toWorld = (e: { clientX: number; clientY: number }): Vec2 | null => {
+    const world = worldRef.current
+    if (!world) return null
+    const ctm = world.getScreenCTM?.()
+    if (!ctm) return null // jsdom — tests drive placement through the store
+    const point = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
+    return { x: point.x / S, y: point.y / S }
+  }
+
+  const interaction = useMemo<MapInteraction>(
+    () => ({
+      consumeSuppressedClick: () => {
+        if (!suppressClick.current) return false
+        suppressClick.current = false
+        return true
+      },
+      toWorld: (e) => toWorld(e),
+    }),
+    [],
+  )
+
+  /*
+   * Build-mode hover is evaluated at most once per animation frame, from the
+   * latest pointer position: placement checks and the road tool's network
+   * preview never run more often than the screen can show them.
+   */
+  const hover = useRef<{ clientX: number; clientY: number } | null>(null)
+  const hoverFrame = useRef(0)
+  const evaluateHover = () => {
+    hoverFrame.current = 0
+    const at = hover.current
+    const state = useGameStore.getState()
+    const current = state.run
+    if (!at || !state.buildMode || !current) return
+    const pos = toWorld(at)
+    const wrap = svgRef.current?.parentElement?.getBoundingClientRect()
+    if (!pos || !wrap) return
+    const screen = { x: at.clientX - wrap.left, y: at.clientY - wrap.top }
+    if (state.buildMode === ROAD_TOOL) {
+      const road = cachedRoadPreview(current, state.roadAnchor, pos, state.roadErase)
+      setGhost({
+        pos: road.to,
+        screen,
+        ok: road.ok,
+        hint: road.reason ?? (road.parts.length > 0 ? road.parts.join(' · ') : null),
+        road,
+      })
+      return
+    }
+    const reason = canPlaceBuilding(current, state.buildMode, pos)
+    const parts = describePlacement(current, state.buildMode, pos).parts
+    setGhost({ pos, screen, ok: reason === null, hint: reason ?? (parts.length > 0 ? parts.join(' · ') : null) })
+  }
+  const queueHover = (e: React.PointerEvent) => {
+    hover.current = { clientX: e.clientX, clientY: e.clientY }
+    if (hoverFrame.current) return
+    if (typeof requestAnimationFrame === 'function') {
+      hoverFrame.current = requestAnimationFrame(evaluateHover)
+    } else evaluateHover()
+  }
+  useEffect(
+    () => () => {
+      if (hoverFrame.current) cancelAnimationFrame(hoverFrame.current)
+    },
+    [],
+  )
 
   const onPointerDown = (e: React.PointerEvent) => {
     pinch.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -153,34 +248,7 @@ export function MapView2D() {
 
   const onPointerMove = (e: React.PointerEvent) => {
     // Mouse hover aims the build ghost; touch keeps tap-to-place.
-    if (buildMode === ROAD_TOOL && run && e.pointerType !== 'touch' && !drag.current) {
-      const pos = toWorld(e)
-      const wrap = svgRef.current?.parentElement?.getBoundingClientRect()
-      if (pos && wrap) {
-        const { roadAnchor, roadErase } = useGameStore.getState()
-        const road = describeRoadTool(run, roadAnchor, pos, roadErase)
-        setGhost({
-          pos: road.to,
-          screen: { x: e.clientX - wrap.left, y: e.clientY - wrap.top },
-          ok: road.ok,
-          hint: road.reason ?? (road.parts.length > 0 ? road.parts.join(' · ') : null),
-          road,
-        })
-      }
-    } else if (buildMode && run && e.pointerType !== 'touch' && !drag.current) {
-      const pos = toWorld(e)
-      const wrap = svgRef.current?.parentElement?.getBoundingClientRect()
-      if (pos && wrap) {
-        const reason = canPlaceBuilding(run, buildMode, pos)
-        const parts = describePlacement(run, buildMode, pos).parts
-        setGhost({
-          pos,
-          screen: { x: e.clientX - wrap.left, y: e.clientY - wrap.top },
-          ok: reason === null,
-          hint: reason ?? (parts.length > 0 ? parts.join(' · ') : null),
-        })
-      }
-    }
+    if (buildMode && e.pointerType !== 'touch' && !drag.current) queueHover(e)
     if (!pinch.current.has(e.pointerId)) return
     const prev = pinch.current.get(e.pointerId)!
     pinch.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -191,9 +259,7 @@ export function MapView2D() {
       const distance = Math.hypot(a.x - b.x, a.y - b.y)
       const last = pinchDistance.current
       pinchDistance.current = distance
-      if (last > 0) {
-        setView((v) => ({ ...v, scale: clamp(v.scale * (distance / last), MIN_SCALE, MAX_SCALE) }))
-      }
+      if (last > 0) zoomBy(distance / last)
       return
     }
 
@@ -201,7 +267,7 @@ export function MapView2D() {
     const dx = e.clientX - prev.x
     const dy = e.clientY - prev.y
     drag.current.moved += Math.abs(dx) + Math.abs(dy)
-    setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
+    panBy(dx, dy)
   }
 
   const onPointerUp = (e: React.PointerEvent) => {
@@ -213,472 +279,163 @@ export function MapView2D() {
     }
   }
 
-  /** Converts a mouse event to world coordinates via the transform group. */
-  const toWorld = (e: React.MouseEvent): { x: number; y: number } | null => {
-    const world = worldRef.current
-    const svg = svgRef.current
-    if (!world || !svg) return null
-    const ctm = world.getScreenCTM?.()
-    if (!ctm) return null // jsdom — tests drive placement through the store
-    const point = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
-    return { x: point.x / S, y: point.y / S }
-  }
-
   /** Clicks on open ground: place in build mode, deselect otherwise. */
   const onMapClick = (e: React.MouseEvent) => {
-    if (!run) return
-    if (suppressClick.current) {
-      suppressClick.current = false
-      return
-    }
+    if (interaction.consumeSuppressedClick()) return
     const state = useGameStore.getState()
     const pos = toWorld(e)
     if (!pos) return
     if (state.buildMode) {
       state.place(pos)
-      if (state.buildMode === ROAD_TOOL) refreshRoadGhost()
+      // After a road click the anchor moved: redraw the ghost from it.
+      if (state.buildMode === ROAD_TOOL && useGhost.getState().ghost) {
+        hover.current = { clientX: e.clientX, clientY: e.clientY }
+        evaluateHover()
+      }
       return
     }
     state.clearSelection()
   }
 
-  /** After a road click the anchor moved: redraw the ghost from it. */
-  const refreshRoadGhost = () => {
-    const { run: current, roadAnchor, roadErase } = useGameStore.getState()
-    if (!current) return
-    setGhost((g) => {
-      if (!g) return g
-      const road = describeRoadTool(current, roadAnchor, g.pos, roadErase)
-      return { ...g, ok: road.ok, hint: road.reason ?? road.parts.join(' · '), road }
-    })
-  }
-
-  if (!run) return null
-
+  // ---- scene --------------------------------------------------------------
   const w = run.world.width * S
   const h = run.world.height * S
-  const viewBox = `${-w / 2 - PAD} ${-h / 2 - PAD} ${w + PAD * 2} ${h + PAD * 2}`
-  const glades = Object.values(run.glades)
-  const statusContext: StatusContext = {}
-  const sources = warmthSources(run)
-  const buildDef = buildMode ? BUILDINGS[buildMode] : undefined
+  const box = useMemo<ViewBoxRect>(
+    () => ({ x: -w / 2 - PAD, y: -h / 2 - PAD, w: w + PAD * 2, h: h + PAD * 2 }),
+    [w, h],
+  )
 
   return (
-    <div className="map-wrap">
-      <svg
-        ref={svgRef}
-        className="map"
-        viewBox={viewBox}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onPointerLeave={() => setGhost(null)}
-        onClick={onMapClick}
-        onContextMenu={(e) => {
-          // Right-click ends the road being laid, then puts the tool away.
-          if (!useGameStore.getState().buildMode) return
-          e.preventDefault()
-          useGameStore.getState().cancelBuildStep()
-          setGhost(null)
-        }}
-        role="application"
-        aria-label="Settlement map"
-      >
-        <IconSymbols ids={MAP_SYMBOLS} />
-        <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
-          <g ref={worldRef}>
-            {/* The forest beyond the world's edge. */}
-            <rect
-              x={-w / 2 - PAD}
-              y={-h / 2 - PAD}
-              width={w + PAD * 2}
-              height={h + PAD * 2}
-              fill="#0a0e11"
-            />
-
-            {glades.map((glade) => {
-              const look = gladeLook(glade)
-              const points = glade.polygon.map((p) => `${p.x * S},${p.y * S}`).join(' ')
-              return (
-                <polygon
-                  key={glade.id}
-                  points={points}
-                  className={`glade-poly is-${look} ${selectedGlade === glade.id ? 'is-selected' : ''}`}
-                  fill={gladeFill(glade, '2d')}
-                  onClick={(e) => {
-                    if (look === 'fogged') {
-                      e.stopPropagation()
-                      if (!suppressClick.current) {
-                        useGameStore.getState().selectGlade(glade.id)
-                      } else {
-                        suppressClick.current = false
-                      }
-                    }
-                    // Cleared/hidden ground falls through to the map handler.
-                  }}
-                />
-              )
-            })}
-
-            {/* Kind borders on fogged glades: solid, dashed or dotted. */}
-            {glades.map((glade) =>
-              gladeLook(glade) === 'fogged' ? (
-                <GladeEdge2D
-                  key={`edge-${glade.id}`}
-                  id={glade.id}
-                  points={glade.polygon.map((p) => `${p.x * S},${p.y * S}`).join(' ')}
-                  kind={glade.kind}
-                  access={gladePlateInfo(run, glade).access}
-                />
-              ) : null,
-            )}
-
-            {/* Every fire's reach: toggled on (R / 🔥), placing housing or a
-                brazier, or inspecting a fire or a home. */}
-            {showWarmth &&
-              warmthSources(run).map((w) => (
-                <circle
-                  key={`warmth-${w.id}`}
-                  cx={w.pos.x * S}
-                  cy={w.pos.y * S}
-                  r={w.radius * S}
-                  className="warmth-ring"
-                />
-              ))}
-
-            <RoadLayer2D run={run} scale={S} roadsKey={roadKey(run)} />
-
-            {/* Obstacles on cleared ground. */}
-            {run.obstacles.map((o) =>
-              run.glades[o.gladeId]?.cleared ? (
-                <circle
-                  key={o.id}
-                  cx={o.pos.x * S}
-                  cy={o.pos.y * S}
-                  r={o.radius * S}
-                  className={`obstacle is-${o.kind}`}
-                />
-              ) : null,
-            )}
-
-            {/* Deposits on cleared ground. */}
-            {Object.values(run.deposits).map((d) => {
-              if (!run.glades[d.gladeId]?.cleared) return null
-              const cx = d.pos.x * S
-              const cy = d.pos.y * S
-              return (
-                <g
-                  key={d.id}
-                  className={`deposit ${selectedDeposit === d.id ? 'is-selected' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (suppressClick.current) {
-                      suppressClick.current = false
-                      return
-                    }
-                    useGameStore.getState().selectDeposit(d.id)
-                  }}
-                >
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={d.radius * S}
-                    className="deposit-disc"
-                    style={{ stroke: DEPOSIT_TINT[d.kind], strokeOpacity: 0.7 }}
-                  />
-                  <IconUse
-                    id={DEPOSIT_ART[d.kind]}
-                    x={cx}
-                    y={cy}
-                    size={Math.max(MAP_ICON, d.radius * S * 1.1)}
-                  />
-                  {d.amount !== null && (
-                    <text className="hex-sub" x={cx} y={cy + d.radius * S + 10}>
-                      {d.amount}
-                    </text>
-                  )}
-                </g>
-              )
-            })}
-
-            {/* Villagers walk beneath the buildings, so they step out of doors. */}
-            <VillagerDots2D run={run} scale={S} routeKey={villagerRouteKey(run)} />
-
-            {/* Buildings. */}
-            {Object.values(run.buildings).map((b) => {
-              const def = BUILDINGS[b.defId]
-              if (!def) return null
-              const cx = b.pos.x * S
-              const cy = b.pos.y * S
-              const r = footprintOf(b.defId) * S
-              const progress = b.built
-                ? 1
-                : b.buildProgress / Math.max(1, def.buildSeconds)
-              const status = buildingStatusKind(run, b, statusContext)
-              const badge = status === 'none' ? null : STATUS_BADGE[status]
-              // A home beyond every fire in the Storm, or a brazier gone out.
-              const cold = isColdHousing(run, b, sources) || isUnlitWarmthSource(b)
-              const mark = tierMark(b)
-              const upgrade = upgradeFraction(b)
-              const slots = workerSlotsOf(b)
-              return (
-                <g
-                  key={b.id}
-                  className={`building ${selectedBuilding === b.id ? 'is-selected' : ''} ${b.built ? '' : 'is-site'}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (suppressClick.current) {
-                      suppressClick.current = false
-                      return
-                    }
-                    // The road tool runs roads to (and from) buildings.
-                    const state = useGameStore.getState()
-                    if (state.buildMode === ROAD_TOOL) {
-                      state.place(toWorld(e) ?? b.pos)
-                      return
-                    }
-                    state.selectBuilding(b.id)
-                  }}
-                >
-                  <circle cx={cx} cy={cy} r={r} className="building-disc" />
-                  {cold && (
-                    <circle
-                      cx={cx}
-                      cy={cy}
-                      r={r + 4}
-                      fill="rgba(95, 143, 212, 0.18)"
-                      stroke="#5f8fd4"
-                      strokeWidth={1.5}
-                      pointerEvents="none"
-                    />
-                  )}
-                  {def.art ? (
-                    <IconUse id={def.art} x={cx} y={cy} size={Math.max(MAP_ICON, r * 1.15)} />
-                  ) : (
-                    <text className="hex-icon" x={cx} y={cy + 6}>
-                      {def.icon}
-                    </text>
-                  )}
-                  {!b.built && (
-                    <>
-                      <rect x={cx - 16} y={cy + r + 3} width={32} height={4} rx={2} className="build-bar-bg" />
-                      <rect
-                        x={cx - 16}
-                        y={cy + r + 3}
-                        width={32 * Math.min(1, progress)}
-                        height={4}
-                        rx={2}
-                        className="build-bar"
-                      />
-                    </>
-                  )}
-                  {b.built && slots > 0 && (
-                    <text className="hex-sub" x={cx} y={cy + r + 12}>
-                      {b.workers.length}/{slots}
-                    </text>
-                  )}
-                  {mark && (
-                    <text
-                      className="tier-mark"
-                      x={cx + r * 0.85}
-                      y={cy + r * 0.85 + 3}
-                    >
-                      <title>{`${displayName(b)} — tier ${mark.length}`}</title>
-                      {mark}
-                    </text>
-                  )}
-                  {upgrade !== null && (
-                    <g className="upgrade-bar-2d" pointerEvents="none">
-                      <title>{`Upgrading — ${Math.floor(upgrade * 100)}%`}</title>
-                      <rect x={cx - 16} y={cy - r - 8} width={32} height={4} rx={2} className="build-bar-bg" />
-                      <rect
-                        x={cx - 16}
-                        y={cy - r - 8}
-                        width={32 * upgrade}
-                        height={4}
-                        rx={2}
-                        className="upgrade-bar"
-                      />
-                      <IconUse id="upArrow" x={cx - 22} y={cy - r - 6} size={8} />
-                    </g>
-                  )}
-                  {badge && (
-                    <g className={`status-badge is-${status}`} pointerEvents="none">
-                      <title>{badge.label}</title>
-                      <circle
-                        cx={cx + r * 0.8}
-                        cy={cy - r * 0.8}
-                        r={status === 'working' ? 3.5 : 7.5}
-                        fill={badge.color}
-                        stroke="rgba(9, 13, 16, 0.85)"
-                        strokeWidth={1.5}
-                      />
-                      {status !== 'working' && (
-                        <IconUse
-                          id={badge.art}
-                          x={cx + r * 0.8}
-                          y={cy - r * 0.8}
-                          size={10}
-                        />
-                      )}
-                    </g>
-                  )}
-                  {cold && (
-                    <IconUse id="snowflake" x={cx - r * 0.8} y={cy - r * 0.8} size={11} />
-                  )}
-                </g>
-              )
-            })}
-
-            {/* The build ghost: footprint, plus a camp's reach or a brazier's warmth. */}
-            {buildDef && ghost && (
-              <g className="ghost-2d" pointerEvents="none">
-                {buildDef.gatherRadius && (
-                  <circle
-                    cx={ghost.pos.x * S}
-                    cy={ghost.pos.y * S}
-                    r={buildDef.gatherRadius * S}
-                    fill="none"
-                    stroke="#9fc9a3"
-                    strokeOpacity={0.5}
-                    strokeDasharray="4 4"
-                  />
-                )}
-                {buildDef.warmth && (
-                  <circle
-                    cx={ghost.pos.x * S}
-                    cy={ghost.pos.y * S}
-                    r={buildDef.warmth.radius * S}
-                    className="warmth-ring"
-                  />
-                )}
-                <circle
-                  cx={ghost.pos.x * S}
-                  cy={ghost.pos.y * S}
-                  r={footprintOf(buildDef.id) * S}
-                  fill={ghost.ok ? 'rgba(111, 191, 114, 0.45)' : 'rgba(192, 80, 80, 0.45)'}
-                  stroke={ghost.ok ? '#6fbf72' : '#c05050'}
-                />
+    <div className="map-wrap map-wrap-2d" data-paused={paused ? 'true' : 'false'}>
+      <MapInteractionContext.Provider value={interaction}>
+        <ViewBusContext.Provider value={bus}>
+          <svg
+            ref={svgRef}
+            className="map map-2d"
+            viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onPointerLeave={() => {
+              hover.current = null
+              setGhost(null)
+            }}
+            onClick={onMapClick}
+            onContextMenu={(e) => {
+              // Right-click ends the road being laid, then puts the tool away.
+              if (!useGameStore.getState().buildMode) return
+              e.preventDefault()
+              useGameStore.getState().cancelBuildStep()
+              setGhost(null)
+            }}
+            role="application"
+            aria-label="Settlement map"
+          >
+            <IconSymbols ids={MAP_SYMBOLS} />
+            <g ref={viewRef} transform="translate(0 0) scale(1)">
+              <g ref={worldRef}>
+                {/* The forest beyond the world's edge. */}
+                <rect x={box.x} y={box.y} width={box.w} height={box.h} fill="#0a0e11" />
+                <GladeLayer2D run={run} />
+                {/* The season's wash darkens the ground only: roads, features
+                    and buildings stay crisp above it. */}
+                <WeatherGround2D x={-w / 2} y={-h / 2} width={w} height={h} />
+                <RoadLayer2D run={run} />
+                <ObstacleLayer2D run={run} />
+                <DepositLayer2D run={run} />
+                {/* Every fire's reach: toggled on (R / 🔥), placing housing or
+                    a brazier, or inspecting a fire or a home. */}
+                <WarmthLayer2D run={run} />
+                <BuildingLayer2D />
+                <BuildGhost2D />
+                <RoadGhost2D run={run} />
+                <GladePlateLayer2D run={run} />
               </g>
-            )}
-
-            {buildMode === ROAD_TOOL && <RoadGhost2D run={run} preview={ghost?.road ?? null} scale={S} />}
-
-            {/* Labels over undiscovered-but-known glades. */}
-            {glades.map((glade) => {
-              if (!glade.discovered || glade.cleared) return null
-              const info = gladePlateInfo(run, glade)
-              const { reachable, pct } = info
-              const kindStyle = GLADE_KIND_STYLE[glade.kind]
-              const cx = glade.center.x * S
-              const cy = glade.center.y * S
-              return (
-                <g
-                  key={glade.id}
-                  className={`glade-label is-${glade.kind} is-${info.access} ${reachable ? '' : 'is-locked'}`}
-                  transform={`translate(${cx} ${cy})`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (suppressClick.current) {
-                      suppressClick.current = false
-                      return
-                    }
-                    useGameStore.getState().selectGlade(glade.id)
-                  }}
-                >
-                  <rect
-                    x={-52}
-                    y={-26}
-                    width={104}
-                    height={60}
-                    rx={8}
-                    className="glade-plate"
-                    style={reachable ? { stroke: kindStyle.edge, strokeOpacity: 0.85 } : undefined}
-                  />
-                  {/* Kind icon and label, centred together as one line. */}
-                  <IconUse
-                    id={GLADE_ART[glade.kind]}
-                    x={-kindStyle.label.length * 2.8 - 1}
-                    y={-11}
-                    size={11}
-                  />
-                  <text
-                    x={6}
-                    y={-8}
-                    className="glade-kind"
-                    style={reachable ? { fill: kindStyle.edge } : undefined}
-                  >
-                    {kindStyle.label}
-                  </text>
-                  <text y={7} className="glade-name">
-                    {glade.name}
-                  </text>
-                  {pct > 0 && (
-                    <>
-                      <rect x={-40} y={13} width={80} height={5} rx={2.5} className="glade-bar-bg" />
-                      <rect
-                        x={-40}
-                        y={13}
-                        width={80 * Math.min(1, pct)}
-                        height={5}
-                        rx={2.5}
-                        className="glade-bar"
-                      />
-                    </>
-                  )}
-                  <text y={28} className="glade-crew" style={reachable ? undefined : { fill: '#6d7a7a' }}>
-                    {gladeAccessText(info)}
-                  </text>
-                </g>
-              )
-            })}
-          </g>
-        </g>
-      </svg>
+            </g>
+          </svg>
+          <VillagerCanvas2D run={run} viewBox={box} />
+        </ViewBusContext.Provider>
+      </MapInteractionContext.Provider>
 
       <div className="map-controls">
-        <button
-          type="button"
-          aria-label="Zoom in"
-          onClick={() => setView((v) => ({ ...v, scale: clamp(v.scale * 1.2, MIN_SCALE, MAX_SCALE) }))}
-        >
+        <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.2)}>
           +
         </button>
-        <button
-          type="button"
-          aria-label="Zoom out"
-          onClick={() => setView((v) => ({ ...v, scale: clamp(v.scale / 1.2, MIN_SCALE, MAX_SCALE) }))}
-        >
+        <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)}>
           −
         </button>
-        <button
-          type="button"
-          aria-label="Recentre"
-          onClick={() => setView({ x: 0, y: 0, scale: 1 })}
-        >
+        <button type="button" aria-label="Recentre" onClick={() => applyView({ x: 0, y: 0, scale: 1 })}>
           ⌖
         </button>
         <WarmthToggle />
       </div>
 
-      {buildMode && ghost?.hint && (
-        <div
-          className={`ghost-hint ${ghost.ok ? 'is-ok' : 'is-bad'}`}
-          style={{
-            position: 'absolute',
-            left: ghost.screen.x,
-            top: ghost.screen.y - 44,
-            transform: 'translateX(-50%)',
-          }}
-        >
-          {ghost.hint}
-        </div>
-      )}
-
+      <GhostHint />
       {buildMode && <BuildBanner buildMode={buildMode} />}
     </div>
   )
+})
+
+/** The verdict bubble that follows the build ghost. */
+function GhostHint() {
+  const buildMode = useGameStore((s) => s.buildMode)
+  const ghost = useGhost((s) => s.ghost)
+  if (!buildMode || !ghost?.hint) return null
+  return (
+    <div
+      className={`ghost-hint ${ghost.ok ? 'is-ok' : 'is-bad'}`}
+      style={{
+        position: 'absolute',
+        left: ghost.screen.x,
+        top: ghost.screen.y - 44,
+        transform: 'translateX(-50%)',
+      }}
+    >
+      {ghost.hint}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Road tool preview cache
+// ---------------------------------------------------------------------------
+
+/**
+ * `describeRoadTool` builds a whole road network to say what a stretch would
+ * join, which is too much to redo on every mouse move. Previews are cached
+ * for the current anchor and road/building state, by the endpoint rounded to
+ * a twentieth of a pace (about a pixel and a half at default zoom); anything
+ * that could change the verdict — a new anchor, a road laid or lifted, a
+ * building finished, the wood running short — starts a fresh cache.
+ */
+const ROAD_CELL = 0.05
+let roadCacheState = ''
+const roadCache = new Map<string, RoadPreview>()
+
+function cachedRoadPreview(run: RunState, anchor: Vec2 | null, pos: Vec2, erase: boolean): RoadPreview {
+  const state = [
+    run.seed,
+    run.roadCounter ?? 0,
+    run.roads?.length ?? 0,
+    run.stats.buildingsBuilt,
+    Object.keys(run.buildings).length,
+    Math.floor(run.stock.wood ?? 0),
+    anchor ? `${anchor.x},${anchor.y}` : '-',
+    erase ? 'erase' : 'lay',
+  ].join('|')
+  if (state !== roadCacheState) {
+    roadCacheState = state
+    roadCache.clear()
+  }
+  const cell = `${Math.round(pos.x / ROAD_CELL)},${Math.round(pos.y / ROAD_CELL)}`
+  let hit = roadCache.get(cell)
+  if (!hit) {
+    if (roadCache.size > 400) roadCache.clear()
+    hit = describeRoadTool(run, anchor, pos, erase)
+    roadCache.set(cell, hit)
+  }
+  return hit
 }
 
 /** Shared banner for both renderers while a blueprint is in hand. */
@@ -716,45 +473,9 @@ export function WarmthToggle() {
   )
 }
 
-/**
- * A fogged glade's border, drawn inside its own polygon (the stroke is
- * clipped to the cell) so neighbouring borders never overlap. Pattern and
- * colour carry the kind; brightness carries reachability.
- */
-function GladeEdge2D({
-  id,
-  points,
-  kind,
-  access,
-}: {
-  id: string
-  points: string
-  kind: GladeKind
-  access: GladeAccess
-}) {
-  const style = GLADE_KIND_STYLE[kind]
-  const clipId = `glade-clip-${id}`
-  return (
-    <g pointerEvents="none" className={`glade-edge is-${kind} is-${access}`}>
-      <clipPath id={clipId}>
-        <polygon points={points} />
-      </clipPath>
-      <polygon
-        points={points}
-        clipPath={`url(#${clipId})`}
-        fill="none"
-        stroke={style.edge}
-        strokeWidth={access === 'locked' ? 4 : 7}
-        strokeOpacity={access === 'locked' ? 0.35 : 0.9}
-        strokeDasharray={style.dash ? style.dash.map((d) => d * S).join(' ') : undefined}
-        style={
-          access === 'clearing'
-            ? { animation: 'warmth-breathe 1.2s ease-in-out infinite' }
-            : undefined
-        }
-      />
-    </g>
-  )
+/** The world is standing still: paused, over, or waiting on a choice. */
+function isStill(s: { speed: number; run: RunState | null }): boolean {
+  return s.speed === 0 || s.run?.phase !== 'playing' || (s.run?.pendingChoices.length ?? 0) > 0
 }
 
 function clamp(v: number, min: number, max: number): number {

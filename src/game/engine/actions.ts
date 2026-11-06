@@ -17,7 +17,7 @@ import {
   SOOTHE_BASE_COST,
   SOOTHE_COST_GROWTH,
 } from './balance'
-import { pushLog } from './createRun'
+import { pushLog } from './runLog'
 import { dist } from './geometry'
 import { gladeAt, insideWorld } from './mapgen'
 import { completeUpgrade, depositsInRangeOf } from './production'

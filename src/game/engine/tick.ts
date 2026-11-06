@@ -1,3 +1,4 @@
+import { withRunCache } from './runCache'
 import { feats } from './feats'
 import type { RunState, Season } from '../types'
 import {
@@ -13,7 +14,7 @@ import {
   SEASON_INFO,
   SEASON_ORDER,
 } from './balance'
-import { pushLog } from './createRun'
+import { pushLog } from './runLog'
 import {
   breakStormBlights,
   forecastStormBlight,
@@ -63,7 +64,11 @@ const BRAZIER_COLD_LOG = 'A brazier has gone cold — the homes around it are fr
 export function tick(s: RunState, dt: number): void {
   if (s.phase !== 'playing') return
   if (s.pendingChoices.length > 0) return
+  // Settlement-wide derivations are remembered across ticks (see `withRunCache`).
+  withRunCache(s, () => tickPlaying(s, dt))
+}
 
+function tickPlaying(s: RunState, dt: number): void {
   const mods = computeModifiers(s)
   s.storageCap = computeStorageCap(s, BASE_STORAGE + mods.globalStorage)
   s.clock += dt

@@ -25,7 +25,7 @@ import { TERRAIN } from '../game/content/terrain'
 import { terrainOf } from '../game/engine/production'
 import { benefitsFromRoad, describeRoadLink, roadLinkOf } from '../game/engine/roads'
 import { workerMultiplier } from '../game/engine/traits'
-import { useGameStore, useRun } from '../game/store'
+import { useGameStore, useHudRun } from '../game/store'
 import { BuildingStatusLine } from './BuildingStatusLine'
 import { Icon } from './Icon'
 import { PartnerIcon } from './PartnerIcon'
@@ -57,7 +57,7 @@ import { IconText } from './IconText'
  * or an uncleared glade.
  */
 export function Inspector() {
-  const run = useRun()
+  const run = useHudRun()
   const selectedBuilding = useGameStore((s) => s.selectedBuilding)
   const selectedDeposit = useGameStore((s) => s.selectedDeposit)
   const selectedGlade = useGameStore((s) => s.selectedGlade)

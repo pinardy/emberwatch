@@ -218,50 +218,50 @@ describe('migration from the single save', () => {
 describe('overwrite protection', () => {
   const store = () => useGameStore.getState()
 
-  it('starts each new settlement in a free slot, never over a run in progress', () => {
-    store().startRun(1)
+  it('starts each new settlement in a free slot, never over a run in progress', async () => {
+    await store().startRun(1)
     expect(store().activeSlot).toBe('auto')
     const first = store().run!
-    store().startRun(2)
+    await store().startRun(2)
     expect(store().activeSlot).toBe('1')
     // The first run was saved and is still in its own slot.
     expect(loadSlot('auto')!.seed).toBe(first.seed)
-    store().startRun(3)
-    store().startRun(4)
+    await store().startRun(3)
+    await store().startRun(4)
     expect(SLOT_IDS.map((id) => loadSlot(id)!.seed)).toEqual([1, 2, 3, 4])
 
     // Every slot is full: a fifth run is refused rather than overwrite one.
-    store().startRun(5)
+    await store().startRun(5)
     expect(store().run!.seed).toBe(4)
     expect(store().notice).toMatch(/Every save slot holds a settlement/)
     expect(SLOT_IDS.map((id) => loadSlot(id)!.seed)).toEqual([1, 2, 3, 4])
 
     // Replacing is a deliberate choice of slot, and replaces only that one.
-    store().startRun(6, undefined, undefined, undefined, '2')
+    await store().startRun(6, undefined, undefined, undefined, '2')
     expect(store().activeSlot).toBe('2')
     expect(SLOT_IDS.map((id) => loadSlot(id)!.seed)).toEqual([1, 2, 6, 4])
   })
 
-  it('starts the daily expedition in a free slot, and never over a run in progress', () => {
-    store().startRun(1)
-    store().startDaily(Date.UTC(2026, 10, 5, 12))
+  it('starts the daily expedition in a free slot, and never over a run in progress', async () => {
+    await store().startRun(1)
+    await store().startDaily(Date.UTC(2026, 10, 5, 12))
     expect(store().activeSlot).toBe('1')
     expect(store().run!.daily).toBe('2026-11-05')
     expect(loadSlot('auto')!.seed).toBe(1)
 
     // With every slot full, the daily is refused rather than overwrite a run.
-    store().startRun(3)
-    store().startRun(4)
+    await store().startRun(3)
+    await store().startRun(4)
     const before = SLOT_IDS.map((id) => loadSlot(id)!.seed)
-    store().startDaily(Date.UTC(2026, 10, 6, 12))
+    await store().startDaily(Date.UTC(2026, 10, 6, 12))
     expect(store().screen).toBe('daily')
     expect(store().notice).toMatch(/Every save slot holds a settlement/)
     expect(SLOT_IDS.map((id) => loadSlot(id)!.seed)).toEqual(before)
   })
 
-  it('autosaves to the slot being played, not to the autosave slot', () => {
+  it('autosaves to the slot being played, not to the autosave slot', async () => {
     saveToSlot('auto', newRun(1), 1)
-    store().startRun(2)
+    await store().startRun(2)
     expect(store().activeSlot).toBe('1')
     const run = store().run!
     run.pendingChoices = []
@@ -272,8 +272,8 @@ describe('overwrite protection', () => {
     expect(loadSlot('auto')!.clock).toBe(0)
   })
 
-  it('loads a chosen slot after saving the run it leaves', () => {
-    store().startRun(1)
+  it('loads a chosen slot after saving the run it leaves', async () => {
+    await store().startRun(1)
     const first = store().run!
     first.pendingChoices = []
     for (let i = 0; i < 16; i++) tick(first, 0.125)
@@ -284,24 +284,24 @@ describe('overwrite protection', () => {
     expect(loadSlot('auto')!.clock).toBe(first.clock)
   })
 
-  it('banks a finished run by freeing only its own slot', () => {
+  it('banks a finished run by freeing only its own slot', async () => {
     saveToSlot('auto', newRun(1), 1)
-    store().startRun(2)
+    await store().startRun(2)
     store().run!.phase = 'won'
     store().finishRun()
     expect(loadSlot('1')).toBeNull()
     expect(loadSlot('auto')!.seed).toBe(1)
   })
 
-  it('copies the current run to another slot and keeps playing in its own', () => {
-    store().startRun(1)
+  it('copies the current run to another slot and keeps playing in its own', async () => {
+    await store().startRun(1)
     store().saveCopy('3')
     expect(loadSlot('3')!.seed).toBe(1)
     expect(store().activeSlot).toBe('auto')
   })
 
-  it('deleting the slot being played drops that run', () => {
-    store().startRun(1)
+  it('deleting the slot being played drops that run', async () => {
+    await store().startRun(1)
     store().deleteSave('auto')
     expect(store().run).toBeNull()
     expect(store().activeSlot).toBeNull()
@@ -323,8 +323,8 @@ describe('full storage', () => {
     expect(listSlots()[0].meta!.savedAt).toBe(1)
   })
 
-  it('tells the player once, not on every autosave, and recovers', () => {
-    useGameStore.getState().startRun(1)
+  it('tells the player once, not on every autosave, and recovers', async () => {
+    await useGameStore.getState().startRun(1)
     storage.opts.quotaBytes = 0
     useGameStore.getState().saveNow()
     expect(useGameStore.getState().notice).toMatch(/storage is full/)

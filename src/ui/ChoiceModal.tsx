@@ -10,7 +10,7 @@ import {
   optionAffordable,
   rerollCost,
 } from '../game/engine/events'
-import { useGameStore, useRun } from '../game/store'
+import { useGameStore, useHudRun } from '../game/store'
 import type {
   ConditionOutcome,
   ConditionSpec,
@@ -34,7 +34,7 @@ import { conditionArt, cornerstoneArt, gladeEventArt, ongoingArt, threatArt } fr
  * blueprint picks, and glade events. The sim is paused while it is open.
  */
 export function ChoiceModal() {
-  const run = useRun()
+  const run = useHudRun()
   const chooseOption = useGameStore((s) => s.chooseOption)
   const chooseEventOption = useGameStore((s) => s.chooseEventOption)
   if (!run) return null
@@ -291,7 +291,7 @@ function outcomeWords(o: ConditionOutcome | undefined): string {
 
 /** Amber lever on drafts: redraw the options at a steepening price. */
 function RerollButton() {
-  const run = useRun()
+  const run = useHudRun()
   const reroll = useGameStore((s) => s.reroll)
   if (!run) return null
   const cost = rerollCost(run)
