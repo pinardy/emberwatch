@@ -560,10 +560,16 @@ describe('the first royal decree on modified land', () => {
       state.cornerstones = ['royalCouriers']
       while (state.season.year === 1) {
         tick(state, 0.125)
-        state.pendingChoices = []
-        if (state.season.year === 1) expect(state.decree, `${modifiers} Y1 ${state.clock}`).toBeNull()
+        state.pendingChoices = state.pendingChoices.filter((c) => c.kind === 'decree')
+        if (state.season.year === 1) {
+          expect(state.decree, `${modifiers} Y1 ${state.clock}`).toBeNull()
+          expect(state.pendingChoices, `${modifiers} Y1 ${state.clock}`).toHaveLength(0)
+        }
       }
-      for (let i = 0; i < 4 && !state.decree; i++) tick(state, 0.125)
+      // The herald brings a choice of decrees as Year 2 opens.
+      for (let i = 0; i < 4 && state.pendingChoices.length === 0; i++) tick(state, 0.125)
+      expect(state.pendingChoices[0]?.kind, `${modifiers}`).toBe('decree')
+      takeChoice(state, state.pendingChoices[0].options[0])
       expect(state.decree, `${modifiers}`).not.toBeNull()
       expect(state.season).toMatchObject({ year: 2, season: 'drizzle' })
       const def = DECREES[state.decree!.defId]

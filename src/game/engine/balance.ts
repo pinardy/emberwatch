@@ -401,9 +401,7 @@ export const DECREE_MISS_IMPATIENCE = 1.5
  * Extra impatience on a missed decree for every earlier miss still standing.
  * The Queen forgives one lapse; she does not forgive a habit. Meeting a decree
  * clears one strike, so a settlement that recovers is not punished forever.
- * The balance bot ignores decrees and usually wins before a second miss, so
- * this moves its win rate by about a point; it is aimed at long runs that
- * let every decree lapse.
+ * It is aimed at long runs that let every decree lapse.
  */
 export const DECREE_MISS_ESCALATION = 1
 /**
@@ -411,6 +409,59 @@ export const DECREE_MISS_ESCALATION = 1
  * met, so a deadline is a real push rather than a free payout.
  */
 export const DECREE_MAX_START_PROGRESS = 0.6
+/**
+ * A production decree asks for this share of what the settlement's staffed
+ * producers would turn out over its time limit at their current rate — keep
+ * them staffed and fed for the whole countdown, or add a hand. Only goods
+ * with a staffed producer are decreed at all.
+ */
+export const DECREE_RATE_SHARE = 1.25
+/** A sized decree never asks for less than this share of its listed amount… */
+export const DECREE_MIN_SHARE = 0.3
+/** …or more than this multiple of it. */
+export const DECREE_MAX_SHARE = 2
+/** Impatience for turning down both decrees the Queen offers. */
+export const DECREE_DECLINE_IMPATIENCE = 0.5
+/**
+ * Amber for each decree met on a streak of two or more, per decree of the
+ * streak beyond the first (15, 30, 45…), up to the cap. A point of
+ * reputation every third decree was tried and let the economy-only control
+ * bot win a quarter of its runs on decrees alone.
+ */
+export const DECREE_STREAK_AMBER = 15
+export const DECREE_STREAK_AMBER_CAP = 60
+
+/** Ordinary order slots; each is refilled by a choice of two. */
+export const ORDER_SLOTS = 3
+/**
+ * Orders, like decrees, are drawn only from goals not already mostly met, so
+ * none completes the instant it is chosen.
+ */
+export const ORDER_MAX_START_PROGRESS = 0.6
+/** Resolve goals sit closer to their mark by nature, so they get more room. */
+export const ORDER_MAX_START_RESOLVE = 0.85
+/**
+ * How far past the settlement's current state an order may reach: a
+ * population, housing, glade or building goal further off than this is left
+ * for later rather than clogging a slot for the whole run.
+ */
+export const ORDER_REACH = {
+  population: 12,
+  housing: 20,
+  glades: 4,
+  buildings: 3,
+  /** Resolve points below the goal the average may sit. */
+  resolve: 12,
+} as const
+/**
+ * A counting order ("produce N more") asks for what the settlement makes in
+ * this many seconds at its current rate, rounded to fives, and never less
+ * than the minimum.
+ */
+export const ORDER_COUNT_SECONDS = 300
+export const ORDER_COUNT_MIN = 15
+/** Impatience for asking the Queen for a different pair of orders (once a year). */
+export const ORDER_DECLINE_IMPATIENCE = 0.5
 
 /** Reputation at which the Queen grants her one-time charter. */
 export const CHARTER_REPUTATION = 10

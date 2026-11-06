@@ -1,9 +1,9 @@
 import { CORNERSTONES } from '../game/content/cornerstones'
-import { ORDERS, describeGoal } from '../game/content/orders'
+import { ORDERS } from '../game/content/orders'
 import { RESOURCES, RESOURCE_LIST } from '../game/content/resources'
 import { sootheCost } from '../game/engine/actions'
 import { TRADE_LOT } from '../game/engine/balance'
-import { orderReputation } from '../game/engine/events'
+import { describeOrder, orderReputation } from '../game/engine/orders'
 import { modifierOngoingId } from '../game/engine/runModifiers'
 import { caravanAvailable, hasTradingPost, offerPrice, sellPrice } from '../game/engine/trade'
 import { useGameStore, useHudRun } from '../game/store'
@@ -30,21 +30,35 @@ export function OrdersPanel() {
           <RaceSparkline run={run} />
         </div>
         <p className="panel-hint">
-          Completing an order grants reputation immediately and draws a replacement.
+          Completing an order grants reputation immediately; the Queen then offers two
+          more to choose from. {run.orderDeclineYear === run.season.year
+            ? 'You have already asked her for different orders this year.'
+            : 'Once a year you may ask her for a different pair.'}
         </p>
         <DecreeCard />
         {run.orders.map((order) => {
           const def = ORDERS[order.defId]
           if (!def) return null
+          const tag = order.writ
+            ? 'founding writ'
+            : def.consume
+              ? 'shipment'
+              : order.baseline !== undefined
+                ? 'counts from its draw'
+                : null
           return (
-            <div className="order-card" key={order.id}>
+            <div className={`order-card ${order.writ ? 'is-writ' : ''}`} key={order.id}>
               <div className="row-between">
-                <strong>{def.name}</strong>
+                <strong>
+                  {def.name}
+                  {tag && <em className="order-tag">{tag}</em>}
+                </strong>
                 <span className="order-reward">
-                  <Icon id="reputation" label="reputation" /> +{orderReputation(run, def.reputationReward)}
+                  <Icon id="reputation" label="reputation" /> +
+                  {order.writ ? def.reputationReward : orderReputation(run, def.reputationReward)}
                 </span>
               </div>
-              <small>{describeGoal(def.goal)}</small>
+              <small>{describeOrder(order)}</small>
               <div className="bar">
                 <div className="bar-fill" style={{ width: `${order.progress * 100}%` }} />
               </div>

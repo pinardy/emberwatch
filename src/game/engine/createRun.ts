@@ -23,11 +23,13 @@ import {
   STARTING_VILLAGERS,
   MAX_IMPATIENCE,
   MAX_REPUTATION,
+  ORDER_SLOTS,
   SEASON_ORDER,
   YEAR_SECONDS,
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { offerBlueprint, offerCornerstone } from './events'
+import { offerWrit } from './orders'
 import { defaultDecreeState } from './structure'
 import { emptyTimeline } from './timeline'
 import { defaultCaravan } from './trade'
@@ -212,6 +214,7 @@ export function createRun({
     conditions: [],
     conditionCounter: 0,
     ...defaultDecreeState(),
+    decreeStreak: 0,
     charterOffered: false,
     charter: null,
     caravan: defaultCaravan(),
@@ -253,7 +256,9 @@ export function createRun({
   state.decreeTimer += yearOneLength(landMods) - YEAR_SECONDS
 
   // --- opening orders -------------------------------------------------------
-  for (let i = 0; i < 3; i++) drawOrder(state)
+  // Two standing orders, drawn to fit; the third slot is the founding writ,
+  // chosen once the opening draft is done.
+  for (let i = 0; i < ORDER_SLOTS - 1; i++) drawOrder(state)
 
   // --- opening blueprint draft ---------------------------------------------
   // The run begins on a choice: which buildings this settlement will have. It
@@ -265,6 +270,8 @@ export function createRun({
   // Viceroy's Signet adds a second from the whole pool.
   offerCornerstone(state, true)
   if (loadout.startCornerstoneChoice) offerCornerstone(state)
+  // The founding writ: a small first goal, worth a point in the opening minutes.
+  offerWrit(state)
 
   const land = runModifierDefs(state.runModifiers)
   if (land.length > 0) {

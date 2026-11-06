@@ -506,6 +506,8 @@ describe('cornerstones', () => {
     expect(s.pendingChoices.map((c) => c.kind)).toEqual([
       ...Array(OPENING_BLUEPRINT_PICKS).fill('blueprint'),
       'cornerstone',
+      // then the founding writ
+      'order',
     ])
   })
 
