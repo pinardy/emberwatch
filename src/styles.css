@@ -304,13 +304,6 @@ code {
   flex: 1;
 }
 
-.upgrade-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 10px;
-  margin: 16px 0;
-}
-
 .upgrade-card {
   display: grid;
   gap: 6px;
@@ -334,25 +327,6 @@ code {
 
 .upgrade-card.is-owned em {
   color: var(--good);
-}
-
-.history-list {
-  list-style: none;
-  padding: 0;
-  margin: 10px 0 0;
-  display: grid;
-  gap: 6px;
-}
-
-.history-list li {
-  display: grid;
-  grid-template-columns: 90px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 10px;
-  background: var(--panel);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
 }
 
 /* ==========================================================================
@@ -1420,18 +1394,6 @@ code {
   font-family: var(--font-ui);
 }
 
-.hex-flag {
-  font-size: 10px;
-  text-anchor: middle;
-  pointer-events: none;
-}
-
-.building-disc {
-  fill: rgba(10, 14, 17, 0.72);
-  stroke: rgba(217, 180, 106, 0.5);
-  stroke-width: 1;
-}
-
 .build-bar-bg {
   fill: rgba(0, 0, 0, 0.6);
 }
@@ -1624,27 +1586,6 @@ code {
   height: 100%;
   background: linear-gradient(90deg, #5f8c63, var(--gold));
   transition: width 150ms linear;
-}
-
-.worker-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.worker-chip {
-  font-size: 12px;
-  padding: 3px 8px;
-  border-radius: 20px;
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.worker-chip em {
-  color: var(--good);
-  font-style: normal;
-  font-size: 12px;
 }
 
 .recipe-list {
@@ -2838,88 +2779,6 @@ code {
   letter-spacing: 0.03em;
 }
 
-/* Floating plates over undiscovered glades. Sized in scene units via drei's
- * distanceFactor, so keep the base font size generous. */
-.glade-plate-3d {
-  display: grid;
-  gap: 2px;
-  justify-items: center;
-  min-width: 130px;
-  padding: 8px 14px;
-  background: rgba(9, 13, 16, 0.82);
-  border: 1px solid rgba(217, 180, 106, 0.35);
-  border-radius: 10px;
-  color: #e6ece9;
-  font-family: var(--font-ui);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.glade-plate-3d:hover {
-  border-color: var(--gold);
-}
-
-.glade-plate-3d.is-locked {
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.glade-plate-3d small {
-  font-size: 11px;
-  color: var(--warn);
-  letter-spacing: 0.04em;
-}
-
-.glade-plate-3d.is-locked small {
-  color: #6d7a7a;
-}
-
-.glade-plate-3d strong {
-  font-size: 14px;
-}
-
-.glade-plate-3d em {
-  font-size: 11px;
-  font-style: normal;
-  color: var(--gold);
-}
-
-.glade-plate-3d-bar {
-  width: 100px;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(0, 0, 0, 0.55);
-  overflow: hidden;
-}
-
-.glade-plate-3d-bar span {
-  display: block;
-  height: 100%;
-  background: var(--good);
-}
-
-/* Glade kinds carry their own accent (set inline as --kind-color); locked
- * plates stay grey, reachable ones glow, plates under a crew pulse green. */
-.glade-plate-3d:not(.is-locked) {
-  border-color: var(--kind-color, rgba(217, 180, 106, 0.35));
-}
-
-.glade-plate-3d:not(.is-locked) small {
-  color: var(--kind-color, var(--warn));
-}
-
-.glade-plate-3d.is-reachable {
-  box-shadow: 0 0 12px -2px var(--kind-color, var(--gold));
-}
-
-.glade-plate-3d.is-clearing {
-  border-color: var(--good);
-  box-shadow: 0 0 0 2px rgba(111, 191, 114, 0.35);
-}
-
-.glade-plate-3d.is-locked em {
-  color: #6d7a7a;
-}
-
 /* ---------------------------------------------------------------------------
  * 2D continuous-world map (SVG fallback)
  * ------------------------------------------------------------------------- */
@@ -2959,21 +2818,6 @@ code {
 .deposit.is-selected .deposit-disc {
   stroke: var(--gold);
   stroke-width: 2;
-}
-
-.building .building-disc {
-  stroke: rgba(255, 255, 255, 0.2);
-}
-
-.building:hover .building-disc,
-.building.is-selected .building-disc {
-  stroke: var(--gold);
-  stroke-width: 2.5;
-}
-
-.building.is-site .building-disc {
-  stroke-dasharray: 5 4;
-  fill-opacity: 0.5;
 }
 
 .obstacle {
@@ -3137,27 +2981,7 @@ code {
   accent-color: var(--gold);
 }
 
-/* On phones the 3D overlays must shrink with the canvas. */
 @media (max-width: 700px) {
-  .glade-plate-3d {
-    min-width: 90px;
-    padding: 5px 9px;
-  }
-
-  .glade-plate-3d strong {
-    font-size: 11px;
-  }
-
-  .glade-plate-3d small,
-  .glade-plate-3d em {
-    font-size: 9px;
-  }
-
-  .glade-plate-3d-bar {
-    width: 66px;
-    height: 5px;
-  }
-
   .minimap {
     width: 108px;
     height: auto;
