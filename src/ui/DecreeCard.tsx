@@ -1,6 +1,7 @@
 import { DECREES } from '../game/content/decrees'
 import { RESOURCES } from '../game/content/resources'
 import { computeModifiers } from '../game/engine/modifiers'
+import { formatClock } from '../game/engine/forecast'
 import {
   decreeGoal,
   decreeMissImpatience,
@@ -9,12 +10,6 @@ import {
 } from '../game/engine/structure'
 import { useHudRun } from '../game/store'
 import { Icon } from './Icon'
-
-/** Seconds as m:ss. */
-export function clockText(seconds: number): string {
-  const s = Math.max(0, Math.ceil(seconds))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
 
 /**
  * The live royal decree in the Orders panel: a timed order with a richer
@@ -31,7 +26,7 @@ export function DecreeCard() {
   if (!decree || !def || !goal) {
     return (
       <p className="muted decree-next">
-        <Icon id="horn" emoji="📯" /> The next royal decree arrives in about {clockText(run.decreeTimer)}.
+        <Icon id="horn" emoji="📯" /> The next royal decree arrives in about {formatClock(run.decreeTimer)}.
       </p>
     )
   }
@@ -72,7 +67,7 @@ export function DecreeCard() {
       <div className="row-between">
         <small className="muted">{Math.floor(decree.progress * 100)}%</small>
         <small className={`decree-clock ${urgent ? 'is-bad' : ''}`}>
-          ⏱ {clockText(decree.timeLeft)} left · miss it: <Icon id="impatience" label="impatience" /> +{missCost}
+          ⏱ {formatClock(decree.timeLeft)} left · miss it: <Icon id="impatience" label="impatience" /> +{missCost}
         </small>
       </div>
       <StreakLine streak={run.decreeStreak ?? 0} />

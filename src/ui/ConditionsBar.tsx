@@ -1,11 +1,12 @@
 import { DECREES } from '../game/content/decrees'
 import { decreeGoal, describeTimedGoal } from '../game/engine/structure'
 import { useGameStore, useHudRun } from '../game/store'
-import type { ActiveCondition, ConditionOutcome } from '../game/types'
-import { clockText } from './DecreeCard'
+import { formatClock } from '../game/engine/forecast'
+import type { ActiveCondition } from '../game/types'
 import { conditionArt } from '../game/content/artFamilies'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
+import { outcomeWords } from './threatText'
 
 /**
  * Lingering glade conditions and the live royal decree, shown beside the
@@ -35,7 +36,7 @@ export function ConditionsBar() {
           <span className="condition-text">
             <strong>
               {decreeDef.name}
-              <em className="condition-clock">⏱ {clockText(decree.timeLeft)}</em>
+              <em className="condition-clock">⏱ {formatClock(decree.timeLeft)}</em>
             </strong>
             <small>{describeTimedGoal(decreeGoal(decree) ?? decreeDef.goal)}</small>
             <Progress value={decree.progress} />
@@ -59,7 +60,7 @@ export function ConditionsBar() {
               <strong>
                 {condition.name}
                 {condition.timeLeft !== undefined && (
-                  <em className="condition-clock">⏱ {clockText(condition.timeLeft)}</em>
+                  <em className="condition-clock">⏱ {formatClock(condition.timeLeft)}</em>
                 )}
               </strong>
               <small>{condition.description}</small>
@@ -85,19 +86,8 @@ function Progress({ value }: { value: number }) {
   )
 }
 
-function describeOutcome(o: ConditionOutcome | undefined): string {
-  if (!o) return ''
-  const parts: string[] = []
-  if (o.reputation) parts.push(`👑 +${o.reputation}`)
-  if (o.hostility) parts.push(`🌩️ ${o.hostility > 0 ? '+' : ''}${o.hostility}`)
-  if (o.impatience) parts.push(`⏳ ${o.impatience > 0 ? '+' : ''}${o.impatience}`)
-  if (o.villagerLoss) parts.push(`🪦 −${o.villagerLoss}`)
-  if (o.gain) parts.push('supplies')
-  return parts.join(' ')
-}
-
 function outcomeText(c: ActiveCondition): string {
-  const win = describeOutcome(c.onResolve)
-  const lose = describeOutcome(c.onFail)
+  const win = outcomeWords(c.onResolve)
+  const lose = outcomeWords(c.onFail)
   return `${win ? ` · reward ${win}` : ''}${lose ? ` · fail ${lose}` : ''}`
 }

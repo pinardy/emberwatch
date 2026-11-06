@@ -12,7 +12,6 @@ import {
 } from '../game/engine/events'
 import { useGameStore, useHudRun } from '../game/store'
 import type {
-  ConditionOutcome,
   ConditionSpec,
   CornerstoneDef,
   ResourceBag,
@@ -21,7 +20,7 @@ import type {
 import { formatDuration } from '../game/engine/forecast'
 import { describeTimedGoal } from '../game/engine/structure'
 import { IconText } from './IconText'
-import { describeStrike, describeWhileActive } from './threatText'
+import { describeStrike, describeWhileActive, outcomeWords } from './threatText'
 import { DialogTip } from './TipsCoach'
 import { CharterChoice } from './CharterChoice'
 import { DecreeChoice, OrderChoice } from './QueenChoice'
@@ -294,17 +293,6 @@ function conditionTerms(c: ConditionSpec): string {
   if (won) parts.push(`met: ${won}`)
   if (lost) parts.push(`missed: ${lost}`)
   return parts.join(' · ')
-}
-
-function outcomeWords(o: ConditionOutcome | undefined): string {
-  if (!o) return ''
-  const parts: string[] = []
-  if (o.reputation) parts.push(`👑 +${o.reputation}`)
-  if (o.hostility) parts.push(`🌩️ ${o.hostility > 0 ? '+' : ''}${o.hostility}`)
-  if (o.impatience) parts.push(`⏳ ${o.impatience > 0 ? '+' : ''}${o.impatience}`)
-  if (o.villagerLoss) parts.push(`🪦 −${o.villagerLoss}`)
-  if (o.gain) parts.push('supplies')
-  return parts.join(' ')
 }
 
 /** Amber lever on drafts: redraw the options at a steepening price. */

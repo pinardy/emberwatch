@@ -19,6 +19,7 @@ import { METER_ART, SEASON_ART } from '../game/content/art'
 import { Icon } from './Icon'
 import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
 import { useEscapeLayer } from './useGameLoop'
+import { signed } from './threatText'
 
 interface Float {
   id: number
@@ -43,7 +44,7 @@ function useFloaters(value: number, direction: 'up-good' | 'up-bad'): Float[] {
       (delta > 0) === (direction === 'up-good') ? 'good' : 'bad'
     const float: Float = {
       id: counter.current++,
-      text: `${delta > 0 ? '+' : ''}${delta}`,
+      text: signed(delta),
       tone,
     }
     // Cap the stack; each float removes itself when its animation ends. No

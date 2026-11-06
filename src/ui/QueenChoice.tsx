@@ -2,7 +2,7 @@ import { DECREES } from '../game/content/decrees'
 import { ORDERS } from '../game/content/orders'
 import { RESOURCES } from '../game/content/resources'
 import { DECREE_DECLINE_IMPATIENCE, ORDER_DECLINE_IMPATIENCE } from '../game/engine/balance'
-import { productionRate } from '../game/engine/forecast'
+import { formatClock, productionRate } from '../game/engine/forecast'
 import { computeModifiers } from '../game/engine/modifiers'
 import {
   DECLINE_CHOICE,
@@ -20,7 +20,6 @@ import {
 } from '../game/engine/structure'
 import { useGameStore } from '../game/store'
 import type { Order, PendingChoice, RoyalDecree, RunState } from '../game/types'
-import { clockText } from './DecreeCard'
 import { Icon } from './Icon'
 import './queen-choice.css'
 
@@ -171,7 +170,7 @@ function DecreeOption({ run, decree, onPick }: { run: RunState; decree: RoyalDec
     <button type="button" className="option queen-option" onClick={onPick}>
       <strong>{def.name}</strong>
       <small>
-        {describeTimedGoal(goal)} within {clockText(decree.timeLimit)}
+        {describeTimedGoal(goal)} within {formatClock(decree.timeLimit)}
       </small>
       {pace !== null && <small>Your producers make about {pace} in that time now.</small>}
       <Progress value={decree.progress} />
