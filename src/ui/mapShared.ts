@@ -276,6 +276,9 @@ export const STATUS_BADGE: Record<Exclude<MapBuildingStatus, 'none'>, StatusBadg
   working: { icon: '⚙', art: STATUS_BADGE_ART.working, label: 'Working', color: '#6fbf72', problem: false },
 }
 
+/** Storm chill: a home beyond every fire, or a fire gone out. Both maps draw it beside the status badge. */
+export const COLD_BADGE = { icon: '❄', art: STATUS_BADGE_ART.cold, color: '#5f8fd4' } as const
+
 /**
  * Storm chill: finished housing standing outside every live warmth source.
  * Pass `sources` (from `warmthSources`) when checking many buildings at once.

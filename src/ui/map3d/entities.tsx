@@ -6,11 +6,10 @@ import { BUILDINGS } from '../../game/content/buildings'
 import { footprintOf } from '../../game/engine/actions'
 import type { IconId } from '../../art/icons'
 import { DEPOSIT_ART } from '../../game/content/art'
-import { STATUS_BADGE_ART } from '../../game/content/artFamilies'
 import { DEPOSIT_INFO } from '../../game/engine/mapgen'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, RunState, Vec2, WorldDeposit } from '../../game/types'
-import { STATUS_BADGE, type MapBuildingStatus } from '../mapShared'
+import { COLD_BADGE, STATUS_BADGE, type MapBuildingStatus } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import { assignHomes } from '../villagerRoutes'
 import { requestGhost } from './ghostBus'
@@ -330,7 +329,7 @@ export const BuildingNode = memo(function BuildingNode({
       )}
       {cold && (
         <BatchSprite
-          tile={badgeTile('❄', '#5f8fd4', STATUS_BADGE_ART.cold)}
+          tile={badgeTile(COLD_BADGE.icon, COLD_BADGE.color, COLD_BADGE.art)}
           x={x}
           y={badgeY}
           z={z}

@@ -1,10 +1,9 @@
 import { memo } from 'react'
 import { BUILDINGS } from '../game/content/buildings'
-import { STATUS_BADGE_ART } from '../game/content/artFamilies'
 import { ROAD_TOOL } from '../game/engine/roads'
 import { useGameStore } from '../game/store'
 import { IconUse } from './Icon'
-import { STATUS_BADGE, type MapBuildingStatus } from './mapShared'
+import { COLD_BADGE, STATUS_BADGE, type MapBuildingStatus } from './mapShared'
 import { DISTRICT_STYLE, plateShape } from './map2dArt'
 import { S, useBuildingViews2D, useMapInteraction, type BuildingView2D } from './map2dState'
 
@@ -154,8 +153,8 @@ const BuildingMarks2D = memo(function BuildingMarks2D(props: BuildingView2D) {
       {cold && (
         <g className="status-badge is-cold">
           <title>{district === 'fire' ? 'The fire has gone out' : 'Cold — beyond every fire'}</title>
-          <circle cx={-r * 0.88} cy={top + 4} r={8.5} fill="#4f86d0" className="badge-ring" />
-          <IconUse id={STATUS_BADGE_ART.cold} x={-r * 0.88} y={top + 4} size={12} />
+          <circle cx={-r * 0.88} cy={top + 4} r={8.5} fill={COLD_BADGE.color} className="badge-ring" />
+          <IconUse id={COLD_BADGE.art} x={-r * 0.88} y={top + 4} size={12} />
         </g>
       )}
     </g>
