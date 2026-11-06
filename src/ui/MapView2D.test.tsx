@@ -129,14 +129,20 @@ describe('roads and villagers on the maps', () => {
     tickSome(2)
     const lines = document.querySelectorAll('g.roads-2d line')
     expect(lines.length).toBeGreaterThan(0)
-    const dots = Array.from(document.querySelectorAll('circle.villager-dot'))
-    expect(dots.length).toBe(Object.keys(currentRun().villagers).length)
-    // Placed on mount, before any animation frame.
-    expect(dots[0].getAttribute('cx')).not.toBeNull()
+    // Villagers walk on a canvas over the SVG: one route (dot) per villager.
+    const canvas = document.querySelector('canvas.villagers-2d')
+    expect(canvas).not.toBeNull()
+    expect(Number(canvas!.getAttribute('data-villagers'))).toBe(
+      Object.keys(currentRun().villagers).length,
+    )
+    // Nothing per villager is left in the SVG to lay out every frame.
+    expect(document.querySelectorAll('svg.map circle.villager-dot').length).toBe(0)
+    const building = document.querySelector('g.building')
     tickSome()
     // Memoised layers: the same DOM nodes, not re-created per tick.
     expect(document.querySelectorAll('g.roads-2d line')[0]).toBe(lines[0])
-    expect(document.querySelectorAll('circle.villager-dot')[0]).toBe(dots[0])
+    expect(document.querySelector('canvas.villagers-2d')).toBe(canvas)
+    expect(document.querySelector('g.building')).toBe(building)
   })
 
   it('lays a road with clicks through the store and ends it with Esc', () => {
