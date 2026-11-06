@@ -13,6 +13,7 @@ import { pushLog } from './createRun'
 import { computeModifiers, type Modifiers } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
+import { memoByBuildings } from './runCache'
 
 /**
  * Caravans. Once a Trading Post stands, one arrives on a cycle with a rotating
@@ -31,7 +32,9 @@ export function defaultCaravan(): CaravanState {
 }
 
 export function hasTradingPost(s: RunState): boolean {
-  return Object.values(s.buildings).some((b) => b.defId === 'tradingPost' && b.built)
+  return memoByBuildings(s, 'hasTradingPost', () =>
+    Object.values(s.buildings).some((b) => b.defId === 'tradingPost' && b.built),
+  )
 }
 
 /** Goods a caravan may carry: everything tradable except amber itself. */

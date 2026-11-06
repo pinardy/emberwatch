@@ -36,6 +36,7 @@ import { computeModifiers, type Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
 import { canAfford, grant, population, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
+import { touchVillagers } from './runCache'
 import { addCondition, refreshCharterOffer, takeCharter } from './structure'
 import { addImpatience, addReputation, pickVictim, removeVillager, unassign } from './society'
 import { clearMultiplier } from './traits'
@@ -317,6 +318,7 @@ export function addVillager(s: RunState): string | null {
     assignment: null,
     ...(trait ? { trait } : {}),
   }
+  touchVillagers(s)
   return id
 }
 
