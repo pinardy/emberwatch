@@ -37,8 +37,8 @@ const defs: OrderDef[] = [
   { id: 'tavern_1', name: 'Raise a tavern', goal: { kind: 'buildingId', buildingId: 'tavern', amount: 1 }, reputationReward: 1, reward: { amber: 20 } },
   { id: 'warehouse_2', name: 'Two warehouses', goal: { kind: 'buildingId', buildingId: 'warehouse', amount: 2 }, reputationReward: 1, reward: { amber: 20 } },
 
-  { id: 'glades_3', name: 'Push back the forest', goal: { kind: 'gladesCleared', amount: 3 }, reputationReward: 1, reward: { amber: 25 } },
-  { id: 'glades_6', name: 'Tame the woods', goal: { kind: 'gladesCleared', amount: 6 }, reputationReward: 1, reward: { amber: 40 } },
+  { id: 'glades_3', name: 'Push back the forest', goal: { kind: 'gladesCleared', amount: 2 }, reputationReward: 1, reward: { amber: 25 } },
+  { id: 'glades_6', name: 'Tame the woods', goal: { kind: 'gladesCleared', amount: 3 }, reputationReward: 1, reward: { amber: 40 } },
 
   { id: 'resolve_25', name: 'A contented people', goal: { kind: 'resolveAbove', value: 25 }, reputationReward: 2, reward: { amber: 40 } },
   { id: 'resolve_35', name: 'Songs by the hearth', goal: { kind: 'resolveAbove', value: 35 }, reputationReward: 3, reward: { amber: 60 } },
@@ -47,7 +47,9 @@ const defs: OrderDef[] = [
   // Orders never expire, so new ones stick to goals every settlement can reach
   // from its starting blueprints — an unreachable order clogs a slot all run.
   { id: 'produced_wood_250', name: 'Stack the winter woodpile', goal: { kind: 'produced', resource: 'wood', amount: 250 }, reputationReward: 1, reward: { amber: 25 } },
-  { id: 'glades_9', name: 'Master of the wilds', goal: { kind: 'gladesCleared', amount: 9 }, reputationReward: 1, reward: { amber: 45 } },
+  { id: 'glades_9', name: 'Master of the wilds', goal: { kind: 'gladesCleared', amount: 4 }, reputationReward: 1, reward: { amber: 45 } },
+  // Retired: glade orders now count from their draw and reach at most four
+  // glades ahead, so this one is never drawn; kept so older saves still read.
   { id: 'glades_12', name: 'Reclaim the old frontier', goal: { kind: 'gladesCleared', amount: 12 }, reputationReward: 2, reward: { amber: 50 } },
 
   // Citadel shipments: the goods are handed over (consumed) when the order is

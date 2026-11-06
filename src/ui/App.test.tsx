@@ -543,7 +543,8 @@ describe("the Queen's offers", () => {
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
     fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
     let guard = 0
-    while (currentRun().pendingChoices[0]?.kind === 'blueprint' && guard++ < 10) {
+    // The blueprint picks and the founding cornerstone come first.
+    while (currentRun().pendingChoices[0]?.kind !== 'order' && guard++ < 10) {
       fireEvent.click(cardsIn(screen.getByRole('dialog'))[0])
     }
     const dialog = screen.getByRole('dialog', { name: /Founding Writ/i })

@@ -1216,10 +1216,12 @@ describe("the Queen's charter (mid-run milestone)", () => {
     const state = atCharter()
     checkCharter(state)
     state.pendingChoices[0].options[0] = 'guildCharter'
+    // Relative to whatever the opening cornerstone already gives.
+    const before = computeModifiers(state)
     takeChoice(state, 'guildCharter')
     const mods = computeModifiers(state)
-    expect(mods.productionSpeed.all).toBeCloseTo(0.15)
-    expect(mods.buildSpeed).toBeCloseTo(1.2)
+    expect((mods.productionSpeed.all ?? 0) - (before.productionSpeed.all ?? 0)).toBeCloseTo(0.15)
+    expect(mods.buildSpeed / before.buildSpeed).toBeCloseTo(1.2)
   })
 
   it("the architect's warrant unlocks a blueprint and delivers its materials", () => {
@@ -1271,10 +1273,12 @@ describe('lingering glade conditions', () => {
   it('a chosen option leaves a condition whose effects weigh on the sim', () => {
     const state = newRun()
     state.stock.plank = 0
+    // Relative to whatever the opening cornerstone already gives.
+    const before = computeModifiers(state).buildSpeed
     chooseEvent(state, 'sunkenGranary', 'Breach the dyke')
     expect(state.conditions).toHaveLength(1)
     expect(state.conditions[0].name).toBe('Flooded Paths')
-    expect(computeModifiers(state).buildSpeed).toBeCloseTo(0.75)
+    expect(computeModifiers(state).buildSpeed / before).toBeCloseTo(0.75)
     tick(state, 0.125)
     expect(state.conditions).toHaveLength(1)
   })

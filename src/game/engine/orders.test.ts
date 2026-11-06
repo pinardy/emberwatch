@@ -159,6 +159,18 @@ describe('order draws', () => {
     expect(orderEligible(ORDERS.pop_32.goal, s)).toBe(false)
     expect(orderEligible(ORDERS.glades_12.goal, s)).toBe(false)
     expect(orderEligible(ORDERS.glades_3.goal, s)).toBe(true)
+    // Glade orders count from their draw: clearing already pays reputation.
+    s.stats.gladesCleared = 5
+    s.orders = []
+    for (let i = 0; i < 40; i++) {
+      s.pendingChoices = []
+      offerOrders(s)
+      for (const order of s.pendingChoices[0].orders!) {
+        if (orderGoal(order)!.kind !== 'gladesCleared') continue
+        expect(order.baseline).toBe(5)
+        expect(order.progress).toBe(0)
+      }
+    }
   })
 
   it('falls back to a counting goal sized from what the settlement makes', () => {

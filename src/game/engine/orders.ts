@@ -152,8 +152,11 @@ function withinReach(goal: OrderGoal, s: RunState): boolean {
       return goal.amount <= Object.keys(s.villagers).length + ORDER_REACH.population
     case 'housing':
       return goal.amount <= totalHousing(s) + ORDER_REACH.housing
-    case 'gladesCleared':
-      return goal.amount <= s.stats.gladesCleared + ORDER_REACH.glades
+    case 'gladesCleared': {
+      // Counted from the draw: that many glades must still stand to clear.
+      const standing = Object.values(s.glades).filter((g) => g.kind !== 'settlement' && !g.cleared).length
+      return goal.amount <= ORDER_REACH.glades && goal.amount <= standing
+    }
     case 'buildingId':
     case 'buildingsOfCategory':
       return goal.amount <= builtCount(s, goal) + ORDER_REACH.buildings
@@ -202,9 +205,13 @@ function takenBy(s: RunState, extra: Order[] = []): Taken {
   return taken
 }
 
-/** Goals an ordinary order measures from the moment it is drawn. */
+/**
+ * Goals an ordinary order measures from the moment it is drawn: meals cooked,
+ * and glades cleared (clearing already pays reputation every few glades, so a
+ * lifetime glade count paid twice for the same expansion).
+ */
 function countsFromDraw(goal: OrderGoal): boolean {
-  return goal.kind === 'producedCategory'
+  return goal.kind === 'producedCategory' || goal.kind === 'gladesCleared'
 }
 
 function newOrder(s: RunState, def: OrderDef, extra: Partial<Order> = {}): Order {

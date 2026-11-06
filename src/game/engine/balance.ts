@@ -458,7 +458,7 @@ export const ORDER_REACH = {
  * this many seconds at its current rate, rounded to fives, and never less
  * than the minimum.
  */
-export const ORDER_COUNT_SECONDS = 200
+export const ORDER_COUNT_SECONDS = 300
 export const ORDER_COUNT_MIN = 15
 /** Impatience for asking the Queen for a different pair of orders (once a year). */
 export const ORDER_DECLINE_IMPATIENCE = 0.5
