@@ -252,6 +252,7 @@ export function TopBar() {
       <div className="topbar-meters">
         <Meter
           label="Reputation"
+          short="Rep."
           icon="👑"
           art={METER_ART.reputation}
           value={run.reputation}
@@ -263,6 +264,7 @@ export function TopBar() {
         />
         <Meter
           label="Impatience"
+          short="Impat."
           icon="⏳"
           art={METER_ART.impatience}
           value={run.impatience}
@@ -282,6 +284,7 @@ export function TopBar() {
         />
         <Meter
           label="Hostility"
+          short="Host."
           icon="🌩️"
           art={METER_ART.hostility}
           value={Math.floor(run.hostility)}
@@ -619,6 +622,8 @@ function hearthTitle(
 
 interface MeterProps {
   label: string
+  /** The label where the meter is too narrow for it (phones). */
+  short?: string
   icon: string
   art?: IconId
   value: number
@@ -629,7 +634,7 @@ interface MeterProps {
   /** Close to losing: the meter turns urgent so it reads at a glance. */
   critical?: boolean
   hint: string
-  /** Compact growth rate shown beside the label, e.g. "+0.2/min". */
+  /** Compact growth rate on the line under the bar, e.g. "+0.2/min". */
   rate?: string
   floats?: Float[]
   /** Changing this key replays the pulse animation (impatience ticking up). */
@@ -640,6 +645,7 @@ interface MeterProps {
 
 function Meter({
   label,
+  short,
   icon,
   art,
   value,
@@ -657,12 +663,16 @@ function Meter({
   return (
     <div className={`meter meter-${tone} ${critical ? 'is-critical' : ''}`} title={hint}>
       <div className="meter-head">
-        <span>
+        <span className="meter-icon">
           <Icon id={art} emoji={icon} />
         </span>
         <span className="meter-label">
-          {label}
-          {rate && <small className="meter-rate"> {rate}</small>}
+          <span className="meter-label-long">{label}</span>
+          {short && (
+            <span className="meter-label-short" aria-hidden>
+              {short}
+            </span>
+          )}
         </span>
         {/* Only the number remounts to replay its pulse; the bar keeps its transition. */}
         <strong
@@ -683,7 +693,17 @@ function Meter({
       >
         <div className="meter-fill" style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
-      {note}
+      {/* Label, value and rate never share a line, so none is cut short. */}
+      {(rate || note) && (
+        <div className="meter-sub">
+          {rate && (
+            <small className="meter-rate" title={`${label} ${rate} right now`}>
+              {rate}
+            </small>
+          )}
+          {note}
+        </div>
+      )}
       {floats && floats.length > 0 && (
         <div className="floaters" aria-hidden>
           {floats.map((f) => (
