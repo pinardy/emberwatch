@@ -34,12 +34,6 @@ export function useStaticGeometry<T extends THREE.BufferGeometry>(
   return geometry
 }
 
-/** Flat fill of a glade polygon, in the XY plane (rotate −90° about X to lay it down). */
-export function gladeFillGeometry(polygon: Vec2[]): THREE.ShapeGeometry {
-  const shape = new THREE.Shape(polygon.map((p) => new THREE.Vector2(p.x, -p.y)))
-  return new THREE.ShapeGeometry(shape)
-}
-
 /**
  * A flat ribbon running just inside a glade's border, in world XZ at y=0.
  * `dash` splits each edge into [on, off] lengths; `null` draws it solid.

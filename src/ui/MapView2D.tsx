@@ -46,7 +46,6 @@ const MAP_SYMBOLS: IconId[] = [
     ...Object.values(BUILDING_ART).filter((id): id is IconId => id !== undefined),
     ...Object.values(STATUS_BADGE_ART),
     ...Object.values(GLADE_STAKE_ART),
-    'snowflake',
     'upArrow',
     'crag',
     'marsh',

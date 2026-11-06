@@ -16,7 +16,6 @@ import {
   STATUS_BADGE,
   gladeAccessText,
   gladeFill,
-  gladeKindLabel,
   gladeLook,
   gladePlateInfo,
   isColdHousing,
@@ -106,9 +105,9 @@ function laySomeRoad(run: RunState): void {
 
 describe('glade visual language', () => {
   it('names each kind once, for both renderers and the inspector', () => {
-    expect(gladeKindLabel('small')).toBe('🌿 Small')
-    expect(gladeKindLabel('dangerous')).toBe('⚠️ Dangerous')
-    expect(gladeKindLabel('forbidden')).toBe('☠️ Forbidden')
+    expect(GLADE_KIND_STYLE.small.label).toBe('Small')
+    expect(GLADE_KIND_STYLE.dangerous.label).toBe('Dangerous')
+    expect(GLADE_KIND_STYLE.forbidden.label).toBe('Forbidden')
     expect(GLADE_KIND_STYLE.forbidden.title).toBe('Forbidden glade')
   })
 

@@ -65,7 +65,6 @@ export function gladeLook(glade: Glade): GladeLook {
 }
 
 export interface GladeKindStyle {
-  icon: string
   /** Short plate label, e.g. "Dangerous". */
   label: string
   /** Long form, e.g. "Dangerous glade". */
@@ -86,7 +85,6 @@ export interface GladeKindStyle {
 
 export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
   settlement: {
-    icon: '🔥',
     label: 'Settlement',
     title: 'Settlement glade',
     edge: '#d9b46a',
@@ -95,7 +93,6 @@ export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
     canopy: '#2e4f36',
   },
   small: {
-    icon: '🌿',
     label: 'Small',
     title: 'Small glade',
     edge: '#8fc488',
@@ -104,7 +101,6 @@ export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
     canopy: '#2e4f36',
   },
   dangerous: {
-    icon: '⚠️',
     label: 'Dangerous',
     title: 'Dangerous glade',
     edge: '#e8a33c',
@@ -113,7 +109,6 @@ export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
     canopy: '#4a4a2a',
   },
   forbidden: {
-    icon: '☠️',
     label: 'Forbidden',
     title: 'Forbidden glade',
     edge: '#d4567f',
@@ -121,12 +116,6 @@ export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
     fog: '#22141f',
     canopy: '#3d2c40',
   },
-}
-
-/** "🌿 Small", "⚠️ Dangerous", "☠️ Forbidden" — the plate's kind line. */
-export function gladeKindLabel(kind: GladeKind): string {
-  const style = GLADE_KIND_STYLE[kind]
-  return `${style.icon} ${style.label}`
 }
 
 /** Ground fill of a glade that is not (yet) cleared ground. */

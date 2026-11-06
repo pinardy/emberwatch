@@ -183,10 +183,6 @@ export function miniMapKey(run: RunState): string {
   return `${key};${threatKey(run)}`
 }
 
-export function seasonKey(run: RunState): string {
-  return run.season.season
-}
-
 /**
  * What the instanced building models show: which buildings stand where, built
  * or going up (in 10% steps), tier, upgrade scaffolding, lit fires, and — via

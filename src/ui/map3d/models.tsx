@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import type { IconId } from '../../art/icons'
-import { emojiTexture, iconTexture } from './sprites'
+import { artTexture } from './sprites'
 
 /**
  * Small shared pieces of the 3D scene. Building, deposit and obstacle models
@@ -55,7 +55,7 @@ export function IconSprite({
   y: number
   size: number
 }) {
-  const map = useMemo(() => (art ? iconTexture(art) : emojiTexture(icon)), [art, icon])
+  const map = useMemo(() => artTexture(icon, art), [art, icon])
   return (
     <sprite position={[0, y, 0]} scale={[size, size, 1]} raycast={NO_RAYCAST}>
       <spriteMaterial map={map} transparent depthWrite={false} />

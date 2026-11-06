@@ -1,7 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ICON_IDS } from '../../art/icons'
 import { BUILDING_ART, DEPOSIT_ART } from '../../game/content/art'
-import { emojiTexture, iconTexture, textureStats } from './sprites'
+import type { IconId } from '../../art/icons'
+import { artTexture, textureStats } from './sprites'
+
+const iconTexture = (id: IconId) => artTexture('?', id)
+const emojiTexture = (emoji: string) => artTexture(emoji)
 
 /**
  * jsdom has no 2D canvas, so a recording stand-in takes its place: enough to
