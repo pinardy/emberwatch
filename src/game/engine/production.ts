@@ -390,7 +390,7 @@ function doubleBag(bag: Recipe['outputs']): Recipe['outputs'] {
   return out
 }
 
-function hasLiveDeposit(s: RunState, b: BuildingInstance, id: DepositId): boolean {
+export function hasLiveDeposit(s: RunState, b: BuildingInstance, id: DepositId): boolean {
   const ids = b.depositsInRange[id]
   if (!ids || ids.length === 0) return false
   return ids.some((depositId) => {
