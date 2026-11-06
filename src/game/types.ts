@@ -490,6 +490,14 @@ export type OrderGoal =
   | { kind: 'gladesCleared'; amount: number }
   | { kind: 'housing'; amount: number }
   | { kind: 'resolveAbove'; value: number }
+  /** Built buildings of a category with at least one worker on them. */
+  | { kind: 'staffed'; category: BuildingCategory; amount: number }
+  /**
+   * Everything of a resource category produced (lifetime, or from a baseline
+   * where it counts from now) — cooked food is eaten as it is made, so a
+   * stock goal for it can sit at nothing all run.
+   */
+  | { kind: 'producedCategory'; category: ResourceCategory; amount: number }
 
 export interface OrderDef {
   id: string
@@ -498,6 +506,8 @@ export interface OrderDef {
   reputationReward: number
   /** Bonus paid out on completion. */
   reward?: ResourceBag
+  /** A shipment: the stock goal's goods are handed over when it is met. */
+  consume?: boolean
 }
 
 export interface Order {
@@ -507,12 +517,27 @@ export interface Order {
   /** 0..1 */
   progress: number
   complete: boolean
+  /**
+   * This instance's goal, when it is not the def's: a counting order sized
+   * from the settlement's output when it was drawn, or a decree sized the
+   * same way. Absent on older saves, which read the def's goal.
+   */
+  goal?: OrderGoal
+  /**
+   * Goal count when the order was drawn, for goals measured from then
+   * (`goalCount`). Absent = measured as a level (older saves, stock goals).
+   */
+  baseline?: number
+  /** The Year-1 founding writ: a small first order chosen at the start. */
+  writ?: boolean
 }
 
 /** A Queen's order with a deadline: richer reward, and a price for missing it. */
 export interface DecreeDef extends OrderDef {
   /** Seconds allowed to meet the goal. */
   timeLimit: number
+  /** Impatience the Queen forgives when it is met. */
+  impatienceRelief?: number
 }
 
 export interface RoyalDecree extends Order {
@@ -811,9 +836,16 @@ export interface CaravanState {
 export type RunPhase = 'playing' | 'won' | 'lost'
 
 export interface PendingChoice {
-  kind: 'cornerstone' | 'blueprint' | 'gladeEvent' | 'charter'
-  /** Cornerstone/building/charter ids offered, or `[eventId]` for glade events. */
+  kind: 'cornerstone' | 'blueprint' | 'gladeEvent' | 'charter' | 'order' | 'decree'
+  /**
+   * Cornerstone/building/charter ids offered, `[eventId]` for glade events,
+   * or the instance ids of the candidate orders/decrees.
+   */
   options: string[]
+  /** For order choices: the candidates, ready to take as drawn. */
+  orders?: Order[]
+  /** For decree choices: the candidates, ready to take as drawn. */
+  decrees?: RoyalDecree[]
   /** For glade events: which glade triggered it. */
   gladeId?: string
   /** For charters: the blueprint the architect's warrant would grant. */
@@ -972,6 +1004,16 @@ export interface RunState {
    * more, and each decree met forgives one. Absent on older saves (reads as 0).
    */
   decreeStrikes?: number
+  /**
+   * Decrees met in a row since the last one lapsed or was declined; a streak
+   * earns a bonus. Absent on older saves (reads as 0).
+   */
+  decreeStreak?: number
+  /**
+   * Year in which the yearly order decline was last used (asking the Queen
+   * for a different pair of orders). Absent = not used yet.
+   */
+  orderDeclineYear?: number
   /** Whether the mid-run charter has been offered, and which was chosen. */
   charterOffered: boolean
   charter: string | null

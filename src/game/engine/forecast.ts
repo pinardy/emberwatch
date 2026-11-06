@@ -157,6 +157,36 @@ export function foodProductionRate(s: RunState, mods: Modifiers, season: Season)
   return rate
 }
 
+/**
+ * Units of `resource` per second the settlement's staffed producers turn out
+ * right now, at this season's multipliers: what orders and decrees are sized
+ * from. Like `foodProductionRate`, it counts a workshop only while it has its
+ * inputs in stock (a kitchen with no grain makes no biscuits), and never a
+ * producer whose deposit has run dry.
+ */
+export function productionRate(s: RunState, mods: Modifiers, resource: ResourceId): number {
+  let rate = 0
+  for (const b of Object.values(s.buildings)) {
+    if (!b.built || b.paused || b.workers.length === 0) continue
+    const recipe = activeRecipe(b)
+    if (!recipe || recipe.seconds <= 0) continue
+    const out = (recipe.outputs as ResourceBag)[resource] ?? 0
+    if (out <= 0) continue
+    if (recipe.requiresDeposit) {
+      const live = (b.depositsInRange[recipe.requiresDeposit] ?? []).some((id) => {
+        const d = s.deposits[id]
+        return d && (d.amount === null || d.amount > 0)
+      })
+      if (!live) continue
+    }
+    if (!canAfford(s.stock, recipe.inputs)) continue
+    const multiplier = seasonMultiplier(b.defId, s.season.season, mods)
+    if (multiplier <= 0) continue
+    rate += (workRate(s, b, mods) * multiplier * out) / recipe.seconds
+  }
+  return rate
+}
+
 export interface StormFoodForecast {
   /** Seconds from now until the coming (or current) Storm ends. */
   horizon: number

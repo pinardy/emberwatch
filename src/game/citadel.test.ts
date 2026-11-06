@@ -329,7 +329,9 @@ describe('Citadel upgrades in createRun', () => {
     expect(s.unlockedBuildings).toContain('tradingPost')
     const kinds = s.pendingChoices.map((c) => c.kind)
     expect(kinds.filter((k) => k === 'blueprint')).toHaveLength(OPENING_BLUEPRINT_PICKS + 1)
-    expect(kinds[kinds.length - 1]).toBe('cornerstone')
+    // The Signet's cornerstone draft comes after the blueprints, then the writ.
+    expect(kinds[kinds.length - 2]).toBe('cornerstone')
+    expect(kinds[kinds.length - 1]).toBe('order')
   })
 
   it('offers one more option in blueprint and cornerstone drafts', () => {

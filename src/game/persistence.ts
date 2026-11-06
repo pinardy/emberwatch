@@ -1,6 +1,7 @@
 import { defaultAutoPause, migrateAutoPause, type AutoPauseSettings } from './autoPause'
 import { defaultFeats } from './content/achievements'
 import { defaultMeta, emptyCitadelPerks, migrateMeta } from './content/meta'
+import { migrateOrders } from './engine/orders'
 import { defaultDecreeState } from './engine/structure'
 import { createTimeline } from './engine/timeline'
 import { defaultCaravan } from './engine/trade'
@@ -154,6 +155,9 @@ export function migrateRun(raw: unknown): RunState | null {
   run.decree ??= decreeDefaults.decree
   run.decreeTimer ??= decreeDefaults.decreeTimer
   run.charterOffered ??= false
+  // Saves from before decree streaks and order choices.
+  run.decreeStreak ??= 0
+  migrateOrders(run)
   run.charter ??= null
   // Saves from before the Citadel tree and the Queen's Edicts.
   run.edict ??= 0

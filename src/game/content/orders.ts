@@ -5,7 +5,9 @@ import { totalHousing } from '../engine/queries'
 
 /**
  * The Queen's orders. Three are active at a time; completing one grants
- * reputation and immediately draws a replacement.
+ * reputation, and the Queen then offers two candidates for the empty slot.
+ * Candidates are drawn only from goals the settlement can reach and has not
+ * already mostly met (see `engine/orders.ts`).
  */
 const defs: OrderDef[] = [
   { id: 'stock_plank_30', name: 'Stockpile planks', goal: { kind: 'stock', resource: 'plank', amount: 30 }, reputationReward: 1, reward: { amber: 20 } },
@@ -16,7 +18,9 @@ const defs: OrderDef[] = [
   { id: 'stock_incense_12', name: 'Supply the shrines', goal: { kind: 'stock', resource: 'incense', amount: 12 }, reputationReward: 1, reward: { amber: 20 } },
 
   { id: 'stock_food_60', name: 'Fill the larders', goal: { kind: 'stockCategory', category: 'rawFood', amount: 60 }, reputationReward: 1, reward: { amber: 25 } },
-  { id: 'stock_cooked_35', name: 'Cook for the settlement', goal: { kind: 'stockCategory', category: 'food', amount: 35 }, reputationReward: 2, reward: { amber: 35 } },
+  // Cooked food is eaten as it is made, so this counts meals cooked, not a
+  // larder level (as a stock goal it sat at 0% in most runs).
+  { id: 'stock_cooked_35', name: 'Cook for the settlement', goal: { kind: 'producedCategory', category: 'food', amount: 60 }, reputationReward: 2, reward: { amber: 35 } },
 
   { id: 'produced_wood_120', name: 'Fell the forest', goal: { kind: 'produced', resource: 'wood', amount: 120 }, reputationReward: 1, reward: { amber: 20 } },
   { id: 'produced_stone_80', name: 'Quarry stone', goal: { kind: 'produced', resource: 'stone', amount: 80 }, reputationReward: 1, reward: { amber: 20 } },
@@ -34,7 +38,7 @@ const defs: OrderDef[] = [
   { id: 'warehouse_2', name: 'Two warehouses', goal: { kind: 'buildingId', buildingId: 'warehouse', amount: 2 }, reputationReward: 1, reward: { amber: 20 } },
 
   { id: 'glades_3', name: 'Push back the forest', goal: { kind: 'gladesCleared', amount: 3 }, reputationReward: 1, reward: { amber: 25 } },
-  { id: 'glades_6', name: 'Tame the woods', goal: { kind: 'gladesCleared', amount: 6 }, reputationReward: 2, reward: { amber: 40 } },
+  { id: 'glades_6', name: 'Tame the woods', goal: { kind: 'gladesCleared', amount: 6 }, reputationReward: 1, reward: { amber: 40 } },
 
   { id: 'resolve_25', name: 'A contented people', goal: { kind: 'resolveAbove', value: 25 }, reputationReward: 2, reward: { amber: 40 } },
   { id: 'resolve_35', name: 'Songs by the hearth', goal: { kind: 'resolveAbove', value: 35 }, reputationReward: 3, reward: { amber: 60 } },
@@ -43,15 +47,62 @@ const defs: OrderDef[] = [
   // Orders never expire, so new ones stick to goals every settlement can reach
   // from its starting blueprints — an unreachable order clogs a slot all run.
   { id: 'produced_wood_250', name: 'Stack the winter woodpile', goal: { kind: 'produced', resource: 'wood', amount: 250 }, reputationReward: 1, reward: { amber: 25 } },
-  { id: 'glades_9', name: 'Master of the wilds', goal: { kind: 'gladesCleared', amount: 9 }, reputationReward: 2, reward: { amber: 45 } },
+  { id: 'glades_9', name: 'Master of the wilds', goal: { kind: 'gladesCleared', amount: 9 }, reputationReward: 1, reward: { amber: 45 } },
   { id: 'glades_12', name: 'Reclaim the old frontier', goal: { kind: 'gladesCleared', amount: 12 }, reputationReward: 2, reward: { amber: 50 } },
+
+  // Citadel shipments: the goods are handed over (consumed) when the order is
+  // met, so the deeper non-service chains have a path to reputation too.
+  // Only offered once the settlement can make the goods.
+  { id: 'ship_tool_8', name: 'Citadel shipment: tools', goal: { kind: 'stock', resource: 'tool', amount: 8 }, reputationReward: 2, reward: { amber: 30 }, consume: true },
+  { id: 'ship_part_10', name: 'Citadel shipment: parts', goal: { kind: 'stock', resource: 'part', amount: 10 }, reputationReward: 2, reward: { amber: 30 }, consume: true },
+  { id: 'ship_copper_12', name: 'Citadel shipment: copper', goal: { kind: 'stock', resource: 'copperBar', amount: 12 }, reputationReward: 2, reward: { amber: 30 }, consume: true },
 ]
 
+/**
+ * The founding writ: three small Year-1 goals, one chosen at the start,
+ * worth a point of reputation in the first few minutes. Never drawn as an
+ * ordinary order.
+ */
+export const WRIT_LIST: OrderDef[] = [
+  { id: 'writ_glades', name: 'Claim the near woods', goal: { kind: 'gladesCleared', amount: 2 }, reputationReward: 1, reward: { amber: 10 } },
+  { id: 'writ_settlers', name: 'Welcome the first settlers', goal: { kind: 'population', amount: 10 }, reputationReward: 1, reward: { amber: 10 } },
+  { id: 'writ_camps', name: 'Set the camps to work', goal: { kind: 'staffed', category: 'gathering', amount: 4 }, reputationReward: 1, reward: { amber: 10 } },
+]
+
+/**
+ * A counting order ("produce N more of X"), drawn when no ordinary order
+ * suits the settlement. Its instance carries the goal, sized from what the
+ * settlement makes at the moment; this goal is only a placeholder.
+ */
+export const COUNTING_ORDER: OrderDef = {
+  id: 'count_produce',
+  name: 'Royal requisition',
+  goal: { kind: 'produced', resource: 'wood', amount: 30 },
+  reputationReward: 1,
+  reward: { amber: 20 },
+}
+
 export const ORDERS: Record<string, OrderDef> = Object.fromEntries(
-  defs.map((d) => [d.id, d]),
+  [...defs, ...WRIT_LIST, COUNTING_ORDER].map((d) => [d.id, d]),
 )
 
 export const ORDER_LIST = defs
+
+/** "cooked food", "raw food", or the category's name. */
+export function categoryWords(category: string): string {
+  if (category === 'food') return 'cooked food'
+  if (category === 'rawFood') return 'raw food'
+  return category
+}
+
+/** Lifetime production of everything in a resource category. */
+export function producedInCategory(s: RunState, category: string): number {
+  let sum = 0
+  for (const [id, amount] of Object.entries(s.producedTotals)) {
+    if (RESOURCES[id as keyof typeof RESOURCES]?.category === category) sum += amount ?? 0
+  }
+  return sum
+}
 
 /** Human-readable goal, e.g. "Have 30 Planks in the stockpile". */
 export function describeGoal(goal: OrderGoal): string {
@@ -62,6 +113,8 @@ export function describeGoal(goal: OrderGoal): string {
       return `Have ${goal.amount} ${goal.category === 'food' ? 'cooked food' : 'raw food'} in the stockpile`
     case 'produced':
       return `Produce ${goal.amount} ${resourceName(goal.resource)} in total`
+    case 'producedCategory':
+      return `Produce ${goal.amount} ${categoryWords(goal.category)} in total`
     case 'population':
       return `Reach ${goal.amount} villagers`
     case 'housing':
@@ -71,9 +124,13 @@ export function describeGoal(goal: OrderGoal): string {
     case 'buildingId':
       return `Build ${goal.amount} × ${BUILDINGS[goal.buildingId]?.name ?? goal.buildingId}`
     case 'gladesCleared':
-      return `Clear ${goal.amount} glades`
+      return `Clear ${goal.amount} glade${goal.amount === 1 ? '' : 's'}`
     case 'resolveAbove':
       return `Raise average resolve to ${goal.value}`
+    case 'staffed':
+      return goal.category === 'gathering'
+        ? `Have ${goal.amount} camps staffed`
+        : `Have ${goal.amount} ${goal.category} buildings staffed`
   }
 }
 
@@ -93,6 +150,8 @@ export function evaluateGoal(goal: OrderGoal, s: RunState): number {
     }
     case 'produced':
       return clamp((s.producedTotals[goal.resource] ?? 0) / goal.amount)
+    case 'producedCategory':
+      return clamp(producedInCategory(s, goal.category) / goal.amount)
     case 'population':
       return clamp(Object.keys(s.villagers).length / goal.amount)
     case 'housing':
@@ -119,6 +178,12 @@ export function evaluateGoal(goal: OrderGoal, s: RunState): number {
       const avg =
         present.reduce((acc, sp) => acc + s.resolve[sp], 0) / present.length
       return clamp(avg / goal.value)
+    }
+    case 'staffed': {
+      const n = Object.values(s.buildings).filter(
+        (b) => b.built && b.workers.length > 0 && BUILDINGS[b.defId]?.category === goal.category,
+      ).length
+      return clamp(n / goal.amount)
     }
   }
 }

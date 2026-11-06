@@ -200,15 +200,20 @@ describe('first royal decree', () => {
     let sawStorm = false
     while (state.season.year === 1) {
       tick(state, 0.125)
-      state.pendingChoices = []
+      // Answer orders as they come; keep any decree offer for the check below.
+      state.pendingChoices = state.pendingChoices.filter((c) => c.kind === 'decree')
       if (state.season.season === 'storm') sawStorm = true
       if (state.season.year === 1) {
         expect(state.decree, `no decree at ${state.clock}s (${state.season.season})`).toBeNull()
+        expect(state.pendingChoices, `no decree offer at ${state.clock}s`).toHaveLength(0)
       }
     }
     expect(sawStorm).toBe(true)
     // The countdown and the season clock run on the same tick.
-    for (let i = 0; i < 4 && !state.decree; i++) tick(state, 0.125)
+    // The herald arrives with a choice of decrees; taking one makes it live.
+    for (let i = 0; i < 4 && state.pendingChoices.length === 0; i++) tick(state, 0.125)
+    expect(state.pendingChoices[0]?.kind).toBe('decree')
+    takeChoice(state, state.pendingChoices[0].options[0])
     expect(state.decree).not.toBeNull()
     expect(state.season).toMatchObject({ year: 2, season: 'drizzle' })
     expect(state.log.some((entry) => entry.text.includes('Royal decree'))).toBe(true)

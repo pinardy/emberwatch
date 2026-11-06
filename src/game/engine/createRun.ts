@@ -1,6 +1,5 @@
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
 import { citadelLoadout, clampEdict, edictLabel, edictModifiers } from '../content/meta'
-import { ORDER_LIST } from '../content/orders'
 import {
   SPECIES,
   STARTING_SPECIES,
@@ -11,7 +10,6 @@ import type {
   BuildingInstance,
   MetaState,
   OngoingEffect,
-  Order,
   ResourceBag,
   ResourceId,
   RunState,
@@ -25,11 +23,13 @@ import {
   STARTING_VILLAGERS,
   MAX_IMPATIENCE,
   MAX_REPUTATION,
+  ORDER_SLOTS,
   SEASON_ORDER,
   YEAR_SECONDS,
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { offerBlueprint, offerCornerstone } from './events'
+import { drawOrder, offerWrit } from './orders'
 import { defaultDecreeState } from './structure'
 import { emptyTimeline } from './timeline'
 import { defaultCaravan } from './trade'
@@ -212,6 +212,7 @@ export function createRun({
     conditions: [],
     conditionCounter: 0,
     ...defaultDecreeState(),
+    decreeStreak: 0,
     charterOffered: false,
     charter: null,
     caravan: defaultCaravan(),
@@ -253,7 +254,9 @@ export function createRun({
   state.decreeTimer += yearOneLength(landMods) - YEAR_SECONDS
 
   // --- opening orders -------------------------------------------------------
-  for (let i = 0; i < 3; i++) drawOrder(state)
+  // Two standing orders, drawn to fit; the third slot is the founding writ,
+  // chosen once the opening draft is done.
+  for (let i = 0; i < ORDER_SLOTS - 1; i++) drawOrder(state)
 
   // --- opening blueprint draft ---------------------------------------------
   // The run begins on a choice: which buildings this settlement will have. It
@@ -262,6 +265,8 @@ export function createRun({
   for (let i = 0; i < openingPicks; i++) offerBlueprint(state)
   // The Viceroy's Signet adds a cornerstone pick to the opening.
   if (loadout.startCornerstoneChoice) offerCornerstone(state)
+  // The founding writ: a small first goal, worth a point in the opening minutes.
+  offerWrit(state)
 
   const land = runModifierDefs(state.runModifiers)
   if (land.length > 0) {
@@ -285,35 +290,6 @@ function yearOneLength(mods: ReturnType<typeof computeModifiers>): number {
   return SEASON_ORDER.reduce((sum, season) => sum + seasonLengthFor(season, 1, mods), 0)
 }
 
-/** Draws a fresh order the run has not seen yet and appends it. */
-export function drawOrder(s: RunState): Order | null {
-  const rng = makeRng(s.seed, s.rngCursor)
-  const activeDefIds = s.orders.filter((o) => !o.complete).map((o) => o.defId)
-  let pool = ORDER_LIST.filter(
-    (d) => !s.ordersSeen.includes(d.id) && !activeDefIds.includes(d.id),
-  )
-  // Once every order has been seen, allow repeats rather than running dry.
-  if (pool.length === 0) {
-    pool = ORDER_LIST.filter((d) => !activeDefIds.includes(d.id))
-  }
-  if (pool.length === 0) {
-    s.rngCursor = rng.cursor()
-    return null
-  }
-  const def = rng.pick(pool)
-  s.rngCursor = rng.cursor()
-  s.ordersSeen.push(def.id)
-
-  const order: Order = {
-    id: `o${s.orderCounter++}`,
-    defId: def.id,
-    progress: 0,
-    complete: false,
-  }
-  s.orders.push(order)
-  return order
-}
-
 export function pushLog(
   s: RunState,
   text: string,
@@ -328,3 +304,5 @@ export function pushLog(
   })
   if (s.log.length > 80) s.log.length = 80
 }
+
+export { drawOrder }
