@@ -24,7 +24,6 @@ import {
   demolishBuilding,
   demolishRefund,
   demolishRefundShare,
-  isUnstartedSite,
 } from './actions'
 import {
   ADJACENCY_RANGE,
@@ -69,8 +68,8 @@ import {
 import { dist, pointInPolygon } from './geometry'
 import { gladeAt } from './mapgen'
 import { computeModifiers } from './modifiers'
+import { adjacencyMultiplier } from './adjacency'
 import {
-  adjacencyMultiplier,
   seasonMultiplier,
   terrainBuildMultiplier,
   terrainOf,
@@ -103,13 +102,14 @@ import {
 } from './society'
 import {
   checkCharter,
-  goalFeasible,
+  decreeCandidate,
   goalProgress,
-  issueDecree,
   stepConditions,
   stepDecree,
 } from './structure'
+import { orderFeasible } from './orders'
 import { tick } from './tick'
+import { proclaimFirstDecree } from '../../test/decrees'
 import { loadRun } from '../persistence'
 import {
   buyOffer,
@@ -483,7 +483,7 @@ describe('orders', () => {
     for (const id of ['produced_wood_250', 'glades_9', 'glades_12']) {
       const def = ORDER_LIST.find((d) => d.id === id)
       expect(def, id).toBeDefined()
-      expect(goalFeasible(def!.goal, state), id).toBe(true)
+      expect(orderFeasible(def!.goal, state), id).toBe(true)
     }
   })
 
@@ -1083,7 +1083,7 @@ describe("royal decrees (timed Queen's orders)", () => {
     }
     for (let i = 0; i < 40 && state.decree?.defId !== 'decree_planks'; i++) {
       state.decree = null
-      issueDecree(state)
+      proclaimFirstDecree(state)
     }
     expect(state.decree?.defId).toBe('decree_planks')
     expect(state.decree!.baseline).toBe(500)
@@ -1143,9 +1143,9 @@ describe("royal decrees (timed Queen's orders)", () => {
     state.unlockedBuildings = [...STARTING_BLUEPRINTS]
     for (let i = 0; i < 40; i++) {
       state.decree = null
-      issueDecree(state)
+      proclaimFirstDecree(state)
       const def = DECREES[state.decree!.defId]
-      expect(goalFeasible(def.goal, state), def.id).toBe(true)
+      expect(decreeCandidate(state, def), def.id).not.toBeNull()
       expect(['decree_ale', 'decree_fabric', 'decree_service']).not.toContain(def.id)
       // Nothing is staffed yet, so no production decree is asked for.
       expect(def.goal.kind, def.id).not.toBe('produced')
@@ -1854,7 +1854,6 @@ describe('demolition refunds', () => {
     const wood = state.stock.wood ?? 0
     const camp = site(state, 'woodcuttersCamp')
     expect(state.stock.wood).toBe(wood - BUILDINGS.woodcuttersCamp.cost.wood!)
-    expect(isUnstartedSite(camp)).toBe(true)
     expect(demolishRefundShare(camp)).toBe(1)
     expect(demolishRefund(camp)).toEqual(BUILDINGS.woodcuttersCamp.cost)
 
@@ -1872,7 +1871,6 @@ describe('demolition refunds', () => {
     const seconds = BUILDINGS.cabin.buildSeconds
 
     cabin.buildProgress = seconds / 2
-    expect(isUnstartedSite(cabin)).toBe(false)
     expect(demolishRefundShare(cabin)).toBeCloseTo(0.75)
     expect(demolishRefund(cabin)).toEqual({ plank: 6, brick: 3 })
 
@@ -1898,7 +1896,6 @@ describe('demolition refunds', () => {
     state.stock.amber = 500
     const camp = site(state, 'woodcuttersCamp')
     expect(rushConstruction(state, camp.id)).toBeNull()
-    expect(isUnstartedSite(camp)).toBe(false)
     expect(demolishRefundShare(camp)).toBe(0.5)
     // Something built on placement keeps its progress at zero but is finished.
     expect(demolishRefundShare({ defId: 'woodcuttersCamp', built: true, buildProgress: 0 })).toBe(

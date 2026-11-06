@@ -1,7 +1,7 @@
 import type { OrderDef, OrderGoal, RunState } from '../types'
 import { BUILDINGS } from './buildings'
-import { RESOURCES, resourceName } from './resources'
-import { totalHousing } from '../engine/queries'
+import { categoryTotal, resourceName } from './resources'
+import { averageResolve, totalHousing } from '../engine/queries'
 
 /**
  * The Queen's orders. Three are active at a time; completing one grants
@@ -97,22 +97,13 @@ export function categoryWords(category: string): string {
   return category
 }
 
-/** Lifetime production of everything in a resource category. */
-export function producedInCategory(s: RunState, category: string): number {
-  let sum = 0
-  for (const [id, amount] of Object.entries(s.producedTotals)) {
-    if (RESOURCES[id as keyof typeof RESOURCES]?.category === category) sum += amount ?? 0
-  }
-  return sum
-}
-
 /** Human-readable goal, e.g. "Have 30 Planks in the stockpile". */
 export function describeGoal(goal: OrderGoal): string {
   switch (goal.kind) {
     case 'stock':
       return `Have ${goal.amount} ${resourceName(goal.resource)} in the stockpile`
     case 'stockCategory':
-      return `Have ${goal.amount} ${goal.category === 'food' ? 'cooked food' : 'raw food'} in the stockpile`
+      return `Have ${goal.amount} ${categoryWords(goal.category)} in the stockpile`
     case 'produced':
       return `Produce ${goal.amount} ${resourceName(goal.resource)} in total`
     case 'producedCategory':
@@ -142,18 +133,12 @@ export function evaluateGoal(goal: OrderGoal, s: RunState): number {
   switch (goal.kind) {
     case 'stock':
       return clamp((s.stock[goal.resource] ?? 0) / goal.amount)
-    case 'stockCategory': {
-      let sum = 0
-      for (const [id, amount] of Object.entries(s.stock)) {
-        const def = RESOURCES[id as keyof typeof RESOURCES]
-        if (def && def.category === goal.category) sum += amount ?? 0
-      }
-      return clamp(sum / goal.amount)
-    }
+    case 'stockCategory':
+      return clamp(categoryTotal(s.stock, goal.category) / goal.amount)
     case 'produced':
       return clamp((s.producedTotals[goal.resource] ?? 0) / goal.amount)
     case 'producedCategory':
-      return clamp(producedInCategory(s, goal.category) / goal.amount)
+      return clamp(categoryTotal(s.producedTotals, goal.category) / goal.amount)
     case 'population':
       return clamp(Object.keys(s.villagers).length / goal.amount)
     case 'housing':
@@ -172,15 +157,8 @@ export function evaluateGoal(goal: OrderGoal, s: RunState): number {
     }
     case 'gladesCleared':
       return clamp(s.stats.gladesCleared / goal.amount)
-    case 'resolveAbove': {
-      const present = s.speciesPool.filter((sp) =>
-        Object.values(s.villagers).some((v) => v.species === sp),
-      )
-      if (present.length === 0) return 0
-      const avg =
-        present.reduce((acc, sp) => acc + s.resolve[sp], 0) / present.length
-      return clamp(avg / goal.value)
-    }
+    case 'resolveAbove':
+      return clamp(averageResolve(s) / goal.value)
     case 'staffed': {
       const n = Object.values(s.buildings).filter(
         (b) => b.built && b.workers.length > 0 && BUILDINGS[b.defId]?.category === goal.category,

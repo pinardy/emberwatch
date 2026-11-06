@@ -9,9 +9,10 @@ import { defaultSettings, loadSettings } from '../game/persistence'
 import { RUN_MODIFIERS } from '../game/content/runModifiers'
 import { findPlacement } from '../game/engine/actions'
 import { drawRunModifiers } from '../game/engine/runModifiers'
-import { pushLog } from '../game/engine/createRun'
+import { pushLog } from '../game/engine/runLog'
 import { CHARTER_REPUTATION, REWARD_MILESTONES } from '../game/engine/balance'
-import { addCondition, issueDecree, offerDecrees } from '../game/engine/structure'
+import { addCondition, offerDecrees } from '../game/engine/structure'
+import { proclaimFirstDecree } from '../test/decrees'
 import { offerOrders } from '../game/engine/orders'
 import { MAX_FRAME_REAL_SECONDS, frameBudget, useGameStore } from '../game/store'
 import type { BuildingInstance, RunState } from '../game/types'
@@ -648,7 +649,7 @@ describe('mid-run structure UI', () => {
     act(() => {
       const run = currentRun()
       run.decreeTimer = 0
-      issueDecree(run)
+      proclaimFirstDecree(run)
       const option = GLADE_EVENTS.sunkenGranary.options.find((o) => o.condition)!
       addCondition(run, option.condition!, 'glade1')
       useGameStore.setState({ version: useGameStore.getState().version + 1 })
