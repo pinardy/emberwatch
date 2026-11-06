@@ -44,7 +44,7 @@ import { canAfford, grant, population, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { touchVillagers } from './runCache'
 import { addCondition, refreshCharterOffer, takeCharter, takeQueenChoice } from './structure'
-import { addImpatience, addReputation, pickVictim, removeVillager, unassign } from './society'
+import { addImpatience, addReputation, loseVillager, pickVictim, unassign } from './society'
 import { clearMultiplier } from './traits'
 import { recordEvent } from './timeline'
 
@@ -262,9 +262,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
     for (let i = 0; i < option.villagerLoss; i++) {
       const victim = pickVictim(s)
       if (!victim) break
-      removeVillager(s, victim.id)
-      s.stats.villagersLost++
-      recordEvent(s, 'lost', victim.species)
+      loseVillager(s, victim)
       pushLog(s, `${victim.name} the ${speciesSingular(victim.species)} is lost.`, 'bad')
     }
   }
@@ -372,9 +370,7 @@ export function stepThreats(s: RunState, dt: number): void {
       for (let i = 0; i < strike.villagerLoss; i++) {
         const victim = pickVictim(s)
         if (!victim) break
-        removeVillager(s, victim.id)
-        s.stats.villagersLost++
-        recordEvent(s, 'lost', victim.species)
+        loseVillager(s, victim)
         addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
         parts.push(`${victim.name} is taken`)
       }

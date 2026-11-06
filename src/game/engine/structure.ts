@@ -38,7 +38,7 @@ import { DECLINE_CHOICE, takeOrderChoice } from './orders'
 import { grant, spend, storageUsed } from './queries'
 import { makeRng, type Rng } from './rng'
 import { tierOf } from './upgrades'
-import { addImpatience, addReputation, removeVillager } from './society'
+import { addImpatience, addReputation, loseVillager } from './society'
 import { recordEvent } from './timeline'
 
 /**
@@ -557,9 +557,7 @@ export function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined)
     for (let i = 0; i < outcome.villagerLoss; i++) {
       const victim = Object.values(s.villagers)[0]
       if (!victim) break
-      removeVillager(s, victim.id)
-      s.stats.villagersLost++
-      recordEvent(s, 'lost', victim.species)
+      loseVillager(s, victim)
       addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
       parts.push(`${victim.name} leaves`)
     }
