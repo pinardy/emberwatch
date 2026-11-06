@@ -225,7 +225,7 @@ export function stepDecree(s: RunState, dt: number): void {
 }
 
 /** Units per second of everything in a resource category, from staffed producers. */
-function categoryRate(s: RunState, mods: Modifiers, category: string): number {
+export function categoryRate(s: RunState, mods: Modifiers, category: string): number {
   let rate = 0
   for (const r of Object.values(RESOURCES)) {
     if (r.category === category) rate += productionRate(s, mods, r.id as ResourceId)
@@ -259,19 +259,12 @@ export function decreeCandidate(
   const timeLimit = Math.round(def.timeLimit * mods.decreeTime)
   let goal: OrderGoal = def.goal
   switch (def.goal.kind) {
-    case 'produced': {
-      const rate = productionRate(s, mods, def.goal.resource)
-      if (rate <= 0) return null
-      const listed = def.goal.amount
-      const amount = Math.min(
-        Math.ceil(listed * DECREE_MAX_SHARE),
-        Math.max(Math.ceil(listed * DECREE_MIN_SHARE), evenUp(rate * timeLimit * DECREE_RATE_SHARE)),
-      )
-      goal = { ...def.goal, amount }
-      break
-    }
+    case 'produced':
     case 'producedCategory': {
-      const rate = categoryRate(s, mods, def.goal.category)
+      const rate =
+        def.goal.kind === 'produced'
+          ? productionRate(s, mods, def.goal.resource)
+          : categoryRate(s, mods, def.goal.category)
       if (rate <= 0) return null
       const listed = def.goal.amount
       const amount = Math.min(

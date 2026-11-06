@@ -73,7 +73,7 @@ import {
 import { tick } from './tick'
 import { productionRate } from './forecast'
 import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation } from './orders'
-import { decreeGoal, decreeStreakBonus } from './structure'
+import { categoryRate, decreeGoal, decreeStreakBonus } from './structure'
 import { baseServiceCapacity, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 
 /**
@@ -1029,9 +1029,7 @@ function orderPromise(s: RunState, order: Order): number {
       break
     case 'stockCategory':
     case 'producedCategory':
-      if (RESOURCE_LIST.some((r) => r.category === goal.category && productionRate(s, mods, r.id) > 0)) {
-        score += 0.5
-      }
+      if (categoryRate(s, mods, goal.category) > 0) score += 0.5
       break
     case 'gladesCleared':
     case 'staffed':
@@ -1069,19 +1067,11 @@ function decreeOdds(s: RunState, decree: RoyalDecree): number {
     case 'produced':
       return (productionRate(s, mods, goal.resource) * decree.timeLimit) / goal.amount
     case 'stockCategory': {
-      const rate = RESOURCE_LIST.filter((r) => r.category === goal.category).reduce(
-        (sum, r) => sum + productionRate(s, mods, r.id),
-        0,
-      )
+      const rate = categoryRate(s, mods, goal.category)
       return (decree.progress * goal.amount + rate * decree.timeLimit * 0.25) / goal.amount
     }
-    case 'producedCategory': {
-      const rate = RESOURCE_LIST.filter((r) => r.category === goal.category).reduce(
-        (sum, r) => sum + productionRate(s, mods, r.id),
-        0,
-      )
-      return (rate * decree.timeLimit) / goal.amount
-    }
+    case 'producedCategory':
+      return (categoryRate(s, mods, goal.category) * decree.timeLimit) / goal.amount
     case 'gladesCleared':
       return Object.values(s.glades).some((g) => !g.cleared && g.clearers > 0) ? 0.9 : 0.6
     case 'buildingsOfCategory':
