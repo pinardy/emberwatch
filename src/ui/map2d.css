@@ -1,0 +1,184 @@
+/* ---------------------------------------------------------------------------
+ * 2D map (SVG renderer): building plates by district, roads, obstacles,
+ * the villager canvas and the season's weather pass. The base map rules
+ * (.map-wrap, .map, glade plates) live in styles.css.
+ * ------------------------------------------------------------------------- */
+
+.map-wrap-2d {
+  isolation: isolate;
+}
+
+/* Villagers walk on a canvas laid exactly over the SVG. */
+.map-wrap-2d canvas.villagers-2d {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Breathing borders and warmth rings repaint the whole SVG every frame:
+   hold them still while the game is paused. */
+.map-wrap-2d[data-paused='true'] .glade-edge polygon,
+.map-wrap-2d[data-paused='true'] .warmth-ring {
+  animation-play-state: paused;
+}
+
+/* ---- Buildings: a plate per district --------------------------------------- */
+
+svg.map-2d .building-shadow {
+  fill: rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+}
+
+svg.map-2d .building-plate {
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+  fill-opacity: 0.94;
+  transition: stroke-width 120ms ease;
+}
+
+svg.map-2d .building-detail {
+  fill: none;
+  stroke-width: 1.3;
+  stroke-opacity: 0.28;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+svg.map-2d .building:hover .building-plate {
+  stroke: #ffe3a6;
+  stroke-width: 3;
+}
+
+svg.map-2d .building.is-selected .building-plate {
+  stroke: #ffd27a;
+  stroke-width: 4;
+}
+
+svg.map-2d .building.is-site .building-plate {
+  stroke-dasharray: 5 4;
+  fill-opacity: 0.55;
+}
+
+svg.map-2d .building.is-site .map-icon {
+  opacity: 0.75;
+}
+
+/* Status badges: a white glyph on a coloured disc, ringed in ink. */
+svg.map-2d .badge-ring {
+  stroke: rgba(9, 13, 16, 0.92);
+  stroke-width: 1.8;
+}
+
+/* Crew "2/3" under the plate; amber while short-handed. */
+svg.map-2d .worker-count {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 650;
+  text-anchor: middle;
+  fill: #f1ede4;
+  stroke: rgba(9, 13, 16, 0.9);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  pointer-events: none;
+}
+
+svg.map-2d .worker-count.is-short {
+  fill: #ffc069;
+}
+
+svg.map-2d .tier-mark {
+  font-size: 12px;
+  text-anchor: start;
+  stroke-width: 3px;
+}
+
+svg.map-2d .build-bar-bg {
+  fill: rgba(0, 0, 0, 0.72);
+  stroke: rgba(255, 255, 255, 0.18);
+  stroke-width: 1;
+}
+
+svg.map-2d .road-link-2d circle {
+  fill: #b39264;
+  stroke: rgba(9, 13, 16, 0.9);
+  stroke-width: 1.5;
+}
+
+svg.map-2d .deposit-amount {
+  font-size: 11px;
+  font-weight: 600;
+  fill: rgba(255, 255, 255, 0.9);
+  stroke: rgba(9, 13, 16, 0.85);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+
+/* ---- Roads: kerb, packed earth, wheel rut ------------------------------------ */
+
+svg.map-2d .road-kerb {
+  stroke: #2a2116;
+  stroke-opacity: 0.9;
+}
+
+svg.map-2d .road-bed {
+  stroke: #b39264;
+}
+
+svg.map-2d .road-rut {
+  stroke: #e3cf9f;
+  stroke-opacity: 0.6;
+  stroke-dasharray: 7 9;
+}
+
+/* ---- Obstacles: unclearable, labelled on hover -------------------------------- */
+
+svg.map-2d .obstacle-2d .obstacle {
+  pointer-events: auto;
+  cursor: help;
+}
+
+svg.map-2d .obstacle-2d .map-icon {
+  pointer-events: none;
+}
+
+svg.map-2d .obstacle.is-crag {
+  fill: #4b5056;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 1.5;
+}
+
+svg.map-2d .obstacle.is-mire {
+  fill: #1f3530;
+  stroke: #5f8f7a;
+  stroke-opacity: 0.6;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+
+svg.map-2d .obstacle-2d:hover .obstacle {
+  stroke: var(--gold);
+  stroke-opacity: 1;
+}
+
+/* ---- Weather ------------------------------------------------------------------ */
+
+/* The ground wash (fills set per season in WeatherGround2D); rain and
+   lightning are drawn on the villager canvas. */
+svg.map-2d .weather-ground {
+  transition: opacity 2.5s ease;
+}
+
+/*
+ * The game-wide Storm tint (styles.css) drifts its streaks by animating
+ * background-position, which repaints the whole screen every frame — on the
+ * software compositing the 2D map runs under, that alone took the Storm from
+ * ~44 to ~15 fps. While the 2D map is up, its canvas rain does that job, so
+ * the tint holds still (its static streaks and shading stay).
+ */
+.game:has(.map-wrap-2d) .season-tint {
+  animation: none;
+}
