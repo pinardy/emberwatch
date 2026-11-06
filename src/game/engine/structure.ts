@@ -35,7 +35,7 @@ import { relevantBlueprints, unleashThreat } from './events'
 import { productionRate } from './forecast'
 import { computeModifiers, type Modifiers } from './modifiers'
 import { DECLINE_CHOICE, takeOrderChoice } from './orders'
-import { grant, spend, storageUsed } from './queries'
+import { grant, grantProduced, spend, storageUsed } from './queries'
 import { makeRng, type Rng } from './rng'
 import { tierOf } from './upgrades'
 import { addImpatience, addReputation, loseVillager } from './society'
@@ -186,7 +186,7 @@ export function stepDecree(s: RunState, dt: number): void {
     addReputation(s, reputation)
     if (def.impatienceRelief) s.impatience = Math.max(0, s.impatience - def.impatienceRelief)
     if (def.reward) {
-      s.stats.resourcesProduced += grant(s.stock, def.reward, s.storageCap, storageUsed(s))
+      grantProduced(s, def.reward)
     }
     s.decreeStrikes = Math.max(0, (s.decreeStrikes ?? 0) - 1)
     const streak = (s.decreeStreak ?? 0) + 1
@@ -490,7 +490,7 @@ export function takeCharter(s: RunState, choice: PendingChoice, charterId: strin
     s.unlockedBuildings.push(id)
     const building = BUILDINGS[id]
     if (building) {
-      s.stats.resourcesProduced += grant(s.stock, building.cost, s.storageCap, storageUsed(s))
+      grantProduced(s, building.cost)
     }
     pushLog(s, `📐 The Royal Architect delivers plans and materials for a ${building?.name ?? id}.`, 'good')
   }
@@ -550,7 +550,7 @@ export function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined)
     parts.push(outcome.impatience > 0 ? 'the Queen frets' : 'the Queen is pleased')
   }
   if (outcome.gain) {
-    s.stats.resourcesProduced += grant(s.stock, outcome.gain, s.storageCap, storageUsed(s))
+    grantProduced(s, outcome.gain)
     parts.push('supplies arrive')
   }
   if (outcome.villagerLoss) {

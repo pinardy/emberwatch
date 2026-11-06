@@ -314,6 +314,11 @@ export function grant(
   return added
 }
 
+/** Grants `gain` into the stockpile up to storage, counted as produced. */
+export function grantProduced(s: RunState, gain: ResourceBag): void {
+  s.stats.resourcesProduced += grant(s.stock, gain, s.storageCap, storageUsed(s))
+}
+
 export function sortBag(bag: ResourceBag): [ResourceId, number][] {
   return (Object.entries(bag) as [ResourceId, number][])
     .filter(([, n]) => n > 0)

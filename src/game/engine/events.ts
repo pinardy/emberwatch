@@ -40,7 +40,7 @@ import {
 import { pushLog } from './runLog'
 import type { Modifiers } from './modifiers'
 import { refreshDepositCaches } from './production'
-import { canAfford, grant, population, spend, storageUsed } from './queries'
+import { canAfford, grantProduced, population, spend } from './queries'
 import { makeRng } from './rng'
 import { touchVillagers } from './runCache'
 import { addCondition, refreshCharterOffer, takeCharter, takeQueenChoice } from './structure'
@@ -90,8 +90,7 @@ export function stepClearing(s: RunState, dt: number, mods: Modifiers): void {
     glade.discovered = true
 
     const loot = scaleBag(glade.reward, mods.gladeLoot)
-    const added = grant(s.stock, loot, s.storageCap, storageUsed(s))
-    s.stats.resourcesProduced += added
+    grantProduced(s, loot)
     s.hostility += HOSTILITY_PER_GLADE_CLEARED * mods.gladeHostility
 
     refreshDepositCaches(s)
@@ -252,8 +251,7 @@ export function resolveGladeEvent(s: RunState, optionIndex: number): void {
   if (option.cost) spend(s.stock, option.cost)
   if (option.foodCost) spendFood(s.stock, option.foodCost)
   if (option.gain) {
-    const added = grant(s.stock, option.gain, s.storageCap, storageUsed(s))
-    s.stats.resourcesProduced += added
+    grantProduced(s, option.gain)
   }
   if (option.hostility) s.hostility = Math.max(0, s.hostility + option.hostility)
   if (option.impatience) addImpatience(s, option.impatience)

@@ -14,7 +14,7 @@ import {
 import { pushLog } from './runLog'
 import { productionRate } from './forecast'
 import { computeModifiers } from './modifiers'
-import { averageResolve, grant, spend, storageUsed, totalHousing } from './queries'
+import { averageResolve, grantProduced, spend, totalHousing } from './queries'
 import { makeRng, type Rng } from './rng'
 import { addImpatience, addReputation } from './society'
 import { describeTimedGoal, goalCount, goalProgress } from './structure'
@@ -422,7 +422,7 @@ export function stepOrders(s: RunState): void {
     const reputation = order.writ ? def.reputationReward : orderReputation(s, def.reputationReward)
     addReputation(s, reputation)
     if (def.reward) {
-      s.stats.resourcesProduced += grant(s.stock, def.reward, s.storageCap, storageUsed(s))
+      grantProduced(s, def.reward)
     }
     pushLog(
       s,
