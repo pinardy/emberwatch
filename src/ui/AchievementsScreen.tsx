@@ -9,6 +9,7 @@ import { useGameStore } from '../game/store'
 import type { AchievementState } from '../game/types'
 import './replay.css'
 import { achievementArt } from '../game/content/artFamilies'
+import { Bar } from './Bar'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
 
@@ -46,12 +47,7 @@ export function AchievementCard({ def, state }: { def: AchievementDef; state: Ac
             aria-valuemax={progress[1]}
             aria-valuenow={progress[0]}
           >
-            <div className="bar">
-              <div
-                className="bar-fill"
-                style={{ width: `${(progress[0] / progress[1]) * 100}%` }}
-              />
-            </div>
+            <Bar value={progress[0] / progress[1]} />
             <small>
               {progress[0]}/{progress[1]} {def.progress?.unit}
             </small>

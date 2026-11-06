@@ -18,6 +18,7 @@ import { formatMultiplier } from './Inspector'
 import { useConfirm } from './useConfirm'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
+import { signed } from './threatText'
 import { NEED_ART } from '../game/content/art'
 import { VILLAGER_TRAIT_ART } from '../game/content/artFamilies'
 
@@ -292,8 +293,7 @@ function Term({ label, value }: { label: string; value: number }) {
     <li>
       <span>{label}</span>
       <strong className={value > 0 ? 'is-good' : 'is-bad'}>
-        {value > 0 ? '+' : ''}
-        {value.toFixed(1)}
+        {signed(value, (v) => v.toFixed(1))}
       </strong>
     </li>
   )

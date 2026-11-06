@@ -1,19 +1,21 @@
 import { DECREES } from '../game/content/decrees'
 import { RESOURCES } from '../game/content/resources'
-import { computeModifiers } from '../game/engine/modifiers'
+import { formatClock } from '../game/engine/forecast'
 import {
   decreeGoal,
   decreeMissImpatience,
+  decreeReputation,
   decreeStreakBonus,
   describeTimedGoal,
 } from '../game/engine/structure'
 import { useHudRun } from '../game/store'
+import type { RunState } from '../game/types'
+import { Bar } from './Bar'
 import { Icon } from './Icon'
 
-/** Seconds as m:ss. */
-export function clockText(seconds: number): string {
-  const s = Math.max(0, Math.ceil(seconds))
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+/** The impatience a lapse would cost now, to two decimals. */
+export function decreeMissCost(run: RunState): number {
+  return Math.round(decreeMissImpatience(run) * 100) / 100
 }
 
 /**
@@ -31,14 +33,13 @@ export function DecreeCard() {
   if (!decree || !def || !goal) {
     return (
       <p className="muted decree-next">
-        <Icon id="horn" emoji="📯" /> The next royal decree arrives in about {clockText(run.decreeTimer)}.
+        <Icon id="horn" emoji="📯" /> The next royal decree arrives in about {formatClock(run.decreeTimer)}.
       </p>
     )
   }
 
   const urgent = decree.timeLeft < 60
-  const mods = computeModifiers(run)
-  const missCost = Math.round(decreeMissImpatience(run) * 100) / 100
+  const reputation = decreeReputation(run, def)
   return (
     <div className={`order-card decree-card ${urgent ? 'is-urgent' : ''}`}>
       <div className="row-between">
@@ -46,9 +47,9 @@ export function DecreeCard() {
           <Icon id="horn" emoji="📯" /> {def.name}
         </strong>
         <span className="order-reward">
-          {Math.max(0, def.reputationReward + mods.decreeReputation) > 0 ? (
+          {reputation > 0 ? (
             <>
-              <Icon id="reputation" label="reputation" /> +{Math.max(0, def.reputationReward + mods.decreeReputation)}
+              <Icon id="reputation" label="reputation" /> +{reputation}
             </>
           ) : null}
           {def.impatienceRelief ? (
@@ -66,13 +67,11 @@ export function DecreeCard() {
         </span>
       </div>
       <small>{describeTimedGoal(goal)}</small>
-      <div className="bar">
-        <div className="bar-fill" style={{ width: `${decree.progress * 100}%` }} />
-      </div>
+      <Bar value={decree.progress} />
       <div className="row-between">
         <small className="muted">{Math.floor(decree.progress * 100)}%</small>
         <small className={`decree-clock ${urgent ? 'is-bad' : ''}`}>
-          ⏱ {clockText(decree.timeLeft)} left · miss it: <Icon id="impatience" label="impatience" /> +{missCost}
+          ⏱ {formatClock(decree.timeLeft)} left · miss it: <Icon id="impatience" label="impatience" /> +{decreeMissCost(run)}
         </small>
       </div>
       <StreakLine streak={run.decreeStreak ?? 0} />
@@ -83,15 +82,11 @@ export function DecreeCard() {
 /** The streak this decree would extend, and what meeting it adds. */
 function StreakLine({ streak }: { streak: number }) {
   if (streak <= 0) return null
-  const bonus = decreeStreakBonus(streak + 1)
+  const purse = decreeStreakBonus(streak + 1)
   return (
     <small className="muted decree-streak">
       {streak} met in a row
-      {bonus.reputation > 0
-        ? ` · meet this one for +${bonus.reputation} reputation more`
-        : bonus.amber > 0
-          ? ` · meet this one for +${bonus.amber} amber more`
-          : ''}
+      {purse > 0 ? ` · meet this one for +${purse} amber more` : ''}
     </small>
   )
 }

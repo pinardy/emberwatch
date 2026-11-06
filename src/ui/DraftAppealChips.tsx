@@ -1,16 +1,8 @@
 import { NEED_ART } from '../game/content/art'
-import { NEED_LABELS, SPECIES } from '../game/content/species'
+import { NEED_LABELS } from '../game/content/species'
 import { draftAppeal } from '../game/engine/events'
-import type { RunState, ServiceNeed, SpeciesId } from '../game/types'
+import type { RunState, ServiceNeed } from '../game/types'
 import { Icon } from './Icon'
-import './draft-appeal.css'
-
-/** "Humans and Beavers", "Humans, Beavers and Foxes". */
-export function speciesNames(species: SpeciesId[]): string {
-  const names = species.map((sp) => SPECIES[sp].name)
-  if (names.length <= 1) return names[0] ?? ''
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
-}
 
 /**
  * On a blueprint draft card: what the building does for services — the need

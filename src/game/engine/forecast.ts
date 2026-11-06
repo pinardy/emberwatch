@@ -386,6 +386,15 @@ export function buildingStatus(
   return { kind: 'working', rate, batchSeconds: rate > 0 ? recipe.seconds / rate : Infinity }
 }
 
+/**
+ * Seconds as m:ss, rounded up by default so a countdown never reads 0:00
+ * early; pass `Math.round` for a point on a timeline.
+ */
+export function formatClock(seconds: number, round: (n: number) => number = Math.ceil): string {
+  const total = Math.max(0, round(seconds))
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
 /** "45s", "3m 05s", "12m" — compact enough for a chip, honest about scale. */
 export function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds)) return '∞'

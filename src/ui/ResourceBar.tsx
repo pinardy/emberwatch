@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { RESOURCES } from '../game/content/resources'
 import { RUNWAY_WARNING_SECONDS, formatDuration } from '../game/engine/forecast'
 import {
@@ -13,7 +13,7 @@ import { useHudRun } from '../game/store'
 import type { ResourceDef, ResourceId } from '../game/types'
 import { Icon } from './Icon'
 import { useStockTrends, type StockTrend, type StockTrends } from './stockTrends'
-import { useEscapeLayer } from './useGameLoop'
+import { useDismiss } from './useGameLoop'
 
 type GroupId = 'food' | 'building' | 'crafted' | 'trade'
 
@@ -256,15 +256,7 @@ function StockDrawer({
 }) {
   const [open, setOpen] = useState(false)
   const host = useRef<HTMLDivElement>(null)
-  useEscapeLayer(open, () => setOpen(false))
-  useEffect(() => {
-    if (!open) return
-    const onPointer = (e: PointerEvent) => {
-      if (host.current && !host.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointer)
-    return () => document.removeEventListener('pointerdown', onPointer)
-  }, [open])
+  useDismiss(open, host, () => setOpen(false))
 
   return (
     <div className="resource-more-anchor" ref={host}>

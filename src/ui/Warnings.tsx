@@ -1,6 +1,5 @@
 import { useId, useMemo, useState } from 'react'
 import { useFrameDerived } from '../game/frameDerived'
-import { useHudRun } from '../game/store'
 import { IconText } from './IconText'
 
 /** Most warnings the strip holds at once; the rest wait their turn. */
@@ -18,8 +17,7 @@ export const VISIBLE_WARNINGS = 2
  * readers.
  */
 export function Warnings() {
-  const run = useHudRun()
-  const frame = useFrameDerived()
+  const frame = useFrameDerived() // null without a run
   const [expanded, setExpanded] = useState(false)
   const listId = useId()
   // Diagnostics walk every building: computed once per sim step and shared.
@@ -32,7 +30,7 @@ export function Warnings() {
       ...all.filter((w) => w.severity !== 'danger'),
     ].slice(0, MAX_WARNINGS)
   }, [frame])
-  if (!run) return null
+  if (!frame) return null
   const folded = Math.max(0, warnings.length - VISIBLE_WARNINGS)
   const open = expanded && folded > 0
   return (

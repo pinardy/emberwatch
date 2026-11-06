@@ -36,7 +36,7 @@ import { relevantBlueprints, unleashThreat } from './events'
 import { productionRate } from './forecast'
 import { computeModifiers, type Modifiers } from './modifiers'
 import { DECLINE_CHOICE, takeOrderChoice } from './orders'
-import { grant, grantProduced, spend, storageUsed } from './queries'
+import { grantProduced, spend } from './queries'
 import { makeRng, type Rng } from './rng'
 import { tierOf } from './upgrades'
 import { addImpatience, addReputation, loseVillager } from './society'
@@ -143,15 +143,20 @@ export function decreeGoal(decree: RoyalDecree): OrderGoal | undefined {
   return decree.goal ?? DECREES[decree.defId]?.goal
 }
 
+/** Reputation meeting a decree pays, after any run-long bonus to decrees. */
+export function decreeReputation(s: RunState, def: DecreeDef): number {
+  return Math.max(0, def.reputationReward + computeModifiers(s).decreeReputation)
+}
+
 /**
- * What meeting a decree pays on top of its own reward, on a streak of
- * `streak` decrees met in a row (counting this one): a purse from the court
- * that grows with the streak. It pays no reputation — decrees are something
- * an idle economy can farm, so the favour that wins runs stays with services.
+ * The amber purse meeting a decree adds to its own reward, on a streak of
+ * `streak` decrees met in a row (counting this one); it grows with the
+ * streak. It pays no reputation — decrees are something an idle economy can
+ * farm, so the favour that wins runs stays with services.
  */
-export function decreeStreakBonus(streak: number): { reputation: number; amber: number } {
-  if (streak < 2) return { reputation: 0, amber: 0 }
-  return { reputation: 0, amber: Math.min(DECREE_STREAK_AMBER_CAP, DECREE_STREAK_AMBER * (streak - 1)) }
+export function decreeStreakBonus(streak: number): number {
+  if (streak < 2) return 0
+  return Math.min(DECREE_STREAK_AMBER_CAP, DECREE_STREAK_AMBER * (streak - 1))
 }
 
 /** "+2 reputation", "the Queen's patience returns (−1 impatience)". */
@@ -183,7 +188,7 @@ export function stepDecree(s: RunState, dt: number): void {
   if (decree.progress >= 1) {
     decree.complete = true
     s.stats.ordersCompleted++
-    const reputation = Math.max(0, def.reputationReward + computeModifiers(s).decreeReputation)
+    const reputation = decreeReputation(s, def)
     addReputation(s, reputation)
     if (def.impatienceRelief) s.impatience = Math.max(0, s.impatience - def.impatienceRelief)
     if (def.reward) {
@@ -199,13 +204,10 @@ export function stepDecree(s: RunState, dt: number): void {
       `📯 Decree fulfilled with ${Math.ceil(decree.timeLeft)}s to spare — ${def.name}. ${decreePayText(def, reputation)}.`,
       'good',
     )
-    const bonus = decreeStreakBonus(streak)
-    if (bonus.reputation > 0) {
-      addReputation(s, bonus.reputation)
-      pushLog(s, `👑 ${streak} decrees met in a row — the Queen's favour. +${bonus.reputation} reputation.`, 'good')
-    } else if (bonus.amber > 0) {
-      s.stats.resourcesProduced += grant(s.stock, { amber: bonus.amber }, s.storageCap, storageUsed(s))
-      pushLog(s, `👑 ${streak} decrees met in a row — a purse from the court. +${bonus.amber} amber.`, 'good')
+    const purse = decreeStreakBonus(streak)
+    if (purse > 0) {
+      grantProduced(s, { amber: purse })
+      pushLog(s, `👑 ${streak} decrees met in a row — a purse from the court. +${purse} amber.`, 'good')
     }
     s.decree = null
     s.decreeTimer = DECREE_INTERVAL

@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react'
 import { SPECIES, speciesSingular } from '../game/content/species'
 import { RESOLVE_LEAVE_THRESHOLD } from '../game/engine/balance'
+import { formatClock } from '../game/engine/forecast'
 import { COL, describeOutcome, inStorm, raceAt, stormPeriods } from '../game/engine/timeline'
 import type { RunState, SpeciesId, TimelineEvent } from '../game/types'
 import { Icon } from './Icon'
@@ -82,12 +83,6 @@ export function eventLabel(e: TimelineEvent): string {
     case 'decreeMissed':
       return `Decree missed: ${e.d}`
   }
-}
-
-/** Game clock as m:ss. */
-export function formatClock(t: number): string {
-  const total = Math.max(0, Math.round(t))
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
 
 const fmt1 = (x: number) => (Math.round(x * 10) / 10).toString()
@@ -552,7 +547,7 @@ export function RunTimelineChart({ run }: { run: RunState }) {
   const when = (
     <span className="tl-when">
       {focus === null ? 'At the end' : `Year ${sample[COL.year]}`} ·{' '}
-      {formatClock(sample[COL.clock])}
+      {formatClock(sample[COL.clock], Math.round)}
       {inStorm(storms, sample[COL.clock]) ? ' · Storm' : ''}
     </span>
   )
@@ -684,7 +679,7 @@ export function RunTimelineChart({ run }: { run: RunState }) {
                 .filter((e) => e.k !== 'glade')
                 .map((e, i) => (
                   <tr key={i}>
-                    <td>{formatClock(e.t)}</td>
+                    <td>{formatClock(e.t, Math.round)}</td>
                     <td>{eventLabel(e)}</td>
                   </tr>
                 ))}
@@ -714,7 +709,7 @@ export function RunTimelineChart({ run }: { run: RunState }) {
             <tbody>
               {samples.map((smp, i) => (
                 <tr key={i}>
-                  <td>{formatClock(smp[COL.clock])}</td>
+                  <td>{formatClock(smp[COL.clock], Math.round)}</td>
                   <td>{smp[COL.year]}</td>
                   <td>
                     {fmt1(Math.min(smp[COL.reputation], race[i].maxRep))}/{race[i].maxRep}
