@@ -1,14 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
+import { CORNERSTONES } from '../content/cornerstones'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { ORDERS } from '../content/orders'
 import { ALL_RUN_MODIFIER_LIST } from '../content/runModifiers'
 import { SPECIES } from '../content/species'
 import { EDIBLE } from '../content/resources'
-import type { BuildingInstance, ResourceId, RunState, ServiceNeed, SpeciesId, Vec2 } from '../types'
+import type {
+  BuildingInstance,
+  ConditionSpec,
+  GladeEventOptionDef,
+  ResourceBag,
+  ResourceId,
+  RunState,
+  ServiceNeed,
+  SpeciesId,
+  Vec2,
+} from '../types'
 import {
+  DUMP_LOT,
   addClearer,
   assignWorker,
+  dumpStock,
   findPlacement,
   isReachable,
   placeBuilding,
@@ -20,10 +33,13 @@ import {
 import { GLADES_PER_REPUTATION, ROAD_MAX_LENGTH } from './balance'
 import { createRun } from './createRun'
 import { computeModifiers } from './modifiers'
-import { resolveBreakdowns } from './society'
+import { pendingBlight } from './blights'
+import { storageBlocked } from './forecast'
+import { QUEEN_DEADLINE_SECONDS, resolveBreakdowns, stallingImpatienceRate } from './society'
 import {
   appeaseThreat,
   optionAffordable,
+  relevantBlueprints,
   orderReputation,
   resolveGladeEvent,
   takeChoice,
@@ -112,6 +128,14 @@ interface BotReport {
   /** Road stretches laid, and workplaces joined to a hub by road at the end. */
   roads: number
   roadLinked: number
+  /** Why a lost run was lost: the deadline, impatience before it, or an empty hearth. */
+  cause: string
+  /** Storm blights forecast, struck and turned aside. */
+  blights: { forecast: number; struck: number; blunted: number }
+  /** Minutes a firekeeper burned offerings at the hearth. */
+  wardMinutes: number
+  /** Impatience the Queen added for stalling (species below threshold). */
+  stallImpatience: number
 }
 
 /** Snapshot of resolve versus the threshold each species must beat. */
@@ -237,6 +261,8 @@ function build(s: RunState, economyOnly = false): void {
   }
   // Homes that sprawled past the hearth's reach get a brazier before the Storm.
   if (warmSprawl(s)) return
+  // The coming Storm's blight wants goods made: raise a producer if none stands.
+  if (prepareForBlight(s)) return
 
   // 1. Wood first — it is the input to nearly everything.
   if (countPlanned(s, 'woodcuttersCamp') < 2 && tryPlace(s, 'woodcuttersCamp')) return
@@ -660,13 +686,19 @@ function staff(s: RunState): void {
     serviceProducers.add('herbalistsCamp')
   }
 
+  // The coming Storm's blight asks for a good: its makers jump the queue.
+  const prepGood = blightGood(s)
+
   const priority = (b: BuildingInstance): number => {
     const def = BUILDINGS[b.defId]
     if (!def) return 0
+    // The hearth's firekeeper is staffed by `tendWard`, never as filler.
+    if (def.ward) return -1
     const outputs = Object.keys(activeRecipe(b)?.outputs ?? {}) as ResourceId[]
     // Emergencies first: an empty larder or a dying hearth ends runs.
     if (hungry && outputs.some((id) => EDIBLE.includes(id))) return 7
     if (cold && outputs.includes('wood')) return 7
+    if (prepGood && outputs.includes(prepGood)) return 6
     if (saturated(s, b)) return -1
     // Then services and their supply chains — they are what keeps resolve up.
     if (def.category === 'service') return 5
@@ -694,6 +726,76 @@ function staff(s: RunState): void {
       if (assignWorker(s, building.id) !== null) break
     }
   }
+}
+
+/** The good the coming Storm's blight asks to be made, if one is forecast. */
+function blightGood(s: RunState): ResourceId | null {
+  const goal = pendingBlight(s)?.resolveBy
+  return goal?.kind === 'produced' || goal?.kind === 'stock' ? goal.resource : null
+}
+
+/** Places a producer of the forecast blight's good when none is standing. */
+function prepareForBlight(s: RunState): boolean {
+  const good = blightGood(s)
+  if (!good) return false
+  const makers = STARTING_BLUEPRINTS.filter((id) =>
+    BUILDINGS[id]?.recipes.some((r) => (r.outputs[good] ?? 0) > 0),
+  )
+  if (makers.some((id) => countPlanned(s, id) > 0)) return false
+  return makers.some((id) => tryPlace(s, id))
+}
+
+/** Hostility at which the bot sets a firekeeper to burn offerings, and stops. */
+const WARD_START = 26
+const WARD_STOP = 14
+
+/**
+ * The hearth's offerings: once the forest's hostility bites, one villager
+ * burns herbs at the hearth (and a herbalist camp is kept on herbs to feed
+ * it); when hostility has been calmed, or the herbs run out, they go back to
+ * the idle pool.
+ */
+function tendWard(s: RunState): void {
+  const hearth = Object.values(s.buildings).find((b) => BUILDINGS[b.defId]?.ward)
+  if (!hearth) return
+  const herbs = s.stock.herb ?? 0
+  const staffed = hearth.workers.length > 0
+  if (staffed && (s.hostility < WARD_STOP || herbs < 2)) {
+    removeWorker(s, hearth.id)
+    return
+  }
+  if (!staffed && s.hostility >= WARD_START && population(s) >= 12) {
+    if (herbs >= 6) assignWorker(s, hearth.id)
+    // Keep one herbalist on herbs while the forest needs calming.
+    const herbalists = Object.values(s.buildings).filter(
+      (b) => b.defId === 'herbalistsCamp' && b.built,
+    )
+    if (herbalists.length > 0 && !herbalists.some((b) => activeRecipe(b)?.id === 'herb')) {
+      setRecipe(s, herbalists[herbalists.length - 1].id, 'herb')
+    }
+  }
+}
+
+/**
+ * A full store that is stopping production: when no warehouse can be afforded
+ * (the usual deadlock — it needs the stone the stopped stonecutters make),
+ * dump some of the largest surplus to get the producers working again.
+ */
+function dumpSurplus(s: RunState): void {
+  if (storageUsed(s) < s.storageCap) return
+  if (storageBlocked(s, computeModifiers(s)).length === 0) return
+  if (canAfford(s.stock, BUILDINGS.warehouse.cost)) return
+  let worst: ResourceId | null = null
+  let excess = 0
+  for (const [id, amount] of Object.entries(s.stock) as [ResourceId, number][]) {
+    if (id === 'amber' || EDIBLE.includes(id)) continue
+    const over = amount - stockTarget(s, id) * 0.6
+    if (over > excess) {
+      excess = over
+      worst = id
+    }
+  }
+  if (worst) dumpStock(s, worst, Math.min(DUMP_LOT, Math.ceil(excess)))
 }
 
 /**
@@ -735,15 +837,29 @@ function answerChoices(s: RunState): void {
       // Prefer an affordable option that does not cost villagers or patience —
       // and never one that unleashes a threat the bot would have to pay off, or
       // leaves a lingering condition it has no plan to lift.
+      // A greedy option is worth it when it pays reputation and its risk is
+      // one the bot can settle: a threat it can pay off right away, or a
+      // lingering task it is already most of the way through.
       let index = def.options.findIndex(
         (o) =>
           optionAffordable(s.stock, o) &&
+          (o.reputation ?? 0) >= 1 &&
           !o.villagerLoss &&
-          !o.impatience &&
-          !o.threat &&
-          !o.condition &&
-          (o.hostility ?? 0) <= 0,
+          (o.impatience ?? 0) <= 0 &&
+          (!o.threat || canAffordAfter(s, o, o.threat.appease)) &&
+          (!o.condition || conditionWithinReach(s, o.condition)),
       )
+      if (index < 0) {
+        index = def.options.findIndex(
+          (o) =>
+            optionAffordable(s.stock, o) &&
+            !o.villagerLoss &&
+            (o.impatience ?? 0) <= 0 &&
+            !o.threat &&
+            !o.condition &&
+            (o.hostility ?? 0) <= 0,
+        )
+      }
       if (index < 0) {
         index = def.options.findIndex(
           (o) =>
@@ -752,19 +868,83 @@ function answerChoices(s: RunState): void {
       }
       resolveGladeEvent(s, index >= 0 ? index : def.options.length - 1)
     } else if (choice.kind === 'blueprint') {
-      // Prefer anything that unblocks a service the settlement needs.
+      // Prefer anything that unblocks a service the settlement needs; failing
+      // that, a strong cornerstone beats a blueprint nobody will staff.
       const wanted = new Set(
         neededServices(s).flatMap((n) => [
           SERVICE_CHAIN[n].service,
           SERVICE_CHAIN[n].producer,
         ]),
       )
-      const pick = choice.options.find((id) => wanted.has(id)) ?? choice.options[0]
+      const buildings = choice.options.filter((id) => BUILDINGS[id])
+      const stones = choice.options.filter((id) => !BUILDINGS[id])
+      // Finishing a chain beats starting one: a producer for a venue already
+      // drafted comes first (the order `relevantBlueprints` ranks them in).
+      const ranked = relevantBlueprints(s)
+      const finisher = choice.options
+        .filter((id) => ranked.includes(id))
+        .sort((a, b) => ranked.indexOf(a) - ranked.indexOf(b))[0]
+      const pick =
+        finisher ??
+        choice.options.find((id) => wanted.has(id)) ??
+        stones.find((id) => cornerstoneScore(id) >= 2) ??
+        buildings[0] ??
+        choice.options[0]
       takeChoice(s, pick)
+    } else if (choice.kind === 'cornerstone') {
+      const best = [...choice.options].sort((a, b) => cornerstoneScore(b) - cornerstoneScore(a))[0]
+      takeChoice(s, best)
     } else {
       takeChoice(s, choice.options[0])
     }
   }
+}
+
+/** True when paying `price` would still be possible after the option's own cost. */
+function canAffordAfter(s: RunState, o: GladeEventOptionDef, price: ResourceBag): boolean {
+  const after: ResourceBag = { ...s.stock }
+  for (const [id, n] of Object.entries(o.cost ?? {})) after[id as ResourceId] = (after[id as ResourceId] ?? 0) - (n ?? 0)
+  for (const [id, n] of Object.entries(o.gain ?? {})) after[id as ResourceId] = (after[id as ResourceId] ?? 0) + (n ?? 0)
+  return canAfford(after, price)
+}
+
+/** A lingering task the settlement is already well on the way to meeting. */
+function conditionWithinReach(s: RunState, c: ConditionSpec): boolean {
+  const goal = c.resolveBy
+  if (goal.kind === 'gladesCleared') {
+    const open = Object.values(s.glades).filter((g) => !g.cleared && isReachable(s, g.id)).length
+    return open >= goal.amount + 1 && (c.deadline ?? Infinity) >= 200 * goal.amount
+  }
+  if (goal.kind === 'stock') return (s.stock[goal.resource] ?? 0) >= goal.amount * 0.6
+  return false
+}
+
+/**
+ * How much a cornerstone is worth to this bot: 3 for what moves the meters
+ * (resolve, reputation, patience), 2 for a strong economy, 1 for the rest.
+ */
+function cornerstoneScore(id: string): number {
+  const def = CORNERSTONES[id]
+  if (!def) return 0
+  let score = 1
+  for (const e of def.effects) {
+    if (
+      e.kind === 'resolveFlat' ||
+      e.kind === 'reputationRate' ||
+      e.kind === 'impatienceRate' ||
+      e.kind === 'needsFewerServices'
+    ) {
+      score = Math.max(score, e.kind === 'resolveFlat' && e.species !== 'all' ? 2 : 3)
+    } else if (
+      e.kind === 'hostilityRate' ||
+      e.kind === 'gladeHostility' ||
+      e.kind === 'stormResolve' ||
+      (e.kind === 'productionSpeed' && e.tag === 'all')
+    ) {
+      score = Math.max(score, 2)
+    }
+  }
+  return score
 }
 
 interface PlayOptions {
@@ -794,6 +974,8 @@ function playRun(
   let sinceDecision = Infinity
   const maxSeconds = maxMinutes * 60
   const sources: ReputationSources = { orders: 0, glades: 0, events: 0, resolve: 0 }
+  let wardSeconds = 0
+  let stallImpatience = 0
 
   while (s.phase === 'playing' && s.clock < maxSeconds) {
     const beforeChoices = s.reputation
@@ -805,12 +987,16 @@ function playRun(
       sinceDecision = 0
       // Threats compound; a competent player pays them off when they can.
       for (const threat of [...s.threats]) appeaseThreat(s, threat.id)
+      dumpSurplus(s)
       build(s, economyOnly)
       layRoads(s)
       explore(s)
       tuneRecipes(s)
+      tendWard(s)
       staff(s)
     }
+    if (s.buildings.hearth?.workers.length) wardSeconds += STEP
+    stallImpatience += stallingImpatienceRate(s) * computeModifiers(s).impatienceRate * STEP
 
     const openOrders = s.orders.map((o) => o.defId)
     const gladesBefore = s.stats.gladesCleared
@@ -858,7 +1044,18 @@ function playRun(
     openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),
     roads: s.roads?.length ?? 0,
     roadLinked: Object.values(s.buildings).filter((b) => roadLinkOf(s, b).percent > 0).length,
+    cause: lossCause(s),
+    blights: s.stormBlights ?? { forecast: 0, struck: 0, blunted: 0 },
+    wardMinutes: wardSeconds / 60,
+    stallImpatience,
   }
+}
+
+/** Why a run was lost, in the harness's words ('-' for a win). */
+function lossCause(s: RunState): string {
+  if (s.phase !== 'lost') return '-'
+  if (population(s) === 0) return 'abandoned'
+  return s.clock > QUEEN_DEADLINE_SECONDS ? 'deadline' : 'impatience'
 }
 
 /**
@@ -924,6 +1121,7 @@ function summarise(label: string, reports: BotReport[]): string {
 function logRun(seed: number, r: BotReport): void {
   console.log(
     `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
+      ` · cause ${r.cause} · blights ${r.blights.struck}/${r.blights.blunted} of ${r.blights.forecast} · wards ${r.wardMinutes.toFixed(1)} · stallImp ${r.stallImpatience.toFixed(1)}` +
       `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}`,
   )
 }

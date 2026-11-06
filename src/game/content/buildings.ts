@@ -2,6 +2,7 @@ import {
   BRAZIER_FOOTPRINT,
   BRAZIER_FUEL_PER_SECOND,
   BRAZIER_WARMTH_RADIUS,
+  WARD_HOSTILITY_PER_OFFERING,
 } from '../engine/balance'
 import type { AdjacencyBonus, BuildingDef } from '../types'
 import { BUILDING_ART } from './art'
@@ -41,8 +42,10 @@ const defs: BuildingDef[] = [
     tags: ['special'],
     cost: {},
     buildSeconds: 0,
-    workerSlots: 0,
-    recipes: [],
+    // A firekeeper, when the forest needs calming: staffing it is optional.
+    workerSlots: 1,
+    recipes: [{ id: 'offering', inputs: { herb: 2 }, outputs: {}, seconds: 20 }],
+    ward: { hostilityPerCycle: WARD_HOSTILITY_PER_OFFERING },
     // Comfortably more than the starting stock, so a new settlement is never
     // already over capacity on its first tick.
     storage: 80,
@@ -51,7 +54,7 @@ const defs: BuildingDef[] = [
     housing: 6,
     unique: true,
     description:
-      'The heart of the settlement. Burns wood to hold back the Blightstorm, shelters six, and marks where newcomers arrive.',
+      'The heart of the settlement. Burns wood to hold back the Blightstorm, shelters six, and marks where newcomers arrive. A firekeeper set here burns herbs as an offering to the forest, calming its hostility.',
   },
 
   // -------------------------------------------------------------------------

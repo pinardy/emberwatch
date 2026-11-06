@@ -329,7 +329,9 @@ describe('Citadel upgrades in createRun', () => {
     expect(s.unlockedBuildings).toContain('tradingPost')
     const kinds = s.pendingChoices.map((c) => c.kind)
     expect(kinds.filter((k) => k === 'blueprint')).toHaveLength(OPENING_BLUEPRINT_PICKS + 1)
-    expect(kinds[kinds.length - 1]).toBe('cornerstone')
+    // Every run opens on one cornerstone draft; the Signet adds a second.
+    expect(kinds.slice(-2)).toEqual(['cornerstone', 'cornerstone'])
+    expect(kinds.filter((k) => k === 'cornerstone')).toHaveLength(2)
   })
 
   it('offers one more option in blueprint and cornerstone drafts', () => {

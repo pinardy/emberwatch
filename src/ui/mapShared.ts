@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { create } from 'zustand'
 import { BUILDINGS } from '../game/content/buildings'
 import { isReachable } from '../game/engine/actions'
+import { describeStakes, gladeStakesOf, type GladeStake } from '../game/engine/events'
 import {
   buildingStatus,
   type BuildingStatus as EngineBuildingStatus,
@@ -155,20 +156,42 @@ export interface GladePlateInfo {
   /** Clearing progress, 0..1. */
   pct: number
   clearers: number
+  /** What the glade's waiting event could lead to (empty: no event). */
+  stakes?: GladeStake[]
 }
 
 export function gladePlateInfo(run: RunState, glade: Glade): GladePlateInfo {
   const reachable = isReachable(run, glade.id)
   const pct = glade.clearWork > 0 ? Math.min(1, glade.clearProgress / glade.clearWork) : 0
   const access: GladeAccess = glade.clearers > 0 ? 'clearing' : reachable ? 'reachable' : 'locked'
-  return { access, reachable, pct, clearers: glade.clearers }
+  return { access, reachable, pct, clearers: glade.clearers, stakes: gladeStakesOf(glade) }
+}
+
+/**
+ * What a glade's waiting event could lead to, drawn as small icons beside its
+ * plate (lives, a threat, a lingering task, reputation, a pact), so clearing
+ * order is a choice made before the crew goes in.
+ */
+export const GLADE_STAKE_ART: Record<GladeStake, IconId> = {
+  lives: 'grave',
+  threat: 'threat/wolf',
+  condition: 'condition/writ',
+  reputation: 'reputation',
+  pact: 'pact/handshake',
+}
+
+/** "Could bring: a threat or reputation" — the plate's tooltip for its stakes. */
+export function gladeStakesTitle(stakes: readonly GladeStake[]): string {
+  return stakes.length > 0 ? `Clearing it could bring ${describeStakes([...stakes])}` : ''
 }
 
 /** One-line status under a glade's name. */
 export function gladeAccessText(info: GladePlateInfo): string {
   if (info.access === 'clearing') return `⛏ ${info.clearers} clearing · ${Math.floor(info.pct * 100)}%`
-  if (info.access === 'reachable') return info.pct > 0 ? `Reachable · ${Math.floor(info.pct * 100)}%` : 'Reachable'
-  return '🔒 Out of reach'
+  if (info.access === 'reachable') {
+    return info.pct > 0 ? `Reachable · ${Math.floor(info.pct * 100)}%` : 'Reachable'
+  }
+  return `🔒 Out of reach`
 }
 
 // ---------------------------------------------------------------------------

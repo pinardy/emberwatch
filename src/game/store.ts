@@ -22,6 +22,7 @@ import {
   rushConstruction,
   setRecipe,
   sootheQueen,
+  dumpStock,
   togglePause,
   upgradeBuilding,
 } from './engine/actions'
@@ -275,6 +276,8 @@ interface GameStore {
   reroll: () => void
   buyLot: (index: number) => void
   sell: (resource: ResourceId) => void
+  /** Throws a lot of a good out of a full stockpile. */
+  dump: (resource: ResourceId) => void
   appease: (threatId: string) => void
   rush: (buildingId: string) => void
   /** Starts raising a building to its next upgrade tier. */
@@ -750,6 +753,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   reroll: () => runCommand(set, get, (run) => rerollChoice(run)),
   buyLot: (index) => runCommand(set, get, (run) => buyOffer(run, index)),
   sell: (resource) => runCommand(set, get, (run) => sellResource(run, resource)),
+  dump: (resource) => runCommand(set, get, (run) => dumpStock(run, resource)),
   appease: (threatId) => runCommand(set, get, (run) => appeaseThreat(run, threatId)),
   rush: (buildingId) => runCommand(set, get, (run) => rushConstruction(run, buildingId)),
   upgrade: (buildingId) => runCommand(set, get, (run) => upgradeBuilding(run, buildingId)),

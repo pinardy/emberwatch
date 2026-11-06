@@ -335,7 +335,7 @@ const defs: MetaUpgradeDef[] = [
     cost: 10,
     branch: 'crown',
     requires: ['citadelBlessing'],
-    description: 'Every run opens with a cornerstone draft: choose one of three before the first tick.',
+    description: 'Every run opens with a second cornerstone draft: lay two cornerstones before the first tick.',
     effects: { startCornerstoneChoice: true },
   },
   {

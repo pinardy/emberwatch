@@ -170,14 +170,6 @@ const defs: CornerstoneDef[] = [
     ],
   },
   {
-    id: 'modestNeeds',
-    name: 'Modest Needs',
-    icon: '🕊️',
-    rarity: 'rare',
-    description: 'Every species needs one fewer service.',
-    effects: [{ kind: 'needsFewerServices', species: 'all', amount: 1 }],
-  },
-  {
     id: 'efficientKilns',
     name: 'Efficient Kilns',
     icon: '♨️',
@@ -241,6 +233,19 @@ const defs: CornerstoneDef[] = [
       { kind: 'newcomerRate', percent: -50 },
       { kind: 'resolveFlat', species: 'all', amount: 2 },
     ],
+  },
+  /*
+   * Was a rare "every species needs one fewer service": a whole service chain
+   * for free (+9 resolve to everyone and a bigger reputation share), at the
+   * odds of +20% gathering. Now an epic worth half a service.
+   */
+  {
+    id: 'modestNeeds',
+    name: 'Modest Needs',
+    icon: '🕊️',
+    rarity: 'epic',
+    description: 'Every species is content with less: half of one service need counts as met.',
+    effects: [{ kind: 'needsFewerServices', species: 'all', amount: 0.5 }],
   },
   {
     id: 'heraldOfTheFlame',
