@@ -93,7 +93,7 @@ src/
     store.ts            # zustand store + the game loop's entry point; its
                         # subscription hooks (see the comment there) keep a
                         # sim step from re-rendering the whole HUD
-    frameDerived.ts     # the HUD's settlement-wide numbers, once per sim step
+    frameDerived.ts     # the HUD's (and maps') settlement-wide numbers, once per sim step
   ui/                   # React components; read the sim, never contain rules
                         # (audio.ts synthesises all cues & rain through a
                         # volume mixer; music.ts is the generative score,
@@ -151,7 +151,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 - **`pressure.test.ts`** — mid-run pressure: impatience relief borrowing from whole points, the Queen's stalling term, Storm blights (bands, forecast, turning one aside, striking, passing with the Storm, yearly growth), the hearth's offerings, glade stakes, escalating threats, the draft's pity rule and mixed drafts, the opening cornerstone and odd milestones, the larder reserve, dumping goods, the full-stockpile advice, and older saves.
 - **`balanceTuning.test.ts`** — the rules the harness was last tuned with: the late-game hostility squeeze, escalating decree misses, and the harpies' Education and lizards' Brawling floors.
 - **`saves.test.ts`** and **`SavesScreen.test.tsx`** — save slots: the slot index and its repair, migration of the single save, overwrite protection, full storage, the export/import round trip, and rejecting malformed and hostile files (prototype keys, mangled fields) without throwing.
-- **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, district plates, building badges, obstacles, the Storm's ground wash, warmth, roads and villagers, that static geometry is not rebuilt on every tick, and that the 2D layers re-derive on structural change but throttle what ticking changes.
+- **`mapShared.test.ts`** and **`MapView2D.test.tsx`** — the shared map helpers and the 2D renderer: glade kinds, district plates, building badges, obstacles, the Storm's ground wash, warmth, roads and villagers, that static geometry is not rebuilt on every tick, and that the map layers' building views re-derive at once after a command but only on the HUD clock while the sim ticks.
 - **`runCache.test.ts`** and **`frameDerived.test.ts`** — the performance layer: the cached adjacency and settlement counts answer exactly what the plain queries do, before and after hand edits and engine changes mid-tick and through a played run; the HUD's shared per-step numbers equal the engine functions they stand for; the HUD clock throttles sim steps but not commands, pauses or season turns; the idle-time autosave.
 - **`roads.test.ts`** — the road graph and its bonus (directness, junctions, warehouse hubs), the rules for laying roads, the cache that keeps the per-tick cost a lookup, and old saves without roads.
 - **`villagerRoutes.test.ts`** — the walking villagers' routes: a pure function of the run, following roads where they run and walking straight where they do not.

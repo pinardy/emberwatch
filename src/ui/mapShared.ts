@@ -3,17 +3,14 @@ import { create } from 'zustand'
 import { BUILDINGS } from '../game/content/buildings'
 import { isReachable } from '../game/engine/actions'
 import { describeStakes, gladeStakesOf, type GladeStake } from '../game/engine/events'
-import {
-  buildingStatus,
-  type BuildingStatus as EngineBuildingStatus,
-} from '../game/engine/forecast'
+import type { BuildingStatus as EngineBuildingStatus } from '../game/engine/forecast'
 import { dist } from '../game/engine/geometry'
 import { TERRAIN_COLORS } from '../game/engine/mapgen'
-import { computeModifiers, type Modifiers } from '../game/engine/modifiers'
-import { isWarmAt, storageUsed, type WarmthSource } from '../game/engine/queries'
+import { isWarmAt, type WarmthSource } from '../game/engine/queries'
 import { housingOf, isInsulated, isUpgrading, nextUpgrade, tierOf } from '../game/engine/upgrades'
 import { useGameStore } from '../game/store'
 import type {
+  BuildingDef,
   BuildingInstance,
   DepositId,
   Glade,
@@ -69,7 +66,6 @@ export function gladeLook(glade: Glade): GladeLook {
 }
 
 export interface GladeKindStyle {
-  icon: string
   /** Short plate label, e.g. "Dangerous". */
   label: string
   /** Long form, e.g. "Dangerous glade". */
@@ -90,7 +86,6 @@ export interface GladeKindStyle {
 
 export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
   settlement: {
-    icon: '🔥',
     label: 'Settlement',
     title: 'Settlement glade',
     edge: '#d9b46a',
@@ -99,7 +94,6 @@ export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
     canopy: '#2e4f36',
   },
   small: {
-    icon: '🌿',
     label: 'Small',
     title: 'Small glade',
     edge: '#8fc488',
@@ -108,7 +102,6 @@ export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
     canopy: '#2e4f36',
   },
   dangerous: {
-    icon: '⚠️',
     label: 'Dangerous',
     title: 'Dangerous glade',
     edge: '#e8a33c',
@@ -117,7 +110,6 @@ export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
     canopy: '#4a4a2a',
   },
   forbidden: {
-    icon: '☠️',
     label: 'Forbidden',
     title: 'Forbidden glade',
     edge: '#d4567f',
@@ -127,10 +119,13 @@ export const GLADE_KIND_STYLE: Record<GladeKind, GladeKindStyle> = {
   },
 }
 
-/** "🌿 Small", "⚠️ Dangerous", "☠️ Forbidden" — the plate's kind line. */
-export function gladeKindLabel(kind: GladeKind): string {
-  const style = GLADE_KIND_STYLE[kind]
-  return `${style.icon} ${style.label}`
+// ---------------------------------------------------------------------------
+// Placement
+// ---------------------------------------------------------------------------
+
+/** The build ghost's bubble: why it cannot go here, else what it would join. */
+export function placementHint(reason: string | null, parts: readonly string[]): string | null {
+  return reason ?? (parts.length > 0 ? parts.join(' · ') : null)
 }
 
 /** Ground fill of a glade that is not (yet) cleared ground. */
@@ -150,21 +145,33 @@ export function gladeFill(glade: Glade, palette: MapPalette): string {
  */
 export type GladeAccess = 'locked' | 'reachable' | 'clearing'
 
+export function gladeAccess(run: RunState, glade: Glade): GladeAccess {
+  if (glade.clearers > 0) return 'clearing'
+  return isReachable(run, glade.id) ? 'reachable' : 'locked'
+}
+
+/** Clearing progress of a glade, 0..1. */
+export function gladeProgress(glade: Glade): number {
+  return glade.clearWork > 0 ? Math.min(1, glade.clearProgress / glade.clearWork) : 0
+}
+
 export interface GladePlateInfo {
   access: GladeAccess
-  reachable: boolean
   /** Clearing progress, 0..1. */
   pct: number
   clearers: number
   /** What the glade's waiting event could lead to (empty: no event). */
-  stakes?: GladeStake[]
+  stakes: GladeStake[]
 }
 
+/** Everything on a fogged glade's name plate. */
 export function gladePlateInfo(run: RunState, glade: Glade): GladePlateInfo {
-  const reachable = isReachable(run, glade.id)
-  const pct = glade.clearWork > 0 ? Math.min(1, glade.clearProgress / glade.clearWork) : 0
-  const access: GladeAccess = glade.clearers > 0 ? 'clearing' : reachable ? 'reachable' : 'locked'
-  return { access, reachable, pct, clearers: glade.clearers, stakes: gladeStakesOf(glade) }
+  return {
+    access: gladeAccess(run, glade),
+    pct: gladeProgress(glade),
+    clearers: glade.clearers,
+    stakes: gladeStakesOf(glade),
+  }
 }
 
 /**
@@ -185,12 +192,10 @@ export function gladeStakesTitle(stakes: readonly GladeStake[]): string {
   return stakes.length > 0 ? `Clearing it could bring ${describeStakes([...stakes])}` : ''
 }
 
-/** One-line status under a glade's name. */
-export function gladeAccessText(info: GladePlateInfo): string {
-  if (info.access === 'clearing') return `⛏ ${info.clearers} clearing · ${Math.floor(info.pct * 100)}%`
-  if (info.access === 'reachable') {
-    return info.pct > 0 ? `Reachable · ${Math.floor(info.pct * 100)}%` : 'Reachable'
-  }
+/** One-line status under a glade's name; `pct` is clearing progress, 0..1. */
+export function gladeAccessText(access: GladeAccess, pct: number, clearers: number): string {
+  if (access === 'clearing') return `⛏ ${clearers} clearing · ${Math.floor(pct * 100)}%`
+  if (access === 'reachable') return pct > 0 ? `Reachable · ${Math.floor(pct * 100)}%` : 'Reachable'
   return `🔒 Out of reach`
 }
 
@@ -215,6 +220,32 @@ export const DEPOSIT_TINT: Record<DepositId, string> = {
 // ---------------------------------------------------------------------------
 // Buildings
 // ---------------------------------------------------------------------------
+
+/**
+ * What kind of building it is, as both maps draw it: the 2D plate's shape
+ * and tint (`map2dArt.ts`) and the 3D model (`modelParts.ts`).
+ */
+export type District =
+  | 'hearth'
+  | 'fire'
+  | 'housing'
+  | 'camp'
+  | 'farm'
+  | 'industry'
+  | 'service'
+  | 'storage'
+
+/** Which district a building belongs to, from its data (never its id). */
+export function districtOf(def: BuildingDef): District {
+  if (def.category === 'hearth') return 'hearth'
+  if (def.warmth) return 'fire'
+  if (def.category === 'housing') return 'housing'
+  if (def.tags.includes('farming')) return 'farm'
+  if (def.category === 'gathering') return 'camp'
+  if (def.category === 'production') return 'industry'
+  if (def.category === 'service') return 'service'
+  return 'storage'
+}
 
 /**
  * What a building is doing, as a badge-sized kind. The rules live in one
@@ -245,26 +276,8 @@ export const STATUS_BADGE: Record<Exclude<MapBuildingStatus, 'none'>, StatusBadg
   working: { icon: '⚙', art: STATUS_BADGE_ART.working, label: 'Working', color: '#6fbf72', problem: false },
 }
 
-/** Lazily computed per-call context so a batch of buildings shares the work. */
-export interface StatusContext {
-  used?: number
-  mods?: Modifiers
-}
-
-/**
- * The engine's status for `b`, reduced to its kind. Modifiers and storage use
- * are computed once per `ctx`, so a whole layer of buildings shares them.
- */
-export function buildingStatusKind(
-  run: RunState,
-  b: BuildingInstance,
-  ctx: StatusContext = {},
-): MapBuildingStatus {
-  if (!b.built) return 'construction'
-  ctx.mods ??= computeModifiers(run)
-  ctx.used ??= storageUsed(run)
-  return buildingStatus(run, b, ctx.mods, ctx.used).kind
-}
+/** Storm chill: a home beyond every fire, or a fire gone out. Both maps draw it beside the status badge. */
+export const COLD_BADGE = { icon: '❄', art: STATUS_BADGE_ART.cold, color: '#5f8fd4' } as const
 
 /**
  * Storm chill: finished housing standing outside every live warmth source.
@@ -395,4 +408,49 @@ export function useCameraFocus(onFocus: (p: Vec2) => void): void {
     latest.current(cameraFocus)
     useGameStore.setState({ cameraFocus: null })
   }, [cameraFocus])
+}
+
+// ---------------------------------------------------------------------------
+// Subscriptions
+// ---------------------------------------------------------------------------
+
+/** The world is moving: unpaused, playing, and not waiting on a choice. */
+export function isWorldRunning(speed: number, run: RunState | null): boolean {
+  return speed > 0 && run?.phase === 'playing' && run.pendingChoices.length === 0
+}
+
+/**
+ * A value a map layer derives from the run, on the HUD clock: `derive(run,
+ * version)` runs again only when `hudVersion` moves (about 8 Hz while the sim
+ * runs, at once after every command) or another run is loaded. While the
+ * returned key holds, the same value comes back and the layer does not
+ * re-render, so per-building work stays off the per-step path. Null without
+ * a run.
+ */
+export function useHudValue<T>(
+  derive: (run: RunState, version: number) => { key: string; value: T },
+): T | null {
+  const memo = useRef<{ hud: number; run: RunState | null; key: string; value: T | null }>({
+    hud: -1,
+    run: null,
+    key: '',
+    value: null,
+  })
+  return useGameStore((s) => {
+    const m = memo.current
+    if (s.hudVersion === m.hud && s.run === m.run) return m.value
+    m.hud = s.hudVersion
+    m.run = s.run
+    if (!s.run) {
+      m.key = ''
+      m.value = null
+    } else {
+      const next = derive(s.run, s.version)
+      if (m.value === null || next.key !== m.key) {
+        m.key = next.key
+        m.value = next.value
+      }
+    }
+    return m.value
+  })
 }

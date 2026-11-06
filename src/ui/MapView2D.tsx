@@ -8,7 +8,15 @@ import { describePlacement } from '../game/engine/placement'
 import { ROAD_TOOL, describeRoadTool, type RoadPreview } from '../game/engine/roads'
 import { useGameStore } from '../game/store'
 import type { RunState, Vec2 } from '../game/types'
-import { GLADE_STAKE_ART, MAP_KEYS, useCameraFocus, useMapKey, useMapOverlays } from './mapShared'
+import {
+  GLADE_STAKE_ART,
+  MAP_KEYS,
+  isWorldRunning,
+  placementHint,
+  useCameraFocus,
+  useMapKey,
+  useMapOverlays,
+} from './mapShared'
 import { panDirectionOf } from './usePanKeys'
 import {
   BuildGhost2D,
@@ -46,7 +54,6 @@ const MAP_SYMBOLS: IconId[] = [
     ...Object.values(BUILDING_ART).filter((id): id is IconId => id !== undefined),
     ...Object.values(STATUS_BADGE_ART),
     ...Object.values(GLADE_STAKE_ART),
-    'snowflake',
     'upArrow',
     'crag',
     'marsh',
@@ -76,7 +83,7 @@ export function MapView2D() {
 
 const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
   const buildMode = useGameStore((s) => s.buildMode)
-  const paused = useGameStore(isStill)
+  const paused = useGameStore((s) => !isWorldRunning(s.speed, s.run))
   const svgRef = useRef<SVGSVGElement>(null)
   const viewRef = useRef<SVGGElement>(null)
   const worldRef = useRef<SVGGElement>(null)
@@ -212,18 +219,12 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
     const screen = { x: at.clientX - wrap.left, y: at.clientY - wrap.top }
     if (state.buildMode === ROAD_TOOL) {
       const road = cachedRoadPreview(current, state.roadAnchor, pos, state.roadErase)
-      setGhost({
-        pos: road.to,
-        screen,
-        ok: road.ok,
-        hint: road.reason ?? (road.parts.length > 0 ? road.parts.join(' · ') : null),
-        road,
-      })
+      setGhost({ pos: road.to, screen, ok: road.ok, hint: placementHint(road.reason, road.parts), road })
       return
     }
     const reason = canPlaceBuilding(current, state.buildMode, pos)
     const parts = describePlacement(current, state.buildMode, pos).parts
-    setGhost({ pos, screen, ok: reason === null, hint: reason ?? (parts.length > 0 ? parts.join(' · ') : null) })
+    setGhost({ pos, screen, ok: reason === null, hint: placementHint(reason, parts) })
   }
   const queueHover = (e: React.PointerEvent) => {
     hover.current = { clientX: e.clientX, clientY: e.clientY }
@@ -472,11 +473,6 @@ export function WarmthToggle() {
       <Icon id="settlement" emoji="🔥" />
     </button>
   )
-}
-
-/** The world is standing still: paused, over, or waiting on a choice. */
-function isStill(s: { speed: number; run: RunState | null }): boolean {
-  return s.speed === 0 || s.run?.phase !== 'playing' || (s.run?.pendingChoices.length ?? 0) > 0
 }
 
 function clamp(v: number, min: number, max: number): number {

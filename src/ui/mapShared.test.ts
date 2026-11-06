@@ -14,10 +14,9 @@ import {
   GLADE_STAKE_ART,
   gladeStakesTitle,
   STATUS_BADGE,
-  buildingStatusKind,
+  gladeAccess,
   gladeAccessText,
   gladeFill,
-  gladeKindLabel,
   gladeLook,
   gladePlateInfo,
   isColdHousing,
@@ -30,7 +29,7 @@ import {
   type MapBuildingStatus,
 } from './mapShared'
 import {
-  buildingKey,
+  buildingLayer,
   buildingViews,
   clearedKey,
   depositKey,
@@ -47,6 +46,19 @@ import {
 import { assignWorker, findPlacement, placeBuilding } from '../game/engine/actions'
 import { placeRoad, roadNetwork, roadStats } from '../game/engine/roads'
 import { gladeEdgeGeometry } from './map3d/staticGeometry'
+
+/** A fresh store version per read, as after a sim step (statuses are shared per version). */
+let version = 0
+
+/** The status badge the maps draw for `b`. */
+function buildingStatusKind(run: RunState, b: BuildingInstance): MapBuildingStatus {
+  return buildingViews(run, ++version).find((v) => v.building === b)!.status
+}
+
+/** The 3D building layer's key. */
+function buildingKey(run: RunState): string {
+  return buildingLayer(run, ++version).key
+}
 
 function newRun(): RunState {
   const run = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'] })
@@ -94,9 +106,9 @@ function laySomeRoad(run: RunState): void {
 
 describe('glade visual language', () => {
   it('names each kind once, for both renderers and the inspector', () => {
-    expect(gladeKindLabel('small')).toBe('🌿 Small')
-    expect(gladeKindLabel('dangerous')).toBe('⚠️ Dangerous')
-    expect(gladeKindLabel('forbidden')).toBe('☠️ Forbidden')
+    expect(GLADE_KIND_STYLE.small.label).toBe('Small')
+    expect(GLADE_KIND_STYLE.dangerous.label).toBe('Dangerous')
+    expect(GLADE_KIND_STYLE.forbidden.label).toBe('Forbidden')
     expect(GLADE_KIND_STYLE.forbidden.title).toBe('Forbidden glade')
   })
 
@@ -114,21 +126,22 @@ describe('glade visual language', () => {
     const fogged = Object.values(run.glades).filter((g) => gladeLook(g) === 'fogged')
     const reachable = fogged.find((g) => isReachable(run, g.id))!
     const locked = Object.values(run.glades).find((g) => !g.cleared && !isReachable(run, g.id))!
-    expect(gladePlateInfo(run, locked).access).toBe('locked')
-    expect(gladePlateInfo(run, reachable).access).toBe('reachable')
+    expect(gladeAccess(run, locked)).toBe('locked')
+    expect(gladeAccess(run, reachable)).toBe('reachable')
     expect(addClearer(run, reachable.id)).toBeNull()
     const info = gladePlateInfo(run, reachable)
     expect(info.access).toBe('clearing')
-    expect(gladeAccessText(info)).toMatch(/⛏ 1 clearing/)
+    expect(gladeAccess(run, reachable)).toBe('clearing')
+    expect(gladeAccessText(info.access, info.pct, info.clearers)).toMatch(/⛏ 1 clearing/)
   })
 
   it('draws a glade\'s stakes as icons, never as emoji in the plate text', () => {
     const run = newRun()
-    const withStakes = Object.values(run.glades).find((g) => (gladePlateInfo(run, g).stakes ?? []).length > 0)!
+    const withStakes = Object.values(run.glades).find((g) => gladePlateInfo(run, g).stakes.length > 0)!
     const info = gladePlateInfo(run, withStakes)
-    for (const k of info.stakes!) expect(GLADE_STAKE_ART[k]).toBeTruthy()
-    expect(gladeAccessText(info)).not.toMatch(/[🪦🐺⏳👑✨]/u)
-    expect(gladeStakesTitle(info.stakes!)).toMatch(/^Clearing it could bring /)
+    for (const k of info.stakes) expect(GLADE_STAKE_ART[k]).toBeTruthy()
+    expect(gladeAccessText(info.access, info.pct, info.clearers)).not.toMatch(/[🪦🐺⏳👑✨]/u)
+    expect(gladeStakesTitle(info.stakes)).toMatch(/^Clearing it could bring /)
     expect(gladeStakesTitle([])).toBe('')
   })
 
@@ -422,10 +435,10 @@ describe('building upgrade tiers on the map', () => {
     const a = addBuilding(run, 'warehouse', { pos: { x: 2.5, y: 2.5 } })
     addBuilding(run, 'shelter', { pos: { x: -2.5, y: 2.5 } })
     const key = buildingKey(run)
-    const views = buildingViews(run)
+    const views = buildingViews(run, ++version)
     a.tier = 1
     expect(buildingKey(run)).not.toBe(key)
-    const after = buildingViews(run)
+    const after = buildingViews(run, ++version)
     // The memoised node re-renders on changed props; every other view's props
     // are equal, so only this node re-renders.
     const strip = (v: (typeof views)[number]) => ({ ...v, building: v.building.id })

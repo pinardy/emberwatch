@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { BUILDINGS } from '../../game/content/buildings'
 import { footprintOf } from '../../game/engine/actions'
-import type { BuildingCategory, BuildingInstance, Obstacle, WorldDeposit } from '../../game/types'
-import { DEPOSIT_TINT } from '../mapShared'
+import type { BuildingInstance, Obstacle, WorldDeposit } from '../../game/types'
+import { DEPOSIT_TINT, districtOf, type District } from '../mapShared'
 import { hash01 } from './models'
 import { color, local, part, placeParts, type Part } from './parts'
 
@@ -262,23 +262,26 @@ function brazier(lit: boolean): P[] {
 
 /** The finished model of a building, in model units. */
 export function modelParts(
-  category: BuildingCategory,
+  district: District,
   defId: string,
   opts: { occupied: boolean; lit: boolean },
 ): P[] {
-  if (defId === 'brazier') return brazier(opts.lit)
-  switch (category) {
+  switch (district) {
     case 'hearth':
       return [] // drawn by HearthModel (animated flame and light)
+    case 'fire':
+      return brazier(opts.lit)
     case 'housing':
       return defId === 'shelter' ? shelter(opts.occupied) : cottage(opts.occupied)
-    case 'gathering':
-      return defId === 'smallFarm' ? farm() : [tent(), ...campAccent(defId)]
-    case 'production':
+    case 'farm':
+      return farm()
+    case 'camp':
+      return [tent(), ...campAccent(defId)]
+    case 'industry':
       return workshop(defId)
     case 'service':
       return hall(defId)
-    case 'logistics':
+    case 'storage':
       return defId === 'tradingPost' ? tradingPost() : warehouse()
   }
 }
@@ -350,7 +353,7 @@ export function buildingParts(input: BuildingModelInput): P[] {
   let parts: P[]
   if (building.built) {
     parts = [
-      ...modelParts(def.category, def.id, { occupied: input.occupied, lit: input.lit }),
+      ...modelParts(districtOf(def), def.id, { occupied: input.occupied, lit: input.lit }),
       ...tierTrim(input.tier),
       ...(input.upgrading ? upgradeScaffold() : []),
     ]

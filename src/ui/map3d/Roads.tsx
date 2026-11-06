@@ -1,12 +1,12 @@
 import { memo } from 'react'
-import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { ROAD_HALF_WIDTH } from '../../game/engine/balance'
 import type { RoadPreview } from '../../game/engine/roads'
 import { useGameStore } from '../../game/store'
 import type { RoadSegment, RunState, Vec2 } from '../../game/types'
+import { placementHint } from '../mapShared'
 import { roadKey, useRunKey } from './layerKeys'
-import { GOLD, NO_RAYCAST } from './models'
+import { GhostConfirm3D, GhostHint3D, GOLD, NO_RAYCAST } from './models'
 import { useStaticGeometry } from './staticGeometry'
 
 /**
@@ -143,7 +143,7 @@ export function RoadGhost3D({
   const anchor = useGameStore((s) => s.roadAnchor)
   const preview = cursor?.preview
   const lifting = preview?.removeId ? (run.roads ?? []).find((r) => r.id === preview.removeId) : null
-  const hint = preview ? (preview.reason ?? preview.parts.join(' · ')) : null
+  const hint = preview ? placementHint(preview.reason, preview.parts) : null
   const color = preview?.ok ? '#6fbf72' : '#c05050'
   return (
     <>
@@ -153,28 +153,16 @@ export function RoadGhost3D({
       {preview && (
         <group position={[preview.to.x, 0, preview.to.y]} raycast={NO_RAYCAST}>
           <Marker p={{ x: 0, y: 0 }} color={color} />
-          {hint && (
-            <Html position={[0, 1.2, 0]} center distanceFactor={12} zIndexRange={[20, 0]} style={{ pointerEvents: 'none' }}>
-              <div className={`ghost-hint ${preview.ok ? 'is-ok' : 'is-bad'}`}>{hint}</div>
-            </Html>
-          )}
+          {hint && <GhostHint3D y={1.2} ok={preview.ok} hint={hint} />}
           {cursor?.pending && (
-            <Html position={[0, 2, 0]} center distanceFactor={12} zIndexRange={[25, 0]}>
-              <div className="ghost-confirm">
-                <button
-                  type="button"
-                  className="ok"
-                  disabled={!preview.ok}
-                  onClick={onConfirm}
-                  aria-label={preview.removeId ? 'Lift this road' : 'Lay this road'}
-                >
-                  ✓
-                </button>
-                <button type="button" className="no" onClick={onCancel} aria-label="Cancel road">
-                  ✕
-                </button>
-              </div>
-            </Html>
+            <GhostConfirm3D
+              y={2}
+              ok={preview.ok}
+              confirmLabel={preview.removeId ? 'Lift this road' : 'Lay this road'}
+              cancelLabel="Cancel road"
+              onConfirm={onConfirm}
+              onCancel={onCancel}
+            />
           )}
         </group>
       )}

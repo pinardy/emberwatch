@@ -6,11 +6,10 @@ import { BUILDINGS } from '../../game/content/buildings'
 import { footprintOf } from '../../game/engine/actions'
 import type { IconId } from '../../art/icons'
 import { DEPOSIT_ART } from '../../game/content/art'
-import { STATUS_BADGE_ART } from '../../game/content/artFamilies'
 import { DEPOSIT_INFO } from '../../game/engine/mapgen'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, RunState, Vec2, WorldDeposit } from '../../game/types'
-import { STATUS_BADGE, type MapBuildingStatus } from '../mapShared'
+import { COLD_BADGE, STATUS_BADGE, type MapBuildingStatus } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import { assignHomes } from '../villagerRoutes'
 import { requestGhost } from './ghostBus'
@@ -242,11 +241,11 @@ export const BuildingNode = memo(function BuildingNode({
   bucket,
   cold,
   partnerHint,
-  progress: progressProp,
-  workers: workersProp,
-  status = 'none',
-  tier = 0,
-  upgrade = -1,
+  progress,
+  workers,
+  status,
+  tier,
+  upgrade,
 }: {
   building: BuildingInstance
   selected: boolean
@@ -256,17 +255,15 @@ export const BuildingNode = memo(function BuildingNode({
   /** Pulses while the player is placing this building's adjacency partner. */
   partnerHint: boolean
   /** Construction progress 0..1 (quantised by the layer). */
-  progress?: number
+  progress: number
   /** Workers assigned. */
-  workers?: number
+  workers: number
   /** What it is doing right now; drives the status badge. */
-  status?: MapBuildingStatus
-  /** Warmth sources: whether the fire burns (the model reads it itself). */
-  lit?: boolean
+  status: MapBuildingStatus
   /** Upgrade tier: a prop so a new tier re-renders this node alone. */
-  tier?: number
+  tier: number
   /** Upgrade progress 0..1 while one is under way (quantised), else -1. */
-  upgrade?: number
+  upgrade: number
 }) {
   const def = BUILDINGS[building.defId]
   const [hovered, setHovered] = useState(false)
@@ -275,9 +272,6 @@ export const BuildingNode = memo(function BuildingNode({
   if (!def) return null
   const radius = footprintOf(building.defId)
   const scale = radius / 0.6
-  const progress =
-    progressProp ?? (building.built ? 1 : building.buildProgress / Math.max(1, def.buildSeconds))
-  const workers = workersProp ?? building.workers.length
   const iconY = building.built ? 1.15 * scale + 0.45 : 1.35
   const badge = status === 'none' ? null : STATUS_BADGE[status]
   // Problems show at every zoom (bigger from afar); good news only up close.
@@ -335,7 +329,7 @@ export const BuildingNode = memo(function BuildingNode({
       )}
       {cold && (
         <BatchSprite
-          tile={badgeTile('❄', '#5f8fd4', STATUS_BADGE_ART.cold)}
+          tile={badgeTile(COLD_BADGE.icon, COLD_BADGE.color, COLD_BADGE.art)}
           x={x}
           y={badgeY}
           z={z}

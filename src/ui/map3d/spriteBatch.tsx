@@ -19,8 +19,6 @@ import type { SpriteTile } from './sprites'
  * updates it, unmounting removes it.
  */
 
-export const batchStats = { tilesDrawn: 0, subUploads: 0, fullUploads: 0 }
-
 interface Slot {
   index: number
   refs: number
@@ -123,7 +121,6 @@ export class SpriteAtlas {
     this.ctx!.clearRect(x, y, this.tileW, this.tileH)
     this.ctx!.drawImage(this.scratch!, x, y)
     this.pending.set(index, s.getImageData(0, 0, this.tileW, this.tileH))
-    batchStats.tilesDrawn++
   }
 
   /** UV rectangle of a slot: [u, v, w, h], v running top-down. */
@@ -143,7 +140,6 @@ export class SpriteAtlas {
       this.needsFullUpload = false
       this.pending.clear()
       texture.needsUpdate = true
-      batchStats.fullUploads++
       return
     }
     if (this.pending.size === 0) return
@@ -152,7 +148,6 @@ export class SpriteAtlas {
       const y = Math.floor(index / this.cols) * this.tileH
       const source = { isDataTexture: true, image: { data: data.data, width: this.tileW, height: this.tileH } }
       renderer.copyTextureToTexture(source as unknown as THREE.Texture, texture, null, new THREE.Vector2(x, y))
-      batchStats.subUploads++
     }
     this.pending.clear()
   }

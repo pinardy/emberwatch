@@ -1,4 +1,5 @@
-import type { BuildingDef, Obstacle } from '../game/types'
+import type { Obstacle } from '../game/types'
+import type { District } from './mapShared'
 
 /**
  * 2D map art: every building stands on a plate whose silhouette and tint say
@@ -11,16 +12,6 @@ import type { BuildingDef, Obstacle } from '../game/types'
  * in SVG units, so the map can stamp them with a translate and the villager
  * canvas can reuse the same outline to tuck walkers under the roofs.
  */
-
-export type District =
-  | 'hearth'
-  | 'fire'
-  | 'housing'
-  | 'camp'
-  | 'farm'
-  | 'industry'
-  | 'service'
-  | 'storage'
 
 export interface DistrictStyle {
   /** Short name for titles and the legend. */
@@ -40,18 +31,6 @@ export const DISTRICT_STYLE: Record<District, DistrictStyle> = {
   industry: { label: 'Workshop', fill: '#3d2218', edge: '#e2703f' },
   service: { label: 'Service', fill: '#2c2240', edge: '#b48ae0' },
   storage: { label: 'Storage & trade', fill: '#1a2a3a', edge: '#6aa8dc' },
-}
-
-/** Which district a building belongs to on the 2D map. */
-export function districtOf(def: BuildingDef): District {
-  if (def.category === 'hearth') return 'hearth'
-  if (def.warmth) return 'fire'
-  if (def.category === 'housing') return 'housing'
-  if (def.tags.includes('farming')) return 'farm'
-  if (def.category === 'gathering') return 'camp'
-  if (def.category === 'production') return 'industry'
-  if (def.category === 'service') return 'service'
-  return 'storage'
 }
 
 export interface PlateShape {
