@@ -155,13 +155,13 @@ export function gladeStakesOf(glade: Pick<Glade, 'cleared' | 'eventId'>): GladeS
   return order.filter((k) => found.has(k))
 }
 
-/** Short words for each stake, for plates and the Inspector. */
-export const GLADE_STAKE_LABEL: Record<GladeStake, { icon: string; text: string }> = {
-  lives: { icon: '🪦', text: 'lives' },
-  threat: { icon: '🐺', text: 'a threat' },
-  condition: { icon: '⏳', text: 'a lingering task' },
-  reputation: { icon: '👑', text: 'reputation' },
-  pact: { icon: '✨', text: 'a pact' },
+/** Short words for each stake, for plates' titles and the Inspector. */
+export const GLADE_STAKE_LABEL: Record<GladeStake, { text: string }> = {
+  lives: { text: 'lives' },
+  threat: { text: 'a threat' },
+  condition: { text: 'a lingering task' },
+  reputation: { text: 'reputation' },
+  pact: { text: 'a pact' },
 }
 
 /** "a threat, lives or reputation" — the stakes in a sentence. */

@@ -1,7 +1,7 @@
 import { GLADE_ART } from '../../game/content/art'
 import { gladeStakesOf } from '../../game/engine/events'
 import type { Glade } from '../../game/types'
-import { GLADE_KIND_STYLE, gladeAccessText, type GladeAccess } from '../mapShared'
+import { GLADE_KIND_STYLE, GLADE_STAKE_ART, gladeAccessText, type GladeAccess } from '../mapShared'
 import { drawIcon, type SpriteTile } from './sprites'
 
 /**
@@ -15,12 +15,10 @@ import { drawIcon, type SpriteTile } from './sprites'
 export function plateTile(glade: Glade, access: GladeAccess, percent: number, clearers: number): SpriteTile {
   const locked = access === 'locked'
   const style = GLADE_KIND_STYLE[glade.kind]
-  const text = gladeAccessText(
-    { access, reachable: !locked, pct: percent / 100, clearers },
-    gladeStakesOf(glade),
-  )
+  const text = gladeAccessText({ access, reachable: !locked, pct: percent / 100, clearers })
+  const stakes = gladeStakesOf(glade)
   return {
-    key: `p:${glade.id}:${access}:${percent}:${clearers}`,
+    key: `p:${glade.id}:${access}:${percent}:${clearers}:${stakes.join(',')}`,
     draw: (ctx, w, h) => {
       const font = 'system-ui, -apple-system, "Segoe UI", sans-serif'
       const small = `600 30px ${font}`
@@ -37,7 +35,8 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
       const showBar = percent > 0
       const inner = Math.max(kindW, nameW, emW, showBar ? 260 : 0)
       const pw = Math.min(w - 16, inner + 56)
-      const ph = showBar ? 196 : 172
+      const stakeRow = stakes.length > 0 ? 44 : 0
+      const ph = (showBar ? 196 : 172) + stakeRow
       const x = (w - pw) / 2
       const y = (h - ph) / 2
 
@@ -90,6 +89,17 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
       ctx.font = em
       ctx.fillStyle = locked ? '#7d8a8a' : '#d9b46a'
       ctx.fillText(text, cx, cy, pw - 30)
+
+      // What the waiting event could lead to, as a row of small icons.
+      if (stakes.length > 0) {
+        cy += 40
+        const size = 30
+        const gap = 40
+        const left = cx - ((stakes.length - 1) * gap) / 2
+        stakes.forEach((k, i) => {
+          drawIcon(ctx, GLADE_STAKE_ART[k], size / 24, [left + i * gap - size / 2, cy - size / 2], true)
+        })
+      }
     },
   }
 }

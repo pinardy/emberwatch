@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 664 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
+npm test           # 666 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
