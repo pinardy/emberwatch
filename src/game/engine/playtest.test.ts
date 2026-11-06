@@ -45,7 +45,6 @@ import {
   appeaseThreat,
   optionAffordable,
   relevantBlueprints,
-  orderReputation,
   resolveGladeEvent,
   takeChoice,
 } from './events'
@@ -73,7 +72,7 @@ import {
 } from './roads'
 import { tick } from './tick'
 import { productionRate } from './forecast'
-import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal } from './orders'
+import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation } from './orders'
 import { decreeGoal, decreeStreakBonus } from './structure'
 import { baseServiceCapacity, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 

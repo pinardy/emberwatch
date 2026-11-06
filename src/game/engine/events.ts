@@ -770,9 +770,6 @@ export function rerollChoice(s: RunState): string | null {
   return null
 }
 
-// Orders live in ./orders; re-exported here for the tick and older imports.
-export { orderReputation, stepOrders } from './orders'
-
 // ---------------------------------------------------------------------------
 // Newcomers
 // ---------------------------------------------------------------------------

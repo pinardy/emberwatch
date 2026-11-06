@@ -1,5 +1,5 @@
 import { RESOURCES, resourceName } from '../content/resources'
-import { STORM_BLIGHTS, STORM_BLIGHT_LIST, type StormBlightDef } from '../content/stormBlights'
+import { STORM_BLIGHT_LIST, type StormBlightDef } from '../content/stormBlights'
 import type { ActiveCondition, RunState } from '../types'
 import {
   BLIGHT_PREP_GROWTH,
@@ -124,5 +124,3 @@ export function blightPrepText(s: RunState, def: StormBlightDef): string {
   const r = RESOURCES[def.prep.resource]
   return `${blightPrepAmount(s, def)} ${r?.name ?? def.prep.resource}`
 }
-
-export { STORM_BLIGHTS }

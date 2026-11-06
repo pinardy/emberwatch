@@ -22,7 +22,8 @@ import {
   STARTING_STOCK,
 } from './balance'
 import { createRun } from './createRun'
-import { optionAffordable, resolveGladeEvent, stepOrders, takeChoice } from './events'
+import { optionAffordable, resolveGladeEvent, takeChoice } from './events'
+import { stepOrders } from './orders'
 import { hearthForecast, secondsUntilStorm } from './forecast'
 import { DEPOSIT_RADIUS } from './mapgen'
 import { generateMap } from './worldgen'

@@ -69,8 +69,8 @@ import {
 import { dist, pointInPolygon } from './geometry'
 import { gladeAt } from './mapgen'
 import { computeModifiers } from './modifiers'
+import { adjacencyMultiplier } from './adjacency'
 import {
-  adjacencyMultiplier,
   seasonMultiplier,
   terrainBuildMultiplier,
   terrainOf,

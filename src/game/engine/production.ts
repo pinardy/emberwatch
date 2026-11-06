@@ -69,10 +69,6 @@ export function refreshDepositCaches(s: RunState): void {
   }
 }
 
-// Adjacency moved to its own module (several partners per building); the
-// re-export keeps existing imports working.
-export { adjacencyMultiplier } from './adjacency'
-
 // ---------------------------------------------------------------------------
 // Terrain
 // ---------------------------------------------------------------------------

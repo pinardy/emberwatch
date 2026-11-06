@@ -29,11 +29,10 @@ import {
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
 import { offerBlueprint, offerCornerstone } from './events'
-import { offerWrit } from './orders'
+import { drawOrder, offerWrit } from './orders'
 import { defaultDecreeState } from './structure'
 import { emptyTimeline } from './timeline'
 import { defaultCaravan } from './trade'
-import { drawOrder } from './drawOrder'
 import { generateMap } from './worldgen'
 import { pushLog } from './runLog'
 import { computeModifiers, seasonLengthFor } from './modifiers'
@@ -294,6 +293,3 @@ export function createRun({
 function yearOneLength(mods: ReturnType<typeof computeModifiers>): number {
   return SEASON_ORDER.reduce((sum, season) => sum + seasonLengthFor(season, 1, mods), 0)
 }
-
-// Moved to their own modules (see there); re-exported for existing callers.
-export { drawOrder, pushLog }
