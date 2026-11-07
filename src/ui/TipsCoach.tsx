@@ -91,7 +91,7 @@ const TIPS: Tip[] = [
   {
     id: 'first-caravan',
     title: 'A caravan is in town',
-    text: 'It leaves soon. Check the Trade tab — it pays double for one good this visit, and its stock rotates every caravan.',
+    text: 'It leaves soon. Check the Trade tab — it pays double for one good this visit, its stock rotates every caravan, and from the second visit it carries a rare blueprint or cornerstone.',
     when: (run) => run.caravan.here,
   },
 ]
