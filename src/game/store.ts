@@ -166,7 +166,7 @@ let quietStep = false
 
 /**
  * Clears the loop's module-level state (carry, auto-pause snapshot, HUD
- * throttle, a pending idle save), so one UI test's frames cannot leak into the
+ * throttle, a pending idle save, the active slot's stamp), so one UI test's frames cannot leak into the
  * next. Tests only: `src/test/setup-ui.ts` calls it after each test.
  */
 export function resetLoopStateForTests(): void {
@@ -174,7 +174,7 @@ export function resetLoopStateForTests(): void {
   cancelIdleSave = null
   simCarry = 0
   watched = null
-  saveFailing = false
+  slotStamp = null
   lastHudFrame = Number.NEGATIVE_INFINITY
   quietStep = false
 }
