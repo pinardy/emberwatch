@@ -18,9 +18,9 @@ function newRun(): RunState {
   return run
 }
 
-/** Fogged glades as the list orders them: clearing, then reachable, then out of reach. */
+/** Fogged glades as the list orders them: clearing, reachable, left to the forest, out of reach. */
 function foggedInOrder(run: RunState) {
-  const rank = { clearing: 0, reachable: 1, locked: 2 }
+  const rank = { clearing: 0, reachable: 1, spared: 2, locked: 3 }
   return Object.values(run.glades)
     .filter((g) => gladeLook(g) === 'fogged')
     .sort((a, b) => rank[gladeAccess(run, a)] - rank[gladeAccess(run, b)])
