@@ -328,6 +328,12 @@ export function escalateThreat(threat: ActiveThreat): void {
   }
 }
 
+/** An amount for a log line: whole units, or one decimal below ten. */
+function logAmount(n: number): string {
+  const tenths = Math.round(n * 10) / 10
+  return n >= 10 || Number.isInteger(tenths) ? String(Math.round(n)) : tenths.toFixed(1)
+}
+
 /**
  * Threats strike on a timer until they are appeased. Each strike is logged, so
  * a player who ignores one can read exactly what it is costing them — and
@@ -343,7 +349,7 @@ export function stepThreats(s: RunState, dt: number): void {
     const parts: string[] = []
     if (strike.hostility) {
       s.hostility = Math.max(0, s.hostility + strike.hostility)
-      parts.push(`hostility +${strike.hostility}`)
+      parts.push(`hostility +${logAmount(strike.hostility)}`)
     }
     if (strike.impatience) {
       addImpatience(s, strike.impatience)
@@ -355,7 +361,7 @@ export function stepThreats(s: RunState, dt: number): void {
         const taken = Math.min(s.stock[key] ?? 0, amount ?? 0)
         if (taken > 0) {
           spend(s.stock, { [key]: taken })
-          parts.push(`${taken} ${key} stolen`)
+          parts.push(`${logAmount(taken)} ${resourceName(key)} stolen`)
         }
       }
     }

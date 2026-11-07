@@ -202,6 +202,8 @@ export function retreatToCitadel(s: RunState): string | null {
   if (!retreatOffered(s)) return 'The settlement can still be held.'
   s.phase = 'lost'
   s.retreated = true
+  s.pendingChoices = []
+  s.orderOffers = []
   pushLog(s, `🏰 You lead the settlers home to the Citadel. The settlement is given back to the forest.`, 'info')
   return null
 }

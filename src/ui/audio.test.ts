@@ -245,3 +245,53 @@ describe('the score in the mix', () => {
   })
 
 })
+
+describe('a sound that fails never stops the game', () => {
+  it('plays on silent when the browser refuses an AudioContext', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    class Refusing {
+      constructor() {
+        throw new Error('NotAllowedError: too many contexts')
+      }
+    }
+    vi.stubGlobal('AudioContext', Refusing)
+    expect(() => unlockAudio()).not.toThrow()
+    expect(() => cue('orderComplete')).not.toThrow()
+    expect(() => setRainSeason('storm')).not.toThrow()
+    expect(() => setMusicMood({ season: 'storm', tense: true })).not.toThrow()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('swallows a resume the browser rejects', async () => {
+    const rejected = vi.fn()
+    // Node's process (these tests run in the node environment).
+    const { process } = globalThis as unknown as {
+      process: { on(event: string, fn: () => void): void; off(event: string, fn: () => void): void }
+    }
+    process.on('unhandledRejection', rejected)
+    try {
+      unlockAudio()
+      const ctx = graph().ctx
+      ctx.state = 'suspended'
+      ctx.resume = () => Promise.reject(new Error('NotAllowedError: no gesture'))
+      expect(() => unlockAudio()).not.toThrow()
+      // Real timers for a moment, so a rejection left unhandled would surface.
+      vi.useRealTimers()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(rejected).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', rejected)
+    }
+  })
+
+  it('keeps a cue that throws mid-graph from reaching the caller', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    unlockAudio()
+    graph().ctx.createOscillator = () => {
+      throw new Error('InvalidStateError')
+    }
+    expect(() => cue('orderComplete')).not.toThrow()
+    warn.mockRestore()
+  })
+})

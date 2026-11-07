@@ -2,9 +2,11 @@ import { SPECIES } from './content/species'
 import {
   RUN_KEY,
   loadRun,
+  loadRunChecked,
   read,
   removeKey,
   writeChecked,
+  type LoadResult,
   type WriteFailure,
 } from './persistence'
 import type { RunPhase, RunState, Season, SpeciesId } from './types'
@@ -134,6 +136,15 @@ function writeIndex(index: SlotIndex): void {
  * single save, or a write that beat the index) is opened once and indexed.
  */
 function loadIndex(): SlotIndex {
+  try {
+    return reconcileIndex()
+  } catch {
+    // Storage that throws on every read: nothing is listed, nothing breaks.
+    return { version: 1, slots: {} }
+  }
+}
+
+function reconcileIndex(): SlotIndex {
   const raw = read<{ slots?: Record<string, unknown> }>(SLOT_INDEX_KEY)
   const index: SlotIndex = { version: 1, slots: {} }
   let changed = !raw
@@ -192,6 +203,19 @@ export function freeSlot(): SlotId | null {
 
 export function loadSlot(id: SlotId): RunState | null {
   return loadRun(slotKey(id))
+}
+
+/** Loads a slot, or says why not: empty, or damaged (and how). */
+export function loadSlotChecked(id: SlotId): LoadResult {
+  return loadRunChecked(slotKey(id))
+}
+
+/**
+ * When the slot was last saved, by any tab, as the index records it: null for
+ * an empty slot, 0 when unknown (indexed from an old save).
+ */
+export function slotSavedAt(id: SlotId): number | null {
+  return loadIndex().slots[id]?.savedAt ?? null
 }
 
 export type SaveResult =

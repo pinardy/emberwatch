@@ -4,6 +4,7 @@ import { RESOURCES, RESOURCE_LIST } from '../content/resources'
 import { SPECIES } from '../content/species'
 import { TRADE_AGREEMENTS } from '../content/tradeAgreements'
 import type {
+  CaravanOffer,
   CaravanRare,
   CaravanState,
   ResourceId,
@@ -129,6 +130,7 @@ export function caravanStay(s: RunState): number {
 }
 
 export function stepCaravan(s: RunState, dt: number, mods: Modifiers = computeModifiers(s)): void {
+  if (s.caravan.held?.length) unloadHeld(s)
   // No road, no caravans: the timer only runs once a Trading Post stands.
   if (!caravanAvailable(s, mods)) return
 
@@ -138,6 +140,7 @@ export function stepCaravan(s: RunState, dt: number, mods: Modifiers = computeMo
   if (s.caravan.here) {
     s.caravan.here = false
     s.caravan.timer = caravanInterval(s, mods)
+    leavePaidLots(s)
     s.caravan.offers = []
     s.caravan.rare = null
     pushLog(s, '🐫 The caravan packs up and moves on.', 'info')
@@ -174,20 +177,88 @@ export function buyOffer(s: RunState, index: number): string | null {
   const offer = s.caravan.offers[index]
   if (!s.caravan.here || !offer) return 'The caravan is not here.'
   if (offer.sold) return offer.prepaid ? 'That shipment is already collected.' : 'That lot is already sold.'
+  if (offer.prepaid) return collectPaidLot(s, offer)
   const price = offerPrice(s, index)
   if ((s.stock.amber ?? 0) < price) return 'Not enough amber.'
   if (storageUsed(s) + offer.amount > s.storageCap) return 'The stockpile is full.'
   spend(s.stock, { amber: price })
   grant(s.stock, { [offer.resource]: offer.amount }, s.storageCap, storageUsed(s))
   offer.sold = true
+  pushLog(s, `Bought ${offer.amount} × ${RESOURCES[offer.resource]?.name} for ${price} amber.`, 'info')
+  return null
+}
+
+/** Whole units of room left in the stockpile. */
+function roomLeft(s: RunState): number {
+  return Math.max(0, Math.floor(s.storageCap - storageUsed(s)))
+}
+
+/**
+ * Collects as much of a paid commission lot as the stockpile has room for;
+ * whatever does not fit stays on the caravan to collect later.
+ */
+function collectPaidLot(s: RunState, offer: CaravanOffer): string | null {
+  const take = Math.min(offer.amount, roomLeft(s))
+  if (take <= 0) return 'The stockpile is full.'
+  grant(s.stock, { [offer.resource]: take })
+  offer.amount -= take
+  if (offer.amount <= 0) {
+    offer.amount = take
+    offer.sold = true
+  }
+  const name = RESOURCES[offer.resource]?.name ?? offer.resource
   pushLog(
     s,
-    offer.prepaid
-      ? `Collected the commissioned ${offer.amount} × ${RESOURCES[offer.resource]?.name}.`
-      : `Bought ${offer.amount} × ${RESOURCES[offer.resource]?.name} for ${price} amber.`,
+    offer.sold
+      ? `Collected the commissioned ${take} × ${name}.`
+      : `Collected ${take} × ${name} of the commission; ${offer.amount} more wait on the caravan for room.`,
     'info',
   )
   return null
+}
+
+/**
+ * A caravan never leaves with goods already paid for: as it packs up, any
+ * uncollected commission is unloaded into the stockpile as far as room allows,
+ * and the rest is left at the hearth, unloaded as room frees.
+ */
+function leavePaidLots(s: RunState): void {
+  for (const offer of s.caravan.offers) {
+    if (!offer.prepaid || offer.sold || offer.amount <= 0) continue
+    const take = Math.min(offer.amount, roomLeft(s))
+    if (take > 0) grant(s.stock, { [offer.resource]: take })
+    const left = offer.amount - take
+    const name = RESOURCES[offer.resource]?.name ?? offer.resource
+    if (left > 0) {
+      const held = (s.caravan.held ??= [])
+      const same = held.find((h) => h.resource === offer.resource)
+      if (same) same.amount += left
+      else held.push({ resource: offer.resource, amount: left })
+      pushLog(
+        s,
+        `🐫 The caravan leaves the rest of your commission at the hearth: ${left} × ${name}, unloaded as room frees.`,
+        'info',
+      )
+    } else {
+      pushLog(s, `🐫 The caravan unloads the rest of your commission before it leaves: ${take} × ${name}.`, 'info')
+    }
+  }
+}
+
+/** Moves commissioned goods left at the hearth into the stockpile as room frees. */
+function unloadHeld(s: RunState): void {
+  const held = s.caravan.held
+  if (!held) return
+  for (const lot of held) {
+    const take = Math.min(lot.amount, roomLeft(s))
+    if (take <= 0) continue
+    grant(s.stock, { [lot.resource]: take })
+    lot.amount -= take
+    if (lot.amount <= 0) {
+      pushLog(s, `🐫 The last of the commissioned ${RESOURCES[lot.resource]?.name ?? lot.resource} is unloaded.`, 'info')
+    }
+  }
+  s.caravan.held = held.filter((lot) => lot.amount > 0)
 }
 
 /** What the caravan pays for one lot of `resource` right now. */

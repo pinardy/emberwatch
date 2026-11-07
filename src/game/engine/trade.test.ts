@@ -187,6 +187,60 @@ describe('commissioned shipments', () => {
     expect(s.stock.amber).toBe(amber) // already paid for
     expect(s.stock.brick).toBe(bricks + COMMISSION_LOT)
   })
+
+  it('collects as much of a paid lot as there is room for', () => {
+    const s = tradingRun()
+    s.stock.amber = 1000
+    commissionShipment(s, 'brick')
+    s.stock.stone = (s.stock.stone ?? 0) + (s.storageCap - storageUsed(s))
+    const bricks = s.stock.brick ?? 0
+    arrive(s)
+    expect(s.caravan.offers[0]).toMatchObject({ amount: COMMISSION_LOT, prepaid: true })
+    // Room for four: four come off the caravan, the rest wait.
+    s.stock.stone = (s.stock.stone ?? 0) - 4
+    expect(buyOffer(s, 0)).toBeNull()
+    expect(s.stock.brick).toBe(bricks + 4)
+    expect(s.caravan.offers[0]).toMatchObject({ amount: COMMISSION_LOT - 4, sold: false })
+    s.stock.stone = 0
+    expect(buyOffer(s, 0)).toBeNull()
+    expect(s.stock.brick).toBe(bricks + COMMISSION_LOT)
+    expect(s.caravan.offers[0].sold).toBe(true)
+  })
+
+  it('never takes paid goods away: a leaving caravan unloads what fits and leaves the rest at the hearth', () => {
+    const s = tradingRun()
+    s.stock.amber = 1000
+    commissionShipment(s, 'brick')
+    s.stock.stone = (s.stock.stone ?? 0) + (s.storageCap - storageUsed(s) - 2)
+    const bricks = s.stock.brick ?? 0
+    arrive(s)
+    expect(s.stock.brick).toBe(bricks + 2)
+    // Still no room when it packs up, bar three more.
+    s.stock.stone = (s.stock.stone ?? 0) - 3
+    stepCaravan(s, s.caravan.timer + 0.01)
+    expect(s.caravan.here).toBe(false)
+    expect(s.stock.brick).toBe(bricks + 5)
+    expect(s.caravan.held).toEqual([{ resource: 'brick', amount: COMMISSION_LOT - 5 }])
+    expect(s.log.some((l) => /left at the hearth|leaves the rest/.test(l.text))).toBe(true)
+    // Room frees: the rest is unloaded, with no caravan in town.
+    s.stock.stone = 0
+    stepCaravan(s, 0.1)
+    expect(s.stock.brick).toBe(bricks + COMMISSION_LOT)
+    expect(s.caravan.held).toEqual([])
+  })
+
+  it('a leaving caravan unloads the whole paid lot when there is room by then', () => {
+    const s = tradingRun()
+    s.stock.amber = 1000
+    commissionShipment(s, 'ale')
+    s.stock.stone = (s.stock.stone ?? 0) + (s.storageCap - storageUsed(s))
+    const ale = s.stock.ale ?? 0
+    arrive(s)
+    s.stock.stone = 0
+    stepCaravan(s, s.caravan.timer + 0.01)
+    expect(s.stock.ale).toBe(ale + COMMISSION_LOT)
+    expect(s.caravan.held ?? []).toEqual([])
+  })
 })
 
 describe('trade agreements', () => {

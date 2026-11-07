@@ -190,7 +190,7 @@ export function stepDecree(s: RunState, dt: number): void {
     s.stats.ordersCompleted++
     const reputation = decreeReputation(s, def)
     addReputation(s, reputation)
-    if (def.impatienceRelief) s.impatience = Math.max(0, s.impatience - def.impatienceRelief)
+    if (def.impatienceRelief) addImpatience(s, -def.impatienceRelief)
     if (def.reward) {
       grantProduced(s, def.reward)
     }
@@ -498,9 +498,7 @@ export function takeCharter(s: RunState, choice: PendingChoice, charterId: strin
     pushLog(s, `📐 The Royal Architect delivers plans and materials for a ${building?.name ?? id}.`, 'good')
   }
   if (def.maxImpatience) s.maxImpatience += def.maxImpatience
-  if (def.impatienceRelief) {
-    s.impatience = Math.max(0, s.impatience - def.impatienceRelief)
-  }
+  if (def.impatienceRelief) addImpatience(s, -def.impatienceRelief)
 
   s.charter = def.id
   recordEvent(s, 'charter', def.name)
@@ -548,8 +546,7 @@ export function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined)
     parts.push(`hostility ${outcome.hostility > 0 ? '+' : ''}${outcome.hostility}`)
   }
   if (outcome.impatience) {
-    if (outcome.impatience > 0) addImpatience(s, outcome.impatience)
-    else s.impatience = Math.max(0, s.impatience + outcome.impatience)
+    addImpatience(s, outcome.impatience)
     parts.push(outcome.impatience > 0 ? 'the Queen frets' : 'the Queen is pleased')
   }
   if (outcome.gain) {
