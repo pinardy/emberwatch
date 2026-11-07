@@ -1,0 +1,132 @@
+import type { ReactNode } from 'react'
+import {
+  DECREE_DECLINE_IMPATIENCE,
+  HEARTH_STORM_REACH_FLOOR,
+  RESOLVE_EXPECTATION_CROWD_FROM,
+  SPARED_GLADE_RECLAIM_HOSTILITY,
+} from '../game/engine/balance'
+
+/**
+ * The menu's "How to play": the current game in short headed sections, each
+ * a few one-line points, so it can be skimmed on a phone. The numbers it
+ * quotes come from `balance.ts`, so a retune does not leave it out of date.
+ */
+export function HowToPlay() {
+  return (
+    <details className="how-to" data-testid="how-to-play">
+      <summary>How to play</summary>
+      <div className="how-to-parts">
+        <Part title="The goal">
+          <li>
+            Fill <strong>👑 Reputation</strong> before the Queen’s <strong>⏳ Impatience</strong> fills
+            and she recalls you. By Year 5 her deadline has passed and impatience climbs fast.
+          </li>
+          <li>
+            Every run opens on <strong>the Founding</strong>: blueprint drafts, a cornerstone and a
+            first writ, picked in any order while the clock waits.
+          </li>
+        </Part>
+
+        <Part title="The race">
+          <li>
+            Reputation comes from orders, decrees, glade events, reclaimed land, and species whose
+            resolve sits above their threshold — in full only when buildings you raised serve
+            their needs.
+          </li>
+          <li>
+            Impatience grows with the calendar, each villager who leaves and high hostility — and
+            whenever <strong>reputation stalls</strong>: a minute after your last point it climbs,
+            faster the longer you wait. Your next point resets it.
+          </li>
+        </Part>
+
+        <Part title="Needs and expectations">
+          <li>
+            Camps must sit near the deposit they work. Cooked food goes further and variety lifts
+            resolve.
+          </li>
+          <li>
+            Each species wants services; a service counts once it is staffed, supplied and reaches
+            most of your people. You can never draft everything — choose whose needs you serve.
+          </li>
+          <li>
+            From Year 2 settlers <strong>expect more</strong>: a served species loses resolve each
+            year, and faster past {RESOLVE_EXPECTATION_CROWD_FROM} villagers. Keep adding. A
+            species below zero starts to leave.
+          </li>
+        </Part>
+
+        <Part title="Glades and the forest">
+          <li>
+            Idle villagers clear fogged glades beside your land for loot and ground. Some hide a
+            decision — the chips under a plate say what is at stake.
+          </li>
+          <li>
+            Every glade reclaimed makes <strong>hostility</strong> grow faster for good, and
+            hostility drags everyone’s resolve down. A border glade{' '}
+            <strong>left to the forest</strong> (from the Inspector) calms it while it stands;
+            breaking that truce costs {SPARED_GLADE_RECLAIM_HOSTILITY}.
+          </li>
+        </Part>
+
+        <Part title="The Storm">
+          <li>
+            Each year ends in the Storm: farms stop, gathering halves and the hearth burns wood.
+            Stock food and wood in the Clearance.
+          </li>
+          <li>
+            The hearth’s warm ring shrinks to {Math.round(HEARTH_STORM_REACH_FLOOR * 100)}% through
+            the Storm. Homes beyond every fire go <strong>cold</strong>, and the cold kills — a
+            brazier or an insulated shelter keeps them warm.
+          </li>
+          <li>
+            From Year 2 the forest forecasts a <strong>blight</strong> each Clearance. Make the
+            goods it names before the Storm breaks and it is turned aside.
+          </li>
+        </Part>
+
+        <Part title="Orders, decrees and commissions">
+          <li>
+            Three standing <strong>orders</strong> pay reputation. When one is met, choose its
+            replacement in the Orders panel — the clock keeps running.
+          </li>
+          <li>
+            The herald brings two timed <strong>decrees</strong>: meet one for a reward and a
+            streak, miss it and her patience frays — or beg off both for +
+            {DECREE_DECLINE_IMPATIENCE} impatience.
+          </li>
+          <li>
+            A <strong>commission</strong>, chosen before the run, adds an objective judged at the
+            end. Its card sits in the Orders panel.
+          </li>
+        </Part>
+
+        <Part title="Trade and amber">
+          <li>
+            Raise a Trading Post and caravans call: sell for <strong>amber</strong>, buy what you
+            lack, and get double for the one good each visit wants.
+          </li>
+          <li>
+            Amber buys rare blueprints and cornerstones, shipments to order, one trade agreement a
+            run, rerolls, rushed building and a calmer Queen. Spend it.
+          </li>
+        </Part>
+      </div>
+      <p className="muted how-to-keys">
+        <strong>Keys:</strong> Space pauses · 1–5 set speed · B build · P people · O orders · T
+        trade · L log · WASD/arrows pan · Q/E rotate · H homes · right-click or Esc cancels
+        placement and closes tips. On touch screens, drag to pan, pinch to zoom and tap ✓ to
+        place. Progress saves automatically and the game works offline once loaded.
+      </p>
+    </details>
+  )
+}
+
+function Part({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="how-to-part" aria-label={title}>
+      <h3>{title}</h3>
+      <ul>{children}</ul>
+    </section>
+  )
+}

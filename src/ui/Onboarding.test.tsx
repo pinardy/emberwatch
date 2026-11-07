@@ -176,9 +176,18 @@ describe('the founding panel', () => {
     ])
     for (const sp of run.speciesPool) expect(within(panel).getByText(SPECIES[sp].name)).toBeTruthy()
     expect(within(panel).getByRole('list', { name: /Lay of the land/i })).toBeTruthy()
-    // The first-draft tip sits with the blueprints, not under a dialog.
+    // The founding's own tip comes first, under its heading; the first-draft
+    // tip waits its turn, so the panel never holds two tips at once.
+    const foundingTip = within(panel).getByRole('note', { name: 'Tip' })
+    expect(within(foundingTip).getByText('The Founding')).toBeTruthy()
+    expect(within(panel).getAllByRole('note', { name: 'Tip' })).toHaveLength(1)
+    expect(within(panel).queryByText(/Drafting a blueprint/)).toBeNull()
+    fireEvent.click(within(foundingTip).getByRole('button', { name: 'Got it' }))
+    expect(useSeenTips.getState().seen).toContain('founding')
+    // The first-draft tip then sits with the blueprints, not under a dialog.
     const blueprints = within(panel).getByRole('region', { name: /Blueprints/ })
     expect(within(blueprints).getByText(/Drafting a blueprint/)).toBeTruthy()
+    expect(within(panel).getAllByRole('note', { name: 'Tip' })).toHaveLength(1)
     // Each blueprint card says what it does for services, as in a draft.
     const cards = within(blueprints).getAllByRole('button').filter((b) => b.className.includes('option'))
     expect(cards.length).toBe(run.pendingChoices[0].options.length)
@@ -197,6 +206,31 @@ describe('the founding panel', () => {
     const writ = within(panel).getByRole('region', { name: /founding writ/i })
     expect(writ.contains(document.activeElement)).toBe(true)
     expect(document.activeElement?.className).toMatch(/option/)
+  })
+})
+
+describe('the founding holds the clock', () => {
+  it('shows the held state on the speed controls, then the set speed once the picks are made', () => {
+    startRun()
+    useGameStore.setState({ speed: 1 })
+    const group = screen.getByRole('group', { name: 'Game speed' })
+    // While the founding is open the clock waits, and the bar says so.
+    expect(within(group).getByRole('status').textContent).toMatch(/Founding — clock waits/)
+    expect(group.className).toMatch(/is-held/)
+    // No speed is lit while none is running.
+    expect(within(group).queryAllByRole('button')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Game speed: held for the founding' })).toBeTruthy()
+    // The speed already set is kept, unshown, for when the clock starts.
+    act(() => useGameStore.setState({ speed: 3 }))
+    expect(within(group).getByRole('status').textContent).toMatch(/Founding — clock waits/)
+    expect(within(group).queryAllByRole('button')).toHaveLength(0)
+
+    takeOpeningDraft()
+    const after = screen.getByRole('group', { name: 'Game speed' })
+    expect(within(after).queryByRole('status')).toBeNull()
+    expect(after.className).not.toMatch(/is-held/)
+    expect(after.querySelector('button.is-active')?.textContent).toBe('3×')
+    expect(screen.getByRole('button', { name: 'Game speed: 3×' })).toBeTruthy()
   })
 })
 
@@ -252,5 +286,44 @@ describe('blueprint draft', () => {
     fireEvent.click(card)
     expect(currentRun().cornerstones).toContain('campfireTales')
     expect(currentRun().unlockedBuildings).toHaveLength(unlocked)
+  })
+})
+
+describe('how to play', () => {
+  it('explains the current game in short headed sections on the menu', () => {
+    render(<App />)
+    const howTo = screen.getByTestId('how-to-play')
+    expect(within(howTo).getByText('How to play')).toBeTruthy()
+    const parts = Array.from(howTo.querySelectorAll('section.how-to-part'))
+    expect(parts.map((p) => p.getAttribute('aria-label'))).toEqual([
+      'The goal',
+      'The race',
+      'Needs and expectations',
+      'Glades and the forest',
+      'The Storm',
+      'Orders, decrees and commissions',
+      'Trade and amber',
+    ])
+    for (const part of parts) expect(part.querySelector('h3')?.textContent).toBe(part.getAttribute('aria-label'))
+    const text = howTo.textContent ?? ''
+    for (const idea of [
+      /Reputation/,
+      /Impatience/,
+      /reputation stalls/,
+      /expect more/,
+      /left to the forest/,
+      /blight/,
+      /cold/,
+      /decrees/,
+      /commission/,
+      /amber/,
+      /the Founding/,
+    ]) {
+      expect(text).toMatch(idea)
+    }
+    // Skimmable: every point is a line or two, not a paragraph.
+    for (const li of Array.from(howTo.querySelectorAll('li'))) {
+      expect((li.textContent ?? '').length).toBeLessThanOrEqual(240)
+    }
   })
 })

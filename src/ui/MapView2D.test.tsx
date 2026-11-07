@@ -1,11 +1,11 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
-import { findPlacement } from '../game/engine/actions'
+import { findPlacement, isReachable } from '../game/engine/actions'
 import { HUD_INTERVAL_MS, useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { gladeEdgeGeometry, mapStats, useStaticGeometry } from './map3d/staticGeometry'
-import { districtOf, useHudValue, useMapOverlays } from './mapShared'
+import { districtOf, SPARED_STYLE, useHudValue, useMapOverlays } from './mapShared'
 import { roadKey } from './map3d/layerKeys'
 import { roadGeometry } from './map3d/Roads'
 import { ROAD_TOOL, placeRoad } from '../game/engine/roads'
@@ -186,6 +186,42 @@ describe('2D map parity', () => {
     }
     // Fogged glades get a kind border.
     expect(document.querySelectorAll('g.glade-edge').length).toBe(labels.length)
+  })
+
+  it('marks a glade left to the forest on its plate, border and ground', () => {
+    startGame()
+    const run = currentRun()
+    const glade = Object.values(run.glades).find(
+      (g) => g.discovered && !g.cleared && g.kind !== 'settlement' && isReachable(run, g.id),
+    )!
+    const label = () =>
+      Array.from(document.querySelectorAll('g.glade-label')).find((l) =>
+        l.querySelector('.glade-name')?.textContent === glade.name,
+      )!
+    expect(label().getAttribute('class')).not.toMatch(/is-spared/)
+    act(() => useGameStore.getState().spareGlade(glade.id))
+    // The plate says so in a line of its own, with a trees badge, and drops
+    // its stake chips: what clearing would bring is moot while it stands.
+    expect(label().getAttribute('class')).toMatch(/is-spared/)
+    const line = label().querySelector('.glade-spared-line')!
+    expect(line.textContent).toBe('Left to the forest')
+    expect(line.querySelector(`use[href="#${iconSymbolId('trees')}"]`)).not.toBeNull()
+    expect(label().querySelectorAll('.glade-stake-full, .glade-stake-dot').length).toBe(0)
+    // Its kind is still named, in a muted voice.
+    expect(label().querySelector('.glade-kind')?.textContent).toMatch(/Small|Dangerous|Forbidden/)
+    // A soft, solid leaf-green border and a mossy wash.
+    const edge = document.querySelector('g.glade-edge.is-spared > polygon')!
+    expect(edge.getAttribute('stroke')).toBe(SPARED_STYLE.edge)
+    expect(Number(edge.getAttribute('stroke-opacity'))).toBeLessThan(0.9)
+    expect(edge.getAttribute('stroke-dasharray')).toBeNull()
+    const poly = Array.from(document.querySelectorAll('polygon.glade-poly')).find(
+      (p) => p.getAttribute('fill') === SPARED_STYLE.fog,
+    )
+    expect(poly).toBeTruthy()
+    // Breaking the truce restores the ordinary plate.
+    act(() => useGameStore.getState().reclaimGlade(glade.id))
+    expect(label().getAttribute('class')).not.toMatch(/is-spared/)
+    expect(label().querySelector('.glade-spared-line')).toBeNull()
   })
 
   it('toggles the warmth radius with R and the 🔥 button', () => {
