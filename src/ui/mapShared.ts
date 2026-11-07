@@ -5,7 +5,7 @@ import { isReachable } from '../game/engine/actions'
 import { describeStakes, gladeStakesOf, type GladeStake } from '../game/engine/glades'
 import type { BuildingStatus as EngineBuildingStatus } from '../game/engine/forecast'
 import { dist } from '../game/engine/geometry'
-import { TERRAIN_COLORS } from '../game/engine/mapgen'
+import { TERRAIN_COLORS, gladeAt } from '../game/engine/mapgen'
 import { isWarmAt, type WarmthSource } from '../game/engine/queries'
 import { housingOf, isInsulated, isUpgrading, nextUpgrade, tierOf } from '../game/engine/upgrades'
 import { useGameStore } from '../game/store'
@@ -155,6 +155,17 @@ export function gladeFill(glade: Glade, palette: MapPalette): string {
         : GLADE_KIND_STYLE[glade.kind].fog
       : HIDDEN_FILL
   return palette === '3d' ? shade(base, 1.25) : base
+}
+
+/**
+ * The uncleared glade a map click at `p` lands in, if any. It asks the
+ * engine's `gladeAt`, so a click on a shared border picks the glade the sim
+ * would (the one the point sits deeper in), not whichever polygon happens to
+ * be tested first.
+ */
+export function fogGladeAt(run: RunState, p: Vec2): Glade | undefined {
+  const glade = gladeAt(run.glades, p)
+  return glade && !glade.cleared ? glade : undefined
 }
 
 /**

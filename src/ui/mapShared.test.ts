@@ -8,6 +8,7 @@ import { warmthSources } from '../game/engine/queries'
 import { resolveGladeEvent } from '../game/engine/glades'
 import { takeChoice } from '../game/engine/drafts'
 import { pointInPolygon } from '../game/engine/geometry'
+import { gladeAt } from '../game/engine/mapgen'
 import { tick } from '../game/engine/tick'
 import type { BuildingInstance, RunState } from '../game/types'
 import {
@@ -15,6 +16,7 @@ import {
   GLADE_STAKE_ART,
   gladeStakesTitle,
   STATUS_BADGE,
+  fogGladeAt,
   gladeAccess,
   gladeAccessText,
   gladeFill,
@@ -184,6 +186,29 @@ describe('glade visual language', () => {
     const run = newRun()
     const cleared = Object.values(run.glades).find((g) => g.cleared)!
     expect(gladeFill(cleared, '2d')).toBe(terrainColor(cleared.terrain, '2d'))
+  })
+})
+
+describe('map clicks', () => {
+  it('a click on a shared border picks the glade the engine would, not the first polygon tested', () => {
+    const run = newRun()
+    const [a, b] = Object.values(run.glades).filter((g) => !g.cleared)
+    // Neighbouring cells can overlap by a hair after rounding. Here they
+    // overlap by 0.1, and the right-hand glade is listed (so tested) first.
+    const left = { ...a, id: 'left', discovered: true, polygon: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }] }
+    const right = { ...b, id: 'right', discovered: true, polygon: [{ x: 0.9, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 0.9, y: 1 }] }
+    const glades = { right, left }
+    const p = { x: 0.92, y: 0.5 } // 0.08 inside the left glade, 0.02 inside the right
+    expect(pointInPolygon(p, left.polygon) && pointInPolygon(p, right.polygon)).toBe(true)
+    expect(gladeAt(glades, p)?.id).toBe('left')
+    expect(fogGladeAt({ ...run, glades }, p)?.id).toBe('left')
+  })
+
+  it('finds no fogged glade on cleared ground', () => {
+    const run = newRun()
+    const home = Object.values(run.glades).find((g) => g.cleared)!
+    expect(gladeAt(run.glades, home.center)?.id).toBe(home.id)
+    expect(fogGladeAt(run, home.center)).toBeUndefined()
   })
 })
 
