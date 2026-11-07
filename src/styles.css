@@ -4610,3 +4610,112 @@ button.is-armed {
   border-color: var(--gold);
   color: var(--gold);
 }
+
+/* ==========================================================================
+   Citadel commissions: the setup pick, the Citadel board, the Orders card
+   and the end-screen verdict.
+   ========================================================================== */
+
+.commission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.commission-card {
+  display: grid;
+  gap: 5px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  font-size: 12px;
+  align-content: start;
+}
+
+.commission-card small {
+  color: var(--muted);
+}
+
+.commission-card em {
+  color: var(--gold);
+  font-style: normal;
+}
+
+.commission-card.is-picked,
+.commission-card.is-offered {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold);
+  background: var(--panel-2);
+}
+
+.commission-card.is-locked {
+  opacity: 0.55;
+}
+
+.commission-card.is-locked em {
+  color: var(--warn);
+}
+
+.commission-name {
+  font-size: 13px;
+}
+
+.commission-patron {
+  font-style: italic;
+}
+
+.commission-terms {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+}
+
+.commission-terms.is-judged {
+  list-style: none;
+  padding-left: 0;
+}
+
+.commission-terms.is-judged em {
+  color: var(--muted);
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.commission-terms .term-mark {
+  display: inline-block;
+  width: 1.1em;
+  text-align: center;
+  font-weight: 700;
+}
+
+.commission-terms .term-met .term-mark {
+  color: var(--good);
+}
+
+.commission-terms .term-failed .term-mark {
+  color: var(--bad);
+}
+
+.commission-terms .term-open .term-mark {
+  color: var(--gold);
+}
+
+.order-card.commission-run {
+  border-left: 3px solid var(--gold);
+}
+
+.end-commission {
+  margin: 12px 0;
+}
+
+.end-commission h3 {
+  margin-bottom: 6px;
+}
+
+.upgrade-card .upgrade-opens {
+  color: var(--gold);
+  font-size: 11px;
+}

@@ -12,6 +12,7 @@ import { landFor, type LandChoice } from '../game/engine/runModifiers'
 import { listSlots, type SlotId } from '../game/saveSlots'
 import { useGameStore } from '../game/store'
 import type { SpeciesId } from '../game/types'
+import { CommissionPicker } from './Commissions'
 import { EdictPicker } from './EdictPicker'
 import { LandOptions } from './LandOptions'
 import { RunModifierList } from './RunModifierList'
@@ -45,6 +46,8 @@ export function SetupScreen() {
   const [seedText, setSeedText] = useState('')
   // Queen's Edict: defaults to the hardest rung earned so far.
   const [edict, setEdict] = useState(meta.edictUnlocked)
+  // A Citadel commission, or none (the standard settlement).
+  const [commission, setCommission] = useState<string | null>(null)
   const available = useMemo(
     () => [...new Set([...STARTING_SPECIES, ...meta.unlockedSpecies])],
     [meta.unlockedSpecies],
@@ -86,7 +89,7 @@ export function SetupScreen() {
   const start = () => {
     if (!slot) return
     const seed = seedText.trim() ? parseSeed(seedText) : randomSeed()
-    startRun(seed, chosen, edict, landChoice, slot)
+    startRun(seed, chosen, edict, landChoice, slot, commission ?? undefined)
   }
   const replace = useConfirm(`replace-${slot}`, start)
   const allFull = slots.every((s) => s.meta)
@@ -203,6 +206,16 @@ export function SetupScreen() {
             under the hardest you have earned to unlock the next.
           </p>
           <EdictPicker unlocked={meta.edictUnlocked} value={edict} onPick={setEdict} />
+        </section>
+
+        <section className="setup-section commission-section">
+          <h3>Commission</h3>
+          <p className="muted">
+            The Citadel asks something of this settlement: a twist from the founding, and
+            an objective that pays more supplies home if you hold the settlement and meet
+            it. Citadel upgrades open more of them.
+          </p>
+          <CommissionPicker meta={meta} value={commission} onPick={setCommission} />
         </section>
 
         <section className="setup-section slot-section">
