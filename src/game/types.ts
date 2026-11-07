@@ -846,11 +846,28 @@ export interface CaravanOffer {
   /** Total amber asked for the whole lot. */
   price: number
   sold: boolean
+  /** A commissioned lot already paid for, waiting for room in the stockpile. */
+  prepaid?: boolean
 }
+
+/** The one rare item a caravan carries from its second visit on. */
+export interface CaravanRare {
+  kind: 'blueprint' | 'cornerstone'
+  /** Building id or cornerstone id. */
+  id: string
+  /** Amber asked, before cornerstone discounts. */
+  price: number
+  sold: boolean
+}
+
+export type TradeAgreementId = 'provisioners' | 'barges' | 'factors'
 
 /**
  * A caravan visits periodically (once a Trading Post exists), carrying a
  * rotating stock and paying double for one good it wants this trip.
+ *
+ * The optional fields are the amber levers added later; older saves load
+ * without them and read as "none yet".
  */
 export interface CaravanState {
   here: boolean
@@ -860,6 +877,14 @@ export interface CaravanState {
   /** The caravan pays double for this resource this visit. */
   wants: ResourceId
   visits: number
+  /** This visit's rare blueprint or cornerstone, if it carries one. */
+  rare?: CaravanRare | null
+  /** Rare items bought this run; each makes the next one dearer. */
+  raresBought?: number
+  /** A shipment paid for, to arrive with the next caravan. */
+  commission?: { resource: ResourceId; amount: number } | null
+  /** The run's trade agreement, once signed. */
+  agreement?: TradeAgreementId | null
 }
 
 // ---------------------------------------------------------------------------
