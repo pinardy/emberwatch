@@ -6,6 +6,7 @@ import { ORDERS } from '../content/orders'
 import { DECREES } from '../content/decrees'
 import { RESOURCE_LIST } from '../content/resources'
 import { ALL_RUN_MODIFIER_LIST } from '../content/runModifiers'
+import { COMMISSION_LIST, judgeCommission } from '../content/commissions'
 import { SPECIES } from '../content/species'
 import { EDIBLE } from '../content/resources'
 import type {
@@ -133,6 +134,8 @@ interface BotReport {
   upgrades: number
   /** Map modifiers the seed drew (or the test forced). */
   modifiers: string
+  /** The run's Citadel commission was met (false without one). */
+  commissionMet: boolean
   /** Orders still open at the end, with progress — stuck ones explain slow runs. */
   openOrders: string
   /** Road stretches laid, and workplaces joined to a hub by road at the end. */
@@ -1103,6 +1106,8 @@ interface PlayOptions {
   maxMinutes?: number
   /** Force these map modifiers instead of the ones the seed draws. */
   modifiers?: string[]
+  /** Found the run on this Citadel commission. */
+  commission?: string
 }
 
 /** Where a run's reputation came from. */
@@ -1120,8 +1125,8 @@ function playRun(
   species: SpeciesId[],
   options: PlayOptions = {},
 ): BotReport {
-  const { economyOnly = false, maxMinutes = 45, modifiers } = options
-  const s = createRun({ seed, species, modifiers })
+  const { economyOnly = false, maxMinutes = 45, modifiers, commission } = options
+  const s = createRun({ seed, species, modifiers, commission })
   let sinceDecision = Infinity
   const maxSeconds = maxMinutes * 60
   const sources: ReputationSources = { orders: 0, decrees: 0, glades: 0, events: 0, resolve: 0 }
@@ -1215,6 +1220,7 @@ function playRun(
     braziers: countPlanned(s, 'brazier'),
     upgrades: Object.values(s.buildings).reduce((sum, b) => sum + tierOf(b), 0),
     modifiers: s.runModifiers.join(','),
+    commissionMet: judgeCommission(s)?.met ?? false,
     openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),
     roads: s.roads?.length ?? 0,
     roadLinked: Object.values(s.buildings).filter((b) => roadLinkOf(s, b).percent > 0).length,
@@ -1275,6 +1281,9 @@ const ECON_SEEDS = SEEDS.slice(0, Math.max(1, Math.ceil(SEEDS.length / 2)))
 
 /** Seeds per forced map modifier (trios rotate across them). */
 const MODIFIER_SEED_COUNT = Number(ENV.PLAYTEST_MODIFIER_SEEDS ?? 6)
+
+/** Seeds per Citadel commission (trios rotate across them). */
+const COMMISSION_SEED_COUNT = Number(ENV.PLAYTEST_COMMISSION_SEEDS ?? 6)
 
 /** The Queen's deadline must end every run by about this point. */
 const VERDICT_BY_MINUTES = 40
@@ -1411,6 +1420,43 @@ describe('balance harness', () => {
       // And a twist must not empty the settlement in the opening minutes.
       expect(reports.filter(isEarlyCollapse).length, `${id} early collapses`).toBeLessThanOrEqual(1)
       for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
+    }
+  }, 300_000)
+
+  /*
+   * A commission's twist is a run-long change like a land's, so each gets the
+   * same check as the modifiers: forced on in turn over a few seeds (rotating
+   * the trios) against the same seeds with none. The objective only pays
+   * supplies home, so the bot does not chase it; how often it is met anyway
+   * is printed as a sense of each objective's difficulty.
+   */
+  it('no Citadel commission makes runs unwinnable or trivial', () => {
+    const seeds = ALL_SEEDS.slice(0, COMMISSION_SEED_COUNT)
+    const sweep = (commission?: string) =>
+      seeds.map((seed, i) => playRun(seed, TRIOS[i % TRIOS.length], { commission }))
+    const baseline = sweep()
+    const lines = [summarise('no commission', baseline)]
+    const results = COMMISSION_LIST.map((def) => {
+      const reports = sweep(def.id)
+      const met = reports.filter((r) => r.commissionMet).length
+      const wins = reports.filter((r) => r.phase === 'won').length
+      lines.push(`${summarise(def.id, reports)} · objective met ${met}/${wins} wins`)
+      return { id: def.id, reports }
+    })
+    console.log(lines.join('\n'))
+
+    const baseShare = winShare(baseline)
+    for (const { id, reports } of results) {
+      const share = winShare(reports)
+      const wins = reports.filter((r) => r.phase === 'won')
+      expect(share, `${id} win share`).toBeGreaterThanOrEqual(1 / 3)
+      expect(share, `${id} vs baseline`).toBeGreaterThanOrEqual(baseShare - 0.5)
+      expect(mean(wins.map((r) => r.exactMinutes)), `${id} avg win`).toBeGreaterThanOrEqual(12)
+      for (const r of wins) expect(r.exactMinutes, `${id} win time`).toBeGreaterThan(8)
+      expect(reports.filter(isEarlyCollapse).length, `${id} early collapses`).toBeLessThanOrEqual(1)
+      for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
+      // Never met without a win, whatever else held.
+      for (const r of reports) if (r.commissionMet) expect(r.phase).toBe('won')
     }
   }, 300_000)
 

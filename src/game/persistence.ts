@@ -176,6 +176,8 @@ export function migrateRun(raw: unknown): RunState | null {
   for (const b of Object.values(run.buildings ?? {})) b.tier ??= 0
   // Saves from before run modifiers: the land had no particular character.
   if (!Array.isArray(run.runModifiers)) run.runModifiers = []
+  // Saves from before commissions have none; a mangled one reads as none.
+  if (run.commission !== undefined && typeof run.commission !== 'string') delete run.commission
   // Saves from before the run timeline start an empty one where they resume.
   run.timeline ??= createTimeline(run)
   // Saves from before roads have none. With no roads every building works as

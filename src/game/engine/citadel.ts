@@ -1,7 +1,12 @@
+import { COMMISSIONS, describeTerm } from '../content/commissions'
 import { CORNERSTONE_LIST } from '../content/cornerstones'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { CITADEL_EVENT_OPTIONS } from '../content/meta'
-import type { CornerstoneDef, GladeEventDef, GladeEventOptionDef, RunState } from '../types'
+import { MAX_RUN_MODIFIERS, RUN_MODIFIERS } from '../content/runModifiers'
+import type { CornerstoneDef, GladeEventDef, GladeEventOptionDef, ResourceId, RunState } from '../types'
+import { hashInt, makeRng } from './rng'
+import { pushLog } from './runLog'
+import { modifiersClash, runModifierDefs } from './runModifiers'
 
 /**
  * In-run reads of the Citadel's perks (`RunState.citadel`). Kept apart from
@@ -63,4 +68,72 @@ export function gladeEventOptions(s: RunState, def: GladeEventDef): GladeEventOp
     .map((id) => CITADEL_EVENT_OPTIONS[id])
     .filter((o): o is GladeEventOptionDef => !!o)
   return extra.length > 0 ? [...def.options, ...extra] : def.options
+}
+
+// ---------------------------------------------------------------------------
+// Commissions: the twist applied at the founding
+// ---------------------------------------------------------------------------
+
+/** Id of the ongoing effect a commission records, so the UI can tell it apart. */
+export const COMMISSION_ONGOING_ID = 'commission'
+
+/**
+ * The land a run gets under a commission: the commission's own modifier
+ * first, then whatever of the drawn land does not clash with it, capped as
+ * every land is. Without a commission land the draw is returned untouched.
+ */
+export function commissionLand(drawn: readonly string[], commission: string | undefined): string[] {
+  const id = commission ? COMMISSIONS[commission]?.land : undefined
+  const land = id ? RUN_MODIFIERS[id] : undefined
+  if (!land) return [...drawn]
+  const rest = runModifierDefs(drawn).filter((d) => d.id !== land.id && !modifiersClash(d, land))
+  return [land.id, ...rest.map((d) => d.id)].slice(0, MAX_RUN_MODIFIERS)
+}
+
+/** Salt for the royal cornerstone's own stream, so the run RNG never moves. */
+const ROYAL_STONE_STREAM = 0x726f7961
+
+/**
+ * Applies a commission's twist to a run being founded: records it on the run,
+ * folds its run-long effects in like a pact, and lands its one-off grants.
+ * Unknown ids (and none) leave the run exactly as it was.
+ */
+export function applyCommission(s: RunState, commission: string | undefined): void {
+  const def = commission ? COMMISSIONS[commission] : undefined
+  if (!def) return
+  s.commission = def.id
+  if (def.effects && def.effects.length > 0) {
+    s.ongoing.push({
+      id: COMMISSION_ONGOING_ID,
+      name: `Commission: ${def.name}`,
+      icon: def.icon,
+      description: def.twist,
+      effects: def.effects,
+    })
+  }
+  if (def.startStockPercent) {
+    for (const [id, amount] of Object.entries(s.stock)) {
+      s.stock[id as ResourceId] = Math.round((amount ?? 0) * (1 + def.startStockPercent / 100))
+    }
+  }
+  for (const [id, amount] of Object.entries(def.startStock ?? {})) {
+    const key = id as ResourceId
+    s.stock[key] = Math.max(0, (s.stock[key] ?? 0) + (amount ?? 0))
+  }
+  if (def.startHostility) s.hostility = Math.max(s.hostility, def.startHostility)
+  for (const id of def.startBlueprints ?? []) {
+    if (!s.unlockedBuildings.includes(id)) s.unlockedBuildings.push(id)
+  }
+  if (def.royalCornerstone) {
+    const pool = cornerstonePool(s).filter(
+      (c) => c.rarity === 'rare' && !s.cornerstones.includes(c.id),
+    )
+    if (pool.length > 0) {
+      const stone = makeRng(hashInt((s.seed ^ ROYAL_STONE_STREAM) >>> 0, 0), 0).pick(pool)
+      s.cornerstones.push(stone.id)
+      pushLog(s, `👑 The Queen lays ${stone.name} at the founding: ${stone.description}`, 'good')
+    }
+  }
+  const goals = def.terms.map(describeTerm).join('; ')
+  pushLog(s, `${def.icon} Commission — ${def.name}: hold the settlement; ${goals}.`, 'info')
 }

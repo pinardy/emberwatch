@@ -42,7 +42,8 @@ export function foundingPart(choice: PendingChoice): FoundingPart | null {
 
 /** Marks every choice queued so far as part of the founding (run creation). */
 export function markFounding(s: RunState): void {
-  for (const choice of s.pendingChoices) choice.founding = true
+  // Only what the Founding panel can show: anything else stays a pop-up.
+  for (const choice of s.pendingChoices) if (foundingPart(choice)) choice.founding = true
 }
 
 /**

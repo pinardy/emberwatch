@@ -6,9 +6,11 @@ import {
   missingPrerequisites,
   upgradeStatus,
 } from '../game/content/meta'
+import { COMMISSIONS, commissionsOpenedBy, unlockedCommissions, COMMISSION_LIST } from '../game/content/commissions'
 import { SPECIES } from '../game/content/species'
 import { runModifierDefs } from '../game/engine/runModifiers'
 import { useGameStore } from '../game/store'
+import { CommissionBoard } from './Commissions'
 import { EdictPicker } from './EdictPicker'
 import { Icon } from './Icon'
 import { runModifierArt } from '../game/content/art'
@@ -52,6 +54,10 @@ export function CitadelScreen() {
             <Icon id="fog" emoji="🌫️" /> {meta.runsLost} lost
           </span>
           <span className="chip">
+            <Icon id="charter/seal" emoji="📜" /> {unlockedCommissions(meta.upgrades).length}/
+            {COMMISSION_LIST.length} commissions
+          </span>
+          <span className="chip">
             <Icon id="scroll" emoji="📜" />{' '}
             {meta.edictUnlocked > 0
               ? `Up to Edict ${edictNumeral(meta.edictUnlocked)}`
@@ -71,6 +77,7 @@ export function CitadelScreen() {
               {META_UPGRADE_LIST.filter((def) => def.branch === branch.id).map((def) => {
                 const status = upgradeStatus(meta, def.id)
                 const missing = missingPrerequisites(meta, def.id)
+                const opens = commissionsOpenedBy(def.id)
                 const label =
                   status === 'owned' ? (
                     '✓ Unlocked'
@@ -94,6 +101,11 @@ export function CitadelScreen() {
                     </span>
                     <strong>{def.name}</strong>
                     <small>{def.description}</small>
+                    {opens.map((c) => (
+                      <small key={c.id} className="upgrade-opens">
+                        Opens the commission <Icon id={c.art} emoji={c.icon} /> {c.name}
+                      </small>
+                    ))}
                     {missing.length > 0 && (
                       // Icons, not names: each name already heads its own card.
                       <small
@@ -114,6 +126,17 @@ export function CitadelScreen() {
             </section>
           ))}
         </div>
+
+        <section className="setup-section" aria-label="Commissions">
+          <h3>Commissions</h3>
+          <p className="muted">
+            Each settlement may set out on a commission: a twist from the founding and an
+            objective that pays extra supplies if met. A few from the board are on offer
+            before every run — a newly opened one always among them — and upgrades open
+            more.
+          </p>
+          <CommissionBoard meta={meta} />
+        </section>
 
         <section className="setup-section">
           <h3>Queen's Edicts</h3>
@@ -136,6 +159,7 @@ export function CitadelScreen() {
                     <th>Settlers</th>
                     <th>Edict</th>
                     <th>Land</th>
+                    <th>Commission</th>
                     <th>Years</th>
                     <th>Reputation</th>
                     <th>Supplies</th>
@@ -170,6 +194,22 @@ export function CitadelScreen() {
                               <Icon key={d.id} id={runModifierArt(d)} emoji={d.icon} />
                             ))
                           : '—'}
+                      </td>
+                      <td>
+                        {entry.commission && COMMISSIONS[entry.commission.id] ? (
+                          <span
+                            className={entry.commission.met ? 'is-good' : 'muted'}
+                            title={`${COMMISSIONS[entry.commission.id].name}: ${entry.commission.met ? 'met' : 'not met'}`}
+                          >
+                            <Icon
+                              id={COMMISSIONS[entry.commission.id].art}
+                              emoji={COMMISSIONS[entry.commission.id].icon}
+                            />{' '}
+                            {entry.commission.met ? '✓' : '✗'}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                       <td>{entry.years}</td>
                       <td>{entry.reputation}</td>

@@ -1116,6 +1116,13 @@ export interface RunState {
    */
   daily?: string
   /**
+   * The Citadel commission this settlement was sent out on (id in
+   * `COMMISSIONS`): its twist was applied at the founding and its objective
+   * is judged when the run ends. Absent on runs without one and on saves
+   * from before commissions, which read as none.
+   */
+  commission?: string
+  /**
    * Small in-run bookkeeping for achievements, set where the moment happens
    * (never scanned per tick). Absent on older saves, which load with defaults.
    */
@@ -1188,6 +1195,8 @@ export interface MetaHistoryEntry {
   modifiers?: string[]
   /** UTC date key when the run was that day's daily expedition. */
   daily?: string
+  /** The commission the run was sent out on, and whether it was met. */
+  commission?: { id: string; met: boolean }
 }
 
 /** The best finished attempt at one day's daily expedition. */
