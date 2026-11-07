@@ -18,7 +18,6 @@ import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
 import { FellingForest, ForestCover } from './ForestCover'
 import { onGhostRequest } from './ghostBus'
-import { GladeList } from './GladeList'
 import { MiniMap } from './MiniMap'
 import { Paths } from './Paths'
 import { PerfProbe } from './PerfProbe'
@@ -39,7 +38,8 @@ import {
   placementHint,
   type GladeAccess,
 } from '../mapShared'
-import { useEscapeLayer } from '../useGameLoop'
+import { useKeyGhost, usePlacementView } from '../keyboardPlacement'
+import { MapAids, useControlsHelp } from '../MapAids'
 import { REDUCED_MOTION } from '../motion'
 import {
   BuildingInstances,
@@ -64,7 +64,8 @@ import { GHOST_BAD_MAT, GHOST_OK_MAT, GhostConfirm3D, GhostHint3D, GOLD, IconSpr
 import { plateTile, stakeChipPlacements, stakeChipTile } from './plates'
 import { BatchSprite, ICON_BATCH, PLATE_BATCH, SpriteBatchMesh } from './spriteBatch'
 
-const CAMERA_HOME: [number, number, number] = [0, 15, 12]
+/** Where the camera starts and returns to; phones start closer, so plates and labels read. */
+const CAMERA_HOME: [number, number, number] = smallScreen() ? [0, 11, 8.8] : [0, 15, 12]
 
 /**
  * Pixel-ratio cap: phones and small screens render at up to 1.25× (a 3×
@@ -126,6 +127,14 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
     },
     [run, buildMode],
   )
+
+  // The keyboard ghost (arrow keys) aims the same cursor.
+  useEffect(() => {
+    if (!buildMode || roadMode) return
+    return useKeyGhost.subscribe((state, prev) => {
+      if (state.ghost && state.ghost !== prev.ghost) setCursor(evaluate(state.ghost.pos))
+    })
+  }, [buildMode, roadMode, evaluate])
 
   // Taps on deposits/buildings during touch build-mode land here too.
   useEffect(() => {
@@ -528,8 +537,7 @@ export function MapView3D() {
   const controls = useRef<MapControlsImpl | null>(null)
   const flight = useRef<Flight | null>(null)
   const [bucket, setBucket] = useState<ZoomBucket>('mid')
-  const [showHelp, setShowHelp] = useState(false)
-  useEscapeLayer(showHelp, () => setShowHelp(false))
+  const help = useControlsHelp('3d')
   const rightClick = useRef<{ x: number; y: number } | null>(null)
 
   /** Glide (or, under reduced motion, jump) to a new camera pose. */
@@ -598,6 +606,42 @@ export function MapView3D() {
 
   // Fly-to requests from elsewhere in the UI (threat cards, the minimap).
   useCameraFocus(focusOn)
+
+  // Keyboard placement: the camera's focus, screen axes on the ground (the
+  // camera can turn), a step that grows as the camera pulls back, and a
+  // glide whenever the ghost wanders toward the edge of the view.
+  usePlacementView({
+    centre: () => {
+      const c = controls.current
+      return c ? { x: c.target.x, y: c.target.z } : { x: 0, y: 0 }
+    },
+    axes: () => {
+      const c = controls.current
+      if (!c) return { up: { x: 0, y: -1 }, right: { x: 1, y: 0 } }
+      let fx = c.target.x - c.object.position.x
+      let fz = c.target.z - c.object.position.z
+      const len = Math.hypot(fx, fz)
+      if (len < 1e-6) {
+        fx = 0
+        fz = -1
+      } else {
+        fx /= len
+        fz /= len
+      }
+      return { up: { x: fx, y: fz }, right: { x: -fz, y: fx } }
+    },
+    step: () => {
+      const c = controls.current
+      const distance = c ? c.object.position.distanceTo(c.target) : 19
+      return Math.max(0.5, Math.min(2.5, Math.round((distance / 14) * 4) / 4))
+    },
+    reveal: (p) => {
+      const c = controls.current
+      if (!c) return
+      const distance = c.object.position.distanceTo(c.target)
+      if (Math.hypot(p.x - c.target.x, p.y - c.target.z) > distance * 0.35) focusOn(p)
+    },
+  })
   // R toggles the warmth radius (H → home lives in the CameraRig).
   useMapKey(MAP_KEYS.warmth, () => useMapOverlays.getState().toggleWarmth())
 
@@ -609,7 +653,7 @@ export function MapView3D() {
   return (
     <div
       className="map-wrap map-wrap-3d"
-      role="application"
+      role="region"
       aria-label="Settlement map"
       onContextMenu={(e) => e.preventDefault()}
       onPointerDown={(e) => {
@@ -690,7 +734,7 @@ export function MapView3D() {
       </Canvas>
 
       <MiniMap run={run} controls={controls} />
-      <GladeList run={run} />
+      <MapAids run={run} />
 
       <div className="map-controls">
         <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.8)}>
@@ -706,38 +750,10 @@ export function MapView3D() {
           ⌖
         </button>
         <WarmthToggle />
-        <button
-          type="button"
-          aria-label="Controls help"
-          aria-expanded={showHelp}
-          title="Controls (Esc closes)"
-          className={showHelp ? 'is-active' : ''}
-          onClick={() => setShowHelp((v) => !v)}
-        >
-          ?
-        </button>
+        {help.button}
       </div>
 
-      {showHelp && (
-        <div className="controls-help" role="dialog" aria-label="Controls">
-          <strong>Controls</strong>
-          <ul>
-            <li><em>Pan</em> — drag · WASD / arrows · mouse at edge</li>
-            <li><em>Rotate</em> — right-drag · Q / E</li>
-            <li><em>Zoom</em> — wheel toward cursor · pinch</li>
-            <li><em>Home</em> — H or ⌖ · <em>North</em> — 🧭</li>
-            <li><em>Warmth radius</em> — R or 🔥</li>
-            <li><em>Select</em> — click · <em>Deselect / cancel</em> — right-click or Esc</li>
-            <li><em>Jump</em> — click the minimap</li>
-            <li><em>Pause</em> — Space · <em>Speed</em> — 1 / 2 / 3</li>
-            <li><em>Panels</em> — B build · P people · O orders · T trade · L log</li>
-            <li><em>Close</em> — Esc closes this help and tips</li>
-          </ul>
-          <button type="button" onClick={() => setShowHelp(false)}>
-            Close
-          </button>
-        </div>
-      )}
+      {help.panel}
 
       {buildMode && <BuildBanner buildMode={buildMode} />}
     </div>

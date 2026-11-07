@@ -31,9 +31,9 @@ export function CitadelScreen() {
     <div className="screen citadel-screen">
       <div className="menu-card wide">
         <header className="row-between">
-          <h2>
+          <h1 className="screen-title">
             <Icon id="guildHouse" emoji="🏛️" /> The Citadel
-          </h2>
+          </h1>
           <span className="chip big">
             <Icon id="warehouse" emoji="📦" /> {meta.citadelSupplies} supplies
           </span>
@@ -69,9 +69,9 @@ export function CitadelScreen() {
           {META_BRANCHES.map((branch) => (
             <section key={branch.id} className="upgrade-branch" aria-label={branch.name}>
               <header>
-                <h3>
+                <h2>
                   <Icon id={metaBranchArt(branch.id)} emoji={branch.icon} /> {branch.name}
-                </h3>
+                </h2>
                 <small>{branch.blurb}</small>
               </header>
               {META_UPGRADE_LIST.filter((def) => def.branch === branch.id).map((def) => {
@@ -128,7 +128,7 @@ export function CitadelScreen() {
         </div>
 
         <section className="setup-section" aria-label="Commissions">
-          <h3>Commissions</h3>
+          <h2>Commissions</h2>
           <p className="muted">
             Each settlement may set out on a commission: a twist from the founding and an
             objective that pays extra supplies if met. A few from the board are on offer
@@ -139,7 +139,7 @@ export function CitadelScreen() {
         </section>
 
         <section className="setup-section">
-          <h3>Queen's Edicts</h3>
+          <h2>Queen's Edicts</h2>
           <p className="muted">
             The Queen sets harsher terms for viceroys who have proven themselves — and pays
             more for them. Win under your hardest edict to unlock the next; choose one
@@ -150,7 +150,7 @@ export function CitadelScreen() {
 
         {meta.history.length > 0 && (
           <section className="setup-section">
-            <h3>Ledger</h3>
+            <h2>Ledger</h2>
             <div className="history-scroll">
               <table className="history-table">
                 <thead>

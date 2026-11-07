@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 
+/**
+ * The second step's wording, the same everywhere: "Click again" with a mouse,
+ * "Tap again" on a touch screen.
+ */
+export function againWord(): 'Click again' | 'Tap again' {
+  const coarse =
+    typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches ?? false)
+  return coarse ? 'Tap again' : 'Click again'
+}
+
 /** How long a destructive button stays armed after its first click. */
 export const CONFIRM_WINDOW_MS = 4000
 

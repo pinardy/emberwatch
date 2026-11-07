@@ -26,6 +26,7 @@ import { METER_ART, SEASON_ART } from '../game/content/art'
 import { Icon } from './Icon'
 import { AutoPauseFields, PauseOnBlurField, PerfField, SoundFields } from './SettingsFields'
 import { useDismiss } from './useGameLoop'
+import { HEARTH_KEY, inspectHearth } from './MapAids'
 import { signed } from './threatText'
 import { SaveStatusChip } from './SaveStatusChip'
 
@@ -158,6 +159,10 @@ export function TopBar() {
 
   return (
     <header className="topbar">
+      {/* The game screen's title, for screen readers and the screen-change focus. */}
+      <h1 className="sr-only" tabIndex={-1}>
+        Emberwatch: your settlement, year {run.season.year}
+      </h1>
       <div className="topbar-left">
         <button
           type="button"
@@ -243,6 +248,8 @@ export function TopBar() {
                     if (popover === 'speed') setPopover(null)
                   }}
                   title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
+                  aria-label={option === 0 ? 'Pause' : undefined}
+                  aria-pressed={speed === option}
                 >
                   {option === 0 ? <Icon id="pause" emoji="⏸" label="Pause" /> : `${option}×`}
                 </button>
@@ -310,6 +317,17 @@ export function TopBar() {
       </div>
 
       <div className="topbar-tools">
+        {/* The hearth's Architect, dumping and upgrades, without finding it on the map. */}
+        <button
+          type="button"
+          className="icon-btn hearth-btn"
+          onClick={inspectHearth}
+          title={`Hearth: the Architect, dumping goods and upgrades (${HEARTH_KEY.label})`}
+          aria-label="Hearth"
+          aria-keyshortcuts={HEARTH_KEY.label}
+        >
+          <Icon id="ancientHearth" emoji="🔥" />
+        </button>
         <SaveStatusChip />
         <button
           type="button"
@@ -413,17 +431,23 @@ export function TopBar() {
             </ul>
           )}
           <div className="stat" title="Population and housing">
-            <span>
+            <span aria-hidden>
               <Icon id="people" emoji="🧑‍🤝‍🧑" />
             </span>
-            <strong className={pop > housing ? 'is-bad' : ''}>
+            <span className="sr-only">
+              Population {pop}, housing for {housing}
+            </span>
+            <strong className={pop > housing ? 'is-bad' : ''} aria-hidden>
               {pop}/{housing}
             </strong>
           </div>
           <div
             className={`stat hearth-stat ${hearthDanger ? 'is-bad' : hearthCaution ? 'is-warn' : ''}`}
             title={hearthTitle(hearth, storm, run.coldHearth)}
-            aria-label={`Hearth fuel: ${run.coldHearth ? 'out' : formatDuration(hearth.runway)}`}
+            role="img"
+            aria-label={`Hearth fuel: ${run.coldHearth ? 'out' : formatDuration(hearth.runway)}${
+              !storm && !run.coldHearth ? `, ${formatDuration(hearth.stormRunway)} in the Storm` : ''
+            }`}
           >
             <span>
               <Icon id="ancientHearth" />
@@ -440,9 +464,10 @@ export function TopBar() {
             )}
           </div>
           <div className="stat" title="Idle villagers — they also act as builders">
-            <span>
+            <span aria-hidden>
               <Icon id="zzz" emoji="💤" />
             </span>
+            <span className="sr-only">Idle villagers</span>
             <strong className={idle > 0 ? 'is-warn' : ''}>{idle}</strong>
           </div>
           <div className="resolve-chips">
@@ -454,9 +479,10 @@ export function TopBar() {
                   1,
                 )} (heading for ${b.target.toFixed(1)}). Earns reputation above ${b.threshold}.`}
               >
-                <span>
+                <span aria-hidden>
                   <Icon of={SPECIES[b.species]} />
                 </span>
+                <span className="sr-only">{SPECIES[b.species].name} resolve</span>
                 <strong
                   className={
                     b.current < 0 ? 'is-bad' : b.current >= b.threshold ? 'is-good' : ''
@@ -464,9 +490,20 @@ export function TopBar() {
                 >
                   {Math.round(b.current)}
                 </strong>
-                <small className="resolve-chip-threshold">/{b.threshold}</small>
+                <small className="resolve-chip-threshold">
+                  <span className="sr-only"> of </span>/{b.threshold}
+                </small>
+                {/* Not colour alone: a mark (and words) when it earns reputation. */}
+                {b.current >= b.threshold && (
+                  <em className="resolve-earning" title="Earning reputation">
+                    <span aria-hidden>✓</span>
+                    <span className="sr-only">, earning reputation</span>
+                  </em>
+                )}
+                {b.current < 0 && <span className="sr-only">, below zero</span>}
                 {Math.abs(b.target - b.current) >= 0.5 && (
                   <em
+                    role="img"
                     className={`resolve-trend ${b.target > b.current ? 'is-up' : 'is-down'}`}
                     aria-label={b.target > b.current ? 'rising' : 'falling'}
                   >

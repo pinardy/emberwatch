@@ -46,7 +46,7 @@ async function startSettlement(page: Page): Promise<void> {
   }
   await expect(options).toHaveCount(0)
   await expect(page.locator('header.topbar')).toBeVisible()
-  await expect(page.getByRole('application', { name: 'Settlement map' })).toBeVisible()
+  await expect(page.locator('[aria-label="Settlement map"]').first()).toBeVisible()
 }
 
 async function savedClock(page: Page): Promise<number | null> {
@@ -201,7 +201,7 @@ test.describe('desktop', () => {
 
     // Switch to the 2D map: the SVG renderer replaces the canvas.
     await page.getByRole('button', { name: 'Switch to 2D map' }).click()
-    const svgMap = page.locator('svg[role="application"][aria-label="Settlement map"]')
+    const svgMap = page.locator('svg[role="img"][aria-label="Settlement map"]')
     await expect(svgMap).toBeVisible()
     expect(await svgMap.locator('path, polygon, circle').count()).toBeGreaterThan(10)
     await expect(page.getByRole('button', { name: 'Switch to 3D map' })).toBeVisible()

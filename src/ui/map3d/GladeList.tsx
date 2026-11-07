@@ -1,6 +1,7 @@
 import { memo, useId, useRef, useState } from 'react'
 import { gladeStakesOf } from '../../game/engine/events'
 import { useGameStore } from '../../game/store'
+import { requestInspectorFocus } from '../focusRequests'
 import type { Glade, RunState } from '../../game/types'
 import {
   GLADE_KIND_STYLE,
@@ -28,11 +29,13 @@ function chooseGlade(glade: Glade): void {
   const store = useGameStore.getState()
   store.focusCamera(glade.center)
   store.selectGlade(glade.id)
+  requestInspectorFocus()
 }
 
 /**
- * The 3D map's glade plates for the keyboard. The plates are painted into a
- * canvas, so they cannot take focus; this list stands in for them. It is one
+ * The glade plates for the keyboard, on either map. The 3D plates are painted
+ * into a canvas and the 2D ones are drawn, so neither can take focus; this
+ * list stands in for them. It is one
  * Tab stop, hidden until it has focus, then shown as a small panel: arrow
  * keys (or Home / End) move through the glades and Enter picks one, exactly
  * as clicking its plate does.
@@ -76,7 +79,7 @@ export const GladeList = memo(function GladeList({ run }: { run: RunState }) {
   }
 
   return (
-    <nav className="glade-list" aria-label="Glades" aria-describedby={hintId}>
+    <nav className="glade-list map-list" aria-label="Glades" aria-describedby={hintId}>
       <p id={hintId} className="glade-list-hint">
         Glades: ↑ ↓ to move, Enter to pick
       </p>

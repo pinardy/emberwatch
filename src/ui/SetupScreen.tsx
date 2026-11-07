@@ -19,7 +19,7 @@ import { RunModifierList } from './RunModifierList'
 import { Icon } from './Icon'
 import { NEED_ART } from '../game/content/art'
 import { SlotPicker } from './SaveSlots'
-import { useConfirm } from './useConfirm'
+import { againWord, useConfirm } from './useConfirm'
 
 /** Settlements bring exactly this many species at most. */
 const MAX_SPECIES = 3
@@ -97,10 +97,10 @@ export function SetupScreen() {
   return (
     <div className="screen setup-screen">
       <div className="menu-card wide">
-        <h2>New settlement</h2>
+        <h1 className="screen-title">New settlement</h1>
 
         <section className="setup-section">
-          <h3>Settlers</h3>
+          <h2>Settlers</h2>
           <p className="muted">
             Choose up to three species. Each brings work bonuses and two service needs you
             will have to satisfy.{' '}
@@ -156,7 +156,7 @@ export function SetupScreen() {
         </section>
 
         <section className="setup-section">
-          <h3>Seed</h3>
+          <h2>Seed</h2>
           <p className="muted">
             Leave blank for a random map, or enter any word or number to replay a specific
             one.
@@ -178,7 +178,7 @@ export function SetupScreen() {
             </button>
           </div>
           <div className="setup-land" aria-live="polite">
-            <h4>Lay of the land</h4>
+            <h3>Lay of the land</h3>
             {previewSeed === null ? (
               <p className="muted">
                 Every map has one or two modifiers of its own — richer veins, longer
@@ -200,7 +200,7 @@ export function SetupScreen() {
         </section>
 
         <section className="setup-section edict-section">
-          <h3>Queen's Edict</h3>
+          <h2>Queen's Edict</h2>
           <p className="muted">
             Harsher terms for richer supplies. Each edict stacks on the ones below it; win
             under the hardest you have earned to unlock the next.
@@ -209,7 +209,7 @@ export function SetupScreen() {
         </section>
 
         <section className="setup-section commission-section">
-          <h3>Commission</h3>
+          <h2>Commission</h2>
           <p className="muted">
             The Citadel asks something of this settlement: a twist from the founding, and
             an objective that pays more supplies home if you hold the settlement and meet
@@ -219,7 +219,7 @@ export function SetupScreen() {
         </section>
 
         <section className="setup-section slot-section">
-          <h3>Save slot</h3>
+          <h2>Save slot</h2>
           <p className="muted">
             {allFull
               ? 'Every slot holds a settlement. Choose one to replace, or go back and delete or export one first.'
@@ -245,7 +245,7 @@ export function SetupScreen() {
             </button>
           ) : slotTaken && replace.armed ? (
             <button type="button" className="primary is-armed" onClick={replace.trigger}>
-              Replace {slotLabel}? Tap again
+              Replace {slotLabel}? {againWord()}
             </button>
           ) : (
             <button

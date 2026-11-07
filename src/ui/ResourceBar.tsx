@@ -112,6 +112,7 @@ function TrendMark({ trend }: { trend?: StockTrend }) {
   const up = trend.direction === 'up'
   return (
     <em
+      role="img"
       className={`resource-trend ${up ? 'is-up' : 'is-down'}`}
       aria-label={up ? 'rising' : 'falling'}
     >
@@ -154,12 +155,15 @@ export function ResourceBar() {
             : 'Stockpile usage. Amber does not take up space.'
         }
       >
-        <span>
+        <span aria-hidden>
           <Icon id="warehouse" emoji="📦" />
         </span>
+        <span className="sr-only">Stockpile</span>
         <strong>
           {Math.floor(used)}
-          <small>/{run.storageCap}</small>
+          <small>
+            <span className="sr-only"> of </span>/{run.storageCap}
+          </small>
         </strong>
         <div className="storage-track">
           <div className="storage-fill" style={{ width: `${Math.min(100, capPct)}%` }} />
@@ -187,13 +191,17 @@ export function ResourceBar() {
           food.runway,
         )} without new food.`}
       >
-        <span>
+        <span aria-hidden>
           <Icon id="plate" emoji="🍽️" />
         </span>
+        <span className="sr-only">Food</span>
         <strong>{Math.floor(foodStock(run))}</strong>
-        <small className="food-variety">×{foodVariety(run)}</small>
+        <small className="food-variety">
+          <span className="sr-only">, kinds </span>×{foodVariety(run)}
+        </small>
         <span
           className="food-runway"
+          role="img"
           aria-label={
             run.starving ? 'Food runway: the larder is empty' : `Food runway: ${runwayText}`
           }
@@ -214,14 +222,17 @@ export function ResourceBar() {
           >
             {group.items.map((item) => (
               <div className={itemClass(item)} key={item.id} title={describeItem(item)}>
-                <span>
+                <span aria-hidden>
                   <Icon of={RESOURCES[item.id]} />
                 </span>
+                {/* Read as "Wood 120", not a bare number. */}
+                <span className="sr-only">{RESOURCES[item.id]?.name ?? item.id} </span>
                 <strong>{Math.floor(item.amount)}</strong>
                 <TrendMark trend={item.trend} />
                 {isFlagged(item) && (
                   <em
                     className="resource-flag"
+                    role="img"
                     aria-label={item.blocking?.length ? 'holding up a building' : 'running out'}
                   >
                     !
@@ -282,7 +293,7 @@ function StockDrawer({
         <div id="stock-drawer" className="stock-drawer" role="group" aria-label="All stock">
           {groups.map((group) => (
             <section key={group.id} className="stock-drawer-group">
-              <h4>{group.label}</h4>
+              <h2>{group.label}</h2>
               <ul>
                 {group.items.map((item) => {
                   const t = item.trend

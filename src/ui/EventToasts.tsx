@@ -154,10 +154,17 @@ export function EventToasts() {
     return () => window.clearTimeout(timer)
   }, [toasts])
 
-  if (!run || toasts.length === 0) return null
+  if (!run) return null
 
+  // The live log stays mounted (empty between toasts): screen readers only
+  // announce changes to a region that already exists.
   return (
-    <div className="event-toasts" role="log" aria-live="polite" aria-label="Settlement news">
+    <div
+      className={`event-toasts ${toasts.length === 0 ? 'is-empty' : ''}`}
+      role="log"
+      aria-live="polite"
+      aria-label="Settlement news"
+    >
       {toasts.map((toast) => (
         <button
           key={toast.key}

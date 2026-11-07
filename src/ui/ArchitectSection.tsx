@@ -24,9 +24,9 @@ export function ArchitectSection({ run }: { run: RunState }) {
   const reason = blocked && blocked !== 'Not enough amber.' && offers.length > 0 ? blocked : null
   return (
     <section className="inspector-section architect" data-testid="architect">
-      <h4>
+      <h3>
         <Icon id="setSquare" emoji="📐" /> The Queen's Architect
-      </h4>
+      </h3>
       {offers.length === 0 ? (
         <p className="muted">Every service your settlers want can already be built.</p>
       ) : (

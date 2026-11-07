@@ -71,7 +71,7 @@ describe('when the 3D map fails', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    expect(await screen.findByRole('application', { name: /Settlement map/i })).toBeTruthy()
+    expect(await screen.findByRole('img', { name: /Settlement map/i })).toBeTruthy()
     expect(screen.queryByTestId('gl-canvas')).toBeNull()
     expect(useGameStore.getState().settings.renderer).toBe('2d')
     expect(useGameStore.getState().notice).toBe(MAP_FALLBACK_NOTICE)

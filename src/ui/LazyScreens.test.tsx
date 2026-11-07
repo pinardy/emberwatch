@@ -45,7 +45,7 @@ describe('lazily loaded screens', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
     fireEvent.click(await screen.findByRole('button', { name: /Set out with/i }))
-    expect(await screen.findByRole('application', { name: /Settlement map/i })).toBeTruthy()
+    expect(await screen.findByRole('img', { name: /Settlement map/i })).toBeTruthy()
     expect(screen.queryByText(/The settlement holds/i)).toBeNull()
 
     act(() => {

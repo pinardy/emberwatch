@@ -2,6 +2,7 @@ import { CORNERSTONES } from '../game/content/cornerstones'
 import { ORDERS } from '../game/content/orders'
 import { RESOURCES } from '../game/content/resources'
 import { sootheCost } from '../game/engine/actions'
+import { SEASON_INFO } from '../game/engine/balance'
 import { describeOrder, orderReputation } from '../game/engine/orders'
 import { modifierOngoingId } from '../game/engine/runModifiers'
 import { useGameStore, useHudRun } from '../game/store'
@@ -26,6 +27,14 @@ export function OrdersPanel() {
   // ...and the commission's twist is on its own card.
   landIds.add(COMMISSION_ONGOING_ID)
   const pacts = run.ongoing.filter((effect) => !landIds.has(effect.id))
+  // Why the petition button is off, said in words (not only by greying it).
+  const amber = Math.floor(run.stock.amber ?? 0)
+  const sootheBlocked =
+    run.impatience < 1
+      ? 'Her patience is whole: there is no impatience to soothe.'
+      : amber < sootheCost(run)
+        ? `Needs ${sootheCost(run)} amber; you have ${amber}.`
+        : null
   return (
     <div className="panel-body">
       <section className="build-group">
@@ -79,12 +88,19 @@ export function OrdersPanel() {
         <button
           type="button"
           className="wide-button"
-          disabled={(run.stock.amber ?? 0) < sootheCost(run) || run.impatience < 1}
+          disabled={sootheBlocked !== null}
+          title={sootheBlocked ?? undefined}
+          aria-describedby={sootheBlocked ? 'soothe-why' : undefined}
           onClick={() => soothe()}
         >
           <Icon id="dove" emoji="🕊️" /> Soothe the Queen — {sootheCost(run)} <Icon of={RESOURCES.amber} label="amber" /> (
           <Icon id="impatience" label="impatience" /> −1)
         </button>
+        {sootheBlocked && (
+          <small id="soothe-why" className="muted soothe-why">
+            {sootheBlocked}
+          </small>
+        )}
         <GrandPetitionCard run={run} />
         <RetreatCard run={run} />
       </section>
@@ -154,7 +170,7 @@ export function LogPanel() {
           {run.log.map((entry) => (
             <li key={entry.id} className={`log-${entry.tone}`}>
               <span className="log-when">
-                Y{entry.year} {entry.season.slice(0, 3)}
+                Y{entry.year} {SEASON_INFO[entry.season]?.name ?? entry.season}
               </span>
               <span>
                 <IconText text={entry.text} />

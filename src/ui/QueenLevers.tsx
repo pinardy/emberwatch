@@ -15,7 +15,7 @@ import type { RunState } from '../game/types'
 import { Bar } from './Bar'
 import { Icon } from './Icon'
 import './levers.css'
-import { useConfirm } from './useConfirm'
+import { againWord, useConfirm } from './useConfirm'
 
 /**
  * The Grand Petition, in the Orders panel: once per run, when the Queen's
@@ -97,7 +97,7 @@ export function RetreatCard({ run }: { run: RunState }) {
         className={`wide-button danger ${confirm.armed ? 'is-armed' : ''}`}
         onClick={confirm.trigger}
       >
-        {confirm.armed ? 'Click again to retreat — the run ends' : 'Retreat to the Citadel'}
+        {confirm.armed ? `${againWord()} to retreat — the run ends` : 'Retreat to the Citadel'}
       </button>
     </div>
   )
