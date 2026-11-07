@@ -2673,6 +2673,51 @@ code {
   box-shadow: inset 0 0 0 1px rgba(217, 180, 106, 0.35);
 }
 
+/* The caravan's rare item, and the run's trade agreement (TradePanel.tsx). */
+.trade-rare {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+.trade-rare-icon {
+  font-size: 22px;
+}
+
+.trade-rare-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.trade-rare-buy {
+  grid-column: 1 / -1;
+  border-color: var(--gold);
+}
+
+.trade-agreements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.trade-agreement em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.trade-elsewhere {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
 .wide-button {
   width: 100%;
   margin-top: 8px;

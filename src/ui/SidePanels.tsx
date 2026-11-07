@@ -1,18 +1,15 @@
 import { CORNERSTONES } from '../game/content/cornerstones'
 import { ORDERS } from '../game/content/orders'
-import { RESOURCES, RESOURCE_LIST } from '../game/content/resources'
+import { RESOURCES } from '../game/content/resources'
 import { sootheCost } from '../game/engine/actions'
-import { TRADE_LOT } from '../game/engine/balance'
 import { describeOrder, orderReputation } from '../game/engine/orders'
 import { modifierOngoingId } from '../game/engine/runModifiers'
-import { caravanAvailable, hasTradingPost, offerPrice, sellPrice } from '../game/engine/trade'
 import { useGameStore, useHudRun } from '../game/store'
 import { Bar } from './Bar'
 import { DecreeCard } from './DecreeCard'
 import { orderTag } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
 import { RaceSparkline } from './RaceSparkline'
-import type { ResourceId } from '../game/types'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
 import { cornerstoneArt, ongoingArt } from '../game/content/artFamilies'
@@ -157,108 +154,5 @@ export function LogPanel() {
   )
 }
 
-/**
- * Caravan trading. While a caravan is in town you buy its rotating lots and
- * sell your surplus — it pays double for the one good it wants this visit.
- */
-export function TradePanel() {
-  const run = useHudRun()
-  const buyLot = useGameStore((s) => s.buyLot)
-  const sell = useGameStore((s) => s.sell)
-  if (!run) return null
-
-  const available = caravanAvailable(run)
-  const wandering = available && !hasTradingPost(run)
-  const amber = run.stock.amber ?? 0
-  const caravan = run.caravan
-  const sellable = RESOURCE_LIST.filter(
-    (r) => r.category !== 'currency' && (run.stock[r.id] ?? 0) >= TRADE_LOT,
-  )
-
-  return (
-    <div className="panel-body">
-      <section className="build-group">
-        <div className="row-between">
-          <h3>Caravan</h3>
-          <span className="chip">
-            <Icon of={RESOURCES.amber} label="amber" /> {Math.floor(amber)}
-          </span>
-        </div>
-        {!available ? (
-          <p className="muted">
-            Build a Trading Post and caravans will start calling. They carry rotating
-            stock, and each one pays double for a good it wants.
-          </p>
-        ) : !caravan.here ? (
-          <p className="muted">
-            {wandering ? 'Wandering traders find you without a Trading Post. ' : ''}
-            <Icon id="camel" emoji="🐫" /> The next caravan arrives in about{' '}
-            <strong>{Math.max(1, Math.ceil(caravan.timer / 60))} min</strong>. Stock up
-            on whatever it might want.
-          </p>
-        ) : (
-          <>
-            <p className="panel-hint">
-              <Icon id="camel" emoji="🐫" /> In town for {Math.ceil(caravan.timer)}s — paying double for{' '}
-              <strong>
-                <Icon of={RESOURCES[caravan.wants]} /> {RESOURCES[caravan.wants]?.name}
-              </strong>
-              .
-            </p>
-            <h4 className="trade-heading">For sale</h4>
-            <div className="trade-grid">
-              {caravan.offers.map((offer, index) => {
-                const price = offerPrice(run, index)
-                return (
-                  <button
-                    key={`${offer.resource}-${index}`}
-                    type="button"
-                    className="trade-card"
-                    disabled={offer.sold || amber < price}
-                    onClick={() => buyLot(index)}
-                  >
-                    <span>
-                      <Icon of={RESOURCES[offer.resource]} />
-                    </span>
-                    <strong>
-                      {offer.amount} {RESOURCES[offer.resource]?.name}
-                    </strong>
-                    <small>{offer.sold ? 'Sold' : `${price} amber`}</small>
-                  </button>
-                )
-              })}
-            </div>
-            <h4 className="trade-heading">Sell (lots of {TRADE_LOT})</h4>
-            {sellable.length === 0 && (
-              <p className="muted">Nothing in the stockpile makes a full lot.</p>
-            )}
-            <div className="trade-grid">
-              {sellable.map((resource) => {
-                const paid = sellPrice(run, resource.id as ResourceId, TRADE_LOT)
-                const wanted = caravan.wants === resource.id
-                return (
-                  <button
-                    key={resource.id}
-                    type="button"
-                    className={`trade-card ${wanted ? 'is-wanted' : ''}`}
-                    onClick={() => sell(resource.id as ResourceId)}
-                  >
-                    <span>
-                      <Icon of={resource} />
-                    </span>
-                    <strong>
-                      {TRADE_LOT} {resource.name}
-                    </strong>
-                    <small>
-                      {wanted ? '★ ' : ''}+{paid} amber
-                    </small>
-                  </button>
-                )
-              })}
-            </div>
-          </>
-        )}
-      </section>
-    </div>
-  )
-}
+/** The Trade panel lives in its own module; re-exported for the panel switcher. */
+export { TradePanel } from './TradePanel'
