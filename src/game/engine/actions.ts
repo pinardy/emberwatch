@@ -14,6 +14,7 @@ import {
   DEMOLISH_REFUND_BUILT,
   FOOTPRINT_RADIUS,
   RUSH_COST_PER_SECOND,
+  SPARED_GLADE_RECLAIM_HOSTILITY,
   SOOTHE_BASE_COST,
   SOOTHE_COST_GROWTH,
 } from './balance'
@@ -371,6 +372,7 @@ export function addClearer(s: RunState, gladeId: string): ActionError {
   const glade = s.glades[gladeId]
   if (!glade) return 'No such glade.'
   if (glade.cleared) return 'Already cleared.'
+  if (glade.spared) return 'Left to the forest. Reclaim it before sending a crew.'
   if (!isReachable(s, gladeId)) return 'Clear an adjacent glade first.'
   const idle = idleVillagers(s)
   if (idle.length === 0) return 'No idle villagers.'
@@ -391,6 +393,47 @@ export function removeClearer(s: RunState, gladeId: string): ActionError {
   )
   if (!worker) return 'Nobody is clearing there.'
   unassign(s, worker.id)
+  return null
+}
+
+/**
+ * Leaves an uncleared glade bordering the settlement to the forest: any crew
+ * comes home, it cannot be cleared while it stands spared, and it calms the
+ * forest's hostility for as long as it does (`sparedGladeCalm`). Its loot,
+ * ground and waiting event stay in the woods.
+ */
+export function spareGlade(s: RunState, gladeId: string): ActionError {
+  const glade = s.glades[gladeId]
+  if (!glade) return 'No such glade.'
+  if (glade.cleared) return 'Already cleared.'
+  if (glade.spared) return 'Already left to the forest.'
+  if (glade.kind === 'settlement') return 'The settlement glade is yours.'
+  if (!isReachable(s, gladeId)) return 'Only a glade bordering the settlement can be spared.'
+  for (const v of Object.values(s.villagers)) {
+    if (v.assignment === `clearing:${gladeId}`) unassign(s, v.id)
+  }
+  glade.clearers = 0
+  glade.spared = true
+  pushLog(s, `${glade.name} is left to the forest. The woods grow quieter while it stands.`, 'good')
+  return null
+}
+
+/**
+ * Breaks the truce on a spared glade so crews may clear it again. The forest
+ * remembers: hostility jumps by `SPARED_GLADE_RECLAIM_HOSTILITY`, so sparing
+ * is a commitment rather than a free toggle for glades nobody is clearing yet.
+ */
+export function reclaimGlade(s: RunState, gladeId: string): ActionError {
+  const glade = s.glades[gladeId]
+  if (!glade) return 'No such glade.'
+  if (!glade.spared || glade.cleared) return 'That glade is not spared.'
+  glade.spared = false
+  s.hostility = Math.min(100, s.hostility + SPARED_GLADE_RECLAIM_HOSTILITY)
+  pushLog(
+    s,
+    `The truce over ${glade.name} is broken. The forest bristles (+${SPARED_GLADE_RECLAIM_HOSTILITY} hostility).`,
+    'bad',
+  )
   return null
 }
 
