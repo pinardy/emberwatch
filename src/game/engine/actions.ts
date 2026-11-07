@@ -31,7 +31,7 @@ import {
   storageUsed,
 } from './queries'
 import { invalidateRoadNetwork } from './roads'
-import { unassign } from './society'
+import { addImpatience, unassign } from './society'
 import { clearMultiplier } from './traits'
 import {
   displayName,
@@ -106,7 +106,7 @@ export function placeBuilding(s: RunState, defId: string, pos: Vec2): ActionErro
   const def = BUILDINGS[defId]
   spend(s.stock, def.cost)
 
-  const id = `b${Object.keys(s.buildings).length}_${Math.round(s.clock * 100)}`
+  const id = nextBuildingId(s)
   const instance: BuildingInstance = {
     id,
     defId,
@@ -130,6 +130,20 @@ export function placeBuilding(s: RunState, defId: string, pos: Vec2): ActionErro
   s.buildings[id] = instance
   invalidateRoadNetwork(s)
   return null
+}
+
+/**
+ * A fresh building id from the run's counter. It only ever counts up, so a
+ * building placed after a demolition never reuses the id of one still
+ * standing (older saves' ids have another shape; the check is a backstop).
+ */
+function nextBuildingId(s: RunState): string {
+  let id: string
+  do {
+    s.buildingCounter = (s.buildingCounter ?? Object.keys(s.buildings).length) + 1
+    id = `b${s.buildingCounter}`
+  } while (s.buildings[id])
+  return id
 }
 
 /**
@@ -541,7 +555,7 @@ export function sootheQueen(s: RunState): ActionError {
   const cost = sootheCost(s)
   if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
   spend(s.stock, { amber: cost })
-  s.impatience = Math.max(0, s.impatience - 1)
+  addImpatience(s, -1)
   s.soothesUsed++
   pushLog(s, `A gift of ${cost} amber reaches the Citadel. The Queen is soothed.`, 'good')
   return null

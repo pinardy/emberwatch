@@ -377,6 +377,11 @@ describe('2D map subscriptions', () => {
     expect(held).toEqual({ structure: 'a' })
     const version = () => useGameStore.getState().version
     const hud = () => useGameStore.getState().hudVersion
+    // The sim must actually be free to step; if not, say why rather than
+    // failing below on a version that never moved.
+    expect(useGameStore.getState().speed).toBe(1)
+    expect(currentRun().phase).toBe('playing')
+    expect(currentRun().pendingChoices.map((c) => c.kind)).toEqual([])
     // A burst of sim steps inside one HUD interval: every step moves the
     // version, only the HUD ticks derive, and an unchanged key keeps the value.
     const t0 = performance.now()

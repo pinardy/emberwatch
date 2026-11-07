@@ -154,7 +154,6 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
     }
     applyView(homeView())
     setGhost(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run])
 
   useEffect(() => {
@@ -246,7 +245,6 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
         if (!g || g === prev.ghost) return
         setGhost({ pos: g.pos, screen: screenOf(g.pos), ok: g.ok, hint: g.hint })
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   )
 

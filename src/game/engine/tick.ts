@@ -137,7 +137,18 @@ function tickPlaying(s: RunState, dt: number): void {
   checkMilestones(s)
   checkCharter(s)
   checkEndConditions(s)
+  if (s.phase !== 'playing') closeOpenChoices(s)
   stepTimeline(s)
+}
+
+/**
+ * A finished run asks nothing more: any choice still waiting (a glade event
+ * opened this very tick, a decree on offer, an order offer) is withdrawn, so
+ * the end-of-run summary is the only dialog.
+ */
+export function closeOpenChoices(s: RunState): void {
+  if (s.pendingChoices.length > 0) s.pendingChoices = []
+  if ((s.orderOffers ?? []).length > 0) s.orderOffers = []
 }
 
 /**

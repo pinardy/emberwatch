@@ -10,6 +10,7 @@ import {
   preloadScreensWhenIdle,
 } from './ui/lazyScreens'
 import { MenuScreen } from './ui/MenuScreen'
+import { RecoveryOverlay } from './ui/RecoveryOverlay'
 import { UpdatePrompt } from './ui/UpdatePrompt'
 import { useScreenFocus } from './ui/focusRequests'
 
@@ -35,6 +36,8 @@ export default function App() {
       {screen === 'game' && <GameScreen />}
       {screen === 'achievements' && <AchievementsScreen />}
       {screen === 'daily' && <DailyScreen />}
+      {/* After a game-loop crash; render errors show it from the boundary. */}
+      <RecoveryOverlay />
       <UpdatePrompt />
     </>
   )

@@ -189,6 +189,7 @@ export function createRun({
     deposits,
     obstacles,
     buildings: { [hearth.id]: hearth },
+    buildingCounter: 0,
     villagers,
     roads: [],
     roadCounter: 0,

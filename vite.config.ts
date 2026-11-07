@@ -22,6 +22,13 @@ function resolveBase(raw: string | undefined): string {
 /** Real-browser smoke tests live in e2e/ and run under Playwright, not vitest. */
 const testExclude = [...configDefaults.exclude, 'e2e/**']
 
+/**
+ * The full balance harness (minutes of whole-run sweeps) is its own project:
+ * `npm run test:balance`. `npm test` runs the sim and UI projects, which carry
+ * a quick harness smoke test (`engine/bot/harnessSmoke.test.ts`).
+ */
+const balanceHarness = ['src/game/engine/playtest*.test.ts']
+
 export default defineConfig({
   base: resolveBase(process.env.BASE_PATH),
   resolve: {
@@ -76,7 +83,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // A new version waits for the player's Reload (UpdatePrompt) rather than
+      // swapping chunks under a running game.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
@@ -123,6 +132,15 @@ export default defineConfig({
           name: 'sim',
           environment: 'node',
           include: ['src/**/*.test.ts'],
+          exclude: [...testExclude, ...balanceHarness],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'balance',
+          environment: 'node',
+          include: balanceHarness,
           exclude: testExclude,
         },
       },
@@ -136,6 +154,9 @@ export default defineConfig({
           // through them; LazyScreens.test.tsx covers the cold, suspending path.
           setupFiles: ['src/test/setup-ui.ts'],
           exclude: testExclude,
+          // A UI test mounts the whole app; on a loaded machine the default
+          // 5 s is too tight for the longer flows.
+          testTimeout: 15_000,
         },
       },
     ],

@@ -37,8 +37,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Lint
+        run: npm run lint
+
       - name: Unit and UI tests (vitest)
-        run: npx vitest run
+        run: npm test
+
+      - name: Balance harness (vitest)
+        run: npm run test:balance
 
       - name: Build
         run: npm run build

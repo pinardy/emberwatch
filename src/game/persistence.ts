@@ -6,6 +6,7 @@ import { migrateFounding } from './engine/founding'
 import { defaultDecreeState } from './engine/structure'
 import { createTimeline } from './engine/timeline'
 import { defaultCaravan } from './engine/trade'
+import { isRec, runProblem } from './runCheck'
 import type { GrandPetition, MetaState, RunState } from './types'
 
 /**
@@ -13,7 +14,7 @@ import type { GrandPetition, MetaState, RunState } from './types'
  * `saveSlots.ts`), so a save from before slots is already in place.
  */
 export const RUN_KEY = 'emberwatch.run.v1'
-const META_KEY = 'emberwatch.meta.v1'
+export const META_KEY = 'emberwatch.meta.v1'
 const SETTINGS_KEY = 'emberwatch.settings.v1'
 
 export interface Settings {
@@ -82,6 +83,15 @@ function smallOrTouchScreen(): boolean {
   return coarse || Math.min(window.innerWidth, window.innerHeight) < 600
 }
 
+/** The stored text under `key`, or null (missing, or no storage at all). */
+export function readRaw(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
 export function read<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key)
@@ -133,17 +143,46 @@ export function removeKey(key: string): void {
   }
 }
 
-/** Loads the run in the autosave slot (the original single save). */
+/** Loads the run in the autosave slot (the original single save); null when missing or damaged. */
 export function loadRun(key: string = RUN_KEY): RunState | null {
-  return migrateRun(read<unknown>(key))
+  const loaded = loadRunChecked(key)
+  return loaded.ok ? loaded.run : null
+}
+
+export type LoadResult =
+  | { ok: true; run: RunState }
+  | { ok: false; missing: boolean; error: string }
+
+/**
+ * Loads a stored run through the same shape check an imported file passes
+ * (`runProblem`), so a damaged slot is refused with a reason instead of
+ * reaching the simulation or a screen that would crash on it.
+ */
+export function loadRunChecked(key: string = RUN_KEY): LoadResult {
+  const raw = read<unknown>(key)
+  if (raw === null) return { ok: false, missing: true, error: 'No saved settlement found.' }
+  const problem = isRec(raw) && (raw as { world?: unknown }).world ? runProblem(raw) : 'it is not a run this version can read'
+  if (problem) return { ok: false, missing: false, error: `This save is damaged: ${problem}.` }
+  const run = migrateRun(raw)
+  if (!run) return { ok: false, missing: false, error: 'This save is damaged and could not be read.' }
+  return { ok: true, run }
 }
 
 /**
  * Brings a parsed save up to the current shape, or returns null when it is
  * not a run at all. Shared by local saves and imported files, so both get the
- * same defaults for anything an older version did not write.
+ * same defaults for anything an older version did not write. Never throws:
+ * anything too damaged to bring up to date reads as no run.
  */
 export function migrateRun(raw: unknown): RunState | null {
+  try {
+    return migrateRunUnchecked(raw)
+  } catch {
+    return null
+  }
+}
+
+function migrateRunUnchecked(raw: unknown): RunState | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const run = raw as RunState
   // Saves from the old tile-based world lack `world`/`deposits` and are
@@ -176,7 +215,25 @@ export function migrateRun(raw: unknown): RunState | null {
   run.edict ??= 0
   run.citadel = { ...emptyCitadelPerks(), ...(run.citadel ?? {}) }
   // Saves from before building upgrades: every building stands at tier 0.
-  for (const b of Object.values(run.buildings ?? {})) b.tier ??= 0
+  for (const b of Object.values(run.buildings ?? {})) if (b && typeof b === 'object') b.tier ??= 0
+  // Saves from before the building counter: ids then came from the count of
+  // buildings and the clock, and new ids never take that shape.
+  if (!Number.isInteger(run.buildingCounter) || run.buildingCounter < 0) {
+    run.buildingCounter = Object.keys(run.buildings ?? {}).length
+  }
+  // Impatience is whole points plus fractional progress; an older save could
+  // hold a fraction or more than the ceiling in the whole points.
+  if (typeof run.impatience === 'number' && typeof run.maxImpatience === 'number') {
+    const whole = Math.max(0, Math.floor(run.impatience))
+    if (whole !== run.impatience) {
+      run.impatienceProgress = (run.impatienceProgress ?? 0) + (run.impatience - whole)
+      run.impatience = whole
+    }
+    if (run.impatience >= run.maxImpatience) {
+      run.impatience = run.maxImpatience
+      run.impatienceProgress = 0
+    }
+  }
   // Saves from before run modifiers: the land had no particular character.
   if (!Array.isArray(run.runModifiers)) run.runModifiers = []
   // Saves from before commissions have none; a mangled one reads as none.
@@ -216,8 +273,18 @@ export function loadMeta(): MetaState {
   return raw ? migrateMeta(raw) : defaultMeta()
 }
 
-export function saveMeta(meta: MetaState): void {
-  write(META_KEY, meta)
+/** The Citadel from its stored text (see `loadMeta`); never throws. */
+export function parseMeta(text: string): MetaState {
+  try {
+    const raw: unknown = JSON.parse(text)
+    return raw ? migrateMeta(raw) : defaultMeta()
+  } catch {
+    return defaultMeta()
+  }
+}
+
+export function saveMeta(meta: MetaState): WriteFailure | null {
+  return writeChecked(META_KEY, meta)
 }
 
 export function loadSettings(): Settings {

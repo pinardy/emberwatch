@@ -28,6 +28,7 @@ import { AutoPauseFields, PauseOnBlurField, PerfField, SoundFields } from './Set
 import { useDismiss } from './useGameLoop'
 import { HEARTH_KEY, inspectHearth } from './MapAids'
 import { signed } from './threatText'
+import { SaveStatusChip } from './SaveStatusChip'
 
 interface Float {
   id: number
@@ -327,6 +328,7 @@ export function TopBar() {
         >
           <Icon id="ancientHearth" emoji="🔥" />
         </button>
+        <SaveStatusChip />
         <button
           type="button"
           className="icon-btn"
