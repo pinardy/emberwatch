@@ -6,6 +6,7 @@ import {
 } from '../game/content/meta'
 import { useGameStore, useHudRun } from '../game/store'
 import { Overlay } from './ChoiceModal'
+import { CommissionEnd } from './Commissions'
 import { EndExtras } from './EndExtras'
 import { RunModifierList } from './RunModifierList'
 import { RunTimelineChart } from './RunTimeline'
@@ -52,6 +53,8 @@ export function EndModal() {
                 <RunModifierList ids={run.runModifiers} compact />
               </section>
             )}
+
+            <CommissionEnd run={run} breakdown={breakdown} />
 
             <dl className="end-stats">
               <div>
