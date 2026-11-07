@@ -15,7 +15,7 @@
 
 .queen-streak {
   margin: 0 0 10px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   color: var(--muted);
 }
 
@@ -24,8 +24,8 @@
   display: inline-block;
   margin-left: 6px;
   font-style: normal;
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -64,7 +64,7 @@
 }
 
 .order-offer .rarity-tag {
-  font-size: 10px;
+  font-size: 0.625rem;
   letter-spacing: 0.06em;
 }
 

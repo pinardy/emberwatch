@@ -5,14 +5,15 @@ import { Icon } from './Icon'
 
 /**
  * Each resource in a bag as its drawn icon and amount, one span apiece (given
- * `className`). `title` names each on hover; `label` announces the icons, for
- * places where no name is written beside them.
+ * `className`). `title` names each on hover; `label` (on by default) announces
+ * each icon by its resource's name, so "Wood 4" is read rather than a bare
+ * "4"; turn it off only where the name is already written beside the icon.
  */
 export function BagIcons({
   bag,
   className,
   title = false,
-  label = false,
+  label = true,
 }: {
   bag: ResourceBag
   className?: string

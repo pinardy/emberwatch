@@ -304,7 +304,7 @@ describe('how to play', () => {
       'Orders, decrees and commissions',
       'Trade and amber',
     ])
-    for (const part of parts) expect(part.querySelector('h3')?.textContent).toBe(part.getAttribute('aria-label'))
+    for (const part of parts) expect(part.querySelector('h2')?.textContent).toBe(part.getAttribute('aria-label'))
     const text = howTo.textContent ?? ''
     for (const idea of [
       /Reputation/,

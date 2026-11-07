@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { Season } from '../../game/types'
-import { REDUCED_MOTION } from '../motion'
+import { useReducedMotion } from '../motion'
 
 /**
  * Sky, fog, light and rain per season. Every season keeps a generous fill
@@ -198,7 +198,8 @@ function Lightning() {
 /** Sky colour, fog, sun, fill, rim and rain for the current season. */
 export function Atmosphere({ season, shadows = true }: { season: Season; shadows?: boolean }) {
   const look = LOOKS[season]
-  const rainCount = REDUCED_MOTION ? 0 : look.rainCount
+  const reduced = useReducedMotion()
+  const rainCount = reduced ? 0 : look.rainCount
   return (
     <>
       <color attach="background" args={[look.bg]} />
@@ -227,7 +228,7 @@ export function Atmosphere({ season, shadows = true }: { season: Season; shadows
       {rainCount > 0 && (
         <Rain key={season} count={rainCount} speed={look.rainSpeed} opacity={look.rainOpacity} />
       )}
-      {season === 'storm' && !REDUCED_MOTION && <Lightning />}
+      {season === 'storm' && !reduced && <Lightning />}
     </>
   )
 }

@@ -3,7 +3,7 @@
 .menu-actions .menu-sub {
   display: block;
   margin-top: 3px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
   opacity: 0.85;
 }
@@ -44,12 +44,12 @@
   gap: 8px;
 }
 
-.slot-head h3 {
-  font-size: 16px;
+.slot-head h2 {
+  font-size: 1rem;
 }
 
 .slot-badge {
-  font-size: 11px;
+  font-size: 0.6875rem;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--gold);
@@ -60,7 +60,7 @@
 .slot-details {
   display: grid;
   gap: 3px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   min-width: 0;
 }
 

@@ -12,6 +12,7 @@ import {
 import { MenuScreen } from './ui/MenuScreen'
 import { RecoveryOverlay } from './ui/RecoveryOverlay'
 import { UpdatePrompt } from './ui/UpdatePrompt'
+import { useScreenFocus } from './ui/focusRequests'
 
 export default function App() {
   const screen = useGameStore((s) => s.screen)
@@ -23,6 +24,8 @@ export default function App() {
 
   // Only the menu ships in the startup chunk; fetch the rest once it is up.
   useEffect(() => preloadScreensWhenIdle(), [])
+  // A new screen: focus goes to its title.
+  useScreenFocus(screen)
 
   return (
     <>

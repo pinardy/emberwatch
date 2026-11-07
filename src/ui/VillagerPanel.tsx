@@ -15,7 +15,7 @@ import { useFrameDerived } from '../game/frameDerived'
 import { useGameStore, useHudRun } from '../game/store'
 import type { RunState, Villager } from '../game/types'
 import { formatMultiplier } from './Inspector'
-import { useConfirm } from './useConfirm'
+import { againWord, useConfirm } from './useConfirm'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
 import { signed } from './threatText'
@@ -149,7 +149,7 @@ export function VillagerPanel() {
             disabled={busy === 0 && !confirmRecall.armed}
             title="Send every worker and clearer back to idle"
           >
-            {confirmRecall.armed ? `Recall all ${busy}? Click again` : 'Recall all'}
+            {confirmRecall.armed ? `Recall all ${busy}? ${againWord()}` : 'Recall all'}
           </button>
           <span className="sr-only" aria-live="polite">
             {confirmRecall.armed

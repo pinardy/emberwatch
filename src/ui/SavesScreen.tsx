@@ -16,7 +16,7 @@ import {
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { SlotDetails, SlotPicker } from './SaveSlots'
-import { useConfirm } from './useConfirm'
+import { againWord, useConfirm } from './useConfirm'
 
 /** Brings a freshly shown block into view; the screen scrolls inside its card. */
 function useRevealOnChange(trigger: unknown) {
@@ -68,7 +68,7 @@ function SlotCard({
       className={`slot-card ${slot.meta ? '' : 'is-empty'} ${playing ? 'is-playing' : ''}`}
     >
       <header className="slot-head">
-        <h3>{slot.label}</h3>
+        <h2>{slot.label}</h2>
         {playing && <span className="slot-badge">Playing now</span>}
       </header>
       {slot.meta ? (
@@ -117,13 +117,13 @@ function SlotCard({
             className={slot.meta && copy.armed ? 'is-armed' : ''}
             aria-label={
               slot.meta && copy.armed
-                ? `Replace ${slot.label}? Tap again`
+                ? `Replace ${slot.label}? ${againWord()}`
                 : `Save a copy of the current run to ${slot.label}`
             }
             onClick={slot.meta ? copy.trigger : () => saveCopy(slot.id)}
           >
             {slot.meta && copy.armed
-              ? `Replace ${slot.label}? Tap again`
+              ? `Replace ${slot.label}? ${againWord()}`
               : '💾 Save a copy here'}
           </button>
         )}
@@ -132,14 +132,14 @@ function SlotCard({
             type="button"
             className={`danger ${del.armed ? 'is-armed' : ''}`}
             aria-label={
-              del.armed ? `Delete ${slot.label}? Tap again` : `Delete ${slot.label}`
+              del.armed ? `Delete ${slot.label}? ${againWord()}` : `Delete ${slot.label}`
             }
             onClick={del.trigger}
           >
             {del.armed
               ? playing
-                ? 'Delete the run you are playing? Tap again'
-                : 'Delete for good? Tap again'
+                ? 'Delete the run you are playing? ' + againWord()
+                : 'Delete for good? ' + againWord()
               : '🗑 Delete'}
           </button>
         )}
@@ -182,7 +182,7 @@ function ImportPanel({ slots }: { slots: SlotSummary[] }) {
 
   return (
     <section className="setup-section import-panel" aria-label="Import a save">
-      <h3>Import a save</h3>
+      <h2>Import a save</h2>
       <p className="muted">
         Load a run exported from this or another device. Files are checked before anything
         is written.
@@ -253,7 +253,7 @@ function ImportPanel({ slots }: { slots: SlotSummary[] }) {
               {!target
                 ? 'Choose a slot'
                 : replacing && confirm.armed
-                  ? `Replace ${targetSlot?.label}? Tap again`
+                  ? `Replace ${targetSlot?.label}? ${againWord()}`
                   : replacing
                     ? `Import, replacing ${targetSlot?.label}`
                     : `Import into ${targetSlot?.label}`}
@@ -297,7 +297,7 @@ export function SavesScreen() {
   return (
     <div className="screen saves-screen">
       <div className="menu-card wide">
-        <h2>Saved settlements</h2>
+        <h1 className="screen-title">Saved settlements</h1>
         <p className="muted">
           Every settlement saves itself to its slot as you play. Export a run to keep it
           safe or move it to another device.
@@ -319,7 +319,7 @@ export function SavesScreen() {
             aria-label="Save as text"
             ref={textBox}
           >
-            <h3>{textOut.label} as text</h3>
+            <h2>{textOut.label} as text</h2>
             <p className="muted" role="status">
               {textOut.copied
                 ? 'Copied to the clipboard. Paste it into “Paste save text” on the other device.'

@@ -139,7 +139,7 @@ export function HowToPlay() {
 function Part({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="how-to-part" aria-label={title}>
-      <h3>{title}</h3>
+      <h2>{title}</h2>
       <ul>{children}</ul>
     </section>
   )

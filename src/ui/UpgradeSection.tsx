@@ -39,7 +39,7 @@ export function UpgradeSection({ run, building }: { run: RunState; building: Bui
     const amber = Math.floor(run.stock.amber ?? 0)
     return (
       <section className="inspector-section upgrade-section" aria-label="Upgrade">
-        <h4>Upgrade</h4>
+        <h3>Upgrade</h3>
         <p className="muted" role="status">
           ⬆ Upgrading to <strong>{next.name}</strong> — {Math.floor(progress)}/{next.buildSeconds}{' '}
           work.{' '}
@@ -74,7 +74,7 @@ export function UpgradeSection({ run, building }: { run: RunState; building: Bui
   if (!next) {
     return (
       <section className="inspector-section upgrade-section" aria-label="Upgrade">
-        <h4>Upgrade</h4>
+        <h3>Upgrade</h3>
         <p className="muted">
           <span className="tier-stars">{tierMark(building)}</span> Fully upgraded — tier {tier} of{' '}
           {max}.
@@ -87,9 +87,9 @@ export function UpgradeSection({ run, building }: { run: RunState; building: Bui
   const error = canUpgradeBuilding(run, building.id)
   return (
     <section className="inspector-section upgrade-section" aria-label="Upgrade">
-      <h4>
+      <h3>
         Upgrade · tier {tier + 1} of {max}
-      </h4>
+      </h3>
       <p>
         Next: <strong>{next.name}</strong>
       </p>

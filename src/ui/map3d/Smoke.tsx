@@ -5,7 +5,7 @@ import { BUILDINGS } from '../../game/content/buildings'
 import { frameDerived } from '../../game/frameDerived'
 import type { RunState } from '../../game/types'
 import { useHudValue } from '../mapShared'
-import { REDUCED_MOTION } from '../motion'
+import { useReducedMotion } from '../motion'
 import { NO_RAYCAST } from './models'
 import { chimneyAt } from './modelParts'
 
@@ -90,6 +90,7 @@ export function smokeEmitters(run: RunState, version: number): { key: string; va
 export const Smoke = memo(function Smoke() {
   // Re-render only when the set of smoking chimneys changes.
   const emitters = useHudValue(smokeEmitters)
-  if (REDUCED_MOTION || !emitters || emitters.length === 0) return null
+  const reduced = useReducedMotion()
+  if (reduced || !emitters || emitters.length === 0) return null
   return <SmokeColumns key={emitters.length} emitters={emitters} />
 })
