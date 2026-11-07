@@ -214,7 +214,7 @@ function RareItem({ run, amber }: { run: RunState; amber: number }) {
 
 /** Commission a lot of any good, paid now, delivered with the next caravan. */
 function Commission({ run, amber }: { run: RunState; amber: number }) {
-  const commission = useGameStore((s) => s.commission)
+  const commission = useGameStore((s) => s.commissionShipment)
   // Default to the service good this settlement is shortest of a way to make.
   const suggested = provisionsGood(run) ?? 'plank'
   const [picked, setPicked] = useState<ResourceId | ''>('')
