@@ -152,11 +152,11 @@ describe('commissions: the founding', () => {
     expect(run('holdFrontier').hostility).toBe(8)
   })
 
-  it('Light Wagons carries a quarter less of everything', () => {
+  it('Light Wagons carries 15% less of everything', () => {
     const plain = run()
     const light = run('lightWagons')
     for (const [id, amount] of Object.entries(plain.stock)) {
-      expect(light.stock[id as keyof typeof plain.stock], id).toBe(Math.round((amount ?? 0) * 0.75))
+      expect(light.stock[id as keyof typeof plain.stock], id).toBe(Math.round((amount ?? 0) * 0.85))
     }
   })
 
@@ -181,7 +181,9 @@ describe('commissions: the founding', () => {
     expect(fav.pendingChoices.map((c) => c.kind)).toEqual(plain.pendingChoices.map((c) => c.kind))
   })
 
-  it('The Deep Works always has Rich Veins, keeping what of the draw fits', () => {
+  it('The Deep Works always has Rich Veins, keeping what of the draw fits, and the copper plans', () => {
+    expect(run().unlockedBuildings).not.toContain('smelter')
+    expect(run('deepWorks').unlockedBuildings).toEqual(expect.arrayContaining(['copperMine', 'smelter']))
     for (const seed of [1, 7, 42, 99, 777, 4242]) {
       const s = run('deepWorks', seed)
       expect(s.runModifiers[0]).toBe('richVeins')
@@ -222,13 +224,24 @@ describe('commissions: judging the objective', () => {
     const light = run('lightWagons')
     expect(judgeCommission(light)!.terms[1].state).toBe('open')
     expect(judgeCommission(ended(light, 'won'))!.met).toBe(true)
+    // Home by Year 3 as well: a fourth year fails the wager.
+    light.season = { ...light.season, year: 4 }
+    expect(judgeCommission(light)!.terms[2].state).toBe('failed')
+    expect(judgeCommission(ended(light, 'won'))!.met).toBe(false)
+    light.season = { ...light.season, year: 3 }
     light.stats.villagersLost = 1
     expect(judgeCommission(light)!.terms[1].state).toBe('failed')
     expect(judgeCommission(ended(light, 'won'))!.met).toBe(false)
 
     const storm = run('stormWatch')
+    expect(judgeCommission(ended(storm, 'won'))!.met).toBe(true)
+    storm.hostility = 21
+    expect(judgeCommission(ended(storm, 'won'))!.terms[2]).toMatchObject({ state: 'failed', detail: '21/20' })
+    storm.hostility = 20
+    expect(judgeCommission(ended(storm, 'won'))!.met).toBe(true)
     storm.feats = { ...storm.feats!, hearthWentCold: true }
     expect(judgeCommission(storm)!.terms[1].state).toBe('failed')
+    expect(judgeCommission(ended(storm, 'won'))!.met).toBe(false)
   })
 
   it('a deadline fails once its year is past', () => {
@@ -243,9 +256,9 @@ describe('commissions: judging the objective', () => {
   it('counts caravans, decrees and impatience from the run', () => {
     const trade = run('tradeTown')
     const [post, caravans] = COMMISSIONS.tradeTown.terms
-    trade.caravan.visits = 3
-    expect(termStatus(caravans, trade).detail).toBe('3/4')
-    trade.caravan.visits = 4
+    trade.caravan.visits = 5
+    expect(termStatus(caravans, trade)).toMatchObject({ state: 'open', detail: '5/6' })
+    trade.caravan.visits = 6
     expect(termStatus(caravans, trade).state).toBe('met')
     expect(termStatus(post, ended(trade, 'won')).state).toBe('failed')
 
@@ -264,10 +277,10 @@ describe('commissions: judging the objective', () => {
 
     const frontier = run('holdFrontier')
     const forest = COMMISSIONS.holdFrontier.terms[1]
-    frontier.hostility = 41
-    expect(termStatus(forest, frontier)).toMatchObject({ state: 'open', detail: '41/30' })
+    frontier.hostility = 36
+    expect(termStatus(forest, frontier)).toMatchObject({ state: 'open', detail: '36/35' })
     expect(termStatus(forest, ended(frontier, 'won')).state).toBe('failed')
-    frontier.hostility = 30
+    frontier.hostility = 35
     expect(termStatus(forest, ended(frontier, 'won')).state).toBe('met')
   })
 })
@@ -282,7 +295,7 @@ describe('commissions: the reward', () => {
     const won = ended(s, 'won')
     const base = supplyBreakdown(plainWon)
     const paid = supplyBreakdown(won)
-    const bonus = Math.round((base.subtotal * 60) / 100)
+    const bonus = Math.round((base.subtotal * 65) / 100)
     expect(paid.commission).toEqual({ id: 'holdFrontier', met: true, bonus })
     expect(paid.subtotal).toBe(base.subtotal + bonus)
     expect(paid.lines.at(-1)?.label).toMatch(/Commission met: Hold the Frontier/)
@@ -290,7 +303,7 @@ describe('commissions: the reward', () => {
     expect(edict.total).toBe(paid.subtotal + Math.round(paid.subtotal * 0.5))
     // Found a Trade Town doubles the run's own payout.
     const trade = ended({ ...run('tradeTown'), stats: s.stats, season: s.season }, 'won')
-    trade.caravan.visits = 4
+    trade.caravan.visits = 6
     trade.buildings.post = { ...trade.buildings.hearth, id: 'post', defId: 'tradingPost' }
     const doubled = supplyBreakdown(trade)
     expect(doubled.commission?.met).toBe(true)
