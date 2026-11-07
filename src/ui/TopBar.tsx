@@ -8,6 +8,7 @@ import {
   secondsUntilStorm,
   type DeadlineForecast,
 } from '../game/engine/forecast'
+import { isFounding } from '../game/engine/founding'
 import { idleVillagers, population, totalHousing } from '../game/engine/queries'
 import {
   impatienceParts,
@@ -145,6 +146,12 @@ export function TopBar() {
       : 'all well',
   ].join(', ')
 
+  // The clock waits on the founding's picks, whatever speed is set: say so in
+  // place of the speed buttons rather than lighting a speed that is not
+  // running. The set speed returns with the buttons once the last pick is
+  // made.
+  const held = isFounding(run)
+
   const toggle = (which: Exclude<Popover, null>) =>
     setPopover((open) => (open === which ? null : which))
 
@@ -190,40 +197,56 @@ export function TopBar() {
           {/* Phones fold the six speeds behind this; desktop hides it. */}
           <button
             type="button"
-            className={`speed-toggle ${speed === 0 ? 'is-paused' : ''} ${
-              popover === 'speed' ? 'is-open' : ''
-            }`}
+            className={`speed-toggle ${speed === 0 || held ? 'is-paused' : ''} ${
+              held ? 'is-held' : ''
+            } ${popover === 'speed' ? 'is-open' : ''}`}
             onClick={() => toggle('speed')}
             aria-expanded={popover === 'speed'}
             aria-controls="speed-group"
-            aria-label={`Game speed: ${speed === 0 ? 'paused' : `${speed}×`}`}
-            title="Game speed"
+            aria-label={`Game speed: ${
+              held ? 'held for the founding' : speed === 0 ? 'paused' : `${speed}×`
+            }`}
+            title={held ? 'The clock waits until the founding picks are made' : 'Game speed'}
           >
-            {speed === 0 ? <Icon id="pause" emoji="⏸" /> : `${speed}×`}
+            {held ? (
+              <>
+                <Icon id="pause" emoji="⏸" /> <span className="speed-held-word">Founding</span>
+              </>
+            ) : speed === 0 ? (
+              <Icon id="pause" emoji="⏸" />
+            ) : (
+              `${speed}×`
+            )}
             <span className="speed-chevron" aria-hidden>
               ▾
             </span>
           </button>
           <div
             id="speed-group"
-            className={`speed-group ${popover === 'speed' ? 'is-open' : ''}`}
+            className={`speed-group ${popover === 'speed' ? 'is-open' : ''} ${held ? 'is-held' : ''}`}
             role="group"
             aria-label="Game speed"
           >
-            {SPEED_OPTIONS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={speed === option ? 'is-active' : ''}
-                onClick={() => {
-                  setSpeed(option)
-                  if (popover === 'speed') setPopover(null)
-                }}
-                title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
-              >
-                {option === 0 ? <Icon id="pause" emoji="⏸" label="Pause" /> : `${option}×`}
-              </button>
-            ))}
+            {held ? (
+              <span className="speed-held" role="status" title="The clock starts once every founding pick is made">
+                <Icon id="pause" emoji="⏸" /> Founding — clock waits
+              </span>
+            ) : (
+              SPEED_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={speed === option ? 'is-active' : ''}
+                  onClick={() => {
+                    setSpeed(option)
+                    if (popover === 'speed') setPopover(null)
+                  }}
+                  title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
+                >
+                  {option === 0 ? <Icon id="pause" emoji="⏸" label="Pause" /> : `${option}×`}
+                </button>
+              ))
+            )}
           </div>
         </div>
       </div>

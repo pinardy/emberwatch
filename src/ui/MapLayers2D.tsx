@@ -33,6 +33,7 @@ import {
   gladeLook,
   gladePlateInfo,
   isWorldRunning,
+  SPARED_STYLE,
   useWarmthRingVisible,
   type GladeAccess,
 } from './mapShared'
@@ -120,6 +121,8 @@ function GladeEdge2D({
 }) {
   const style = GLADE_KIND_STYLE[kind]
   const clipId = `glade-clip-${id}`
+  // Left to the forest: a wide, faint mint band instead of the kind's crisp line.
+  const spared = access === 'spared'
   return (
     <g pointerEvents="none" className={`glade-edge is-${kind} is-${access}`}>
       <clipPath id={clipId}>
@@ -129,10 +132,10 @@ function GladeEdge2D({
         points={points}
         clipPath={`url(#${clipId})`}
         fill="none"
-        stroke={style.edge}
-        strokeWidth={access === 'locked' ? 4 : 7}
-        strokeOpacity={access === 'locked' ? 0.35 : 0.9}
-        strokeDasharray={style.dash ? style.dash.map((d) => d * S).join(' ') : undefined}
+        stroke={spared ? SPARED_STYLE.edge : style.edge}
+        strokeWidth={access === 'locked' ? 4 : spared ? 16 : 7}
+        strokeOpacity={access === 'locked' ? 0.35 : spared ? 0.3 : 0.9}
+        strokeDasharray={!spared && style.dash ? style.dash.map((d) => d * S).join(' ') : undefined}
         style={
           access === 'clearing'
             ? { animation: 'warmth-breathe 1.2s ease-in-out infinite' }
@@ -413,7 +416,9 @@ export const GladePlateLayer2D = memo(function GladePlateLayer2D({ run }: { run:
         const info = gladePlateInfo(run, glade)
         const { pct } = info
         const reachable = info.access !== 'locked'
+        const spared = info.access === 'spared'
         const kindStyle = GLADE_KIND_STYLE[glade.kind]
+        const accent = spared ? SPARED_STYLE.edge : kindStyle.edge
         return (
           <g
             key={glade.id}
@@ -432,11 +437,11 @@ export const GladePlateLayer2D = memo(function GladePlateLayer2D({ run }: { run:
               height={60}
               rx={8}
               className="glade-plate"
-              style={reachable ? { stroke: kindStyle.edge, strokeOpacity: 0.85 } : undefined}
+              style={reachable ? { stroke: accent, strokeOpacity: spared ? 0.6 : 0.85 } : undefined}
             />
             {/* Kind icon and label, centred together as one line. */}
             <IconUse id={GLADE_ART[glade.kind]} x={-kindStyle.label.length * 2.8 - 1} y={-11} size={11} />
-            <text x={6} y={-8} className="glade-kind" style={reachable ? { fill: kindStyle.edge } : undefined}>
+            <text x={6} y={-8} className="glade-kind" style={reachable && !spared ? { fill: kindStyle.edge } : undefined}>
               {kindStyle.label}
             </text>
             <text y={7} className="glade-name">
@@ -448,9 +453,19 @@ export const GladePlateLayer2D = memo(function GladePlateLayer2D({ run }: { run:
                 <rect x={-40} y={13} width={80 * Math.min(1, pct)} height={5} rx={2.5} className="glade-bar" />
               </>
             )}
-            <text y={28} className="glade-crew" style={reachable ? undefined : { fill: '#6d7a7a' }}>
-              {gladeAccessText(info.access, pct, info.clearers)}
-            </text>
+            {spared ? (
+              // The truce, as a leaf badge and a line of its own.
+              <g className="glade-spared-line">
+                <IconUse id={SPARED_STYLE.art} x={-41} y={25} size={11} />
+                <text x={6} y={28} className="glade-crew">
+                  {gladeAccessText(info.access, pct, info.clearers)}
+                </text>
+              </g>
+            ) : (
+              <text y={28} className="glade-crew" style={reachable ? undefined : { fill: '#6d7a7a' }}>
+                {gladeAccessText(info.access, pct, info.clearers)}
+              </text>
+            )}
             {info.stakes.length > 0 && <GladeStakes2D stakes={info.stakes} />}
           </g>
         )

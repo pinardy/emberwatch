@@ -5,6 +5,7 @@ import { ACHIEVEMENT_LIST, achievementCount } from '../game/content/achievements
 import { DailyMenuEntry } from './DailyScreen'
 import { SlotOneLiner } from './SaveSlots'
 import { AutoPauseFields, PauseOnBlurField, PerfField, SoundFields } from './SettingsFields'
+import { HowToPlay } from './HowToPlay'
 import { Icon } from './Icon'
 
 export function MenuScreen() {
@@ -68,41 +69,7 @@ export function MenuScreen() {
           </button>
         </div>
 
-        <details className="how-to">
-          <summary>How to play</summary>
-          <ol>
-            <li>
-              <strong>Clear glades.</strong> Tap a fogged glade next to your territory and
-              add villagers to the clearing crew. Glades yield resources — and dangerous
-              ones force a decision.
-            </li>
-            <li>
-              <strong>Feed everyone.</strong> Gathering camps must sit within range of a
-              deposit. Cooked food feeds twice as far, and food <em>variety</em> raises
-              resolve.
-            </li>
-            <li>
-              <strong>Meet their needs.</strong> Each species wants two services. A service
-              must be staffed <em>and</em> supplied to count, and must cover 75% of your
-              population.
-            </li>
-            <li>
-              <strong>Watch the three bars.</strong> Reputation wins the run, Impatience
-              loses it, and Hostility drags resolve down for everybody.
-            </li>
-            <li>
-              <strong>Survive the Storm.</strong> Farms stop, gathering halves, and the
-              hearth burns wood. Stockpile before it hits.
-            </li>
-          </ol>
-          <p className="muted">
-            <strong>Keys:</strong> Space pauses · 1–5 set speed · B build · P people · O
-            orders · T trade · L log · WASD/arrows pan · Q/E rotate · H homes · right-click
-            or Esc cancels placement and closes tips. On touch screens, drag to pan, pinch
-            to zoom and tap ✓ to place. Progress saves automatically and the game works
-            offline once loaded.
-          </p>
-        </details>
+        <HowToPlay />
 
         <details className="how-to settings-block">
           <summary>Settings</summary>

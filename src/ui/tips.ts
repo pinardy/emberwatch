@@ -1,0 +1,233 @@
+import { COMMISSIONS } from '../game/content/commissions'
+import {
+  DECREE_DECLINE_IMPATIENCE,
+  HEARTH_STORM_REACH_FLOOR,
+  IMPATIENCE_STAGNATION_GRACE,
+  RESOLVE_EXPECTATION_CROWD_FROM,
+  RESOLVE_EXPECTATION_PER_YEAR,
+  SPARED_GLADE_RECLAIM_HOSTILITY,
+} from '../game/engine/balance'
+import { pendingBlight } from '../game/engine/blights'
+import { isFounding } from '../game/engine/founding'
+import { HEARTH_STORM_END_REACH, idleVillagers, population } from '../game/engine/queries'
+import {
+  coldVillagers,
+  expectations,
+  secondsSinceReputation,
+  villagersBeyond,
+} from '../game/engine/society'
+import type { RunState } from '../game/types'
+
+/**
+ * The coach's tips, as data. Each fires once, the first time its situation
+ * holds, and is remembered as seen for good (see `TipsCoach`).
+ *
+ * To add one: append an entry below. Order matters — when several tips hold
+ * at once the earliest unseen one shows, and the rest wait their turn, so a
+ * tip about something rarer or later goes further down. Keep the text to two
+ * or three short sentences: on a phone the card has a few lines.
+ */
+export interface Tip {
+  id: string
+  title: TipCopy
+  text: TipCopy
+  when: (run: RunState) => boolean
+  /** Shown inside a dialog (via `DialogTip`) rather than in the corner. */
+  inDialog?: boolean
+  /**
+   * Once this holds the tip has done its job: it is put away (and counted as
+   * seen) without waiting for "Got it", or skipped if it never showed.
+   */
+  doneWhen?: (run: RunState) => boolean
+  /**
+   * Urgent tips may interrupt the First steps checklist; the rest wait until
+   * it is finished or dismissed, so the two never fight for the corner.
+   */
+  urgent?: boolean
+}
+
+/** A tip's words: fixed, or read from the run (to name what it is about). */
+export type TipCopy = string | ((run: RunState) => string)
+
+export function tipCopy(copy: TipCopy, run: RunState): string {
+  return typeof copy === 'function' ? copy(run) : copy
+}
+
+/** The player has done something on purpose: placed a building or put someone to work. */
+function hasActed(run: RunState): boolean {
+  return (
+    Object.values(run.buildings).some((b) => b.defId !== 'ancientHearth') ||
+    Object.values(run.villagers).some((v) => v.assignment !== null)
+  )
+}
+
+/** Villagers who sleep cold now, or will by the Storm's end (warned from Clearance). */
+function coldComing(run: RunState): boolean {
+  if (run.season.season === 'storm') return coldVillagers(run) > 0
+  return run.season.season === 'clearance' && villagersBeyond(run, HEARTH_STORM_END_REACH) > 0
+}
+
+function anySpared(run: RunState): boolean {
+  return Object.values(run.glades).some((g) => g.spared && !g.cleared)
+}
+
+const pct = (share: number) => `${Math.round(share * 100)}%`
+
+export const TIPS: Tip[] = [
+  {
+    id: 'welcome',
+    title: 'Welcome, Viceroy',
+    text: 'Fill the 👑 Reputation meter to win before the Queen’s ⏳ Impatience fills and she recalls you. Resolve above each species’ threshold is what earns reputation.',
+    // The run opens on the founding; welcome the player once it closes.
+    // While the First steps checklist is up, it carries this welcome instead.
+    when: (run) => run.clock < 30 && run.pendingChoices.length === 0,
+    doneWhen: hasActed,
+  },
+  {
+    id: 'founding',
+    title: 'The Founding',
+    text: 'Nothing moves until the last pick, so take your time. Tap glades and deposits on the map to see what this land offers, and take a writ you can meet in Year 1 — it is your first reputation.',
+    when: isFounding,
+    inDialog: true,
+  },
+  {
+    id: 'first-draft',
+    title: 'Drafting a blueprint',
+    text: 'You can never unlock everything — pick buildings that satisfy the services your species actually want. The draft can be rerolled for amber.',
+    when: (run) => run.pendingChoices[0]?.kind === 'blueprint',
+    inDialog: true,
+  },
+  {
+    id: 'decree-choice',
+    title: 'A royal decree',
+    text: `Take the one your producers can meet in time — each card says what they make now. A miss costs patience, more with every miss in a row; begging off costs +${DECREE_DECLINE_IMPATIENCE} now and ends your streak.`,
+    when: (run) => run.pendingChoices[0]?.kind === 'decree',
+    inDialog: true,
+  },
+  {
+    id: 'commission',
+    title: (run) => `Commission: ${COMMISSIONS[run.commission ?? '']?.name ?? 'your charge'}`,
+    text: 'This settlement has an objective on top of winning, judged when the run ends. Its card at the top of the Orders panel ticks off each term as you go.',
+    when: (run) => !!run.commission && !!COMMISSIONS[run.commission] && !isFounding(run),
+  },
+  {
+    id: 'idle-builders',
+    title: 'Idle hands build',
+    text: 'Idle villagers are your construction crew and your glade clearers. The 💤 count in the top bar is your build speed.',
+    when: (run) => run.clock > 45 && idleVillagers(run).length >= 3,
+  },
+  {
+    id: 'first-glade',
+    title: 'Push into the forest',
+    text: 'Select a fogged glade next to your territory and assign clearers. Dangerous and forbidden glades hide richer loot — and a decision.',
+    when: (run) => run.clock > 90 && run.stats.gladesCleared === 0,
+  },
+  {
+    id: 'first-storm',
+    title: 'The Blightstorm',
+    text: 'Farms stop, gathering halves, and the hearth burns wood fast. Stockpile food and fuel during Clearance, and keep homes near the hearth’s warmth — or raise a brazier beside distant ones.',
+    when: (run) => run.season.season === 'storm' && run.season.year === 1,
+    urgent: true,
+  },
+  {
+    id: 'frost',
+    title: 'The cold closes in',
+    text: `Through the Storm the hearth’s warm ring pulls in to ${pct(HEARTH_STORM_REACH_FLOOR)}, and villagers sleeping beyond every fire freeze — the cold takes lives. Raise a brazier by outlying homes, insulate them (a reinforced shelter), or build closer in.`,
+    when: coldComing,
+    urgent: true,
+  },
+  {
+    id: 'low-resolve',
+    title: 'Somebody is miserable',
+    text: 'A species below zero resolve will start leaving, and each departure feeds the Queen’s impatience. Check housing, food variety, and their service needs.',
+    when: (run) => Object.values(run.resolve).some((r) => r < 0),
+    urgent: true,
+  },
+  {
+    id: 'first-threat',
+    title: 'A threat is loose',
+    text: 'It will strike again and again until you pay it off from the red banner. Weigh the appeasement cost against what each strike is costing you.',
+    when: (run) => run.threats.length > 0,
+    urgent: true,
+  },
+  {
+    id: 'storm-blight',
+    title: (run) => `A blight is coming: ${pendingBlight(run)?.name ?? 'the Storm'}`,
+    text: 'The forest has picked a blight for the coming Storm; the conditions bar counts down to it. Make the goods it names before the Storm breaks and it is turned aside — unprepared, it strikes when the Storm comes.',
+    when: (run) => pendingBlight(run) !== undefined,
+    urgent: true,
+  },
+  {
+    id: 'first-caravan',
+    title: 'A caravan is in town',
+    text: 'It leaves soon. Check the Trade tab — it pays double for one good this visit, its stock rotates every caravan, and from the second visit it carries a rare blueprint or cornerstone.',
+    when: (run) => run.caravan.here,
+  },
+  {
+    id: 'caravan-amber',
+    title: 'Amber is for spending',
+    text: 'This caravan carries a rare find — a blueprint or cornerstone no draft promises. Amber also commissions 12 of any good for the next visit and signs one trade agreement a run. Unspent amber wins nothing.',
+    when: (run) => run.caravan.here && !!run.caravan.rare && !run.caravan.rare.sold,
+    doneWhen: (run) => !run.caravan.here,
+  },
+  {
+    id: 'order-offer',
+    title: 'An order slot is open',
+    text: 'Choose its replacement in the Orders panel — the badge on its tab. The clock keeps running and an empty slot earns nothing; once a year you may ask for a different pair.',
+    when: (run) => (run.orderOffers ?? []).length > 0,
+    doneWhen: (run) => (run.orderOffers ?? []).length === 0,
+  },
+  {
+    id: 'stagnation',
+    title: 'The Queen notices a stall',
+    text: 'A minute after your last reputation point her impatience starts climbing faster, and faster the longer it stands still. Any new point resets it: meet an order or a decree, clear a glade, lift resolve over the line.',
+    when: (run) =>
+      run.reputation >= 1 && secondsSinceReputation(run) >= IMPATIENCE_STAGNATION_GRACE + 30,
+  },
+  {
+    id: 'expectations',
+    title: 'Rising expectations',
+    text: `From Year 2 settlers take comfort for granted: a served species loses ${RESOLVE_EXPECTATION_PER_YEAR} resolve a year, and more past ${RESOLVE_EXPECTATION_CROWD_FROM} villagers. Keep adding services and food variety — People → Why? shows the cost.`,
+    when: (run) => run.season.year >= 2 && population(run) > 0 && expectations(run) > 0,
+  },
+  {
+    id: 'glade-truce',
+    title: 'The forest keeps count',
+    text: `Every glade you reclaim makes hostility grow faster for the rest of the run. A border glade you do not need can be left to the forest from the Inspector: it calms hostility while it stands (breaking the truce costs ${SPARED_GLADE_RECLAIM_HOSTILITY}).`,
+    when: (run) => run.stats.gladesCleared >= 3 && !anySpared(run),
+    doneWhen: anySpared,
+  },
+]
+
+/** The tip with this id, if any. */
+export function tipById(id: string): Tip | undefined {
+  return TIPS.find((t) => t.id === id)
+}
+
+/**
+ * The corner tip to show next, if any: the first unseen one whose situation
+ * holds. While the First steps checklist is open only urgent tips may
+ * interrupt it.
+ */
+export function nextCornerTip(run: RunState, seen: readonly string[], checklist: boolean): Tip | null {
+  return (
+    TIPS.find(
+      (tip) =>
+        !tip.inDialog &&
+        !seen.includes(tip.id) &&
+        (!checklist || tip.urgent) &&
+        tip.when(run) &&
+        !tip.doneWhen?.(run),
+    ) ?? null
+  )
+}
+
+/**
+ * The one dialog tip that may show right now: the first unseen in-dialog tip
+ * whose situation holds. A dialog can hold more than one tip's place (the
+ * Founding carries its own and the first draft's), but only this one shows,
+ * so tips never stack up inside a dialog either.
+ */
+export function currentDialogTip(run: RunState, seen: readonly string[]): Tip | null {
+  return TIPS.find((tip) => tip.inDialog && !seen.includes(tip.id) && tip.when(run)) ?? null
+}

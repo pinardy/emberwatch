@@ -23,6 +23,7 @@ import type { Order, PendingChoice, RoyalDecree, RunState } from '../game/types'
 import { Bar } from './Bar'
 import { decreeMissCost } from './DecreeCard'
 import { Icon } from './Icon'
+import { DialogTip } from './TipsCoach'
 import './queen-choice.css'
 
 /**
@@ -162,6 +163,7 @@ export function DecreeChoice({ run, choice }: { run: RunState; choice: PendingCh
           </small>
         </div>
       </header>
+      <DialogTip id="decree-choice" />
       {streak > 0 && (
         <p className="queen-streak">
           <Icon id="reputation" label="" /> {streak} decree{streak === 1 ? '' : 's'} met in a row.{' '}

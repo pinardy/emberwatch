@@ -15,12 +15,13 @@ import { gladePlateKey, useRunKey } from './layerKeys'
 /** "reachable", "2 clearing, 40%", "out of reach": the plate's status in words. */
 export function gladeAccessWords(access: GladeAccess, pct: number, clearers: number): string {
   const percent = Math.floor(pct * 100)
+  if (access === 'spared') return 'left to the forest'
   if (access === 'clearing') return `${clearers} clearing, ${percent}%`
   if (access === 'reachable') return percent > 0 ? `reachable, ${percent}% cleared` : 'reachable'
   return 'out of reach'
 }
 
-const ACCESS_ORDER: Record<GladeAccess, number> = { clearing: 0, reachable: 1, locked: 2 }
+const ACCESS_ORDER: Record<GladeAccess, number> = { clearing: 0, reachable: 1, spared: 2, locked: 3 }
 
 /** Picks the glade as its plate would: the Inspector opens and the camera glides there. */
 function chooseGlade(glade: Glade): void {

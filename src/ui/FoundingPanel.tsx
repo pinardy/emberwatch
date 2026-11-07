@@ -91,6 +91,7 @@ export function FoundingPanel() {
           </small>
         </div>
       </header>
+      <DialogTip id="founding" />
       <div className="founding-land">
         {(run.runModifiers ?? []).length > 0 ? (
           <div className="land-strip">
