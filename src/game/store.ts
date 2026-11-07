@@ -46,19 +46,24 @@ import { unassign } from './engine/society'
 import { tick } from './engine/tick'
 import { buyOffer, buyRare, commissionShipment, sellResource, signAgreement } from './engine/trade'
 import {
+  META_KEY,
   loadMeta,
   loadSettings,
+  parseMeta,
+  readRaw,
   saveMeta,
   saveSettings,
   type Settings,
+  type WriteFailure,
 } from './persistence'
 import {
   SLOT_LABELS,
   deleteSlot,
   freeSlot,
   latestSlot,
-  loadSlot,
+  loadSlotChecked,
   saveToSlot,
+  slotSavedAt,
   type SlotId,
 } from './saveSlots'
 import type { MetaState, ResourceId, RunState, ServiceNeed, SpeciesId, TradeAgreementId, Vec2 } from './types'
@@ -126,10 +131,20 @@ let simCarry = 0
 let watched: { run: RunState; snapshot: RunWatch } | null = null
 
 /**
- * Whether the last save failed, so a full disk is reported once rather than
- * every autosave, and again only after a save has worked in between.
+ * When this tab last wrote the active slot (the slot index's `savedAt`), or
+ * when the slot was loaded. A different stamp in the index means another tab
+ * saved the same settlement since, and this one must not overwrite it.
  */
-let saveFailing = false
+let slotStamp: { slot: SlotId; savedAt: number } | null = null
+
+/** Remembers the active slot's stamp after this tab loads or writes it. */
+function stampSlot(slot: SlotId | null): void {
+  slotStamp = slot ? { slot, savedAt: slotSavedAt(slot) ?? 0 } : null
+}
+
+/** Shown (and kept up in the top bar) when another tab has saved this slot. */
+export const SLOT_CONFLICT_MESSAGE =
+  'Not saving: this settlement was saved from another tab since. Saving here would overwrite that progress.'
 
 /**
  * Real milliseconds between HUD refreshes while the game loop runs: the HUD
@@ -190,6 +205,20 @@ interface GameStore {
   notice: string | null
   /** True while a new run waits for the run factory's code to arrive. */
   creatingRun: boolean
+  /**
+   * Why the run is not being saved, while it is not: storage is full or
+   * unavailable, or another tab saved the same slot. The top bar keeps it in
+   * view until a save lands again. Null while saves are landing.
+   */
+  saveError: { message: string; reason: WriteFailure | 'conflict' } | null
+  /**
+   * Set when the game loop or a screen threw: the loop and the autosave stop,
+   * so a half-ticked run is never written, and the recovery overlay offers a
+   * way back. Null while all is well.
+   */
+  crash: string | null
+  /** Bumped by each recovery, so the error boundary renders afresh. */
+  recoveryEpoch: number
 
   // --- UI selection --------------------------------------------------------
   buildMode: string | null
@@ -326,6 +355,14 @@ interface GameStore {
    * `IDLE_SAVE_TIMEOUT_MS`), so the storage write never lands inside a frame.
    */
   saveSoon: () => void
+  /** Saves over a slot another tab wrote since, after the player says so. */
+  saveOverConflict: () => void
+  /** Re-reads the Citadel from storage (another tab may have changed it). */
+  refreshMeta: () => MetaState
+  /** Stops the loop and the autosave after an exception, and shows recovery. */
+  reportCrash: (error: unknown) => void
+  /** Leaves the crash: reloads the active slot's last good save, or goes to the menu. */
+  recover: (how: 'reload' | 'menu') => void
 }
 
 /** The notice shown once a run is banked. */
@@ -449,9 +486,8 @@ function beginRun(
     return
   }
   const run = create()
-  saveFailing = false
   const saved = saveToSlot(target, run)
-  if (!saved.ok) saveFailing = true
+  stampSlot(saved.ok ? target : null)
   set({
     run,
     activeSlot: target,
@@ -466,6 +502,66 @@ function beginRun(
     selectedGlade: null,
     panel: 'build',
     notice: saved.ok ? null : saved.message,
+    saveError: saved.ok ? null : { message: saved.message, reason: saved.reason },
+  })
+}
+
+/**
+ * True while a dialog that takes the whole screen is up: a choice the player
+ * must answer (the founding's picks are in a side panel, not a dialog), the
+ * end-of-run summary, or the recovery overlay after a crash.
+ */
+export function blockingDialogOpen(state: Pick<GameStore, 'run' | 'crash' | 'screen'>): boolean {
+  if (state.crash) return true
+  const run = state.run
+  if (!run || state.screen !== 'game') return false
+  if (run.phase !== 'playing') return true
+  const choice = run.pendingChoices[0]
+  return Boolean(choice && !choice.founding)
+}
+
+/**
+ * Writes the run to its slot and keeps `saveError` in step: the first failure
+ * also shows a notice, and the top bar holds the reason until a save lands.
+ */
+function writeActiveSlot(
+  set: (partial: Partial<GameStore>) => void,
+  get: () => GameStore,
+  slot: SlotId,
+  run: RunState,
+): void {
+  const saved = saveToSlot(slot, run)
+  const failing = get().saveError
+  if (saved.ok) {
+    stampSlot(slot)
+    if (failing) set({ saveError: null })
+  } else if (!failing || failing.reason === 'conflict') {
+    set({ notice: saved.message, saveError: { message: saved.message, reason: saved.reason } })
+  }
+}
+
+/**
+ * The Citadel as this tab last read or wrote it in storage. Another tab's
+ * write shows up as different text, and is taken up before this tab writes.
+ */
+let metaRaw: string | null = null
+
+/** Writes the Citadel, remembering what storage now holds. */
+function writeMeta(meta: MetaState): void {
+  if (saveMeta(meta) === null) metaRaw = JSON.stringify(meta)
+}
+
+let watchingTabs = false
+
+/**
+ * Other tabs share this storage: when one changes the Citadel, this tab picks
+ * the new state up at once rather than writing a stale copy over it later.
+ */
+function watchOtherTabs(): void {
+  if (watchingTabs || typeof window === 'undefined') return
+  watchingTabs = true
+  window.addEventListener('storage', (e) => {
+    if (e.key === META_KEY || e.key === null) useGameStore.getState().refreshMeta()
   })
 }
 
@@ -480,6 +576,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   speed: 1,
   notice: null,
   creatingRun: false,
+  saveError: null,
+  crash: null,
+  recoveryEpoch: 0,
   buildMode: null,
   selectedBuilding: null,
   selectedDeposit: null,
@@ -490,12 +589,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   roadErase: false,
 
   boot: () => {
+    metaRaw = readRaw(META_KEY)
     set({ meta: loadMeta(), settings: loadSettings() })
+    watchOtherTabs()
   },
 
   startRun: (seed, species, edict, land, slot, commission) =>
     withRunFactory(set, get, ({ createRun }) => {
-      const meta = get().meta
+      const meta = get().refreshMeta()
       const offered = commission && commissionOffer(meta).includes(commission)
       beginRun(set, get, slot, 'setup', () =>
         createRun({
@@ -530,14 +631,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ screen: 'game', notice: null })
       return
     }
-    const run = id ? loadSlot(id) : null
-    if (!id || !run) {
-      set({ notice: 'No saved settlement found.' })
+    const loaded = id ? loadSlotChecked(id) : null
+    if (!id || !loaded || !loaded.ok) {
+      set({
+        notice:
+          !id || !loaded || loaded.ok || loaded.missing
+            ? 'No saved settlement found.'
+            : `${SLOT_LABELS[id]} could not be loaded. ${loaded.error} Export it from Saved settlements, or delete it.`,
+      })
       return
     }
+    const run = loaded.run
     // The run being left behind is saved to its own slot first.
     get().saveNow()
-    saveFailing = false
+    stampSlot(id)
     set({
       run,
       activeSlot: id,
@@ -550,13 +657,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       selectedDeposit: null,
       selectedGlade: null,
       notice: null,
+      saveError: null,
     })
   },
 
   deleteSave: (slot) => {
     deleteSlot(slot)
     if (slot === get().activeSlot) {
-      set({ run: null, activeSlot: null, speed: 0, ...bump(get) })
+      set({ run: null, activeSlot: null, speed: 0, saveError: null, ...bump(get) })
     }
     set({ ...bump(get), notice: `${SLOT_LABELS[slot]} deleted.` })
   },
@@ -579,7 +687,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     // Importing over the slot being played replaces that run outright.
     if (slot === get().activeSlot) {
-      set({ run: null, activeSlot: null, speed: 0 })
+      set({ run: null, activeSlot: null, speed: 0, saveError: null })
     }
     set({ ...bump(get), notice: `Imported into ${SLOT_LABELS[slot]}.` })
     return null
@@ -588,7 +696,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   abandonRun: () => {
     const slot = get().activeSlot
     if (slot) deleteSlot(slot)
-    set({ run: null, activeSlot: null, screen: 'menu', speed: 0, ...bump(get) })
+    set({ run: null, activeSlot: null, screen: 'menu', speed: 0, saveError: null, ...bump(get) })
   },
 
   /**
@@ -596,12 +704,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
    * achievements) and returns to the Citadel, or to the daily page.
    */
   finishRun: () => {
-    const { run, meta } = get()
+    const run = get().run
     if (!run || run.phase === 'playing') return
+    // Banked on top of the Citadel as storage holds it now, so progress made
+    // in another tab since this one loaded is kept, not overwritten.
+    const meta = get().refreshMeta()
     const settled = settleRun(meta, run)
     const next = settled.meta
     const unlockedEdict = next.edictUnlocked > meta.edictUnlocked
-    saveMeta(next)
+    writeMeta(next)
     // The banked run is over: its slot is free for the next settlement.
     const slot = get().activeSlot
     if (slot) deleteSlot(slot)
@@ -609,6 +720,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       meta: next,
       run: null,
       activeSlot: null,
+      saveError: null,
       // A daily returns to its own page, where the result can be shared.
       screen: run.daily ? 'daily' : 'citadel',
       speed: 0,
@@ -623,7 +735,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // Simulation loop
   // -------------------------------------------------------------------------
   advance: (realSeconds, now) => {
-    const { run, speed, settings } = get()
+    const { run, speed, settings, crash } = get()
+    if (crash) return
     const watching = Object.values(settings.autoPause).some(Boolean)
     const autoPause = (hits: AutoPauseHit[]) => {
       simCarry = 0
@@ -821,20 +934,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   buyUpgrade: (id) => {
     const def = META_UPGRADES[id]
     if (!def) return
-    const result = purchaseUpgrade(get().meta, id)
+    const result = purchaseUpgrade(get().refreshMeta(), id)
     if (!result.meta) {
       set({ notice: result.error })
       return
     }
-    saveMeta(result.meta)
+    writeMeta(result.meta)
     set({ meta: result.meta, notice: `${def.name} unlocked.` })
   },
 
   setTitle: (title) => {
-    const meta = get().meta
+    const meta = get().refreshMeta()
     if (title !== null && !earnedTitles(meta.achievements).includes(title)) return
     const next = { ...meta, title }
-    saveMeta(next)
+    writeMeta(next)
     set({ meta: next })
   },
 
@@ -848,26 +961,88 @@ export const useGameStore = create<GameStore>((set, get) => ({
     // Anything waiting for idle time is covered by this save.
     cancelIdleSave?.()
     cancelIdleSave = null
-    const run = get().run
-    if (!run) return
+    const { run, crash, saveError } = get()
+    // After a crash the run may be half-ticked: the last good save stays.
+    if (!run || crash) return
+    // Another tab saved this settlement: stay out of its way until told.
+    if (saveError?.reason === 'conflict') return
     let slot = get().activeSlot
     if (!slot) {
       // A run that never had a slot (set up directly) claims a free one.
       slot = freeSlot()
       if (!slot) return
       set({ activeSlot: slot })
+      stampSlot(null)
     }
-    const saved = saveToSlot(slot, run)
-    if (saved.ok) {
-      saveFailing = false
-    } else if (!saveFailing) {
-      saveFailing = true
-      set({ notice: saved.message })
+    if (slotStamp?.slot === slot && slotStamp.savedAt !== (slotSavedAt(slot) ?? 0)) {
+      set({ saveError: { message: SLOT_CONFLICT_MESSAGE, reason: 'conflict' }, notice: SLOT_CONFLICT_MESSAGE })
+      return
     }
+    writeActiveSlot(set, get, slot, run)
+  },
+
+  saveOverConflict: () => {
+    const { run, activeSlot } = get()
+    if (!run || !activeSlot || get().crash) return
+    writeActiveSlot(set, get, activeSlot, run)
+  },
+
+  refreshMeta: () => {
+    const raw = readRaw(META_KEY)
+    // Unchanged since this tab last read or wrote it: what is in memory is
+    // current (and may hold progress a full disk refused to store).
+    if (raw === null || raw === metaRaw) return get().meta
+    metaRaw = raw
+    const meta = parseMeta(raw)
+    set({ meta })
+    return meta
+  },
+
+  reportCrash: (error) => {
+    if (get().crash) return
+    console.error('Emberwatch stopped after an error:', error)
+    cancelIdleSave?.()
+    cancelIdleSave = null
+    simCarry = 0
+    const message = error instanceof Error ? error.message : String(error)
+    set({ crash: message || 'Unknown error', speed: 0 })
+  },
+
+  recover: (how) => {
+    const { activeSlot, recoveryEpoch } = get()
+    const cleared = {
+      crash: null,
+      recoveryEpoch: recoveryEpoch + 1,
+      speed: 0 as GameSpeed,
+      buildMode: null,
+      roadAnchor: null,
+      selectedBuilding: null,
+      selectedDeposit: null,
+      selectedGlade: null,
+      saveError: null,
+    }
+    simCarry = 0
+    watched = null
+    const loaded = how === 'reload' && activeSlot ? loadSlotChecked(activeSlot) : null
+    if (loaded?.ok) {
+      stampSlot(activeSlot)
+      set({ ...cleared, run: loaded.run, screen: 'game', ...bump(get), notice: 'Reloaded the last good save.' })
+      return
+    }
+    // The slot keeps its last good save; this tab just stops playing it.
+    stampSlot(null)
+    set({
+      ...cleared,
+      run: null,
+      activeSlot: null,
+      screen: 'menu',
+      ...bump(get),
+      notice: how === 'reload' ? 'There was no good save to reload.' : null,
+    })
   },
 
   saveSoon: () => {
-    if (cancelIdleSave || !get().run) return
+    if (cancelIdleSave || !get().run || get().crash) return
     const save = () => {
       cancelIdleSave = null
       get().saveNow()
@@ -967,13 +1142,26 @@ export function useRunSelector<T>(
 /** Calls `fn(run)` on every HUD tick (and when a run is loaded). */
 export function subscribeHud(fn: (run: RunState) => void): () => void {
   return useGameStore.subscribe((s, prev) => {
-    if (s.run && (s.hudVersion !== prev.hudVersion || s.run !== prev.run)) fn(s.run)
+    if (s.run && (s.hudVersion !== prev.hudVersion || s.run !== prev.run)) callSafely(fn, s.run)
   })
+}
+
+/**
+ * Listeners run inside the store's `set`, so one that throws (a sound that
+ * cannot play, a toast) would abort the command or sim step that published
+ * the change. They are presentation only: log the failure and carry on.
+ */
+function callSafely(fn: (run: RunState) => void, run: RunState): void {
+  try {
+    fn(run)
+  } catch (error) {
+    console.error('A HUD listener failed:', error)
+  }
 }
 
 /** Calls `fn(run)` after every sim step or command (and when a run is loaded). */
 export function subscribeSteps(fn: (run: RunState) => void): () => void {
   return useGameStore.subscribe((s, prev) => {
-    if (s.run && (s.version !== prev.version || s.run !== prev.run)) fn(s.run)
+    if (s.run && (s.version !== prev.version || s.run !== prev.run)) callSafely(fn, s.run)
   })
 }

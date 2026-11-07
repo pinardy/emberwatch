@@ -27,6 +27,7 @@ import { Icon } from './Icon'
 import { AutoPauseFields, PauseOnBlurField, PerfField, SoundFields } from './SettingsFields'
 import { useDismiss } from './useGameLoop'
 import { signed } from './threatText'
+import { SaveStatusChip } from './SaveStatusChip'
 
 interface Float {
   id: number
@@ -309,6 +310,7 @@ export function TopBar() {
       </div>
 
       <div className="topbar-tools">
+        <SaveStatusChip />
         <button
           type="button"
           className="icon-btn"
