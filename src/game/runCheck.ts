@@ -57,8 +57,10 @@ function validOrder(value: unknown, table: object, decree = false): boolean {
 
 /**
  * A waiting choice the modal, the Founding panel or the Orders panel can show
- * and answer: a known kind, a list of option ids that exist for that kind,
- * and well-formed candidates for order and decree choices.
+ * and answer: a known kind, a list of option ids with at least one that
+ * exists for that kind (a card for content since removed is simply not
+ * drawn, but a choice with nothing to pick would halt the run for good), and
+ * well-formed candidates for order and decree choices.
  */
 function validChoice(value: unknown): boolean {
   if (!isRec(value) || !CHOICE_KINDS.includes(value.kind as string)) return false
@@ -68,13 +70,13 @@ function validChoice(value: unknown): boolean {
   if (value.blueprintId !== undefined && !known(BUILDINGS, value.blueprintId)) return false
   switch (value.kind) {
     case 'cornerstone':
-      return options.every((id) => known(CORNERSTONES, id))
+      return options.some((id) => known(CORNERSTONES, id))
     case 'blueprint':
-      return options.every((id) => known(BUILDINGS, id) || known(CORNERSTONES, id))
+      return options.some((id) => known(BUILDINGS, id) || known(CORNERSTONES, id))
     case 'gladeEvent':
       return known(GLADE_EVENTS, options[0])
     case 'charter':
-      return options.every((id) => known(CHARTERS, id))
+      return options.some((id) => known(CHARTERS, id))
     case 'order':
       return value.orders === undefined || (Array.isArray(value.orders) && value.orders.every((o) => validOrder(o, ORDERS)))
     case 'decree':

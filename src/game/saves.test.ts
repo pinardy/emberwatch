@@ -624,6 +624,11 @@ describe('choices waiting in a save', () => {
     if (!result.ok) expect(result.error).toMatch(/damaged/)
   })
 
+  it('accepts a draft that still has a card to pick beside one for content since removed', () => {
+    const text = withRun((r) => (r.pendingChoices = [{ kind: 'blueprint', options: ['retiredHall', 'brazier'] }]))
+    expect(parseSaveFile(text).ok).toBe(true)
+  })
+
   it('still accepts the founding picks a fresh run waits on, and a played run', () => {
     expect(newRun(5).pendingChoices.length).toBeGreaterThan(0)
     expect(parseSaveFile(saveFileText(newRun(5))).ok).toBe(true)
