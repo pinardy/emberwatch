@@ -38,6 +38,15 @@ export function HowToPlay() {
             whenever <strong>reputation stalls</strong>: a minute after your last point it climbs,
             faster the longer you wait. Your next point resets it.
           </li>
+          <li>
+            Near the end of her patience, once a run, the <strong>Grand Petition</strong> (Orders)
+            buys some back for amber — on a vow of reputation within minutes, and a broken vow
+            costs more than it bought.
+          </li>
+          <li>
+            When a run is lost in all but name, <strong>Retreat to the Citadel</strong> (Orders)
+            ends it at once and sends home what it has earned.
+          </li>
         </Part>
 
         <Part title="Needs and expectations">
@@ -109,6 +118,11 @@ export function HowToPlay() {
           <li>
             Amber buys rare blueprints and cornerstones, shipments to order, one trade agreement a
             run, rerolls, rushed building and a calmer Queen. Spend it.
+          </li>
+          <li>
+            No caravans? Select the hearth: <strong>the Queen's Architect</strong> sells plans for a
+            service your settlers want, dearer with each set. A milestone draft can also be redrawn
+            toward a named service.
           </li>
         </Part>
       </div>

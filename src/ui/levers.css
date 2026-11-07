@@ -1,0 +1,118 @@
+/* ==========================================================================
+   Levers: the Queen's Architect (hearth), the targeted redraw on a blueprint
+   draft, the Grand Petition and the Retreat to the Citadel (Orders panel),
+   and the end screen's "Levers pulled".
+   ========================================================================== */
+
+.architect h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.architect-offers .wide-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  text-align: left;
+  margin-top: 6px;
+}
+
+.targeted-redraw {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.targeted-redraw + .modal-foot {
+  border-top: 0;
+  margin-top: 4px;
+}
+
+.targeted-redraw-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.targeted-redraw-needs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.targeted-redraw-needs .reroll-button {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.petition-card,
+.retreat-card {
+  margin-top: 10px;
+}
+
+.petition-card strong,
+.retreat-card strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.petition-card small,
+.retreat-card small {
+  display: block;
+}
+
+.petition-card.is-kept {
+  border-color: #4b6b53;
+}
+
+.petition-card.is-broken,
+.retreat-card {
+  border-color: #7a4040;
+}
+
+.retreat-card .wide-button {
+  border-color: #b06060;
+  color: #e7a0a0;
+}
+
+.end-levers {
+  margin: 12px 0;
+}
+
+.end-levers h3 {
+  margin-bottom: 6px;
+}
+
+.end-levers ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.end-levers li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.end-levers .is-good {
+  color: var(--good);
+}
+
+.end-levers .is-bad {
+  color: var(--bad);
+}

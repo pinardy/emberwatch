@@ -14,6 +14,7 @@ import { RunModifierList } from './RunModifierList'
 import { RaceSparkline } from './RaceSparkline'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
+import { GrandPetitionCard, RetreatCard } from './QueenLevers'
 import { cornerstoneArt, ongoingArt } from '../game/content/artFamilies'
 
 export function OrdersPanel() {
@@ -84,6 +85,8 @@ export function OrdersPanel() {
           <Icon id="dove" emoji="🕊️" /> Soothe the Queen — {sootheCost(run)} <Icon of={RESOURCES.amber} label="amber" /> (
           <Icon id="impatience" label="impatience" /> −1)
         </button>
+        <GrandPetitionCard run={run} />
+        <RetreatCard run={run} />
       </section>
 
       <section className="build-group">

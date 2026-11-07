@@ -35,6 +35,7 @@ import { stepProduction } from './production'
 import { computeStorageCap, population, totalHousing } from './queries'
 import { checkCharter, stepConditions, stepDecree } from './structure'
 import { stepCaravan } from './trade'
+import { stepPetition } from './levers'
 import { displayName } from './upgrades'
 import { recordEvent, stepTimeline } from './timeline'
 import {
@@ -115,6 +116,8 @@ function tickPlaying(s: RunState, dt: number): void {
   // Reputation from choices made between ticks, and from resolve just now.
   noteReputation(s)
   stepImpatience(s, dt, mods)
+  // The Grand Petition's vow is judged on the same reputation.
+  stepPetition(s)
 
   for (const message of stepDepartures(s, dt)) pushLog(s, message, 'bad')
   for (const message of stepFrost(s, dt)) pushLog(s, message, 'bad')

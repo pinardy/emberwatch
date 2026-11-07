@@ -1,6 +1,11 @@
 import { COMMISSIONS } from '../game/content/commissions'
 import {
   DECREE_DECLINE_IMPATIENCE,
+  PETITION_AMBER,
+  PETITION_BROKEN_IMPATIENCE,
+  PETITION_RELIEF,
+  PETITION_VOW_REPUTATION,
+  PETITION_VOW_SECONDS,
   HEARTH_STORM_REACH_FLOOR,
   IMPATIENCE_STAGNATION_GRACE,
   RESOLVE_EXPECTATION_CROWD_FROM,
@@ -9,6 +14,7 @@ import {
 } from '../game/engine/balance'
 import { pendingBlight } from '../game/engine/blights'
 import { isFounding } from '../game/engine/founding'
+import { architectOffers, architectPrice, petitionOpen, retreatOffered } from '../game/engine/levers'
 import { HEARTH_STORM_END_REACH, idleVillagers, population } from '../game/engine/queries'
 import {
   coldVillagers,
@@ -169,6 +175,34 @@ export const TIPS: Tip[] = [
     text: 'This caravan carries a rare find — a blueprint or cornerstone no draft promises. Amber also commissions 12 of any good for the next visit and signs one trade agreement a run. Unspent amber wins nothing.',
     when: (run) => run.caravan.here && !!run.caravan.rare && !run.caravan.rare.sold,
     doneWhen: (run) => !run.caravan.here,
+  },
+  {
+    id: 'architect',
+    title: "The Queen's Architect",
+    text: 'Select the hearth: her architect sells plans for a service your settlers want — the next blueprint of its chain, yours at once. Each set costs more. A draft can also be redrawn toward a service.',
+    when: (run) =>
+      run.clock > 0 &&
+      !run.architectPlans &&
+      (run.stock.amber ?? 0) >= architectPrice(run) &&
+      !run.pendingChoices.some((c) => c.kind === 'blueprint') &&
+      architectOffers(run).length > 0,
+    doneWhen: (run) => (run.architectPlans ?? 0) > 0,
+  },
+  {
+    id: 'grand-petition',
+    title: 'The Grand Petition',
+    text: `Once a run, near the end of her patience: ${PETITION_AMBER} amber buys −${PETITION_RELIEF} impatience on a vow of ${PETITION_VOW_REPUTATION} reputation in ${PETITION_VOW_SECONDS / 60} minutes. Break it and she adds +${PETITION_BROKEN_IMPATIENCE}. It is in the Orders panel.`,
+    when: petitionOpen,
+    doneWhen: (run) => !!run.petition,
+    urgent: true,
+  },
+  {
+    id: 'retreat',
+    title: 'Retreat to the Citadel',
+    text: 'This run looks lost. The Orders panel offers a Retreat: end it now and send home the supplies it has earned so far — or play on for a turnaround.',
+    when: retreatOffered,
+    doneWhen: (run) => run.phase !== 'playing' || !retreatOffered(run),
+    urgent: true,
   },
   {
     id: 'order-offer',

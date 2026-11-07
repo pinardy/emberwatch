@@ -6,7 +6,7 @@ import { migrateFounding } from './engine/founding'
 import { defaultDecreeState } from './engine/structure'
 import { createTimeline } from './engine/timeline'
 import { defaultCaravan } from './engine/trade'
-import type { MetaState, RunState } from './types'
+import type { GrandPetition, MetaState, RunState } from './types'
 
 /**
  * The original single run save. It is now the autosave slot's key (see
@@ -189,6 +189,14 @@ export function migrateRun(raw: unknown): RunState | null {
   run.roadCounter ??= run.roads.length
   // Saves from before achievements: nothing remarkable recorded yet.
   run.feats = { ...defaultFeats(), ...(run.feats ?? {}) }
+  // Saves from before the architect, the Grand Petition and the Retreat have
+  // none of them (all optional); a mangled one reads as never used.
+  if (typeof run.architectPlans !== 'number' || !(run.architectPlans >= 0)) delete run.architectPlans
+  const p = run.petition as Partial<GrandPetition> | undefined
+  if (p !== undefined && (typeof p !== 'object' || p === null || ![p.at, p.deadline, p.target].every((n) => typeof n === 'number'))) {
+    delete run.petition
+  }
+  if (typeof run.retreated !== 'boolean') delete run.retreated
   return run
 }
 

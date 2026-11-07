@@ -305,7 +305,9 @@ export function describeOutcome(run: RunState): string {
   }
 
   const later = tl.events.filter((e) => LOSS_KINDS.includes(e.k) && e.t > counted).length
-  const ending = emptied
+  const ending = run.retreated
+    ? ` You retreated to the Citadel in Year ${endYear} with reputation at ${Math.round(finalRace.reputation * 100)}%.`
+    : emptied
     ? ` The last villager left in Year ${endYear}.`
     : later > 0
       ? ` ${later === 1 ? 'Another villager' : `${later} more villagers`} left before her patience ran out in Year ${endYear}.`
