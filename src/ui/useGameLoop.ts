@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { SPEED_OPTIONS, type GameSpeed } from '../game/engine/balance'
-import { MAX_FRAME_REAL_SECONDS, useGameStore, type SidePanel } from '../game/store'
+import { MAX_FRAME_REAL_SECONDS, blockingDialogOpen, useGameStore, type SidePanel } from '../game/store'
 
 const AUTOSAVE_INTERVAL_MS = 8000
 
@@ -21,16 +21,24 @@ export function useGameLoop(active: boolean): void {
     lastSave.current = performance.now()
 
     const step = (now: number) => {
-      const dt = Math.min((now - lastFrame.current) / 1000, MAX_FRAME_REAL_SECONDS)
-      lastFrame.current = now
-      // The frame time throttles the HUD clock (see `hudVersion`).
-      useGameStore.getState().advance(dt, now)
+      try {
+        const dt = Math.min((now - lastFrame.current) / 1000, MAX_FRAME_REAL_SECONDS)
+        lastFrame.current = now
+        // The frame time throttles the HUD clock (see `hudVersion`).
+        useGameStore.getState().advance(dt, now)
 
-      if (now - lastSave.current > AUTOSAVE_INTERVAL_MS) {
-        lastSave.current = now
-        // In idle time, not inside this frame; tab hide and pagehide below
-        // still save synchronously.
-        useGameStore.getState().saveSoon()
+        if (now - lastSave.current > AUTOSAVE_INTERVAL_MS) {
+          lastSave.current = now
+          // In idle time, not inside this frame; tab hide and pagehide below
+          // still save synchronously.
+          useGameStore.getState().saveSoon()
+        }
+      } catch (error) {
+        // A step that threw may have left the run half-ticked: stop here (no
+        // next frame), and the store stops every save until the player picks
+        // a recovery, so the last good save is never overwritten.
+        useGameStore.getState().reportCrash(error)
+        return
       }
       frame = requestAnimationFrame(step)
     }
@@ -100,6 +108,19 @@ export function useEscapeLayer(
       const index = escapeLayers.indexOf(layer)
       if (index >= 0) escapeLayers.splice(index, 1)
     }
+  }, [open, priority])
+  // Overlays like the controls help give way to a blocking dialog (a draft, a
+  // glade event, the end of the run): Esc is the dialog's own while it is up,
+  // so nothing could close them behind it.
+  useEffect(() => {
+    if (!open || priority !== 'high') return
+    if (blockingDialogOpen(useGameStore.getState())) {
+      latest.current()
+      return
+    }
+    return useGameStore.subscribe((s) => {
+      if (blockingDialogOpen(s)) latest.current()
+    })
   }, [open, priority])
 }
 
