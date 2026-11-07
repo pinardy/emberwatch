@@ -158,6 +158,10 @@ export function TopBar() {
 
   return (
     <header className="topbar">
+      {/* The game screen's title, for screen readers and the screen-change focus. */}
+      <h1 className="sr-only" tabIndex={-1}>
+        Emberwatch: your settlement, year {run.season.year}
+      </h1>
       <div className="topbar-left">
         <button
           type="button"
@@ -243,6 +247,8 @@ export function TopBar() {
                     if (popover === 'speed') setPopover(null)
                   }}
                   title={option === 0 ? 'Pause (Space)' : `${option}× speed (key ${option})`}
+                  aria-label={option === 0 ? 'Pause' : undefined}
+                  aria-pressed={speed === option}
                 >
                   {option === 0 ? <Icon id="pause" emoji="⏸" label="Pause" /> : `${option}×`}
                 </button>
@@ -495,6 +501,7 @@ export function TopBar() {
                 {b.current < 0 && <span className="sr-only">, below zero</span>}
                 {Math.abs(b.target - b.current) >= 0.5 && (
                   <em
+                    role="img"
                     className={`resolve-trend ${b.target > b.current ? 'is-up' : 'is-down'}`}
                     aria-label={b.target > b.current ? 'rising' : 'falling'}
                   >

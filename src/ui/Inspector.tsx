@@ -52,7 +52,7 @@ import { ScoutReport } from './ScoutReport'
 import { DumpStock } from './DumpStock'
 import { ArchitectSection } from './ArchitectSection'
 import { describeStakes, gladeStakes } from '../game/engine/events'
-import { useConfirm } from './useConfirm'
+import { againWord, useConfirm } from './useConfirm'
 import { UpgradeSection } from './UpgradeSection'
 import {
   displayName,
@@ -167,7 +167,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
     <div className="inspector-body">
       <InspectorHead icon={<Icon of={def} />} name={displayName(building)}>
         {tierMark(building) && (
-          <span className="tier-stars" aria-label={`Tier ${building.tier}`}>
+          <span className="tier-stars" role="img" aria-label={`Tier ${building.tier}`}>
             {tierMark(building)}{' '}
           </span>
         )}
@@ -199,7 +199,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
           {recipes.length > 0 && (
             <section className="inspector-section">
-              <h4>Producing</h4>
+              <h3>Producing</h3>
               <div className="recipe-list">
                 {recipes.map((recipe) => (
                   <button
@@ -225,7 +225,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
           {def.service && (
             <section className="inspector-section">
-              <h4>Service</h4>
+              <h3>Service</h3>
               <p className="muted">
                 <Icon id={NEED_ART[def.service.need]} /> Satisfies{' '}
                 {NEED_LABELS[def.service.need].name} for up to{' '}
@@ -244,7 +244,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
           {adjacency.length > 0 && (
             <section className="inspector-section">
-              <h4>Adjacency</h4>
+              <h3>Adjacency</h3>
               {adjacency.map((status, i) => (
                 <p key={i} className="muted">
                   {status.percent > 0 ? '✅' : '▫'} <PartnerIcon bonus={status.bonus} />{' '}
@@ -257,7 +257,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
           {def.warmth && (
             <section className="inspector-section">
-              <h4>Warmth</h4>
+              <h3>Warmth</h3>
               <p className="muted">
                 <IconText text={building.unlit ? '❄ Cold — no wood to burn.' : '🔥 Lit.'} /> Keeps{' '}
                 {homesWithin(run, building.pos, warmthRadiusOf(building)).length} home
@@ -270,7 +270,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
           {def.category === 'housing' && (
             <section className="inspector-section">
-              <h4>Warmth</h4>
+              <h3>Warmth</h3>
               <p className="muted">
                 <IconText
                   text={
@@ -287,7 +287,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
           {benefitsFromRoad(def) && (
             <section className="inspector-section">
-              <h4>Road</h4>
+              <h3>Road</h3>
               <p className="muted">
                 <IconText text={describeRoadLink(roadLinkOf(run, building)) ?? ''} />
               </p>
@@ -296,7 +296,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
           {terrain && def.category !== 'hearth' && (
             <section className="inspector-section">
-              <h4>Ground</h4>
+              <h3>Ground</h3>
               <p className="muted">
                 <Icon of={TERRAIN[terrain]} />{' '}
                 {ground
@@ -308,7 +308,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
 
           {def.gatherRadius && (
             <section className="inspector-section">
-              <h4>Deposits in range</h4>
+              <h3>Deposits in range</h3>
               <div className="chip-row">
                 {Object.entries(building.depositsInRange).map(([id, tiles]) => (
                   <span key={id} className="chip">
@@ -351,8 +351,8 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             title={
               confirmDemolish.armed
                 ? building.built
-                  ? 'Click again to tear it down'
-                  : 'Click again to cancel construction'
+                  ? `${againWord()} to tear it down`
+                  : `${againWord()} to cancel construction`
                 : building.built
                   ? 'Tear this building down for half its materials back'
                   : refundShare >= 100
@@ -466,9 +466,9 @@ function WorkerSection({
   return (
     <section className="inspector-section" aria-label="Workers">
       <div className="row-between">
-        <h4>
+        <h3>
           Workers {building.workers.length}/{slotCount}
-        </h4>
+        </h3>
         <button
           type="button"
           className="hire-best"
@@ -658,7 +658,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
           <>
             <section className="inspector-section">
               <div className="row-between">
-                <h4>Clearing crew {glade.clearers}</h4>
+                <h3>Clearing crew {glade.clearers}</h3>
                 <div className="btn-row">
                   <button
                     type="button"
@@ -680,7 +680,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
             </section>
 
             <section className="inspector-section">
-              <h4>Expected haul</h4>
+              <h3>Expected haul</h3>
               <div className="chip-row">
                 <BagIcons bag={glade.reward} className="chip" />
               </div>
@@ -718,7 +718,7 @@ function LeaveToForest({ run, glade }: { run: RunState; glade: Glade }) {
   const jump = HOSTILITY_PER_GLADE_CLEARED * mods.gladeHostility
   return (
     <section className="inspector-section glade-truce">
-      <h4>Or leave it to the forest</h4>
+      <h3>Or leave it to the forest</h3>
       <p className="muted">
         Clearing it adds {jump.toFixed(1)} hostility now and makes the forest grow{' '}
         {Math.round(HOSTILITY_RATE_PER_CLEARED_GLADE * 100)}% faster for the rest of the run. Left
@@ -742,9 +742,9 @@ function SparedGlade({ run, glade }: { run: RunState; glade: Glade }) {
   const confirm = useConfirm(`reclaim-${glade.id}`, () => reclaim(glade.id))
   return (
     <section className="inspector-section glade-truce is-spared">
-      <h4>
+      <h3>
         <Icon id="trees" emoji="🌲" /> Left to the forest
-      </h4>
+      </h3>
       <p className="muted">
         It stays wild and calms hostility by {calmPerMinute(glade)} a minute while it stands
         (hostility now {Math.floor(run.hostility)}). Crews cannot clear it until the truce is
@@ -757,7 +757,7 @@ function SparedGlade({ run, glade }: { run: RunState; glade: Glade }) {
         title={`Breaking the truce costs ${SPARED_GLADE_RECLAIM_HOSTILITY} hostility`}
       >
         {confirm.armed
-          ? `Break the truce? +${SPARED_GLADE_RECLAIM_HOSTILITY} hostility — click again`
+          ? `Break the truce for +${SPARED_GLADE_RECLAIM_HOSTILITY} hostility? ${againWord()}`
           : `Break the truce (+${SPARED_GLADE_RECLAIM_HOSTILITY} hostility)`}
       </button>
     </section>

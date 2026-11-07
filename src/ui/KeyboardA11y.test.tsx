@@ -88,9 +88,11 @@ describe('keyboard placement helpers', () => {
     expect(spokenVerdict(evaluateSpot(r, 'shelter', spot))).toMatch(/^Can place here/)
 
     // An arrow press snaps to the next valid spot in its direction.
-    const right = stepSpot(r, 'shelter', spot, { x: 1, y: 0 }, 1)
+    const right = stepSpot(r, 'shelter', spot, { x: 1, y: 0 }, 1)!
     expect(right.x).toBeGreaterThan(spot.x)
     expect(canPlaceBuilding(r, 'shelter', right)).toBeNull()
+    // Nothing that way (past the forest's edge): no step, so the ghost stays put.
+    expect(stepSpot(r, 'shelter', spot, { x: 0, y: -1 }, r.world.height)).toBeNull()
   })
 
   it('snaps by where a building could stand even while the materials are short', () => {

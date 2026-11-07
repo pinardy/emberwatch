@@ -74,7 +74,7 @@ svg.map-2d .badge-ring {
 /* Crew "2/3" under the plate; amber while short-handed. */
 svg.map-2d .worker-count {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-anchor: middle;
   fill: #f1ede4;
@@ -90,7 +90,7 @@ svg.map-2d .worker-count.is-short {
 }
 
 svg.map-2d .tier-mark {
-  font-size: 12px;
+  font-size: 0.75rem;
   text-anchor: start;
   stroke-width: 3px;
 }
@@ -108,7 +108,7 @@ svg.map-2d .road-link-2d circle {
 }
 
 svg.map-2d .deposit-amount {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   fill: rgba(255, 255, 255, 0.9);
   stroke: rgba(9, 13, 16, 0.85);

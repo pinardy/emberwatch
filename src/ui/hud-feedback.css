@@ -25,7 +25,7 @@
   width: 100%;
   padding: 8px 12px;
   text-align: left;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   line-height: 1.35;
   color: var(--text);
   background: rgba(17, 23, 28, 0.95);
@@ -59,7 +59,7 @@
 .event-toast-count {
   flex-shrink: 0;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 1px 7px;
   border-radius: 10px;
   background: #2c363d;
@@ -85,7 +85,7 @@
   border-radius: 9px;
   background: #b0453c;
   color: #fff;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 18px;
   text-align: center;
@@ -104,7 +104,7 @@
 
 .meter-rate {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
 }
 
@@ -118,7 +118,7 @@
 
 .hearth-stat small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .hearth-stat.is-warn {
@@ -148,12 +148,12 @@
 
 .resolve-chip-threshold {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .resolve-trend {
   font-style: normal;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1;
 }
 
@@ -175,7 +175,7 @@
   font-style: normal;
   white-space: nowrap;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   padding: 1px 7px;
@@ -192,7 +192,7 @@
 }
 
 .food-summary strong {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .food-summary .food-runway {
@@ -204,11 +204,11 @@
   border-radius: 14px;
   background: #1c2b22;
   color: #cfe8c9;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .food-runway b {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
 }
 
@@ -230,7 +230,7 @@
 
 .threat-text .threat-timer {
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
   color: #f0b3aa;
   margin-left: 4px;
@@ -242,7 +242,7 @@
 
 .threat-text small.threat-standing {
   color: #d8a9a2;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* --- Inspector status line ------------------------------------------------ */
@@ -250,7 +250,7 @@
 .building-status {
   margin: 6px 0 0;
   padding: 5px 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   border-radius: var(--radius-sm);
   background: var(--panel-2);
   border-left: 2px solid var(--line);

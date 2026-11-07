@@ -79,9 +79,9 @@ export function AchievementsScreen() {
     <div className="screen achievements-screen">
       <div className="menu-card wide">
         <header className="row-between">
-          <h2>
+          <h1 className="screen-title">
             <Icon id="medal" emoji="🏅" /> Achievements
-          </h2>
+          </h1>
           <span className="chip big">
             {earned}/{ACHIEVEMENT_LIST.length} earned
           </span>
@@ -112,12 +112,12 @@ export function AchievementsScreen() {
           const got = list.filter((d) => state.unlocked[d.id] !== undefined).length
           return (
             <section key={tier.id} className="setup-section" aria-label={tier.name}>
-              <h3>
+              <h2>
                 {tier.name}{' '}
                 <small className="muted">
                   {got}/{list.length}
                 </small>
-              </h3>
+              </h2>
               <p className="muted">{tier.blurb}</p>
               <ul className="achievement-grid">
                 {list.map((def) => (

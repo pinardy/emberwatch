@@ -114,7 +114,7 @@ describe('Inspector upgrade section', () => {
 
     // The header takes the new name and tier mark; the next tier is offered.
     const inspector = document.querySelector('.inspector') as HTMLElement
-    expect(within(inspector).getByRole('heading', { hidden: true, level: 4, name: /tier 2 of 2/ })).toBeTruthy()
+    expect(within(inspector).getByRole('heading', { hidden: true, level: 3, name: /tier 2 of 2/ })).toBeTruthy()
     expect(inspector.querySelector('.inspector-head .inspector-title')?.textContent).toBe('Reinforced Shelter')
     expect(inspector.querySelector('.inspector-head .tier-stars')?.textContent).toMatch('★')
     expect(within(section()).getByText('Snug Lodge')).toBeTruthy()

@@ -25,7 +25,7 @@
 
 .first-steps-count {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-family: inherit;
   font-weight: 600;
 }
@@ -38,7 +38,7 @@
   background: transparent;
   color: var(--muted);
   padding: 2px 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1;
 }
 
@@ -47,7 +47,7 @@
 }
 
 .tip-coach p.first-steps-goal {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 
@@ -70,7 +70,7 @@
   background: transparent;
   color: var(--text);
   padding: 4px 6px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   border-radius: 6px;
   min-height: 32px;
 }
@@ -98,7 +98,7 @@
   border-radius: 4px;
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1;
 }
 
@@ -115,13 +115,13 @@
 .first-steps-text em {
   color: var(--muted);
   font-style: normal;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .first-steps-text small {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-top: 1px;
 }
 

@@ -130,7 +130,7 @@ export function Cost({ cost, stock }: { cost: ResourceBag; stock: ResourceBag })
         if (have >= amount) {
           return (
             <span key={id} title={RESOURCES[id]?.name}>
-              <Icon of={RESOURCES[id]} /> {amount}
+              <Icon of={RESOURCES[id]} label={RESOURCES[id]?.name} /> {amount}
             </span>
           )
         }
@@ -141,7 +141,7 @@ export function Cost({ cost, stock }: { cost: ResourceBag; stock: ResourceBag })
             className="is-bad cost-short"
             title={`${RESOURCES[id]?.name}: you have ${have} of ${amount}`}
           >
-            <Icon of={RESOURCES[id]} /> {amount}{' '}
+            <Icon of={RESOURCES[id]} label={RESOURCES[id]?.name} /> {amount}{' '}
             <small>({amount - have} short)</small>
           </span>
         )

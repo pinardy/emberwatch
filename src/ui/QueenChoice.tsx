@@ -240,7 +240,7 @@ function DecreeOption({ run, decree, onPick }: { run: RunState; decree: RoyalDec
 function Progress({ value }: { value: number }) {
   const pct = Math.floor(Math.max(0, Math.min(1, value)) * 100)
   return (
-    <span className="queen-progress" aria-label={`${pct}% done`}>
+    <span className="queen-progress" role="img" aria-label={`${pct}% done`}>
       <Bar value={pct / 100} />
       <small>{pct}% done now</small>
     </span>

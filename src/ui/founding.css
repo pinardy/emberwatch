@@ -35,7 +35,7 @@
 
 .founding-head h2 {
   margin: 0 0 2px;
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 
 .founding-head small {
@@ -58,7 +58,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   color: var(--muted);
 }
 
@@ -95,7 +95,7 @@
 
 .founding-step-head h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .founding-step-n {
@@ -105,7 +105,7 @@
   height: 22px;
   border-radius: 50%;
   border: 1px solid var(--line);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .founding-step.is-open .founding-step-n {
@@ -119,13 +119,13 @@
 }
 
 .founding-status {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 
 .founding-hint {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
@@ -145,7 +145,7 @@
   padding: 2px 8px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .founding .option-list {
@@ -166,7 +166,7 @@
 .founding .option > .option-icon {
   grid-column: 1;
   grid-row: 1 / span 4;
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .founding-steps {
@@ -185,7 +185,7 @@
   padding: 4px 10px;
   border-radius: 999px;
   border-color: var(--gold);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .founding-steps button.is-done {
@@ -201,7 +201,7 @@
 
 .founding-foot {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   color: var(--muted);
   text-align: center;
 }
@@ -230,6 +230,6 @@
   }
 
   .founding-head h2 {
-    font-size: 17px;
+    font-size: 1.0625rem;
   }
 }

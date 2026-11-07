@@ -148,15 +148,20 @@ export function nearestValidSpot(
 
 /**
  * One arrow press from `from`: the first spot along `dir` (a step at a time,
- * up to ten steps, nudging a little to either side) where the building could
- * stand. With nothing in that direction it moves a single step anyway, so
- * the ghost can cross rough ground while the hint explains why it cannot go
- * there.
+ * up to sixteen steps, nudging a little to either side) where the building
+ * could stand — so the ghost hops over deposits, buildings and rough ground
+ * to the next place it can actually go. Null when there is none that way.
  */
-export function stepSpot(run: RunState, defId: string, from: Vec2, dir: Vec2, step: number): Vec2 {
+export function stepSpot(
+  run: RunState,
+  defId: string,
+  from: Vec2,
+  dir: Vec2,
+  step: number,
+): Vec2 | null {
   const probe = affordable(run, defId)
   const side = { x: -dir.y, y: dir.x }
-  for (let k = 1; k <= 10; k++) {
+  for (let k = 1; k <= 16; k++) {
     for (const lateral of [0, 0.5, -0.5, 1, -1]) {
       const pos = {
         x: from.x + dir.x * step * k + side.x * step * lateral,
@@ -165,7 +170,7 @@ export function stepSpot(run: RunState, defId: string, from: Vec2, dir: Vec2, st
       if (isSite(probe, defId, pos)) return pos
     }
   }
-  return { x: from.x + dir.x * step, y: from.y + dir.y * step }
+  return null
 }
 
 function setKeyGhost(run: RunState, defId: string, pos: Vec2): KeyGhost {
@@ -203,7 +208,13 @@ export function moveKeyGhost(direction: PlacementDirection): void {
           ? axes.right
           : { x: -axes.right.x, y: -axes.right.y }
   const step = activeView?.step() ?? 1
-  setKeyGhost(run, defId, stepSpot(run, defId, current.pos, dir, step))
+  const next = stepSpot(run, defId, current.pos, dir, step)
+  if (!next) {
+    // The ghost stays where it is: say so, and what that spot is like.
+    announcePlacement(`Nothing free further ${direction}. ${spokenVerdict(evaluateSpot(run, defId, current.pos))}`)
+    return
+  }
+  setKeyGhost(run, defId, next)
 }
 
 /** Places the building at `pos` and says what happened. */

@@ -23,7 +23,7 @@ export function ConditionsBar() {
   if (run.conditions.length === 0 && !decreeDef) return null
 
   return (
-    <div className="conditions-bar" aria-label="Conditions and decrees">
+    <div className="conditions-bar" role="group" aria-label="Conditions and decrees">
       {decree && decreeDef && (
         <button
           type="button"

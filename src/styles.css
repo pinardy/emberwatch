@@ -15,7 +15,8 @@
   --muted: #8b9a99;
   --gold: #d9b46a;
   --good: #7fbf7a;
-  --bad: #d9695f;
+  /* Light enough for 4.5:1 text on every panel shade. */
+  --bad: #ea8278;
   --warn: #e0a755;
   /* Chart steps of --gold and --bad, validated as a pair on --panel (OKLCH
      lightness band, chroma, colour-blind and normal-vision separation). */
@@ -48,7 +49,7 @@ body {
     radial-gradient(1200px 800px at 50% -10%, #17222a 0%, var(--bg) 45%, var(--bg-deep) 100%);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
@@ -165,7 +166,7 @@ code {
 .icon-btn {
   background: transparent;
   border-color: transparent;
-  font-size: 16px;
+  font-size: 1rem;
   padding: 4px 8px;
 }
 
@@ -197,7 +198,7 @@ code {
 }
 
 .brand {
-  font-size: 42px;
+  font-size: 2.625rem;
   letter-spacing: 0.02em;
   margin-bottom: 6px;
 }
@@ -220,7 +221,7 @@ code {
 .menu-actions button {
   padding: 12px 14px;
   text-align: left;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .how-to summary {
@@ -249,9 +250,9 @@ code {
   margin: 6px 0 12px;
 }
 
-.how-to-part h3 {
+.how-to-part h2 {
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--gold);
@@ -261,7 +262,7 @@ code {
   margin: 0;
   padding-left: 18px;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   line-height: 1.45;
 }
 
@@ -270,12 +271,12 @@ code {
 }
 
 .how-to-keys {
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .menu-foot {
   margin: 18px 0 0;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .setup-section {
@@ -284,7 +285,7 @@ code {
   border-top: 1px solid var(--line-soft);
 }
 
-.setup-section h3 {
+.setup-section h2 {
   margin-bottom: 6px;
 }
 
@@ -316,13 +317,13 @@ code {
 }
 
 .species-icon {
-  font-size: 26px;
+  font-size: 1.625rem;
   line-height: 1;
 }
 
 .locked-tag {
   color: var(--warn);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .seed-row {
@@ -348,7 +349,7 @@ code {
 .upgrade-card em {
   color: var(--gold);
   font-style: normal;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .upgrade-card.is-owned {
@@ -426,7 +427,7 @@ code {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 17px;
+  font-size: 1.0625rem;
   background:
     conic-gradient(var(--gold) calc(var(--pct) * 360deg), rgba(255, 255, 255, 0.08) 0);
   position: relative;
@@ -460,7 +461,7 @@ code {
 
 .season-text small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .speed-group {
@@ -477,7 +478,7 @@ code {
   min-height: 34px;
   padding: 6px 9px;
   background: transparent;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .speed-group button.is-active {
@@ -494,12 +495,12 @@ code {
   gap: 4px;
   min-width: 58px;
   min-height: 34px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 
 .speed-toggle .speed-chevron {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 
@@ -519,7 +520,7 @@ code {
   min-height: 34px;
   padding: 0 12px;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--gold);
   background: rgba(217, 180, 106, 0.12);
@@ -531,7 +532,7 @@ code {
 }
 
 .speed-toggle .speed-held-word {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
@@ -555,7 +556,7 @@ code {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.3;
   color: var(--muted);
   margin-bottom: 3px;
@@ -580,12 +581,12 @@ code {
 .meter-head strong {
   flex-shrink: 0;
   color: var(--text);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .meter-head small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
 }
 
@@ -597,7 +598,7 @@ code {
   gap: 6px;
   min-width: 0;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
@@ -676,7 +677,7 @@ code {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .resolve-chips {
@@ -692,7 +693,7 @@ code {
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 20px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* --- The Queen's deadline, under the impatience meter --------------------- */
@@ -700,7 +701,7 @@ code {
 .meter-note {
   display: block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.2;
   color: var(--warn);
   white-space: nowrap;
@@ -752,7 +753,7 @@ code {
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 20px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   white-space: nowrap;
 }
 
@@ -780,7 +781,7 @@ code {
   border-radius: 10px;
   background: var(--warn);
   color: #1a1207;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 800;
 }
 
@@ -791,7 +792,7 @@ code {
 
 .status-chevron {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   transition: transform 150ms ease;
 }
 
@@ -821,7 +822,7 @@ code {
 
 .settings-popover {
   display: grid;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .settings-popover label,
@@ -852,7 +853,7 @@ code {
   width: 100%;
   padding: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -997,7 +998,7 @@ code {
 
   .status-season {
     color: var(--muted);
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 
   .status-season .is-warn {
@@ -1008,7 +1009,7 @@ code {
   .status-alerts {
     padding: 0;
     list-style: none;
-    font-size: 12px;
+    font-size: 0.75rem;
   }
 
   .status-alerts li {
@@ -1048,7 +1049,7 @@ code {
   .season-ring {
     width: 34px;
     height: 34px;
-    font-size: 15px;
+    font-size: 0.9375rem;
   }
 
   /* ...and back here, in the status drawer. */
@@ -1126,7 +1127,7 @@ code {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   padding: 4px 9px;
   background: var(--bg-deep);
   border: 1px solid var(--line);
@@ -1136,7 +1137,7 @@ code {
 
 .storage small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .storage.is-warn {
@@ -1185,13 +1186,13 @@ code {
   display: flex;
   align-items: center;
   gap: 3px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   white-space: nowrap;
 }
 
 .resource-trend {
   font-style: normal;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1;
 }
 
@@ -1217,7 +1218,7 @@ code {
 .resource-flag {
   font-style: normal;
   font-weight: 800;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 16px;
   padding: 0 5px;
   border-radius: 8px;
@@ -1238,7 +1239,7 @@ code {
   min-height: 32px;
   padding: 3px 11px;
   border-radius: 16px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1284,10 +1285,10 @@ code {
   animation: fade-in 120ms ease;
 }
 
-.stock-drawer-group h4 {
+.stock-drawer-group h2 {
   margin: 0 0 4px;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1312,7 +1313,7 @@ code {
 
 .stock-drawer-trend {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: right;
 }
 
@@ -1327,7 +1328,7 @@ code {
 .stock-drawer-blocking {
   grid-column: 2 / -1;
   color: #f3c27a;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* Narrower bars fold the low-priority groups into "All stock" rather than
@@ -1436,13 +1437,13 @@ code {
 
 /* Map label text shared by the 2D renderer's markers. */
 .hex-icon {
-  font-size: 18px;
+  font-size: 1.125rem;
   text-anchor: middle;
   pointer-events: none;
 }
 
 .hex-sub {
-  font-size: 9px;
+  font-size: 0.5625rem;
   text-anchor: middle;
   fill: rgba(255, 255, 255, 0.75);
   pointer-events: none;
@@ -1501,7 +1502,7 @@ code {
 }
 
 .glade-kind {
-  font-size: 9px;
+  font-size: 0.5625rem;
   fill: var(--warn);
   letter-spacing: 0.04em;
 }
@@ -1511,12 +1512,12 @@ code {
 }
 
 .glade-name {
-  font-size: 12px;
+  font-size: 0.75rem;
   fill: #e6ece9;
 }
 
 .glade-crew {
-  font-size: 9px;
+  font-size: 0.5625rem;
   fill: var(--gold);
 }
 
@@ -1543,7 +1544,7 @@ code {
 
 .glade-stake-label {
   font-family: var(--font-ui);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   dominant-baseline: central;
   pointer-events: none;
@@ -1570,7 +1571,7 @@ code {
   width: 34px;
   height: 34px;
   background: rgba(13, 18, 22, 0.85);
-  font-size: 16px;
+  font-size: 1rem;
   padding: 0;
 }
 
@@ -1586,7 +1587,7 @@ code {
   background: rgba(13, 18, 22, 0.92);
   border: 1px solid var(--gold);
   border-radius: 22px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   white-space: nowrap;
   box-shadow: var(--shadow);
 }
@@ -1597,7 +1598,7 @@ code {
     width: max-content;
     max-width: calc(100% - 16px);
     white-space: normal;
-    font-size: 12.5px;
+    font-size: 0.78125rem;
     line-height: 1.3;
     padding: 5px 6px 5px 12px;
   }
@@ -1639,11 +1640,11 @@ code {
 .inspector-head small {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .inspector-icon {
-  font-size: 24px;
+  font-size: 1.5rem;
   line-height: 1;
 }
 
@@ -1659,8 +1660,8 @@ code {
   margin-top: 9px;
 }
 
-.inspector-section h4 {
-  font-size: 12px;
+.inspector-section h3 {
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -1714,7 +1715,7 @@ code {
 
 .recipe small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -1723,7 +1724,7 @@ code {
   gap: 5px;
   align-items: center;
   flex-wrap: wrap;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .recipe-label em {
@@ -1750,11 +1751,11 @@ code {
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 20px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .chip.big {
-  font-size: 14px;
+  font-size: 0.875rem;
   padding: 6px 12px;
 }
 
@@ -1779,7 +1780,7 @@ code {
   background: var(--panel-2);
   border: 1px solid;
   border-radius: 14px;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.3;
 }
 
@@ -1795,7 +1796,7 @@ code {
 
 .stake-chip-text small {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
 }
 
 /* ==========================================================================
@@ -1830,7 +1831,7 @@ code {
 
 .tabs button em {
   font-style: normal;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.2;
   color: var(--muted);
 }
@@ -1855,7 +1856,7 @@ code {
 
 .panel-hint {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   margin: 0 0 12px;
 }
 
@@ -1864,7 +1865,7 @@ code {
 }
 
 .build-group h3 {
-  font-size: 12px;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--gold);
@@ -1890,13 +1891,18 @@ code {
   background: var(--panel-3);
 }
 
-/* Dimmed, not faded out: its tags and cost still have to read. */
+/* Unaffordable: a dashed edge and a dimmed icon, never faded text — its
+   description, tags and shortfall still have to read. */
 .build-card.is-poor {
-  opacity: 0.78;
+  border-style: dashed;
+}
+
+.build-card.is-poor .build-icon {
+  opacity: 0.6;
 }
 
 .build-icon {
-  font-size: 21px;
+  font-size: 1.3125rem;
   line-height: 1.2;
 }
 
@@ -1908,7 +1914,7 @@ code {
 
 .build-main small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.35;
 }
 
@@ -1916,7 +1922,7 @@ code {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .build-tags {
@@ -1928,7 +1934,7 @@ code {
 
 .build-tags em {
   font-style: normal;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: #a9b6b5;
   background: #222c33;
   padding: 1px 7px;
@@ -1955,12 +1961,12 @@ code {
 .species-head small {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.3;
 }
 
 .species-resolve {
-  font-size: 19px;
+  font-size: 1.1875rem;
   font-weight: 700;
   text-align: right;
   line-height: 1.1;
@@ -1968,7 +1974,7 @@ code {
 
 .species-resolve small {
   display: block;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 400;
   color: var(--muted);
 }
@@ -2011,7 +2017,7 @@ code {
   display: inline-flex;
   gap: 4px;
   align-items: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 2px 7px;
   border-radius: 20px;
   border: 1px solid var(--line);
@@ -2021,7 +2027,7 @@ code {
 .need em {
   font-style: normal;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .need.is-met {
@@ -2045,7 +2051,7 @@ code {
 
 .breakdown summary {
   cursor: pointer;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 
@@ -2055,7 +2061,7 @@ code {
   margin: 0;
   display: grid;
   gap: 2px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .breakdown li {
@@ -2071,7 +2077,7 @@ code {
 
 .villager small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2089,12 +2095,12 @@ code {
 
 .order-card small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .order-reward {
   color: var(--gold);
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -2110,13 +2116,13 @@ code {
 }
 
 .cornerstone-chip span {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .cornerstone-chip small {
   display: block;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .rarity-common {
@@ -2143,7 +2149,7 @@ code {
   display: grid;
   grid-template-columns: 54px 1fr;
   gap: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 5px 7px;
   background: var(--panel-2);
   border-radius: var(--radius-sm);
@@ -2152,7 +2158,7 @@ code {
 
 .log-when {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -2175,12 +2181,12 @@ code {
   gap: 2px;
   justify-items: center;
   padding: 9px 6px;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: center;
 }
 
 .trade-card span {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .trade-card small {
@@ -2233,14 +2239,14 @@ code {
 }
 
 .modal-icon {
-  font-size: 32px;
+  font-size: 2rem;
   line-height: 1;
 }
 
 .modal-flavour {
   color: var(--muted);
   font-family: var(--font);
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.5;
   border-left: 2px solid var(--line);
   padding-left: 12px;
@@ -2272,7 +2278,7 @@ code {
 
 .option small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.4;
 }
 
@@ -2291,7 +2297,7 @@ code {
 }
 
 .option-icon {
-  font-size: 26px;
+  font-size: 1.625rem;
   line-height: 1;
 }
 
@@ -2299,7 +2305,7 @@ code {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-top: 4px;
 }
 
@@ -2317,7 +2323,7 @@ code {
 
 .rarity-tag {
   font-style: normal;
-  font-size: 12px;
+  font-size: 0.75rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
@@ -2383,12 +2389,12 @@ code {
 
 .end-stats dt {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .end-stats dd {
   margin: 2px 0 0;
-  font-size: 19px;
+  font-size: 1.1875rem;
   font-family: var(--font);
 }
 
@@ -2400,7 +2406,7 @@ code {
   color: #f2ddba;
   padding: 9px 16px;
   border-radius: 22px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   box-shadow: var(--shadow);
   cursor: pointer;
   animation: rise-in 180ms ease;
@@ -2435,7 +2441,7 @@ code {
 .warning {
   padding: 6px 14px;
   border-radius: 20px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   line-height: 1.4;
   text-align: center;
   overflow-wrap: anywhere;
@@ -2466,16 +2472,16 @@ code {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 /* "Ready to play offline": a passing pill that the pointer goes straight
-   through, at the top edge where no primary action lives. */
+   through, in the bottom-left corner — clear of the top bar's meters and the
+   founding pill, which must stay readable. */
 .sw-toast.is-pill {
   position: fixed;
-  top: calc(8px + env(safe-area-inset-top, 0px));
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  left: calc(12px + env(safe-area-inset-left, 0px));
   z-index: 70;
   pointer-events: none;
   padding: 5px 12px;
@@ -2490,7 +2496,7 @@ code {
 @keyframes pill-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -6px);
+    transform: translateY(6px);
   }
 }
 
@@ -2575,7 +2581,7 @@ code {
     border-radius: 0;
     background: var(--panel-2);
     color: var(--text);
-    font-size: 18px;
+    font-size: 1.125rem;
   }
 }
 
@@ -2588,7 +2594,7 @@ code {
 
 @media (max-width: 560px) {
   body {
-    font-size: 13px;
+    font-size: 0.8125rem;
   }
 
   .menu-card {
@@ -2596,7 +2602,7 @@ code {
   }
 
   .brand {
-    font-size: 34px;
+    font-size: 2.125rem;
   }
 
   /* Labels stay: five bare emoji are not a navigation. */
@@ -2675,7 +2681,7 @@ code {
 }
 
 .threat-icon {
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .threat-text {
@@ -2692,7 +2698,7 @@ code {
 .threat-text small {
   display: block;
   color: #d8a9a2;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .threat-card .threat-appease {
@@ -2740,7 +2746,7 @@ code {
 
 .tip-coach p {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   color: var(--text);
 }
 
@@ -2765,7 +2771,7 @@ code {
   position: absolute;
   right: 0;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 0.8125rem;
   animation: float-up 1.4s ease-out forwards;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
@@ -2809,7 +2815,7 @@ code {
 .trade-heading {
   margin: 10px 0 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -2832,7 +2838,7 @@ code {
 }
 
 .trade-rare-icon {
-  font-size: 22px;
+  font-size: 1.375rem;
 }
 
 .trade-rare-text {
@@ -2855,13 +2861,13 @@ code {
 .trade-agreement em {
   color: var(--muted);
   font-style: normal;
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.35;
 }
 
 .trade-elsewhere {
   margin-top: 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .wide-button {
@@ -2901,7 +2907,7 @@ code {
 
 .villager-trait {
   font-style: normal;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--gold);
   font-weight: 400;
 }
@@ -3016,7 +3022,7 @@ code {
   background: rgba(9, 13, 16, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.14);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
   white-space: nowrap;
   pointer-events: none;
 }
@@ -3062,7 +3068,7 @@ code {
   border-radius: 6px;
   background: rgba(9, 13, 16, 0.86);
   color: #cfe0d6;
-  font-size: 11px;
+  font-size: 0.6875rem;
   line-height: 1.35;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -3104,7 +3110,7 @@ code {
 .glade-list-hint {
   margin: 0;
   padding: 8px 12px 4px;
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   color: var(--muted);
 }
 
@@ -3123,7 +3129,7 @@ code {
   border: 1px solid transparent;
   background: transparent;
   text-align: left;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .map-list button:focus-visible,
@@ -3210,7 +3216,7 @@ code {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  font-size: 20px;
+  font-size: 1.25rem;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.25);
   background: rgba(9, 13, 16, 0.9);
@@ -3242,7 +3248,7 @@ code {
   border: 1px solid rgba(217, 180, 106, 0.35);
   border-radius: 10px;
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .controls-help strong {
@@ -3288,7 +3294,7 @@ code {
   }
 
   .ghost-hint {
-    font-size: 11px;
+    font-size: 0.6875rem;
     padding: 4px 9px;
   }
 
@@ -3359,7 +3365,7 @@ button.is-armed {
   background: transparent;
   color: var(--gold);
   padding: 2px 4px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 /* ---------------------------------------------------------------------------
  * The overlay dock: everything that floats over the map lives in one of four
@@ -3468,7 +3474,7 @@ button.is-armed {
   min-height: 32px;
   padding: 4px 12px;
   border-radius: 16px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
   background: rgba(18, 26, 32, 0.94);
@@ -3606,7 +3612,7 @@ button.is-armed {
   }
 
   .warning {
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.35;
     padding: 4px 10px;
     border-radius: 14px;
@@ -3690,7 +3696,7 @@ button.is-armed {
   }
 
   .hud-context > .tip-coach:not(.first-steps) p {
-    font-size: 12px;
+    font-size: 0.75rem;
     line-height: 1.35;
   }
 
@@ -3713,7 +3719,7 @@ button.is-armed {
  * ------------------------------------------------------------------------- */
 
 .hire-best {
-  font-size: 12px;
+  font-size: 0.75rem;
   padding: 4px 10px;
 }
 
@@ -3731,12 +3737,12 @@ button.is-armed {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 5px;
   align-items: center;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .worker-slot button {
   padding: 3px 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .worker-who {
@@ -3756,7 +3762,7 @@ button.is-armed {
 
 .mult {
   font-style: normal;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -3796,19 +3802,19 @@ button.is-armed {
   align-items: center;
   text-align: left;
   padding: 5px 8px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .picker-option small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .best-tag {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--gold);
   white-space: nowrap;
 }
@@ -3824,7 +3830,7 @@ button.is-armed {
   align-items: center;
   text-align: left;
   padding: 3px 4px 3px 0;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--panel-2);
@@ -3840,13 +3846,13 @@ button.is-armed {
   border: none;
   background: transparent;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .villager-assign {
   max-width: 132px;
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text);
   background: var(--panel-3);
   border: 1px solid var(--line);
@@ -3866,11 +3872,11 @@ button.is-armed {
 
 .need-state {
   font-weight: 700;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .cost-short small {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .build-tags .tag-short {
@@ -3920,13 +3926,14 @@ button.is-armed {
   min-height: 1.2em;
   margin: 6px 0 0;
   color: var(--warn);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .picked-tag {
   font-style: normal;
-  font-size: 11px;
-  color: var(--species, var(--gold));
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: var(--gold);
 }
 
 .species-pick.is-full {
@@ -4007,7 +4014,7 @@ button.is-armed {
   align-content: start;
 }
 
-.upgrade-branch > header h3 {
+.upgrade-branch > header h2 {
   margin: 0;
 }
 
@@ -4016,12 +4023,18 @@ button.is-armed {
 }
 
 .upgrade-card.is-locked {
-  opacity: 0.5;
+  border-style: dashed;
+  background: var(--bg);
+}
+
+.upgrade-card.is-locked .icon,
+.upgrade-card.is-locked .icon-emoji {
+  opacity: 0.55;
 }
 
 .upgrade-card .upgrade-req {
   color: var(--warn);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .upgrade-card.is-child {
@@ -4044,12 +4057,12 @@ button.is-armed {
   border-radius: var(--radius-sm);
   background: var(--panel);
   border: 1px solid var(--line-soft);
-  font-size: 12px;
+  font-size: 0.75rem;
   align-content: start;
 }
 
 .edict-step strong {
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .edict-step small {
@@ -4062,8 +4075,19 @@ button.is-armed {
   background: var(--panel-2);
 }
 
+/* Locked: dashed and recessed, its text muted but still 4.5:1. */
 .edict-step.is-locked {
-  opacity: 0.45;
+  border-style: dashed;
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.edict-step.is-locked strong {
+  color: var(--muted);
+}
+
+.edict-step.is-locked em {
+  color: var(--warn);
 }
 
 .edict-step em {
@@ -4075,7 +4099,7 @@ button.is-armed {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .history-table th,
@@ -4088,7 +4112,7 @@ button.is-armed {
 .history-table th {
   color: var(--muted);
   font-weight: normal;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .history-scroll {
@@ -4101,7 +4125,7 @@ button.is-armed {
 
 .reward-breakdown h3 {
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .reward-breakdown ul {
@@ -4110,7 +4134,7 @@ button.is-armed {
   margin: 0;
   display: grid;
   gap: 3px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .reward-breakdown li {
@@ -4128,7 +4152,7 @@ button.is-armed {
 
 .reward-breakdown p {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 /* ==========================================================================
@@ -4177,7 +4201,7 @@ button.is-armed {
 }
 
 .condition-icon {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .condition-text {
@@ -4197,7 +4221,7 @@ button.is-armed {
 
 .condition-text small {
   color: #cdbf9c;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 /* The decree is compact: name and clock, its goal on one line, a thin bar
@@ -4216,7 +4240,7 @@ button.is-armed {
 .condition-clock {
   font-style: normal;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text);
 }
 
@@ -4274,16 +4298,16 @@ button.is-armed {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .upgrade-afford {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .upgrade-effects {
   margin: 2px 0 8px 18px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   color: var(--text);
 }
 
@@ -4297,7 +4321,7 @@ button.is-armed {
 }
 
 .tier-mark {
-  font-size: 9px;
+  font-size: 0.5625rem;
   text-anchor: middle;
   fill: var(--gold);
   stroke: rgba(9, 13, 16, 0.85);
@@ -4327,7 +4351,7 @@ button.is-armed {
 
 .land-tone {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-style: normal;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -4344,7 +4368,7 @@ button.is-armed {
 
 .land-tag {
   padding: 3px 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   background: var(--panel-2);
   border: 1px solid var(--line-soft);
   border-radius: 999px;
@@ -4368,7 +4392,7 @@ button.is-armed {
   align-items: center;
   gap: 8px;
   margin: 0 0 10px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   color: var(--muted);
 }
 
@@ -4384,9 +4408,9 @@ button.is-armed {
   margin-top: 12px;
 }
 
-.setup-land h4 {
+.setup-land h3 {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 /* ==========================================================================
@@ -4410,7 +4434,7 @@ button.is-armed {
 }
 
 .tl-head h3 {
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .tl-switch {
@@ -4425,7 +4449,7 @@ button.is-armed {
   border-radius: 0;
   background: transparent;
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   min-height: 30px;
 }
 
@@ -4437,20 +4461,20 @@ button.is-armed {
 .tl-summary {
   margin: 8px 0 2px;
   font-family: var(--font);
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.4;
   color: var(--text);
 }
 
 .tl-subtitle {
   margin: 0 0 6px;
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   color: var(--muted);
 }
 
 .tl-empty {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .tl-plot {
@@ -4493,7 +4517,7 @@ button.is-armed {
 
 .tl-axis {
   fill: var(--muted);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -4503,7 +4527,7 @@ button.is-armed {
 
 .tl-storm-label {
   fill: var(--muted);
-  font-size: 9.5px;
+  font-size: 0.59375rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -4534,7 +4558,7 @@ button.is-armed {
 
 .tl-direct {
   fill: var(--text);
-  font-size: 11px;
+  font-size: 0.6875rem;
   paint-order: stroke;
   stroke: var(--panel);
   stroke-width: 3px;
@@ -4542,7 +4566,7 @@ button.is-armed {
 
 .tl-row-title {
   fill: var(--text);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
 }
 
 .tl-row-note {
@@ -4575,7 +4599,7 @@ button.is-armed {
 
 .tl-count {
   fill: var(--muted);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-variant-numeric: tabular-nums;
 }
 
@@ -4614,7 +4638,7 @@ button.is-armed {
   padding: 6px 8px;
   background: var(--bg-deep);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 
@@ -4668,7 +4692,7 @@ button.is-armed {
   gap: 4px 14px;
   margin: 8px 0 0;
   padding: 0;
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   color: var(--muted);
 }
 
@@ -4684,7 +4708,7 @@ button.is-armed {
 
 .tl-table {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .tl-table summary {
@@ -4799,7 +4823,7 @@ button.is-armed {
   border-radius: var(--radius-sm);
   background: var(--panel);
   border: 1px solid var(--line-soft);
-  font-size: 12px;
+  font-size: 0.75rem;
   align-content: start;
 }
 
@@ -4820,7 +4844,9 @@ button.is-armed {
 }
 
 .commission-card.is-locked {
-  opacity: 0.55;
+  border-style: dashed;
+  background: var(--bg);
+  color: var(--muted);
 }
 
 .commission-card.is-locked em {
@@ -4828,7 +4854,7 @@ button.is-armed {
 }
 
 .commission-name {
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .commission-patron {
@@ -4838,7 +4864,7 @@ button.is-armed {
 .commission-terms {
   margin: 2px 0 0;
   padding-left: 16px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .commission-terms.is-judged {
@@ -4885,5 +4911,120 @@ button.is-armed {
 
 .upgrade-card .upgrade-opens {
   color: var(--gold);
-  font-size: 11px;
+  font-size: 0.6875rem;
+}
+
+/* ==========================================================================
+   Readable text on the full-page screens (setup, Citadel, achievements,
+   daily, saves): nothing under 12px at the default text size. Sizes are in
+   rem throughout, so the browser's text-size setting scales them all.
+   ========================================================================== */
+
+:where(.screen) small {
+  font-size: max(0.75rem, 0.84em);
+}
+
+.edict-step small,
+.commission-card small,
+.upgrade-card .upgrade-req,
+.history-table th,
+.screen .land-tone,
+.screen code {
+  font-size: 0.75rem;
+}
+
+/* ==========================================================================
+   Phones: tap targets at least 44px tall (and wide, for the small ones).
+   ========================================================================== */
+
+@media (max-width: 600px), (pointer: coarse) {
+  .modal-foot button,
+  .seed-row button,
+  .seed-row input,
+  .founding-steps button,
+  .reroll-button,
+  .title-picker select,
+  .condition-card {
+    min-height: 44px;
+  }
+
+  .seed-row button,
+  .resource-more {
+    min-width: 44px;
+  }
+
+  details > summary {
+    min-height: 44px;
+    padding-block: 10px;
+    box-sizing: border-box;
+  }
+
+  .settings-block label,
+  .sound-fields label,
+  .auto-pause-fields label {
+    min-height: 44px;
+    align-items: center;
+  }
+}
+
+/* ==========================================================================
+   Short viewports (a phone on its side, or 200% zoom on a laptop): the tip
+   and the decree / condition cards fold to one-line chips so the map keeps
+   its height. Their full text stays in the accessibility tree.
+   ========================================================================== */
+
+@media (max-height: 500px) {
+  .hud-context > .tip-coach:not(.first-steps) {
+    align-items: center;
+    gap: 8px;
+    width: max-content;
+    max-width: 100%;
+    padding: 4px 6px 4px 12px;
+  }
+
+  .hud-context > .tip-coach:not(.first-steps) .tip-body strong {
+    margin: 0;
+  }
+
+  .hud-context > .tip-coach:not(.first-steps) .tip-body p,
+  .bottom-stack .condition-card small,
+  .bottom-stack .condition-card .condition-progress {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .bottom-stack .condition-card {
+    width: max-content;
+    max-width: 100%;
+    padding: 3px 10px;
+    justify-self: center;
+  }
+
+  .bottom-stack .condition-card .condition-icon {
+    font-size: 1rem;
+  }
+}
+
+/* Full-page screens: one h1 (the screen's title, at the size its h2 had),
+   sections as h2 and their parts as h3, drawn at the sizes the old h3 and h4
+   had. Focus lands on the title when the screen opens. */
+.screen-title {
+  font-size: 1.5em;
+}
+
+.screen-title:focus {
+  outline: none;
+}
+
+:where(.screen) h2:where(:not(.screen-title)) {
+  font-size: 1.17em;
+}
+
+:where(.screen) h3 {
+  font-size: 1em;
 }

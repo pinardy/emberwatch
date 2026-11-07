@@ -100,7 +100,7 @@ describe('new settlement', () => {
     fireEvent.click(go)
     expect(useGameStore.getState().run).toBeNull()
     expect(loadSlot('2')!.seed).toBe(102)
-    fireEvent.click(screen.getByRole('button', { name: /Replace Slot 2\? Tap again/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Replace Slot 2\? Click again/ }))
     expect(useGameStore.getState().activeSlot).toBe('2')
     expect(useGameStore.getState().run!.seed).not.toBe(102)
     expect(SLOT_IDS.map((id) => loadSlot(id)!.seed)).toEqual([
@@ -139,7 +139,7 @@ describe('load screen', () => {
     const card = within(list).getAllByRole('listitem')[3]
     fireEvent.click(within(card).getByRole('button', { name: /Delete Slot 3/ }))
     expect(loadSlot('3')).not.toBeNull()
-    fireEvent.click(within(card).getByRole('button', { name: /Tap again/ }))
+    fireEvent.click(within(card).getByRole('button', { name: /Click again/ }))
     expect(loadSlot('3')).toBeNull()
     expect(within(list).getAllByRole('listitem')[3].textContent).toMatch(/Empty slot/)
   })
@@ -190,7 +190,7 @@ describe('load screen', () => {
     fireEvent.click(within(picker).getByLabelText(/Autosave/))
     fireEvent.click(screen.getByRole('button', { name: /Import, replacing Autosave/ }))
     expect(loadSlot('auto')!.seed).toBe(5)
-    fireEvent.click(screen.getByRole('button', { name: /Replace Autosave\? Tap again/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Replace Autosave\? Click again/ }))
     expect(loadSlot('auto')!.seed).toBe(65)
   })
 })

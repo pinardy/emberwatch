@@ -82,9 +82,9 @@ describe('Inspector glade section: leave it to the forest', () => {
     fireEvent.click(button)
     // Armed, not done: one stray click does not anger the forest.
     expect(currentRun().glades[id].spared).toBe(true)
-    expect(screen.getByRole('button', { name: /click again/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Click again/ })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: /click again/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Click again/ }))
     expect(currentRun().glades[id].spared).toBe(false)
     expect(currentRun().hostility).toBeCloseTo(before + SPARED_GLADE_RECLAIM_HOSTILITY)
     expect(screen.getByText(/Clearing crew/)).toBeTruthy()

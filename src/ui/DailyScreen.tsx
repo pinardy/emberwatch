@@ -97,7 +97,7 @@ export function DailyMenuEntry() {
         <time dateTime={today}>{today}</time>
       </span>
       <span className="daily-entry-body">
-        <span aria-label={day.species.map((id) => SPECIES[id].name).join(', ')}>
+        <span role="img" aria-label={day.species.map((id) => SPECIES[id].name).join(', ')}>
           {day.species.map((id) => (
             <Icon key={id} of={SPECIES[id]} />
           ))}
@@ -140,9 +140,9 @@ export function DailyScreen() {
     <div className="screen daily-screen">
       <div className="menu-card wide">
         <header className="row-between">
-          <h2>
+          <h1 className="screen-title">
             <Icon id="calendar" emoji="📅" /> Daily expedition
-          </h2>
+          </h1>
           <time className="chip big" dateTime={today}>
             {today} UTC
           </time>
@@ -182,7 +182,7 @@ export function DailyScreen() {
         </div>
 
         <section className="setup-section">
-          <h3>Today's settlers</h3>
+          <h2>Today's settlers</h2>
           <div className="chip-row">
             {day.species.map((id) => (
               <span key={id} className="chip">
@@ -190,9 +190,9 @@ export function DailyScreen() {
               </span>
             ))}
           </div>
-          <h3 className="daily-subhead">The land</h3>
+          <h2 className="daily-subhead">The land</h2>
           <RunModifierList ids={day.modifiers} />
-          <h3 className="daily-subhead">Terms: {edictLabel(DAILY_EDICT)}</h3>
+          <h2 className="daily-subhead">Terms: {edictLabel(DAILY_EDICT)}</h2>
           <ul className="daily-edicts">
             {edicts.map((e) => (
               <li key={e.level}>
@@ -206,7 +206,7 @@ export function DailyScreen() {
         </section>
 
         <section className="setup-section" aria-label="Today's result">
-          <h3>Today's best</h3>
+          <h2>Today's best</h2>
           {result ? (
             <>
               <p className={result.won ? 'is-good' : ''}>
@@ -227,7 +227,7 @@ export function DailyScreen() {
 
         {past.length > 0 && (
           <section className="setup-section">
-            <h3>Past expeditions</h3>
+            <h2>Past expeditions</h2>
             <div className="history-scroll">
               <table className="history-table daily-table">
                 <thead>

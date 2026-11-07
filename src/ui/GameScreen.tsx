@@ -161,13 +161,14 @@ export function GameScreen() {
                   </span>
                   <em>{tab.label}</em>
                   {tab.id === 'log' && unreadLog > 0 && (
-                    <span className="tab-badge" aria-label={`${unreadLog} unread`}>
+                    <span className="tab-badge" role="img" aria-label={`${unreadLog} unread`}>
                       {unreadLog > 9 ? '9+' : unreadLog}
                     </span>
                   )}
                   {tab.id === 'orders' && offers > 0 && (
                     <span
                       className="tab-badge is-offer"
+                      role="img"
                       aria-label={offers === 1 ? 'a new order to choose' : `${offers} new orders to choose`}
                     >
                       {offers}
@@ -196,6 +197,7 @@ export function GameScreen() {
               role={panel ? 'tabpanel' : undefined}
               aria-labelledby={panel ? `tab-${panel}` : undefined}
             >
+              {panel && <h2 className="sr-only">{TABS.find((t) => t.id === panel)?.label}</h2>}
               {panel === 'build' && <BuildPanel />}
               {panel === 'villagers' && <VillagerPanel />}
               {panel === 'orders' && <OrdersPanel />}

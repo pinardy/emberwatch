@@ -112,6 +112,7 @@ function TrendMark({ trend }: { trend?: StockTrend }) {
   const up = trend.direction === 'up'
   return (
     <em
+      role="img"
       className={`resource-trend ${up ? 'is-up' : 'is-down'}`}
       aria-label={up ? 'rising' : 'falling'}
     >
@@ -200,6 +201,7 @@ export function ResourceBar() {
         </small>
         <span
           className="food-runway"
+          role="img"
           aria-label={
             run.starving ? 'Food runway: the larder is empty' : `Food runway: ${runwayText}`
           }
@@ -230,6 +232,7 @@ export function ResourceBar() {
                 {isFlagged(item) && (
                   <em
                     className="resource-flag"
+                    role="img"
                     aria-label={item.blocking?.length ? 'holding up a building' : 'running out'}
                   >
                     !
@@ -290,7 +293,7 @@ function StockDrawer({
         <div id="stock-drawer" className="stock-drawer" role="group" aria-label="All stock">
           {groups.map((group) => (
             <section key={group.id} className="stock-drawer-group">
-              <h4>{group.label}</h4>
+              <h2>{group.label}</h2>
               <ul>
                 {group.items.map((item) => {
                   const t = item.trend
