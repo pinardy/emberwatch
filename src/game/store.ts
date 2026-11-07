@@ -33,6 +33,7 @@ import {
   resolveGladeEvent,
   takeChoice,
 } from './engine/events'
+import { takeOrderOffer } from './engine/orders'
 import { randomSeed } from './engine/rng'
 import { ROAD_TOOL, canStartRoad, placeRoad, removeRoad, roadAt, snapRoadPoint } from './engine/roads'
 import type { LandChoice } from './engine/runModifiers'
@@ -271,9 +272,13 @@ interface GameStore {
   pauseBuilding: (buildingId: string) => void
   clearGladeAdd: (gladeId: string) => void
   clearGladeRemove: (gladeId: string) => void
-  chooseOption: (optionId: string) => void
+  /** Takes an option of the front choice, or of the queued choice at `index` (a founding pick). */
+  chooseOption: (optionId: string, index?: number) => void
   chooseEventOption: (index: number) => void
-  reroll: () => void
+  /** Redraws the front choice, or the queued choice at `index`. */
+  reroll: (index?: number) => void
+  /** Takes an order (or asks for a different pair) from the offer waiting in the Orders panel. */
+  chooseOrder: (offerIndex: number, optionId: string) => void
   buyLot: (index: number) => void
   sell: (resource: ResourceId) => void
   /** Throws a lot of a good out of a full stockpile. */
@@ -738,9 +743,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   clearGladeAdd: (gladeId) => runCommand(set, get, (run) => addClearer(run, gladeId)),
   clearGladeRemove: (gladeId) =>
     runCommand(set, get, (run) => removeClearer(run, gladeId)),
-  chooseOption: (optionId) =>
+  chooseOption: (optionId, index = 0) =>
     runCommand(set, get, (run) => {
-      takeChoice(run, optionId)
+      takeChoice(run, optionId, index)
+      get().saveNow()
+      return null
+    }),
+  chooseOrder: (offerIndex, optionId) =>
+    runCommand(set, get, (run) => {
+      takeOrderOffer(run, offerIndex, optionId)
       get().saveNow()
       return null
     }),
@@ -750,7 +761,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().saveNow()
       return null
     }),
-  reroll: () => runCommand(set, get, (run) => rerollChoice(run)),
+  reroll: (index = 0) => runCommand(set, get, (run) => rerollChoice(run, index)),
   buyLot: (index) => runCommand(set, get, (run) => buyOffer(run, index)),
   sell: (resource) => runCommand(set, get, (run) => sellResource(run, resource)),
   dump: (resource) => runCommand(set, get, (run) => dumpStock(run, resource)),

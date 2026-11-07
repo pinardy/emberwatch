@@ -648,8 +648,12 @@ function noteDraftOffer(s: RunState, options: string[]): void {
   else s.draftDrought = (s.draftDrought ?? DRAFT_PITY) + 1
 }
 
-export function takeChoice(s: RunState, optionId: string): void {
-  const choice = s.pendingChoices[0]
+/**
+ * Applies a pick from a queued choice — the front one unless `index` says
+ * otherwise (the Founding panel takes its picks in any order).
+ */
+export function takeChoice(s: RunState, optionId: string, index = 0): void {
+  const choice = s.pendingChoices[index]
   if (!choice) return
   if (choice.kind === 'cornerstone') {
     if (!choice.options.includes(optionId)) return
@@ -673,8 +677,11 @@ export function takeChoice(s: RunState, optionId: string): void {
   } else {
     return
   }
-  s.pendingChoices.shift()
-  refreshQueuedChoices(s)
+  s.pendingChoices.splice(index, 1)
+  // Taken out of turn (a founding cornerstone or writ while a blueprint draft
+  // is still showing), nothing the player can see is redrawn: only offers the
+  // pick has made stale change.
+  refreshQueuedChoices(s, index === 0 || choice.kind === 'blueprint')
 }
 
 /**
@@ -685,16 +692,20 @@ export function takeChoice(s: RunState, optionId: string): void {
  * player chose, so without this the same building is offered (and granted) twice
  * and half a service chain never appears.
  */
-function refreshQueuedChoices(s: RunState): void {
+function refreshQueuedChoices(s: RunState, redraw = true): void {
   const stale = s.pendingChoices
   for (let i = 0; i < stale.length; i++) {
     const choice = stale[i]
     if (choice.kind === 'blueprint') {
+      if (!redraw && !choice.options.some((id) => s.unlockedBuildings.includes(id) || s.cornerstones.includes(id))) {
+        continue
+      }
       const fresh = buildBlueprintOptions(s, !!choice.mixed)
       if (fresh.length === 0) {
         // Nothing left to draft — swap in a cornerstone offer instead.
         stale.splice(i, 1)
         offerCornerstone(s)
+        if (choice.founding && stale.length > 0) stale[stale.length - 1].founding = true
         i--
         continue
       }
@@ -721,8 +732,8 @@ export function rerollCost(s: RunState): number {
  * Re-draws the options of the open draft for amber. A well-loved roguelite
  * lever: it converts a lucky economy into slightly better luck.
  */
-export function rerollChoice(s: RunState): string | null {
-  const choice = s.pendingChoices[0]
+export function rerollChoice(s: RunState, index = 0): string | null {
+  const choice = s.pendingChoices[index]
   if (!choice) return 'Nothing to reroll.'
   if (choice.kind === 'gladeEvent') return 'The forest does not renegotiate.'
   if (choice.kind === 'charter') return 'A royal charter is not up for negotiation.'

@@ -29,6 +29,7 @@ import {
 } from './balance'
 import { offerBlueprint, offerCornerstone } from './events'
 import { drawOrder, offerWrit } from './orders'
+import { markFounding } from './founding'
 import { defaultDecreeState } from './structure'
 import { emptyTimeline } from './timeline'
 import { defaultCaravan } from './trade'
@@ -220,6 +221,7 @@ export function createRun({
     rerollsUsed: 0,
     soothesUsed: 0,
     pendingChoices: [],
+    orderOffers: [],
     log: [],
     logCounter: 0,
     timeline: emptyTimeline(speciesPool),
@@ -259,7 +261,7 @@ export function createRun({
   // chosen once the opening draft is done.
   for (let i = 0; i < ORDER_SLOTS - 1; i++) drawOrder(state)
 
-  // --- opening blueprint draft ---------------------------------------------
+  // --- the founding: opening blueprint drafts, cornerstone, writ -------------
   // The run begins on a choice: which buildings this settlement will have. It
   // also guarantees a route to satisfying at least one service need.
   const openingPicks = OPENING_BLUEPRINT_PICKS + loadout.openingPicks
@@ -271,6 +273,8 @@ export function createRun({
   if (loadout.startCornerstoneChoice) offerCornerstone(state)
   // The founding writ: a small first goal, worth a point in the opening minutes.
   offerWrit(state)
+  // All of these are made together, beside the map, before the clock starts.
+  markFounding(state)
 
   const land = runModifierDefs(state.runModifiers)
   if (land.length > 0) {

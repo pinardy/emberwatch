@@ -9,9 +9,12 @@ import {
   draftAppeal,
   optionAffordable,
   relevantBlueprints,
+  rerollChoice,
   resolveGladeEvent,
   takeChoice,
 } from './events'
+import { foundingPart, foundingPicks, isFounding, migrateFounding } from './founding'
+import { migrateRun } from '../persistence'
 import { firstSteps, firstStepsComplete, firstStepTarget, isFoodCamp } from './onboarding'
 import { population } from './queries'
 import { tick } from './tick'
@@ -257,5 +260,94 @@ describe('draft appeal', () => {
     )
     if (!unwanted) return // every need is wanted by this trio
     expect(draftAppeal(state, unwanted.id).serves?.species).toEqual([])
+  })
+})
+
+describe('the founding', () => {
+  const kinds = (s: RunState) => s.pendingChoices.map((c) => foundingPart(c))
+
+  it('deals every opening pick as one founding, and the clock waits for all of it', () => {
+    const s = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'] })
+    expect(isFounding(s)).toBe(true)
+    expect(s.pendingChoices.every((c) => c.founding)).toBe(true)
+    expect(kinds(s)).toEqual(['blueprint', 'blueprint', 'blueprint', 'cornerstone', 'writ'])
+    expect(foundingPicks(s).map((p) => p.index)).toEqual([0, 1, 2, 3, 4])
+    // Picks come in any order: the writ and the cornerstone first.
+    takeChoice(s, s.pendingChoices[4].options[0], 4)
+    expect(s.orders.some((o) => o.writ)).toBe(true)
+    tick(s, 1)
+    expect(s.clock).toBe(0)
+    takeChoice(s, s.pendingChoices[3].options[0], 3)
+    expect(s.cornerstones).toHaveLength(1)
+    expect(kinds(s)).toEqual(['blueprint', 'blueprint', 'blueprint'])
+    while (isFounding(s)) takeChoice(s, s.pendingChoices[0].options[0])
+    expect(s.pendingChoices).toEqual([])
+    tick(s, 1)
+    expect(s.clock).toBeGreaterThan(0)
+  })
+
+  it('never redraws the showing draft when a pick is taken out of turn', () => {
+    const s = createRun({ seed: 99, species: ['human', 'fox', 'harpy'] })
+    const showing = [...s.pendingChoices[0].options]
+    const cursor = s.rngCursor
+    takeChoice(s, s.pendingChoices[3].options[1], 3)
+    takeChoice(s, s.pendingChoices[3].options[0], 3)
+    expect(s.pendingChoices[0].options).toEqual(showing)
+    expect(s.rngCursor).toBe(cursor)
+  })
+
+  it('ends on the same settlement whichever order the picks are made in', () => {
+    const inTurn = createRun({ seed: 2024, species: ['beaver', 'lizard', 'fox'] })
+    const outOfTurn = createRun({ seed: 2024, species: ['beaver', 'lizard', 'fox'] })
+    const stone = outOfTurn.pendingChoices[3].options[1]
+    const writ = outOfTurn.pendingChoices[4].options[2]
+    takeChoice(outOfTurn, writ, 4)
+    takeChoice(outOfTurn, stone, 3)
+    while (isFounding(outOfTurn)) takeChoice(outOfTurn, outOfTurn.pendingChoices[0].options[0])
+    while (isFounding(inTurn)) {
+      const c = inTurn.pendingChoices[0]
+      takeChoice(inTurn, c.kind === 'cornerstone' ? stone : c.kind === 'order' ? writ : c.options[0])
+    }
+    expect(outOfTurn.unlockedBuildings).toEqual(inTurn.unlockedBuildings)
+    expect(outOfTurn.cornerstones).toEqual(inTurn.cornerstones)
+    expect(outOfTurn.orders.map((o) => o.defId)).toEqual(inTurn.orders.map((o) => o.defId))
+  })
+
+  it('rerolls the founding cornerstone in place, leaving the draft before it alone', () => {
+    const s = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'] })
+    s.stock.amber = 50
+    const showing = [...s.pendingChoices[0].options]
+    const stones = [...s.pendingChoices[3].options]
+    expect(rerollChoice(s, 3)).toBeNull()
+    for (const id of s.pendingChoices[3].options) expect(stones).not.toContain(id)
+    expect(s.pendingChoices[0].options).toEqual(showing)
+    expect(s.pendingChoices[3].founding).toBe(true)
+    // The writ is not up for a reroll.
+    expect(rerollChoice(s, 4)).not.toBeNull()
+  })
+
+  it('later choices are not founding ones', () => {
+    const s = newRun()
+    expect(isFounding(s)).toBe(false)
+    s.reputation = 1
+    tick(s, 0.125)
+    expect(s.pendingChoices.length).toBeGreaterThan(0)
+    expect(s.pendingChoices.some((c) => c.founding)).toBe(false)
+  })
+
+  it('resumes a save made mid-opening, before picks carried the flag, as a founding', () => {
+    const s = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'] })
+    takeChoice(s, s.pendingChoices[0].options[0])
+    const legacy = JSON.parse(JSON.stringify(s))
+    for (const c of legacy.pendingChoices) delete c.founding
+    const run = migrateRun(legacy)!
+    expect(run.pendingChoices.every((c) => c.founding)).toBe(true)
+    expect(foundingPicks(run)).toHaveLength(4)
+    // Mid-run, nothing is flagged.
+    const later = newRun()
+    tick(later, 1)
+    later.pendingChoices.push({ kind: 'blueprint', options: ['tavern', 'brewery'] })
+    migrateFounding(later)
+    expect(later.pendingChoices[0].founding).toBeUndefined()
   })
 })

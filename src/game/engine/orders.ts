@@ -30,7 +30,8 @@ import { describeTimedGoal, goalCount, goalProgress } from './structure'
  *    ("produce 40 more planks") sized from what the settlement makes.
  *  - **Chosen.** An empty slot is refilled by a choice of two candidates, and
  *    once a year the player may ask for a different pair at a small price in
- *    patience.
+ *    patience. The choice waits in the Orders panel (`orderOffers`) without
+ *    stopping the clock; the slot stays empty until one is taken.
  *  - **The founding writ.** The run opens with a choice of three small goals
  *    worth a first point of reputation in the opening minutes.
  *
@@ -285,23 +286,33 @@ export function drawOrder(s: RunState): Order | null {
   return order
 }
 
-/** Empty order slots not already waiting on a choice. */
-export function openOrderSlots(s: RunState): number {
-  const queued = s.pendingChoices.filter((c) => c.kind === 'order').length
-  return ORDER_SLOTS - s.orders.filter((o) => !o.complete).length - queued
+/** Order offers still waiting: the Orders panel's, and any order choice queued as a pop-up (the writ). */
+function orderChoices(s: RunState): PendingChoice[] {
+  return [...(s.orderOffers ?? []), ...s.pendingChoices.filter((c) => c.kind === 'order')]
 }
 
-/** Queues a choice of two orders for an empty slot. False when none can be drawn. */
+/** Empty order slots not already waiting on a choice. */
+export function openOrderSlots(s: RunState): number {
+  return ORDER_SLOTS - s.orders.filter((o) => !o.complete).length - orderChoices(s).length
+}
+
+/**
+ * Offers a choice of two orders for an empty slot, in the Orders panel: it
+ * does not stop the clock. False when none can be drawn.
+ */
 export function offerOrders(s: RunState): boolean {
   const orders = drawCandidates(s, 2, queuedCandidates(s))
   if (orders.length === 0) return false
-  s.pendingChoices.push({ kind: 'order', options: orders.map((o) => o.id), orders })
+  s.orderOffers ??= []
+  s.orderOffers.push({ kind: 'order', options: orders.map((o) => o.id), orders })
   return true
 }
 
-/** Candidates already offered in queued choices, so two queued offers differ. */
+/** Candidates already offered in waiting choices, so two offers differ. */
 function queuedCandidates(s: RunState, except?: PendingChoice): Order[] {
-  return s.pendingChoices.filter((c) => c.kind === 'order' && c !== except).flatMap((c) => c.orders ?? [])
+  return orderChoices(s)
+    .filter((c) => c !== except)
+    .flatMap((c) => c.orders ?? [])
 }
 
 /** Queues the founding writ: a choice of three small Year-1 goals. */
@@ -363,11 +374,24 @@ function declineOrders(s: RunState, choice: PendingChoice): void {
 }
 
 /**
- * Keeps other queued order offers from repeating what was just taken.
+ * Settles a pick from the order offer waiting at `index` in the Orders panel.
+ * True when an order was taken (the offer is retired); a decline swaps a
+ * fresh pair in place and returns false, as does an unknown offer or option.
+ */
+export function takeOrderOffer(s: RunState, index: number, optionId: string): boolean {
+  const offer = s.orderOffers?.[index]
+  if (!offer) return false
+  if (!takeOrderChoice(s, offer, optionId)) return false
+  s.orderOffers.splice(s.orderOffers.indexOf(offer), 1)
+  return true
+}
+
+/**
+ * Keeps other waiting order offers from repeating what was just taken.
  */
 function refreshQueuedOrders(s: RunState, taken: PendingChoice): void {
-  for (const choice of s.pendingChoices) {
-    if (choice === taken || choice.kind !== 'order' || isWritChoice(choice)) continue
+  for (const choice of orderChoices(s)) {
+    if (choice === taken || isWritChoice(choice)) continue
     const live = takenBy(s)
     const clash = (choice.orders ?? []).some((o) => {
       const resource = countingResource(o)
@@ -393,6 +417,16 @@ function refreshQueuedOrders(s: RunState, taken: PendingChoice): void {
  * its old larder goal.
  */
 export function migrateOrders(run: RunState): void {
+  // Saves from before order offers waited in the Orders panel queued them as
+  // pop-ups: move any still waiting there (the writ stays a founding pick).
+  if (!Array.isArray(run.orderOffers)) run.orderOffers = []
+  if (Array.isArray(run.pendingChoices)) {
+    const waiting = run.pendingChoices.filter((c) => c?.kind === 'order' && !isWritChoice(c))
+    if (waiting.length > 0) {
+      run.orderOffers.push(...waiting)
+      run.pendingChoices = run.pendingChoices.filter((c) => !waiting.includes(c))
+    }
+  }
   for (const order of run.orders ?? []) {
     const goal = orderGoal(order)
     if (goal && countsFromDraw(goal) && order.baseline === undefined) {
@@ -435,10 +469,21 @@ export function stepOrders(s: RunState): void {
   }
   if (!completedAny) return
   s.orders = s.orders.filter((o) => !o.complete)
-  // Each slot just emptied is refilled by a choice of two (none once the
-  // run is won: an offer then is noise).
+  // Each slot just emptied is refilled by a choice of two, waiting in the
+  // Orders panel (none once the run is won: an offer then is noise).
   if (s.phase !== 'playing' || s.reputation >= s.maxReputation) return
+  let offered = 0
   for (let open = openOrderSlots(s); open > 0; open--) {
     if (!offerOrders(s)) break
+    offered++
+  }
+  if (offered > 0) {
+    pushLog(
+      s,
+      offered === 1
+        ? '📜 A new order awaits your choice in the Orders panel.'
+        : `📜 ${offered} new orders await your choice in the Orders panel.`,
+      'info',
+    )
   }
 }
