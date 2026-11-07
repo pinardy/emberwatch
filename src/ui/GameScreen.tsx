@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
+import { isFounding } from '../game/engine/founding'
 import { canAfford } from '../game/engine/queries'
 import {
   useGameStore,
@@ -11,6 +12,7 @@ import { BuildPanel } from './BuildPanel'
 import { ChoiceModal } from './ChoiceModal'
 import { ConditionsBar } from './ConditionsBar'
 import { EventToasts, useLogUnread } from './EventToasts'
+import { FoundingPanel } from './FoundingPanel'
 import { Inspector } from './Inspector'
 import { EndModal } from './lazyScreens'
 import { MapView } from './MapView'
@@ -42,7 +44,10 @@ export function GameScreen() {
   // run's end, the Log tab's unread badge); everything inside subscribes to
   // its own data, so a sim step does not re-render the whole HUD.
   const run = useRunRef()
-  useRunSelector((r) => `${r.season.season}|${r.phase}|${r.log[0]?.id ?? -1}`)
+  useRunSelector(
+    (r) =>
+      `${r.season.season}|${r.phase}|${r.log[0]?.id ?? -1}|${isFounding(r)}|${(r.orderOffers ?? []).length}`,
+  )
   const panel = useGameStore((s) => s.panel)
   const setPanel = useGameStore((s) => s.setPanel)
   const notice = useGameStore((s) => s.notice)
@@ -52,6 +57,18 @@ export function GameScreen() {
   useHotkeys(run !== null)
   useAudioCues(run)
   const unreadLog = useLogUnread(run, panel === 'log')
+  const founding = run ? isFounding(run) : false
+  const offers = run?.orderOffers?.length ?? 0
+
+  // When the founding's last pick is made the panel gives way to the side
+  // rail; focus goes to its first tab rather than being lost with the panel.
+  const wasFounding = useRef(founding)
+  useEffect(() => {
+    if (wasFounding.current && !founding) {
+      document.getElementById(`tab-${panel ?? 'build'}`)?.focus()
+    }
+    wasFounding.current = founding
+  }, [founding, panel])
 
   // Notices are transient; clear them after a beat.
   useEffect(() => {
@@ -84,7 +101,7 @@ export function GameScreen() {
       <TopBar />
       <ResourceBar />
 
-      <main className="game-main">
+      <main className={`game-main ${founding ? 'is-founding' : ''}`}>
         <div className="map-column">
           <MapView />
           {/*
@@ -116,61 +133,75 @@ export function GameScreen() {
           </div>
         </div>
 
-        <aside className={`sidebar ${panel ? 'is-open' : 'is-folded'}`}>
-          <nav className="tabs" role="tablist" aria-label="Side panels" onKeyDown={onTabKey}>
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                id={`tab-${tab.id}`}
-                type="button"
-                role="tab"
-                aria-selected={panel === tab.id}
-                aria-controls={panel === tab.id ? 'side-panel' : undefined}
-                aria-keyshortcuts={PANEL_KEY_LABEL[tab.id]}
-                tabIndex={panel === tab.id || (panel === null && tab.id === 'build') ? 0 : -1}
-                title={`${tab.label} (${PANEL_KEY_LABEL[tab.id]})`}
-                className={panel === tab.id ? 'is-active' : ''}
-                onClick={() => setPanel(panel === tab.id ? null : tab.id)}
-              >
-                <span aria-hidden>
-                  <Icon id={TAB_ART[tab.id]} emoji={tab.icon} />
-                </span>
-                <em>{tab.label}</em>
-                {tab.id === 'log' && unreadLog > 0 && (
-                  <span className="tab-badge" aria-label={`${unreadLog} unread`}>
-                    {unreadLog > 9 ? '9+' : unreadLog}
+        {/* The founding's picks stand in the side rail (a bottom sheet on
+            phones) beside the visible map until they are all made. */}
+        {founding ? (
+          <FoundingPanel />
+        ) : (
+          <aside className={`sidebar ${panel ? 'is-open' : 'is-folded'}`}>
+            <nav className="tabs" role="tablist" aria-label="Side panels" onKeyDown={onTabKey}>
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  id={`tab-${tab.id}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={panel === tab.id}
+                  aria-controls={panel === tab.id ? 'side-panel' : undefined}
+                  aria-keyshortcuts={PANEL_KEY_LABEL[tab.id]}
+                  tabIndex={panel === tab.id || (panel === null && tab.id === 'build') ? 0 : -1}
+                  title={`${tab.label} (${PANEL_KEY_LABEL[tab.id]})`}
+                  className={panel === tab.id ? 'is-active' : ''}
+                  onClick={() => setPanel(panel === tab.id ? null : tab.id)}
+                >
+                  <span aria-hidden>
+                    <Icon id={TAB_ART[tab.id]} emoji={tab.icon} />
                   </span>
-                )}
-              </button>
-            ))}
-          </nav>
-          {/* Phones: the side panel is a bottom sheet, and this folds it down
-              to its tabs so the map gets the height. Desktop hides it. */}
-          <button
-            type="button"
-            className="sheet-handle"
-            aria-expanded={panel !== null}
-            aria-controls="side-panel"
-            aria-label={panel ? 'Fold the panel away' : 'Open the panel'}
-            title={panel ? 'Fold the panel away' : 'Open the panel'}
-            onClick={() => setPanel(panel ? null : 'build')}
-          >
-            <span aria-hidden>{panel ? '▾' : '▴'}</span>
-          </button>
-          <div
-            key={panel ?? 'none'}
-            className="panel-scroll"
-            id="side-panel"
-            role={panel ? 'tabpanel' : undefined}
-            aria-labelledby={panel ? `tab-${panel}` : undefined}
-          >
-            {panel === 'build' && <BuildPanel />}
-            {panel === 'villagers' && <VillagerPanel />}
-            {panel === 'orders' && <OrdersPanel />}
-            {panel === 'trade' && <TradePanel />}
-            {panel === 'log' && <LogPanel />}
-          </div>
-        </aside>
+                  <em>{tab.label}</em>
+                  {tab.id === 'log' && unreadLog > 0 && (
+                    <span className="tab-badge" aria-label={`${unreadLog} unread`}>
+                      {unreadLog > 9 ? '9+' : unreadLog}
+                    </span>
+                  )}
+                  {tab.id === 'orders' && offers > 0 && (
+                    <span
+                      className="tab-badge is-offer"
+                      aria-label={offers === 1 ? 'a new order to choose' : `${offers} new orders to choose`}
+                    >
+                      {offers}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+            {/* Phones: the side panel is a bottom sheet, and this folds it down
+                to its tabs so the map gets the height. Desktop hides it. */}
+            <button
+              type="button"
+              className="sheet-handle"
+              aria-expanded={panel !== null}
+              aria-controls="side-panel"
+              aria-label={panel ? 'Fold the panel away' : 'Open the panel'}
+              title={panel ? 'Fold the panel away' : 'Open the panel'}
+              onClick={() => setPanel(panel ? null : 'build')}
+            >
+              <span aria-hidden>{panel ? '▾' : '▴'}</span>
+            </button>
+            <div
+              key={panel ?? 'none'}
+              className="panel-scroll"
+              id="side-panel"
+              role={panel ? 'tabpanel' : undefined}
+              aria-labelledby={panel ? `tab-${panel}` : undefined}
+            >
+              {panel === 'build' && <BuildPanel />}
+              {panel === 'villagers' && <VillagerPanel />}
+              {panel === 'orders' && <OrdersPanel />}
+              {panel === 'trade' && <TradePanel />}
+              {panel === 'log' && <LogPanel />}
+            </div>
+          </aside>
+        )}
       </main>
 
       <ChoiceModal />

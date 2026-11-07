@@ -63,18 +63,22 @@ function answerPendingChoices() {
   expect(currentRun().pendingChoices).toEqual([])
 }
 
+/** Makes every founding pick from the Founding panel beside the map, as a player would. */
 function takeOpeningDraft() {
   let guard = 0
   while (currentRun().pendingChoices.length > 0 && guard++ < 10) {
-    const heading = screen.getByRole('heading', { level: 2 })
-    expect(heading.textContent).toMatch(/New Blueprint|Cornerstone|Founding Writ/)
+    const panel = screen.getByRole('region', { name: /^The Founding/ })
+    // The founding is not a pop-up: no dialog covers the map meanwhile.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('application', { name: /Settlement map/i })).toBeTruthy()
     // Each option is a button whose accessible name starts with the icon+name.
-    const options = screen
+    const options = within(panel)
       .getAllByRole('button')
       .filter((b) => b.className.includes('option'))
     expect(options.length).toBeGreaterThan(0)
     fireEvent.click(options[0])
   }
+  expect(screen.queryByRole('region', { name: /^The Founding/ })).toBeNull()
 }
 
 beforeEach(() => {
@@ -572,35 +576,96 @@ describe("the Queen's offers", () => {
   /** The option cards in the open dialog. */
   const cardsIn = (dialog: HTMLElement) =>
     within(dialog)
-      .getAllByRole('button')
+      .queryAllByRole('button')
       .filter((b) => b.className.includes('option'))
 
-  it('opens on the founding writ, with reward, goal and progress on each card', () => {
+  it('opens on the founding beside the map: every pick at once, in any order, then the clock', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
     fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-    let guard = 0
-    // The blueprint picks and the founding cornerstone come first.
-    while (currentRun().pendingChoices[0]?.kind !== 'order' && guard++ < 10) {
-      fireEvent.click(cardsIn(screen.getByRole('dialog'))[0])
-    }
-    const dialog = screen.getByRole('dialog', { name: /Founding Writ/i })
-    const cards = cardsIn(dialog)
-    expect(cards).toHaveLength(3)
-    for (const card of cards) {
+    // The map is up and no dialog covers it; the picks stand beside it.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.querySelector('[aria-modal="true"]')).toBeNull()
+    expect(screen.getByRole('application', { name: /Settlement map/i })).toBeTruthy()
+    const panel = screen.getByRole('region', { name: /^The Founding/ })
+    // Every part of the founding is on show together.
+    const part = (name: RegExp) => within(panel).getByRole('region', { name })
+    const blueprints = part(/Blueprints/)
+    const stone = part(/Cornerstone/)
+    const writ = part(/founding writ/i)
+    expect(cardsIn(blueprints).length).toBeGreaterThan(0)
+    expect(within(blueprints).getByRole('button', { name: /Reroll/ })).toBeTruthy()
+    expect(cardsIn(stone).length).toBeGreaterThan(0)
+    expect(within(stone).getByRole('button', { name: /Reroll/ })).toBeTruthy()
+    const writCards = cardsIn(writ)
+    expect(writCards).toHaveLength(3)
+    for (const card of writCards) {
       expect(card.textContent).toMatch(/% done now/)
       expect(card.textContent).toMatch(/\+1/)
     }
     // The writ cannot be swapped for another.
-    expect(within(dialog).queryByText(/Ask for different orders/)).toBeNull()
-    fireEvent.click(cards[0])
-    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(within(writ).queryByText(/Ask for different orders/)).toBeNull()
+    expect(within(writ).queryByRole('button', { name: /Reroll/ })).toBeNull()
+    expect(within(panel).getByText(/5 picks left/)).toBeTruthy()
+
+    // The writ first: it is marked made, and the drafts stay as they were.
+    const draft = cardsIn(blueprints).map((c) => c.textContent)
+    fireEvent.click(writCards[0])
     expect(currentRun().orders.some((o) => o.writ)).toBe(true)
+    expect(within(part(/founding writ/i)).getByText('Done')).toBeTruthy()
+    expect(cardsIn(part(/founding writ/i))).toHaveLength(0)
+    expect(cardsIn(part(/Blueprints/)).map((c) => c.textContent)).toEqual(draft)
+    expect(within(panel).getByText(/4 picks left/)).toBeTruthy()
+
+    // The clock waits for the founding, whatever the speed.
+    act(() => {
+      useGameStore.getState().setSpeed(1)
+      useGameStore.getState().advance(2)
+      useGameStore.getState().setSpeed(0)
+    })
+    expect(currentRun().clock).toBe(0)
+
+    // The cornerstone next; the chosen one is listed in its part.
+    const stoneName = cardsIn(part(/Cornerstone/))[0].querySelector('strong')!.textContent!
+    fireEvent.click(cardsIn(part(/Cornerstone/))[0])
+    expect(within(part(/Cornerstone/)).getByText(new RegExp(stoneName))).toBeTruthy()
+    // Focus follows the player to the next open pick.
+    expect(document.activeElement?.className).toMatch(/option/)
+    expect(part(/Blueprints/).contains(document.activeElement)).toBe(true)
+
+    takeOpeningDraft()
+    // Done: the side rail is back, with focus on its tab, and the clock runs.
+    expect(document.activeElement?.id).toBe('tab-build')
+    act(() => {
+      useGameStore.getState().setSpeed(1)
+      useGameStore.getState().advance(0.5)
+      useGameStore.getState().setSpeed(0)
+    })
+    expect(currentRun().clock).toBeGreaterThan(0)
     act(() => useGameStore.getState().setPanel('orders'))
     expect(screen.getByText('founding writ')).toBeTruthy()
   })
 
-  it('offers two orders for an empty slot, with one swap a year', () => {
+  it('rerolls a founding draft for amber from the panel', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    act(() => {
+      currentRun().stock.amber = 40
+      bump()
+    })
+    const stone = within(screen.getByRole('region', { name: /^The Founding/ })).getByRole('region', {
+      name: /Cornerstone/,
+    })
+    const before = cardsIn(stone).map((c) => c.textContent)
+    fireEvent.click(within(stone).getByRole('button', { name: /Reroll/ }))
+    const after = cardsIn(stone).map((c) => c.textContent)
+    expect(after.length).toBeGreaterThan(0)
+    for (const card of after) expect(before).not.toContain(card)
+    expect(currentRun().stock.amber).toBeLessThan(40)
+  })
+
+  it('offers two orders inline in the Orders panel, without stopping the clock, with one swap a year', () => {
     startPlaying()
     act(() => {
       const run = currentRun()
@@ -608,17 +673,62 @@ describe("the Queen's offers", () => {
       offerOrders(run)
       bump()
     })
-    const dialog = screen.getByRole('dialog', { name: /Queen's Orders/i })
-    expect(cardsIn(dialog)).toHaveLength(2)
-    const swap = within(dialog).getByRole('button', { name: /Ask for different orders/ })
+    // No pop-up: the offer waits, flagged on the Orders tab.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    const tab = within(screen.getByRole('tablist')).getByRole('tab', { name: /Orders/i })
+    expect(within(tab).getByLabelText(/a new order to choose/)).toBeTruthy()
+    // The clock keeps running, and the slot stays empty until a pick.
+    const clock = currentRun().clock
+    act(() => {
+      useGameStore.getState().setSpeed(1)
+      useGameStore.getState().advance(1)
+      useGameStore.getState().setSpeed(0)
+    })
+    expect(currentRun().clock).toBeGreaterThan(clock)
+    expect(currentRun().orders).toHaveLength(2)
+    expect(currentRun().orderOffers).toHaveLength(1)
+
+    fireEvent.click(tab)
+    const offer = screen.getByRole('group', { name: /Open slot — choose an order/ })
+    expect(cardsIn(offer)).toHaveLength(2)
+    for (const card of cardsIn(offer)) {
+      expect(card.textContent).toMatch(/% done now/)
+      expect(card.textContent).toMatch(/\+\d/)
+    }
+    const swap = within(offer).getByRole('button', { name: /Ask for different orders/ })
     const before = currentRun().impatienceProgress + currentRun().impatience
     fireEvent.click(swap)
     expect(currentRun().impatienceProgress + currentRun().impatience).toBeCloseTo(before + 0.5)
-    const again = screen.getByRole('button', { name: /Ask for different orders/ }) as HTMLButtonElement
+    const again = within(screen.getByRole('group', { name: /Open slot/ })).getByRole('button', {
+      name: /Ask for different orders/,
+    }) as HTMLButtonElement
     expect(again.disabled).toBe(true)
-    fireEvent.click(cardsIn(screen.getByRole('dialog'))[0])
-    expect(screen.queryByRole('dialog')).toBeNull()
+    const picked = currentRun().orderOffers[0].options[0]
+    fireEvent.click(cardsIn(screen.getByRole('group', { name: /Open slot/ }))[0])
+    expect(screen.queryByRole('group', { name: /Open slot/ })).toBeNull()
     expect(currentRun().orders).toHaveLength(3)
+    expect(currentRun().orders.at(-1)!.id).toBe(picked)
+    expect(within(tab).queryByLabelText(/to choose/)).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('toasts a new order when one awaits a choice', () => {
+    startPlaying()
+    act(() => {
+      const run = currentRun()
+      const order = run.orders[0]
+      order.goal = { kind: 'stock', resource: 'wood', amount: 1 }
+      order.baseline = undefined
+      run.stock.wood = 50
+      // No milestone draft on the way: this is about the order alone.
+      run.cornerstonesTaken = REWARD_MILESTONES.length
+      useGameStore.getState().setSpeed(1)
+      useGameStore.getState().advance(0.25)
+      useGameStore.getState().setSpeed(0)
+    })
+    expect(currentRun().orderOffers.length).toBeGreaterThan(0)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText(/new order awaits your choice in the Orders panel/)).toBeTruthy()
   })
 
   it('offers two decrees, each with its countdown, reward and miss cost', () => {
@@ -780,10 +890,12 @@ describe('mid-run structure UI', () => {
     }
   })
 
-  it('presents the draft as a labelled modal dialog that holds focus', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+  it('presents a milestone draft as a labelled modal dialog that holds focus', () => {
+    startPlaying()
+    act(() => {
+      currentRun().pendingChoices.push({ kind: 'blueprint', options: ['tavern', 'brewery'], mixed: true })
+      bump()
+    })
 
     const dialog = screen.getByRole('dialog', { name: /New Blueprint/i })
     expect(dialog.getAttribute('aria-modal')).toBe('true')
@@ -805,6 +917,37 @@ describe('mid-run structure UI', () => {
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.getByRole('dialog', { name: /New Blueprint/i })).toBeTruthy()
     expect(currentRun().pendingChoices.length).toBeGreaterThan(0)
+
+    fireEvent.click(within(dialog).getAllByRole('button').filter((b) => b.className.includes('option'))[0])
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('presents the founding as a labelled panel that takes focus but does not trap it', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+
+    const panel = screen.getByRole('region', { name: /^The Founding/ })
+    expect(panel.getAttribute('aria-modal')).toBeNull()
+    expect(panel.contains(document.activeElement)).toBe(true)
+    // Its first pick is one Tab away, and nothing holds Tab inside it.
+    const firstCard = within(panel).getAllByRole('button').filter((b) => b.className.includes('option'))[0]
+    firstCard.focus()
+    expect(document.activeElement).toBe(firstCard)
+    const tabbed = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    panel.dispatchEvent(tabbed)
+    expect(tabbed.defaultPrevented).toBe(false)
+    // The top bar stays reachable meanwhile.
+    expect(screen.getByRole('group', { name: 'Game speed' })).toBeTruthy()
+
+    // It cannot be dismissed: Esc leaves every pick waiting.
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByRole('region', { name: /^The Founding/ })).toBeTruthy()
+
+    // After a pick, focus moves to the next card rather than being lost.
+    fireEvent.click(firstCard)
+    expect(document.activeElement?.className).toMatch(/option/)
+    expect(screen.getByRole('region', { name: /^The Founding/ }).contains(document.activeElement)).toBe(true)
 
     takeOpeningDraft()
     expect(screen.queryByRole('dialog')).toBeNull()

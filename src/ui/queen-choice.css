@@ -33,3 +33,49 @@
 .order-card.is-writ {
   border-color: var(--gold);
 }
+
+/* --- Orders panel: an open slot's choice of two, inline ------------------ */
+
+.order-offer {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px dashed var(--gold);
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.16);
+  animation: fade-in 200ms ease;
+}
+
+.order-offer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.order-offer .option-list {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.order-offer .option {
+  padding: 8px 10px;
+  gap: 2px;
+}
+
+.order-offer .rarity-tag {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.order-offer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.tab-badge.is-offer {
+  background: var(--gold);
+  color: #1a1408;
+}

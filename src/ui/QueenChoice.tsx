@@ -26,9 +26,10 @@ import { Icon } from './Icon'
 import './queen-choice.css'
 
 /**
- * The Queen's offers, rendered inside the choice modal overlay: a choice of
- * two orders for an empty slot (or the founding writ's three), and a choice
- * of two royal decrees. Every card says what it pays, what it asks and how far
+ * The Queen's offers. A choice of two royal decrees is a modal (it has a
+ * deadline); a choice of two orders for an empty slot waits inline in the
+ * Orders panel (`OrderOffer`), and the founding writ's three are made in the
+ * Founding panel. Every card says what it pays, what it asks and how far
  * along the settlement already is.
  */
 export function OrderChoice({ run, choice }: { run: RunState; choice: PendingChoice }) {
@@ -80,7 +81,45 @@ export function orderTag(order: Order): string | null {
   return order.baseline !== undefined ? 'counts from its draw' : null
 }
 
-function OrderOption({ run, order, onPick }: { run: RunState; order: Order; onPick: () => void }) {
+/**
+ * A choice of two orders for an empty slot, inline in the Orders panel. It
+ * never stops the clock; the slot stays empty until one is taken. Once a
+ * year the pair can be swapped for a little of the Queen's patience.
+ */
+export function OrderOffer({ run, offer, index }: { run: RunState; offer: PendingChoice; index: number }) {
+  const chooseOrder = useGameStore((s) => s.chooseOrder)
+  const blocked = orderDeclineBlocked(run, offer)
+  const titleId = `order-offer-${index}`
+  return (
+    <div className="order-offer" role="group" aria-labelledby={titleId}>
+      <div className="order-offer-head">
+        <Icon id="scroll" emoji="📜" />
+        <strong id={titleId}>Open slot — choose an order</strong>
+      </div>
+      <small className="muted">It stays empty until you choose one. The clock keeps running.</small>
+      <div className="option-list">
+        {(offer.orders ?? []).map((order) => (
+          <OrderOption key={order.id} run={run} order={order} onPick={() => chooseOrder(index, order.id)} />
+        ))}
+      </div>
+      <div className="order-offer-foot">
+        <button
+          type="button"
+          className="reroll-button"
+          disabled={blocked !== null}
+          title={blocked ?? undefined}
+          onClick={() => chooseOrder(index, DECLINE_CHOICE)}
+        >
+          Ask for different orders — <Icon id="impatience" label="impatience" /> +{ORDER_DECLINE_IMPATIENCE}
+        </button>
+        <small className="muted">{blocked ?? 'Once a year.'}</small>
+      </div>
+    </div>
+  )
+}
+
+/** One order card: name, goal, current progress and reward. */
+export function OrderOption({ run, order, onPick }: { run: RunState; order: Order; onPick: () => void }) {
   const def = ORDERS[order.defId]
   const goal = orderGoal(order)
   if (!def || !goal) return null
