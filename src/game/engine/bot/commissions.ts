@@ -1,14 +1,14 @@
-import { BUILDINGS } from '../content/buildings'
-import { COMMISSIONS, judgeCommission, type CommissionTerm } from '../content/commissions'
-import type { BuildingInstance, Glade, ResourceBag, RunState, Vec2 } from '../types'
-import { sootheCost, sootheQueen } from './actions'
-import { HEARTH_FUEL_PER_SECOND, SEASON_LENGTH } from './balance'
-import { computeModifiers } from './modifiers'
-import { foodStock, population, totalHousing } from './queries'
-import { AGREEMENT_PRICE, caravanAvailable, signAgreement } from './trade'
+import { BUILDINGS } from '../../content/buildings'
+import { COMMISSIONS, judgeCommission, type CommissionTerm } from '../../content/commissions'
+import type { BuildingInstance, Glade, ResourceBag, RunState, Vec2 } from '../../types'
+import { sootheCost, sootheQueen } from '../actions'
+import { HEARTH_FUEL_PER_SECOND, SEASON_LENGTH } from '../balance'
+import { computeModifiers } from '../modifiers'
+import { foodStock, population, totalHousing } from '../queries'
+import { AGREEMENT_PRICE, caravanAvailable, signAgreement } from '../trade'
 
 /**
- * The balance harness's commission play (used only by `playtest.test.ts`).
+ * The balance harness's commission play (used only by the harness bot in `play.ts`).
  *
  * The harness bot plays every run the same way; with a Citadel commission it
  * also pursues the commission's terms the way a competent player would. Each
