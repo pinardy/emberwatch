@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { distToPolygonEdge, pointInPolygon } from '../../game/engine/geometry'
 import type { Glade, RunState, Vec2 } from '../../game/types'
-import { GLADE_KIND_STYLE, gladeAccess, gladeFill, gladeLook, type GladeAccess } from '../mapShared'
+import { GLADE_KIND_STYLE, SPARED_STYLE, gladeAccess, gladeFill, gladeLook, type GladeAccess } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import { gladeSurfaceKey, useRunKey } from './layerKeys'
 import { NO_RAYCAST } from './models'
@@ -333,9 +333,11 @@ export const GladeEdges = memo(function GladeEdges({ run }: { run: RunState }) {
   const merged = useStaticGeometry(() => {
     const parts = still.map(({ glade, access }) => {
       const style = GLADE_KIND_STYLE[glade.kind]
-      const g = gladeEdgeGeometry(glade.polygon, style.dash, EDGE_WIDTH)
-      const c = new THREE.Color(style.edge)
-      const a = access === 'locked' ? 0.3 : 0.9
+      // Left to the forest: a wide, faint mint band instead of the kind's crisp line.
+      const spared = access === 'spared'
+      const g = gladeEdgeGeometry(glade.polygon, spared ? null : style.dash, spared ? EDGE_WIDTH * 2.2 : EDGE_WIDTH)
+      const c = new THREE.Color(spared ? SPARED_STYLE.edge : style.edge)
+      const a = access === 'locked' ? 0.3 : spared ? 0.3 : 0.9
       const n = g.getAttribute('position').count
       const colors = new Float32Array(n * 4)
       for (let i = 0; i < n; i++) colors.set([c.r, c.g, c.b, a], i * 4)

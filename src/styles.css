@@ -242,6 +242,37 @@ code {
   color: var(--text);
 }
 
+/* How to play: short headed sections, one idea per line, easy to skim. */
+.how-to-parts {
+  display: grid;
+  gap: 12px;
+  margin: 6px 0 12px;
+}
+
+.how-to-part h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.how-to-part ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.how-to-part li {
+  margin-bottom: 4px;
+}
+
+.how-to-keys {
+  font-size: 12.5px;
+}
+
 .menu-foot {
   margin: 18px 0 0;
   font-size: 12px;
@@ -474,6 +505,34 @@ code {
 
 .speed-toggle.is-open {
   border-color: var(--gold);
+}
+
+/* The founding holds the clock: the group says so, and no speed is lit. */
+.speed-group.is-held {
+  border-color: rgba(217, 180, 106, 0.55);
+}
+
+.speed-group .speed-held {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold);
+  background: rgba(217, 180, 106, 0.12);
+}
+
+.speed-toggle.is-held {
+  border-color: rgba(217, 180, 106, 0.55);
+  color: var(--gold);
+}
+
+.speed-toggle .speed-held-word {
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .topbar-meters {
@@ -1413,6 +1472,24 @@ code {
 
 .glade-label:hover .glade-plate {
   stroke: var(--gold);
+}
+
+/* Left to the forest: a softer plate, its kind muted and the truce in green. */
+.glade-label.is-spared .glade-plate {
+  fill: rgba(12, 22, 15, 0.8);
+}
+
+.glade-label.is-spared .glade-kind {
+  fill: #9db394;
+}
+
+.glade-label.is-spared .glade-name {
+  fill: #cfdcc9;
+}
+
+.glade-label.is-spared .glade-spared-line .glade-crew {
+  fill: #aee0bd;
+  font-style: italic;
 }
 
 .glade-kind,

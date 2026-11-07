@@ -488,7 +488,8 @@ const GladePlate = memo(function GladePlate({
   percent: number
   clearers: number
 }) {
-  const stakes = gladeStakesOf(glade)
+  // A glade left to the forest keeps its plate uncluttered (see `gladePlateInfo`).
+  const stakes = access === 'spared' ? [] : gladeStakesOf(glade)
   return (
     <>
       <BatchSprite

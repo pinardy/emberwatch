@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addClearer, isReachable } from '../game/engine/actions'
+import { addClearer, isReachable, reclaimGlade, spareGlade } from '../game/engine/actions'
 import { HEARTH_WARMTH_RADIUS, TICK_SECONDS } from '../game/engine/balance'
 import { createRun } from '../game/engine/createRun'
 import { buildingStatus as engineStatus } from '../game/engine/forecast'
@@ -23,6 +23,7 @@ import {
   isUnlitWarmthSource,
   shade,
   showsWarmthRing,
+  SPARED_STYLE,
   terrainColor,
   tierMark,
   upgradeFraction,
@@ -133,6 +134,35 @@ describe('glade visual language', () => {
     expect(info.access).toBe('clearing')
     expect(gladeAccess(run, reachable)).toBe('clearing')
     expect(gladeAccessText(info.access, info.pct, info.clearers)).toMatch(/⛏ 1 clearing/)
+  })
+
+  it('sets a glade left to the forest apart: its own access, wash and plate line, no stakes', () => {
+    const run = newRun()
+    const border = Object.values(run.glades).find(
+      (g) => gladeLook(g) === 'fogged' && isReachable(run, g.id) && gladePlateInfo(run, g).stakes.length > 0,
+    ) ?? Object.values(run.glades).find((g) => gladeLook(g) === 'fogged' && isReachable(run, g.id))!
+    const before = { fill: gladeFill(border, '2d'), fill3d: gladeFill(border, '3d'), key: gladeSurfaceKey(run) }
+    expect(addClearer(run, border.id)).toBeNull()
+    expect(spareGlade(run, border.id)).toBeNull()
+    // Spared outranks the crew it sent home and the reach it still has.
+    expect(gladeAccess(run, border)).toBe('spared')
+    const info = gladePlateInfo(run, border)
+    expect(info.access).toBe('spared')
+    expect(info.stakes).toEqual([])
+    expect(gladeAccessText(info.access, info.pct, info.clearers)).toBe('Left to the forest')
+    // A mossy ground wash on both maps, apart from every kind's fog.
+    expect(gladeFill(border, '2d')).toBe(SPARED_STYLE.fog)
+    expect(gladeFill(border, '2d')).not.toBe(before.fill)
+    expect(gladeFill(border, '3d')).not.toBe(before.fill3d)
+    for (const style of Object.values(GLADE_KIND_STYLE)) {
+      expect(style.fog).not.toBe(SPARED_STYLE.fog)
+      expect(style.edge).not.toBe(SPARED_STYLE.edge)
+    }
+    // The map layers redraw when a glade is spared, and again when the truce breaks.
+    expect(gladeSurfaceKey(run)).not.toBe(before.key)
+    expect(reclaimGlade(run, border.id)).toBeNull()
+    expect(gladeAccess(run, border)).toBe('reachable')
+    expect(gladeFill(border, '2d')).toBe(before.fill)
   })
 
   it('draws a glade\'s stakes as icons, never as emoji in the plate text', () => {
