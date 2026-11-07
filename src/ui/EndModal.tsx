@@ -11,6 +11,7 @@ import { EndExtras } from './EndExtras'
 import { RunModifierList } from './RunModifierList'
 import { RunTimelineChart } from './RunTimeline'
 import { Icon } from './Icon'
+import { LeversEnd } from './QueenLevers'
 
 export function EndModal() {
   const run = useHudRun()
@@ -19,6 +20,7 @@ export function EndModal() {
   if (!run || run.phase === 'playing') return null
 
   const won = run.phase === 'won'
+  const retreated = !won && !!run.retreated
   const breakdown = supplyBreakdown(run)
   const reward = breakdown.total
   // Winning at the highest edict earned so far opens the next rung (a daily
@@ -32,13 +34,17 @@ export function EndModal() {
     <Overlay>
       <div className={`modal modal-end ${won ? 'is-won' : 'is-lost'}`}>
         <header>
-          <span className="modal-icon">{won ? <Icon id="reputation" /> : <Icon id="fog" emoji="🌫️" />}</span>
+          <span className="modal-icon">
+            {won ? <Icon id="reputation" /> : retreated ? <Icon id="warehouse" emoji="🏰" /> : <Icon id="fog" emoji="🌫️" />}
+          </span>
           <div>
-            <h2>{won ? 'The settlement holds' : 'The settlement is lost'}</h2>
+            <h2>{won ? 'The settlement holds' : retreated ? 'Retreated to the Citadel' : 'The settlement is lost'}</h2>
             <small>
               {won
                 ? 'The Queen is satisfied. Your name goes in the ledger.'
-                : "The Queen's patience ran out before the forest did."}
+                : retreated
+                  ? "You led the settlers home before the Queen's patience ran out. The run counts as lost; what it earned goes home."
+                  : "The Queen's patience ran out before the forest did."}
             </small>
           </div>
         </header>
@@ -55,6 +61,7 @@ export function EndModal() {
             )}
 
             <CommissionEnd run={run} breakdown={breakdown} />
+            <LeversEnd run={run} />
 
             <dl className="end-stats">
               <div>

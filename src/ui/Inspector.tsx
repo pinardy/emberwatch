@@ -50,6 +50,7 @@ import type {
 } from '../game/types'
 import { ScoutReport } from './ScoutReport'
 import { DumpStock } from './DumpStock'
+import { ArchitectSection } from './ArchitectSection'
 import { describeStakes, gladeStakes } from '../game/engine/events'
 import { useConfirm } from './useConfirm'
 import { UpgradeSection } from './UpgradeSection'
@@ -319,6 +320,7 @@ function BuildingInspector({ run, building }: { run: RunState; building: Buildin
             </section>
           )}
           <UpgradeSection run={run} building={building} />
+          {def.category === 'hearth' && <ArchitectSection run={run} />}
           {(def.category === 'hearth' || def.storage) && <DumpStock run={run} />}
         </>
       )}

@@ -8,8 +8,12 @@ import {
   describeOptionCost,
   describeOptionShortfall,
   optionAffordable,
+  redrawTargets,
   rerollCost,
+  targetedRedrawCost,
 } from '../game/engine/events'
+import { NEED_ART } from '../game/content/art'
+import { NEED_LABELS } from '../game/content/species'
 import { useGameStore, useHudRun } from '../game/store'
 import type {
   ConditionSpec,
@@ -29,6 +33,7 @@ import { RunModifierList } from './RunModifierList'
 import { DraftAppealChips } from './DraftAppealChips'
 import { BagIcons } from './BagIcons'
 import { Icon } from './Icon'
+import './levers.css'
 import { conditionArt, cornerstoneArt, gladeEventArt, ongoingArt, threatArt } from '../game/content/artFamilies'
 
 /**
@@ -226,6 +231,7 @@ export function ChoiceModal() {
             <DraftOption key={id} run={run} id={id} onPick={() => chooseOption(id)} />
           ))}
         </div>
+        <TargetedRedraw />
         <RerollButton />
       </div>
     </Overlay>
@@ -296,6 +302,43 @@ function conditionTerms(c: ConditionSpec): string {
   if (won) parts.push(`met: ${won}`)
   if (lost) parts.push(`missed: ${lost}`)
   return parts.join(' · ')
+}
+
+/**
+ * Draft steering: ask the Queen's architect to redraw the open blueprint
+ * draft around the next piece of a named service's chain. The other cards
+ * are drawn at random, so it is still a choice; it costs the reroll price
+ * plus a surcharge, and steepens the reroll ladder.
+ */
+export function TargetedRedraw({ index = 0 }: { index?: number }) {
+  const run = useHudRun()
+  const redraw = useGameStore((s) => s.redrawToward)
+  if (!run) return null
+  const targets = redrawTargets(run, index)
+  if (targets.length === 0) return null
+  const cost = targetedRedrawCost(run)
+  const short = (run.stock.amber ?? 0) < cost
+  return (
+    <div className="targeted-redraw" data-testid="targeted-redraw">
+      <span className="targeted-redraw-label">
+        <Icon id="setSquare" emoji="📐" /> Ask the architect for — {cost} <Icon of={RESOURCES.amber} label="amber" />:
+      </span>
+      <div className="targeted-redraw-needs">
+        {targets.map(({ need, piece }) => (
+          <button
+            key={need}
+            type="button"
+            className="reroll-button"
+            disabled={short}
+            title={`Redraw the offer with a piece of the ${NEED_LABELS[need]?.name ?? need} chain (${BUILDINGS[piece]?.name ?? piece}) among the cards`}
+            onClick={() => redraw(need, index)}
+          >
+            <Icon id={NEED_ART[need]} emoji={NEED_LABELS[need]?.icon} /> {NEED_LABELS[need]?.name ?? need}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 /**
