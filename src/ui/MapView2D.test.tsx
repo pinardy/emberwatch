@@ -201,13 +201,26 @@ describe('2D map parity', () => {
   })
 
   it('ignores map keys while a modal dialog is open', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-    // The opening blueprint draft is a modal dialog.
+    startGame()
+    // A milestone blueprint draft is a modal dialog.
+    act(() => {
+      currentRun().pendingChoices.push({ kind: 'blueprint', options: ['tavern', 'brewery'], mixed: true })
+      useGameStore.setState({ version: useGameStore.getState().version + 1 })
+    })
     expect(document.querySelector('[aria-modal="true"]')).not.toBeNull()
     fireEvent.keyDown(window, { code: 'KeyR' })
     expect(useMapOverlays.getState().showWarmth).toBe(false)
+  })
+
+  it('keeps the map in play during the founding, which is not a modal', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    // The opening picks stand beside the map, not over it.
+    expect(screen.getByRole('region', { name: /^The Founding/ })).toBeTruthy()
+    expect(document.querySelector('[aria-modal="true"]')).toBeNull()
+    fireEvent.keyDown(window, { code: 'KeyR' })
+    expect(useMapOverlays.getState().showWarmth).toBe(true)
   })
 
   it('badges buildings with what they are doing', () => {

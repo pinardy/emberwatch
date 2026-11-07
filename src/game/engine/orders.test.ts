@@ -32,6 +32,7 @@ import {
   orderGoal,
   orderProgress,
   stepOrders,
+  takeOrderOffer,
 } from './orders'
 import { migrateRun } from '../persistence'
 import {
@@ -96,9 +97,9 @@ describe('order draws', () => {
       const s = matureRun(seed)
       s.orders = []
       for (let round = 0; round < 6; round++) {
-        s.pendingChoices = []
+        s.orderOffers = []
         expect(offerOrders(s)).toBe(true)
-        const choice = s.pendingChoices[0]
+        const choice = s.orderOffers[0]
         expect(choice.kind).toBe('order')
         expect(choice.orders!.length).toBeGreaterThanOrEqual(1)
         for (const order of choice.orders!) {
@@ -109,7 +110,7 @@ describe('order draws', () => {
         // Taking it and running a tick does not complete it on the spot.
         const reputation = s.reputation
         const completed = s.stats.ordersCompleted
-        takeChoice(s, choice.options[0])
+        expect(takeOrderOffer(s, 0, choice.options[0])).toBe(true)
         stepOrders(s)
         expect(s.stats.ordersCompleted).toBe(completed)
         expect(s.reputation).toBe(reputation)
@@ -144,9 +145,9 @@ describe('order draws', () => {
     fresh.unlockedBuildings = [...STARTING_BLUEPRINTS]
     for (let i = 0; i < 30; i++) {
       fresh.orders = []
-      fresh.pendingChoices = []
+      fresh.orderOffers = []
       offerOrders(fresh)
-      for (const order of fresh.pendingChoices[0].orders!) {
+      for (const order of fresh.orderOffers[0].orders!) {
         expect(['stock_tool_8', 'ship_tool_8', 'ship_copper_12', 'stock_ale_15', 'produced_scroll_20']).not.toContain(
           order.defId,
         )
@@ -163,9 +164,9 @@ describe('order draws', () => {
     s.stats.gladesCleared = 5
     s.orders = []
     for (let i = 0; i < 40; i++) {
-      s.pendingChoices = []
+      s.orderOffers = []
       offerOrders(s)
-      for (const order of s.pendingChoices[0].orders!) {
+      for (const order of s.orderOffers[0].orders!) {
         if (orderGoal(order)!.kind !== 'gladesCleared') continue
         expect(order.baseline).toBe(5)
         expect(order.progress).toBe(0)
@@ -179,9 +180,9 @@ describe('order draws', () => {
     staffed(s, 'stonecuttersCamp', 2)
     // Every ordinary order is either seen or no longer fits.
     s.orders = []
-    s.pendingChoices = []
+    s.orderOffers = []
     offerOrders(s)
-    const counting = s.pendingChoices[0].orders!.filter((o) => o.defId === 'count_produce')
+    const counting = s.orderOffers[0].orders!.filter((o) => o.defId === 'count_produce')
     expect(counting.length).toBeGreaterThan(0)
     for (const order of counting) {
       const goal = orderGoal(order)!
@@ -199,7 +200,7 @@ describe('order draws', () => {
 })
 
 describe('orders as a choice', () => {
-  it('refills an empty slot with a choice of two', () => {
+  it('refills an empty slot with a choice of two that waits without stopping the clock', () => {
     const s = openedRun()
     expect(s.orders.length).toBe(ORDER_SLOTS)
     const first = s.orders[0]
@@ -212,16 +213,29 @@ describe('orders as a choice', () => {
     stepOrders(s)
     expect(s.reputation).toBeGreaterThan(before)
     expect(s.orders.length).toBe(ORDER_SLOTS - 1)
-    const choice = s.pendingChoices.at(-1)!
+    // The choice waits in the Orders panel, not as a pop-up.
+    expect(s.pendingChoices).toHaveLength(0)
+    expect(s.orderOffers).toHaveLength(1)
+    const choice = s.orderOffers[0]
     expect(choice.kind).toBe('order')
     expect(choice.options).toHaveLength(2)
     expect(new Set(choice.orders!.map((o) => o.defId)).size).toBe(2)
-    // The sim waits for the pick.
+    expect(s.log[0].text).toMatch(/new order awaits your choice in the Orders panel/)
+    // The sim keeps running, and the slot stays empty until the pick.
     const clock = s.clock
     tick(s, 1)
-    expect(s.clock).toBe(clock)
-    takeChoice(s, choice.options[1])
-    expect(s.pendingChoices).toHaveLength(0)
+    expect(s.clock).toBeGreaterThan(clock)
+    expect(s.orders.length).toBe(ORDER_SLOTS - 1)
+    expect(s.orderOffers).toEqual([choice])
+    // No second offer is stacked on the same empty slot.
+    stepOrders(s)
+    expect(s.orderOffers).toHaveLength(1)
+    // An unknown option or offer changes nothing.
+    expect(takeOrderOffer(s, 0, 'nonsense')).toBe(false)
+    expect(takeOrderOffer(s, 3, choice.options[0])).toBe(false)
+    expect(s.orderOffers).toHaveLength(1)
+    expect(takeOrderOffer(s, 0, choice.options[1])).toBe(true)
+    expect(s.orderOffers).toHaveLength(0)
     expect(s.orders.length).toBe(ORDER_SLOTS)
     expect(s.orders.at(-1)!.id).toBe(choice.options[1])
     expect(s.ordersSeen).toContain(choice.orders![1].defId)
@@ -231,18 +245,18 @@ describe('orders as a choice', () => {
     const s = openedRun()
     s.orders.pop()
     offerOrders(s)
-    const choice = s.pendingChoices[0]
+    const choice = s.orderOffers[0]
     const declined = choice.orders!.map((o) => o.defId)
     expect(orderDeclineBlocked(s, choice)).toBeNull()
     const before = impatienceOf(s)
-    takeChoice(s, DECLINE_CHOICE)
+    expect(takeOrderOffer(s, 0, DECLINE_CHOICE)).toBe(false)
     expect(impatienceOf(s)).toBeCloseTo(before + ORDER_DECLINE_IMPATIENCE)
-    expect(s.pendingChoices[0]).toBe(choice)
+    expect(s.orderOffers[0]).toBe(choice)
     for (const order of choice.orders!) expect(declined).not.toContain(order.defId)
     // Not twice in one year.
     expect(orderDeclineBlocked(s, choice)).not.toBeNull()
     const options = [...choice.options]
-    takeChoice(s, DECLINE_CHOICE)
+    expect(takeOrderOffer(s, 0, DECLINE_CHOICE)).toBe(false)
     expect(choice.options).toEqual(options)
     expect(impatienceOf(s)).toBeCloseTo(before + ORDER_DECLINE_IMPATIENCE)
     // A new year, a new chance.
@@ -257,6 +271,8 @@ describe('the founding writ', () => {
     expect(s.orders).toHaveLength(ORDER_SLOTS - 1)
     const writ = s.pendingChoices.at(-1)!
     expect(isWritChoice(writ)).toBe(true)
+    // A founding pick, made beside the map with the drafts.
+    expect(writ.founding).toBe(true)
     expect(writ.options).toHaveLength(WRIT_LIST.length)
     for (const order of writ.orders!) {
       expect(order.writ).toBe(true)
@@ -277,7 +293,8 @@ describe('the founding writ', () => {
     stepOrders(s)
     expect(s.reputation).toBe(1)
     expect(s.orders.some((o) => o.writ)).toBe(false)
-    expect(s.pendingChoices.at(-1)?.kind).toBe('order')
+    expect(s.pendingChoices).toHaveLength(0)
+    expect(s.orderOffers).toHaveLength(1)
     expect(s.log.some((e) => e.text.includes('Founding writ fulfilled'))).toBe(true)
   })
 })
@@ -411,6 +428,30 @@ describe('old saves', () => {
     run.producedTotals.wood = 120
     stepOrders(run)
     expect(run.orders).toHaveLength(1)
-    expect(run.pendingChoices.filter((c) => c.kind === 'order')).toHaveLength(ORDER_SLOTS - 1)
+    expect(run.orderOffers).toHaveLength(ORDER_SLOTS - 1)
+    expect(run.pendingChoices.filter((c) => c.kind === 'order')).toHaveLength(0)
+  })
+
+  it('moves an order choice an older save left waiting as a pop-up into the Orders panel', () => {
+    const s = openedRun()
+    s.orders.pop()
+    offerOrders(s)
+    // The old flow queued the offer with the pop-ups, ahead of a glade event.
+    const legacy = JSON.parse(JSON.stringify(s))
+    const offer = legacy.orderOffers[0]
+    delete legacy.orderOffers
+    legacy.pendingChoices = [offer, { kind: 'gladeEvent', options: ['rainDrenchedCache'], gladeId: 'glade1' }]
+    const run = migrateRun(legacy)!
+    expect(run.orderOffers).toHaveLength(1)
+    expect(run.orderOffers[0].options).toEqual(offer.options)
+    expect(run.pendingChoices.map((c) => c.kind)).toEqual(['gladeEvent'])
+    // It is choosable, and the slot fills.
+    expect(takeOrderOffer(run, 0, offer.options[1])).toBe(true)
+    expect(run.orders.at(-1)!.id).toBe(offer.options[1])
+    expect(run.orders).toHaveLength(ORDER_SLOTS)
+    // A save with nothing waiting gains an empty list.
+    const plain = JSON.parse(JSON.stringify(openedRun()))
+    delete plain.orderOffers
+    expect(migrateRun(plain)!.orderOffers).toEqual([])
   })
 })

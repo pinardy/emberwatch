@@ -208,6 +208,8 @@ export function runProblem(run: unknown): string | null {
     if (!Array.isArray(run[field]) || !run[field].every(isRec))
       return `its ${field} are damaged`
   }
+  if (run.orderOffers !== undefined && (!Array.isArray(run.orderOffers) || !run.orderOffers.every(isRec)))
+    return 'its order offers are damaged'
   if (!strings(run.cornerstones)) return 'its cornerstones are damaged'
   if (!isRec(run.stats)) return 'its stats are missing'
   return null

@@ -131,7 +131,7 @@ export function useAudioCues(run: RunState | null): void {
       sites: Object.keys(run.buildings).length,
       lost: run.stats.villagersLost,
       pop: population(run),
-      choices: run.pendingChoices.length,
+      choices: run.pendingChoices.length + (run.orderOffers?.length ?? 0),
       threats: run.threats.length,
       threatTimers: Object.fromEntries(run.threats.map((t) => [t.id, t.timer])),
       glades: run.stats.gladesCleared,

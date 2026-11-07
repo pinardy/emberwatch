@@ -15,6 +15,7 @@ import type {
   ConditionSpec,
   CornerstoneDef,
   ResourceBag,
+  RunState,
   ThreatSpec,
 } from '../game/types'
 import { formatDuration } from '../game/engine/forecast'
@@ -31,9 +32,11 @@ import { Icon } from './Icon'
 import { conditionArt, cornerstoneArt, gladeEventArt, ongoingArt, threatArt } from '../game/content/artFamilies'
 
 /**
- * Blocking modal for the things that interrupt play: cornerstone and
- * blueprint picks, glade events, the charter, and the Queen's order and
- * decree offers. The sim is paused while it is open.
+ * Blocking modal for the things that interrupt play: milestone cornerstone
+ * and blueprint picks, glade events, the charter and the Queen's decree
+ * offers. The sim is paused while it is open. The run's founding picks are
+ * made in the Founding panel beside the map instead, and order offers wait in
+ * the Orders panel without stopping the clock.
  */
 export function ChoiceModal() {
   const run = useHudRun()
@@ -41,7 +44,7 @@ export function ChoiceModal() {
   const chooseEventOption = useGameStore((s) => s.chooseEventOption)
   if (!run) return null
   const choice = run.pendingChoices[0]
-  if (!choice) return null
+  if (!choice || choice.founding) return null
 
   if (choice.kind === 'gladeEvent') {
     const def = GLADE_EVENTS[choice.options[0]]
@@ -152,6 +155,7 @@ export function ChoiceModal() {
   }
 
   if (choice.kind === 'order') {
+    // Only a founding writ from an older save can still queue here.
     return (
       <Overlay>
         <OrderChoice run={run} choice={choice} />
@@ -218,38 +222,9 @@ export function ChoiceModal() {
           </div>
         )}
         <div className="option-list option-grid">
-          {choice.options.map((id) => {
-            const def = BUILDINGS[id]
-            if (!def) {
-              const stone = CORNERSTONES[id]
-              return stone ? (
-                <CornerstoneOption key={id} def={stone} onPick={() => chooseOption(id)} />
-              ) : null
-            }
-            return (
-              <button
-                key={id}
-                type="button"
-                className="option"
-                onClick={() => chooseOption(id)}
-              >
-                <span className="option-icon">
-                  <Icon of={def} />
-                </span>
-                <strong>{def.name}</strong>
-                <small>{def.description}</small>
-                <div className="option-effects">
-                  <Effect label="Cost" bag={def.cost} tone="bad" />
-                  {def.workerSlots > 0 && (
-                    <span>
-                      <Icon id="worker" emoji="👷" /> {def.workerSlots}
-                    </span>
-                  )}
-                  <DraftAppealChips run={run} defId={id} />
-                </div>
-              </button>
-            )
-          })}
+          {choice.options.map((id) => (
+            <DraftOption key={id} run={run} id={id} onPick={() => chooseOption(id)} />
+          ))}
         </div>
         <RerollButton />
       </div>
@@ -257,8 +232,35 @@ export function ChoiceModal() {
   )
 }
 
+/** One card of a blueprint draft: a building, or a mixed draft's cornerstone. */
+export function DraftOption({ run, id, onPick }: { run: RunState; id: string; onPick: () => void }) {
+  const def = BUILDINGS[id]
+  if (!def) {
+    const stone = CORNERSTONES[id]
+    return stone ? <CornerstoneOption def={stone} onPick={onPick} /> : null
+  }
+  return (
+    <button type="button" className="option" onClick={onPick}>
+      <span className="option-icon">
+        <Icon of={def} />
+      </span>
+      <strong>{def.name}</strong>
+      <small>{def.description}</small>
+      <div className="option-effects">
+        <Effect label="Cost" bag={def.cost} tone="bad" />
+        {def.workerSlots > 0 && (
+          <span>
+            <Icon id="worker" emoji="👷" /> {def.workerSlots}
+          </span>
+        )}
+        <DraftAppealChips run={run} defId={id} />
+      </div>
+    </button>
+  )
+}
+
 /** One cornerstone card, in a cornerstone draft or a mixed blueprint draft. */
-function CornerstoneOption({ def, onPick }: { def: CornerstoneDef; onPick: () => void }) {
+export function CornerstoneOption({ def, onPick }: { def: CornerstoneDef; onPick: () => void }) {
   return (
     <button type="button" className={`option rarity-${def.rarity}`} onClick={onPick}>
       <span className="option-icon">
@@ -296,8 +298,11 @@ function conditionTerms(c: ConditionSpec): string {
   return parts.join(' · ')
 }
 
-/** Amber lever on drafts: redraw the options at a steepening price. */
-function RerollButton() {
+/**
+ * Amber lever on drafts: redraw the options at a steepening price. Redraws
+ * the front choice, or the queued one at `index` (a founding pick).
+ */
+export function RerollButton({ index = 0 }: { index?: number }) {
   const run = useHudRun()
   const reroll = useGameStore((s) => s.reroll)
   if (!run) return null
@@ -308,7 +313,7 @@ function RerollButton() {
         type="button"
         className="reroll-button"
         disabled={(run.stock.amber ?? 0) < cost}
-        onClick={reroll}
+        onClick={() => reroll(index)}
       >
         {freeRerollsLeft(run) > 0 ? (
           <>
