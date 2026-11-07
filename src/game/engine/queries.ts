@@ -1,7 +1,13 @@
 import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE, RESOURCES } from '../content/resources'
 import { serviceCapacity } from './adjacency'
-import { HEARTH_WARMTH_RADIUS, RESOLVE_LEAVE_THRESHOLD, SECONDS_TO_LEAVE } from './balance'
+import {
+  HEARTH_REACH_STEP,
+  HEARTH_STORM_REACH_FLOOR,
+  HEARTH_WARMTH_RADIUS,
+  RESOLVE_LEAVE_THRESHOLD,
+  SECONDS_TO_LEAVE,
+} from './balance'
 import { dist } from './geometry'
 import { memoByBuildings, memoByVillagers } from './runCache'
 import { despairRate } from './traits'
@@ -83,13 +89,32 @@ export interface WarmthSource {
 }
 
 /**
- * Every live warmth source: the hearth (always — a cold hearth has its own
- * penalty) and each built brazier that has not run out of wood.
+ * The hearth's warm reach right now. Outside the Storm it is
+ * `HEARTH_WARMTH_RADIUS`; through the Storm it pulls in step by step, down to
+ * `HEARTH_STORM_REACH_FLOOR` of that as the Storm ends, so homes on the edge
+ * of a large settlement need a brazier or insulation to see the Storm out.
  */
-export function warmthSources(
-  s: RunState,
-  hearthRadius: number = HEARTH_WARMTH_RADIUS,
-): WarmthSource[] {
+export function hearthWarmthRadius(s: RunState): number {
+  if (s.season.season !== 'storm') return HEARTH_WARMTH_RADIUS
+  return hearthReachAt(Math.min(1, s.season.elapsed / Math.max(1, s.season.length)))
+}
+
+/** The hearth's reach `progress` (0..1) of the way through a Storm. */
+export function hearthReachAt(progress: number): number {
+  const raw = HEARTH_WARMTH_RADIUS * (1 - (1 - HEARTH_STORM_REACH_FLOOR) * progress)
+  // Whole steps, rounded up: the ring pulls in a few times, not every tick.
+  return Math.ceil(raw / HEARTH_REACH_STEP - 1e-9) * HEARTH_REACH_STEP
+}
+
+/** The hearth's reach at the end of a Storm — the edge a home must sit inside to stay warm all Storm. */
+export const HEARTH_STORM_END_REACH = hearthReachAt(1)
+
+/**
+ * Every live warmth source: the hearth (always — a cold hearth has its own
+ * penalty) at its current reach, and each built brazier that has not run out
+ * of wood.
+ */
+export function warmthSources(s: RunState, hearthRadius = hearthWarmthRadius(s)): WarmthSource[] {
   const out: WarmthSource[] = []
   for (const b of Object.values(s.buildings)) {
     const def = BUILDINGS[b.defId]
@@ -113,11 +138,7 @@ export function isWarmHome(s: RunState, b: BuildingInstance, sources?: WarmthSou
 }
 
 /** Whether a home at `pos` sits inside any live warmth source. */
-export function isWarmAt(
-  s: RunState,
-  pos: Vec2,
-  hearthRadius: number = HEARTH_WARMTH_RADIUS,
-): boolean {
+export function isWarmAt(s: RunState, pos: Vec2, hearthRadius = hearthWarmthRadius(s)): boolean {
   return warmthSources(s, hearthRadius).some((w) => dist(w.pos, pos) <= w.radius)
 }
 
@@ -132,11 +153,11 @@ export function homesWithin(s: RunState, pos: Vec2, radius: number): BuildingIns
 }
 
 /**
- * Housing capacity inside any warmth source — the hearth's radius or a lit
- * brazier's. Homes beyond every source are cold during the Storm — see
- * `RESOLVE_COLD_HOME`.
+ * Housing capacity inside any warmth source — the hearth's current reach or a
+ * lit brazier's — or insulated. Homes beyond every source are cold during the
+ * Storm — see `RESOLVE_COLD_HOME` and `FROST_EXPOSURE_PER_LOSS`.
  */
-export function warmHousing(s: RunState, radius: number = HEARTH_WARMTH_RADIUS): number {
+export function warmHousing(s: RunState, radius = hearthWarmthRadius(s)): number {
   const sources = warmthSources(s, radius)
   let sum = 0
   for (const b of Object.values(s.buildings)) {

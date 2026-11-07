@@ -32,7 +32,9 @@ import {
   placeBuilding,
   canUpgradeBuilding,
   removeWorker,
+  reclaimGlade,
   setRecipe,
+  spareGlade,
   upgradeBuilding,
 } from './actions'
 import { GLADES_PER_REPUTATION, IMPATIENCE_PER_VILLAGER_LOST, ROAD_MAX_LENGTH } from './balance'
@@ -49,6 +51,7 @@ import {
   takeChoice,
 } from './events'
 import {
+  HEARTH_STORM_END_REACH,
   SERVICE_COVERAGE_RATIO,
   activeRecipe,
   canAfford,
@@ -74,7 +77,7 @@ import { tick } from './tick'
 import { productionRate } from './forecast'
 import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation } from './orders'
 import { categoryRate, decreeGoal, decreeReputation } from './structure'
-import { baseServiceCapacity, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
+import { baseServiceCapacity, isInsulated, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 
 /**
  * End-to-end balance harness.
@@ -129,6 +132,10 @@ interface BotReport {
   lost: number
   /** Braziers raised to warm homes beyond the hearth. */
   braziers: number
+  /** Glades left to the forest at the end. */
+  spared: number
+  /** Villagers the Storm's cold took. */
+  frozen: number
   /** Upgrade tiers standing at the end, across every building. */
   upgrades: number
   /** Map modifiers the seed drew (or the test forced). */
@@ -396,7 +403,9 @@ function warmSprawl(s: RunState): boolean {
     (b) =>
       b.built &&
       BUILDINGS[b.defId]?.category === 'housing' &&
-      !isWarmAt(s, b.pos) &&
+      !isInsulated(b) &&
+      // The hearth's reach pulls in through the Storm: plan for its end.
+      !isWarmAt(s, b.pos, HEARTH_STORM_END_REACH) &&
       // A planned (or guttering) brazier already covers it.
       !braziers.some((w) => dist(w.pos, b.pos) <= reach),
   )
@@ -849,14 +858,41 @@ function dumpSurplus(s: RunState): void {
 }
 
 /**
+ * Glades the bot reclaims before it weighs leaving the rest to the forest:
+ * enough for two of the Citadel's reclaimed-land points and the ground and
+ * deposits a full settlement needs.
+ */
+const GLADES_BEFORE_SPARING = 2 * GLADES_PER_REPUTATION
+/** Past that, hostility at which the bot spares the glades on its border. */
+const SPARE_AT_HOSTILITY = 25
+
+/**
  * Keeps a crew on the cheapest reachable glade. Expansion is not optional — the
  * starting glade cannot supply a growing settlement — so this runs *before*
- * staffing and takes its people first.
+ * staffing and takes its people first. Once the settlement holds enough land
+ * and the forest is pressing, every further glade costs hostility for loot it
+ * no longer needs, so the bot leaves the glades on its border to the forest
+ * instead (they calm it for as long as they stand).
  */
 function explore(s: RunState): void {
   const pop = population(s)
   // A hungry settlement needs its hands at home, not in the woods.
   if (pop < 6 || s.starving) return
+
+  // An open order for glades is worth clearing for first.
+  const gladeOrder = s.orders.some((o) => orderGoal(o)?.kind === 'gladesCleared')
+  if (
+    !gladeOrder &&
+    s.stats.gladesCleared >= GLADES_BEFORE_SPARING &&
+    s.hostility >= SPARE_AT_HOSTILITY
+  ) {
+    for (const g of Object.values(s.glades)) {
+      if (g.cleared || g.spared || !isReachable(s, g.id)) continue
+      // A crew more than halfway through finishes the job.
+      if (g.clearers > 0 && g.clearProgress >= g.clearWork / 2) continue
+      spareGlade(s, g.id)
+    }
+  }
 
   const inProgress = Object.values(s.glades).find((g) => !g.cleared && g.clearers > 0)
   const crew = Math.min(4, Math.max(2, Math.floor(pop / 8)))
@@ -868,9 +904,13 @@ function explore(s: RunState): void {
     return
   }
 
-  const target = Object.values(s.glades)
-    .filter((g) => !g.cleared && isReachable(s, g.id))
-    .sort((a, b) => a.clearWork - b.clearWork)[0]
+  const border = Object.values(s.glades).filter((g) => !g.cleared && isReachable(s, g.id))
+  let target = border.filter((g) => !g.spared).sort((a, b) => a.clearWork - b.clearWork)[0]
+  if (!target && gladeOrder) {
+    // The order is worth more than the truce: break it on the cheapest glade.
+    target = border.sort((a, b) => a.clearWork - b.clearWork)[0]
+    if (target) reclaimGlade(s, target.id)
+  }
   if (!target) return
   for (let i = 0; i < crew; i++) {
     if (addClearer(s, target.id) !== null) break
@@ -1149,6 +1189,7 @@ function playRun(
   const sources: ReputationSources = { orders: 0, decrees: 0, glades: 0, events: 0, resolve: 0 }
   let wardSeconds = 0
   let stallImpatience = 0
+  let frozen = 0
   const impatienceBy: ImpatienceSources = {
     calendar: 0,
     stalling: 0,
@@ -1194,7 +1235,9 @@ function playRun(
     const impBefore = impatienceNow()
     const lostBefore = s.stats.villagersLost
     const ticked = s.pendingChoices.length === 0
+    const frostBefore = s.frostExposure ?? 0
     tick(s, STEP)
+    if (s.season.season === 'storm' && (s.frostExposure ?? 0) < frostBefore) frozen++
     if (ticked) {
       impatienceBy.calendar += (parts.calendar + parts.hostility) * STEP
       impatienceBy.stalling += parts.stalling * STEP
@@ -1259,6 +1302,8 @@ function playRun(
     sources,
     lost: s.stats.villagersLost,
     braziers: countPlanned(s, 'brazier'),
+    spared: Object.values(s.glades).filter((g) => g.spared && !g.cleared).length,
+    frozen,
     upgrades: Object.values(s.buildings).reduce((sum, b) => sum + tierOf(b), 0),
     modifiers: s.runModifiers.join(','),
     openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),
@@ -1369,7 +1414,8 @@ function summarise(label: string, reports: BotReport[]): string {
     ` · all glades cleared ${((reports.filter((r) => r.gladesCleared >= 14).length / Math.max(1, reports.length)) * 100).toFixed(0)}%` +
     ` · glades ${histogram(reports.map((r) => r.gladesCleared))}` +
     ` · median braziers in wins ${median(wins.map((r) => r.braziers)).toFixed(1)}` +
-    ` · villagers lost ${reports.reduce((n, r) => n + r.lost, 0)} (${mean(reports.map((r) => r.lost)).toFixed(2)}/run)` +
+    ` · villagers lost ${reports.reduce((n, r) => n + r.lost, 0)} (${mean(reports.map((r) => r.lost)).toFixed(2)}/run, ${reports.reduce((n, r) => n + r.frozen, 0)} to frost)` +
+    ` · spared/run ${mean(reports.map((r) => r.spared)).toFixed(1)}` +
     ` · causes ${histogram(losses.map((r) => r.cause))}`
   )
 }
@@ -1386,7 +1432,7 @@ function histogram(values: (string | number)[]): string {
 
 function logRun(seed: number, r: BotReport): void {
   console.log(
-    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · decrees ${r.decreesMet}/${r.decreesMet + r.decreesMissed} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · first rep ${r.firstRepMinute.toFixed(1)}min · late ${(r.lateShare * 100).toFixed(0)}% · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
+    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} spared ${r.spared} · frozen ${r.frozen} · orders ${r.ordersCompleted} · decrees ${r.decreesMet}/${r.decreesMet + r.decreesMissed} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · first rep ${r.firstRepMinute.toFixed(1)}min · late ${(r.lateShare * 100).toFixed(0)}% · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
       ` · cause ${r.cause} · impBy cal ${r.impatienceBy.calendar.toFixed(1)} stall ${r.impatienceBy.stalling.toFixed(1)} stag ${r.impatienceBy.stagnation.toFixed(1)} dl ${r.impatienceBy.deadline.toFixed(1)} lost ${r.impatienceBy.losses.toFixed(1)} ev ${r.impatienceBy.events.toFixed(1)} · over ${r.overThreshold.map((x) => x.toFixed(0)).join('/')} · blights ${r.blights.struck}/${r.blights.blunted} of ${r.blights.forecast} · wards ${r.wardMinutes.toFixed(1)} · stallImp ${r.stallImpatience.toFixed(1)}` +
       `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}\n    reputation by minute: ${r.curve.join(' ')}`,
   )

@@ -11,6 +11,12 @@ import {
   isReachable,
   rushCost,
 } from '../game/engine/actions'
+import {
+  HOSTILITY_PER_GLADE_CLEARED,
+  HOSTILITY_RATE_PER_CLEARED_GLADE,
+  SPARED_GLADE_RECLAIM_HOSTILITY,
+} from '../game/engine/balance'
+import { sparedGladeCalmOf } from '../game/engine/tick'
 import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { computeModifiers } from '../game/engine/modifiers'
 import { availableRecipes, idleVillagers } from '../game/engine/queries'
@@ -37,6 +43,7 @@ import type {
   BuildingInstance,
   DepositId,
   Recipe,
+  Glade,
   ResourceBag,
   RunState,
   Villager,
@@ -636,6 +643,8 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
           <p className="muted">
             Too far. Clear a glade that borders this one before your crews can reach it.
           </p>
+        ) : glade.spared ? (
+          <SparedGlade run={run} glade={glade} />
         ) : (
           <>
             <section className="inspector-section">
@@ -674,10 +683,74 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
               )}
               <ScoutReport run={run} gladeId={gladeId} />
             </section>
+
+            <LeaveToForest run={run} glade={glade} />
           </>
         )}
       </div>
     </div>
+  )
+}
+
+/** Hostility per minute a spared glade of this kind calms, for display. */
+function calmPerMinute(glade: Glade): string {
+  return (sparedGladeCalmOf(glade.kind) * 60).toFixed(2)
+}
+
+/**
+ * The other choice on a border glade: leave it wild. Clearing pays loot,
+ * ground and reclaimed-land reputation but angers the forest for good;
+ * sparing gives all of that up and calms it while the glade stands.
+ */
+function LeaveToForest({ run, glade }: { run: RunState; glade: Glade }) {
+  const spare = useGameStore((s) => s.spareGlade)
+  const mods = computeModifiers(run)
+  const jump = HOSTILITY_PER_GLADE_CLEARED * mods.gladeHostility
+  return (
+    <section className="inspector-section glade-truce">
+      <h4>Or leave it to the forest</h4>
+      <p className="muted">
+        Clearing it adds {jump.toFixed(1)} hostility now and makes the forest grow{' '}
+        {Math.round(HOSTILITY_RATE_PER_CLEARED_GLADE * 100)}% faster for the rest of the run. Left
+        wild, it calms hostility by {calmPerMinute(glade)} a minute for as long as it stands — but
+        its haul, its ground and whatever waits there stay in the woods.
+      </p>
+      <button
+        type="button"
+        onClick={() => spare(glade.id)}
+        title={glade.clearers > 0 ? 'The clearing crew comes home.' : undefined}
+      >
+        <Icon id="trees" emoji="🌲" /> Leave to the forest
+      </button>
+    </section>
+  )
+}
+
+/** A glade already spared: what it is doing, and the costly way back. */
+function SparedGlade({ run, glade }: { run: RunState; glade: Glade }) {
+  const reclaim = useGameStore((s) => s.reclaimGlade)
+  const confirm = useConfirm(`reclaim-${glade.id}`, () => reclaim(glade.id))
+  return (
+    <section className="inspector-section glade-truce is-spared">
+      <h4>
+        <Icon id="trees" emoji="🌲" /> Left to the forest
+      </h4>
+      <p className="muted">
+        It stays wild and calms hostility by {calmPerMinute(glade)} a minute while it stands
+        (hostility now {Math.floor(run.hostility)}). Crews cannot clear it until the truce is
+        broken.
+      </p>
+      <button
+        type="button"
+        className={confirm.armed ? 'danger is-armed' : ''}
+        onClick={confirm.trigger}
+        title={`Breaking the truce costs ${SPARED_GLADE_RECLAIM_HOSTILITY} hostility`}
+      >
+        {confirm.armed
+          ? `Break the truce? +${SPARED_GLADE_RECLAIM_HOSTILITY} hostility — click again`
+          : `Break the truce (+${SPARED_GLADE_RECLAIM_HOSTILITY} hostility)`}
+      </button>
+    </section>
   )
 }
 

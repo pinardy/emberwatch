@@ -149,7 +149,10 @@ function withinReach(goal: OrderGoal, s: RunState): boolean {
       return goal.amount <= totalHousing(s) + ORDER_REACH.housing
     case 'gladesCleared': {
       // Counted from the draw: that many glades must still stand to clear.
-      const standing = Object.values(s.glades).filter((g) => g.kind !== 'settlement' && !g.cleared).length
+      // Glades left to the forest are not there to clear.
+      const standing = Object.values(s.glades).filter(
+        (g) => g.kind !== 'settlement' && !g.cleared && !g.spared,
+      ).length
       return goal.amount <= ORDER_REACH.glades && goal.amount <= standing
     }
     case 'buildingId':

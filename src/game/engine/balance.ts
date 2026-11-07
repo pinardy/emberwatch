@@ -202,7 +202,7 @@ export const REPUTATION_UNSERVED_SHARE = 0.1
 /** Impatience gained for each villager that leaves or dies. */
 export const IMPATIENCE_PER_VILLAGER_LOST = 0.6
 /** Baseline impatience per second (grows each year). */
-export const IMPATIENCE_BASE = 0.0022
+export const IMPATIENCE_BASE = 0.0016
 export const IMPATIENCE_YEAR_SCALING = 0.18
 /**
  * Extra impatience per second once hostility passes the threshold: a
@@ -273,8 +273,12 @@ export const HEARTH_IDLE_FUEL_PER_SECOND = 0.04
  * of making sprawl a decision rather than free real estate.
  */
 export const HEARTH_WARMTH_RADIUS = 5
-/** Resolve penalty (scaled by the exposed share) for cold homes in the Storm. */
-export const RESOLVE_COLD_HOME = -8
+/**
+ * Resolve penalty (scaled by the exposed share) for cold homes in the Storm.
+ * Was −8; cold homes now also cost lives (`FROST_EXPOSURE_PER_LOSS`) and the
+ * hearth's reach shrinks through the Storm (`HEARTH_STORM_REACH_FLOOR`).
+ */
+export const RESOLVE_COLD_HOME = -12
 
 // ---------------------------------------------------------------------------
 // Placement (continuous world space)
@@ -549,3 +553,78 @@ export const DRAFT_PITY = 1
  * a cleared map.
  */
 export const WARD_HOSTILITY_PER_OFFERING = 0.3
+
+// ---------------------------------------------------------------------------
+// Mid-run tension: a Queen who notices reputation standing still, rising
+// expectations, glades left to the forest, and a Storm that shrinks the
+// hearth's reach (new section — tuned together against the balance harness)
+// ---------------------------------------------------------------------------
+
+/**
+ * Seconds after the last whole reputation point before the Queen starts to
+ * notice that it has stopped rising. Every new point resets the clock.
+ */
+export const IMPATIENCE_STAGNATION_GRACE = 60
+/**
+ * Past the grace, stagnation impatience per second grows by this much for
+ * every further second without a reputation point — gentle at first (a
+ * minute past the grace adds ~0.1 a minute), a real push after four…
+ */
+export const IMPATIENCE_STAGNATION_RAMP = 0.0001
+/** …up to this many per second (~0.6 a minute) for a settlement gone still. */
+export const IMPATIENCE_STAGNATION_MAX = 0.008
+
+/**
+ * Rising expectations: from Year 2 a species with every need met loses this
+ * much resolve per year after the first (one with half its needs met, half
+ * as much) — what pleased a young settlement is taken for granted later, so
+ * resolve does not plateau far above the reputation threshold once services
+ * stand, and a service lost late hurts more than one never built…
+ */
+export const RESOLVE_EXPECTATION_PER_YEAR = 2
+/**
+ * …and this much per villager past `RESOLVE_EXPECTATION_CROWD_FROM`: a bigger
+ * settlement expects more of its viceroy.
+ */
+export const RESOLVE_EXPECTATION_PER_VILLAGER = 0.2
+export const RESOLVE_EXPECTATION_CROWD_FROM = 15
+
+/**
+ * Every glade reclaimed makes the forest's passive hostility grow this share
+ * faster for the rest of the run (on top of the one-off
+ * `HOSTILITY_PER_GLADE_CLEARED`), so the fourteenth glade costs more than
+ * the fourth.
+ */
+export const HOSTILITY_RATE_PER_CLEARED_GLADE = 0.04
+/**
+ * A glade left to the forest calms it by this much hostility per second for as
+ * long as it stands uncleared — scaled by its kind (`SPARED_GLADE_WEIGHT`).
+ */
+export const HOSTILITY_CALM_PER_SPARED_GLADE = 0.002
+export const SPARED_GLADE_WEIGHT = {
+  settlement: 0,
+  small: 1,
+  dangerous: 1.5,
+  forbidden: 2,
+} as const
+/**
+ * Hostility for breaking the truce on a spared glade (to clear it after all):
+ * more than a spared glade calms in ten minutes, so sparing is a commitment.
+ */
+export const SPARED_GLADE_RECLAIM_HOSTILITY = 5
+
+/**
+ * Through the Storm the hearth's warm reach shrinks steadily, down to this
+ * share of `HEARTH_WARMTH_RADIUS` as the Storm ends (in steps of
+ * `HEARTH_REACH_STEP`, so the ring visibly pulls in a few times rather than
+ * creeping every tick). Homes on the edge need a brazier or insulation.
+ */
+export const HEARTH_STORM_REACH_FLOOR = 0.7
+export const HEARTH_REACH_STEP = 0.25
+/**
+ * Frost: every villager sleeping in a cold home through the Storm adds a
+ * second of exposure per second; each time the settlement's exposure reaches
+ * this, one villager dies of the cold. Six cold villagers lose one about every
+ * minute; exposure clears when the Storm passes.
+ */
+export const FROST_EXPOSURE_PER_LOSS = 360

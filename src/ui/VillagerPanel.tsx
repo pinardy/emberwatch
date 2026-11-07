@@ -125,8 +125,13 @@ export function VillagerPanel() {
                   <Term label="Comfortable homes" value={b.comfort} />
                   <Term label="Food variety" value={b.variety} />
                   <Term label="Hostility" value={b.hostility} />
+                  <Term
+                    label={`Expectations (Year ${run.season.year}, ${pop} villagers)`}
+                    value={b.expectations}
+                  />
                   <Term label="Cornerstones" value={b.cornerstone} />
-                  <Term label="Penalties" value={b.penalties} />
+                  <Term label="Cold homes in the Storm" value={b.chill} />
+                  <Term label="Penalties" value={b.penalties - b.chill} />
                 </ul>
               </details>
             </div>

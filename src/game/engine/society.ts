@@ -6,15 +6,18 @@ import {
   COMPLEX_FOOD_MULTIPLIER,
   DEPARTURE_GRACE,
   FOOD_VARIETY_CAP,
+  FROST_EXPOSURE_PER_LOSS,
   HEARTH_FUEL_PER_SECOND,
   HEARTH_IDLE_FUEL_PER_SECOND,
-  HEARTH_WARMTH_RADIUS,
   IMPATIENCE_BASE,
   IMPATIENCE_HOSTILITY_THRESHOLD,
   IMPATIENCE_OVERTIME_BASE,
   IMPATIENCE_OVERTIME_RAMP,
   IMPATIENCE_PER_HOSTILITY_OVER,
   IMPATIENCE_PER_VILLAGER_LOST,
+  IMPATIENCE_STAGNATION_GRACE,
+  IMPATIENCE_STAGNATION_MAX,
+  IMPATIENCE_STAGNATION_RAMP,
   IMPATIENCE_STALL_FROM_YEAR,
   IMPATIENCE_STALL_RATE,
   IMPATIENCE_YEAR_SCALING,
@@ -25,6 +28,9 @@ import {
   RESOLVE_COLD_HOME,
   RESOLVE_COMFORT,
   RESOLVE_DRIFT,
+  RESOLVE_EXPECTATION_CROWD_FROM,
+  RESOLVE_EXPECTATION_PER_VILLAGER,
+  RESOLVE_EXPECTATION_PER_YEAR,
   RESOLVE_HOUSED,
   RESOLVE_LEAVE_THRESHOLD,
   RESOLVE_PER_FOOD_VARIETY,
@@ -45,6 +51,7 @@ import {
   SERVICE_COVERAGE_RATIO,
   comfortableHousing,
   foodVariety,
+  hearthWarmthRadius,
   population,
   serviceCoverage,
   speciesCounts,
@@ -186,7 +193,11 @@ export interface ResolveBreakdown {
   comfort: number
   variety: number
   hostility: number
+  /** Rising expectations: the year and the settlement's size (≤ 0). */
+  expectations: number
   penalties: number
+  /** The Storm's chill on homes beyond every fire, inside `penalties` (≤ 0). */
+  chill: number
   cornerstone: number
   target: number
   current: number
@@ -232,12 +243,8 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
    * population sleeping out there, so one distant shelter is a nuisance and a
    * whole cold suburb is a crisis.
    */
-  let chillTerm = 0
-  if (storm && pop > 0 && housing > 0) {
-    const housed = Math.min(pop, housing)
-    const warm = Math.min(housed, warmHousing(s, HEARTH_WARMTH_RADIUS))
-    chillTerm = RESOLVE_COLD_HOME * ((housed - warm) / pop)
-  }
+  const chillTerm = pop > 0 ? RESOLVE_COLD_HOME * (coldVillagers(s, pop) / pop) : 0
+  const owed = expectations(s, pop)
 
   return s.speciesPool.map((sp) => {
     const def = SPECIES[sp]
@@ -267,6 +274,11 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
     // Cornerstones that reduce needs count as fully satisfied ones.
     satisfied = Math.min(def.needs.length, satisfied + reduction)
     const needsTerm = satisfied * RESOLVE_PER_NEED
+    const needsMet = def.needs.length > 0 ? satisfied / def.needs.length : 1
+    // What a species is served, it comes to expect: rising expectations bite
+    // in proportion to the needs met, so a well-served settlement must keep
+    // improving while a struggling one is not kicked when it is down.
+    const expectationsTerm = -owed * needsMet
     const varietyTerm = variety * RESOLVE_PER_FOOD_VARIETY
     const hostilityTerm = -hostilityResolvePenalty(s.hostility)
     const cornerstoneTerm = resolveBonusFor(mods, sp) + (storm ? mods.stormResolve : 0)
@@ -281,6 +293,7 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
       comfortTerm +
       varietyTerm +
       hostilityTerm +
+      expectationsTerm +
       cornerstoneTerm +
       penalties
 
@@ -292,14 +305,16 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
       comfort: comfortTerm,
       variety: varietyTerm,
       hostility: hostilityTerm,
+      expectations: expectationsTerm,
       penalties,
+      chill: chillTerm,
       cornerstone: cornerstoneTerm,
       target,
       current: s.resolve[sp],
       needDetail,
       needRatio,
       threshold: def.resolveTarget,
-      needsMet: def.needs.length > 0 ? satisfied / def.needs.length : 1,
+      needsMet,
       builtMet:
         def.needs.length > 0 ? Math.min(def.needs.length, built + reduction) / def.needs.length : 1,
     }
@@ -313,6 +328,78 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
 export function hungerSeverity(s: RunState, pop = population(s)): number {
   if (!s.starving || pop <= 0) return 0
   return Math.min(1, Math.max(STARVING_MIN_SEVERITY, s.foodDebt / pop))
+}
+
+/**
+ * Villagers sleeping in the cold right now: in the Storm, the housed
+ * population beyond every live warmth source (the hearth's shrinking reach, a
+ * lit brazier) and not in an insulated home. 0 outside the Storm.
+ */
+export function coldVillagers(s: RunState, pop = population(s)): number {
+  if (s.season.season !== 'storm') return 0
+  return villagersBeyond(s, hearthWarmthRadius(s), pop)
+}
+
+/**
+ * Housed villagers who would sleep cold with the hearth's reach at
+ * `hearthRadius`. Villagers take the warm beds first, so only a settlement
+ * whose warm homes are full has anyone out in the cold.
+ */
+export function villagersBeyond(s: RunState, hearthRadius: number, pop = population(s)): number {
+  if (pop <= 0) return 0
+  const housing = totalHousing(s)
+  if (housing <= 0) return 0
+  const housed = Math.min(pop, housing)
+  return housed - Math.min(housed, warmHousing(s, hearthRadius))
+}
+
+/**
+ * Resolve a fully served species has come to take for granted: nothing in
+ * Year 1, then `RESOLVE_EXPECTATION_PER_YEAR` more each year, plus a little
+ * for every villager past `RESOLVE_EXPECTATION_CROWD_FROM`. Each species
+ * feels it in proportion to the share of its needs that are met (see
+ * `resolveBreakdowns`).
+ */
+export function expectations(s: RunState, pop = population(s)): number {
+  const years = Math.max(0, s.season.year - 1) * RESOLVE_EXPECTATION_PER_YEAR
+  const crowd =
+    Math.max(0, pop - RESOLVE_EXPECTATION_CROWD_FROM) * RESOLVE_EXPECTATION_PER_VILLAGER
+  return years + crowd
+}
+
+/**
+ * Frost: villagers in cold homes through the Storm build up exposure, and each
+ * `FROST_EXPOSURE_PER_LOSS` of it costs a life (and the Queen's patience, like
+ * any loss). Lizards shrug off the cold, so it takes one of the others.
+ * Exposure clears when the Storm passes. Returns log lines for the losses.
+ */
+export function stepFrost(s: RunState, dt: number): string[] {
+  if (s.season.season !== 'storm') {
+    if (s.frostExposure) s.frostExposure = 0
+    return []
+  }
+  const cold = coldVillagers(s)
+  if (cold <= 0) return []
+  s.frostExposure = (s.frostExposure ?? 0) + cold * dt
+  if (s.frostExposure < FROST_EXPOSURE_PER_LOSS) return []
+  s.frostExposure -= FROST_EXPOSURE_PER_LOSS
+  const pool = Object.values(s.villagers).filter((v) => !ignoresColdHearth(v.species))
+  if (pool.length === 0) return []
+  const rng = makeRng(s.seed, s.rngCursor)
+  const victim = rng.pick(pool)
+  s.rngCursor = rng.cursor()
+  loseVillager(s, victim, 'lost')
+  addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
+  return [
+    `${victim.name} the ${speciesSingular(victim.species)} died of the cold in an unheated home. Raise a brazier or insulate the homes beyond the hearth's reach.`,
+  ]
+}
+
+/** Seconds until the cold takes someone at the current exposure (Infinity if nobody is cold). */
+export function secondsUntilFrostLoss(s: RunState): number {
+  const cold = coldVillagers(s)
+  if (cold <= 0) return Infinity
+  return Math.max(0, (FROST_EXPOSURE_PER_LOSS - (s.frostExposure ?? 0)) / cold)
 }
 
 /** Drifts resolve toward its target and returns the fresh breakdowns. */
@@ -391,7 +478,7 @@ export function impatienceParts(s: RunState, mods: Modifiers): ImpatienceParts {
       ? (s.hostility - IMPATIENCE_HOSTILITY_THRESHOLD) * IMPATIENCE_PER_HOSTILITY_OVER * calm
       : 0
   const stalling = stallingImpatienceRate(s) * calm
-  const stagnation = 0
+  const stagnation = stagnationImpatienceRate(s) * calm
   // The deadline is not softened by cornerstones: it is what ends every run.
   const deadline = deadlineOvertimeRate(s)
   return {
@@ -411,6 +498,40 @@ export function impatienceParts(s: RunState, mods: Modifiers): ImpatienceParts {
  */
 export function impatienceRate(s: RunState, mods: Modifiers): number {
   return impatienceParts(s, mods).total
+}
+
+/**
+ * Seconds since reputation last rose by a whole point (0 until the run's first
+ * tick has started the count; see `noteReputation`).
+ */
+export function secondsSinceReputation(s: RunState): number {
+  return s.reputationRise ? Math.max(0, s.clock - s.reputationRise.at) : 0
+}
+
+/**
+ * The Queen reacts to stagnation, not just the calendar: once reputation has
+ * stood still for `IMPATIENCE_STAGNATION_GRACE` seconds, impatience climbs by
+ * a rate that grows with every further second — gently at first, up to
+ * `IMPATIENCE_STAGNATION_MAX`. The next reputation point resets it.
+ */
+export function stagnationImpatienceRate(s: RunState): number {
+  const past = secondsSinceReputation(s) - IMPATIENCE_STAGNATION_GRACE
+  if (past <= 0) return 0
+  return Math.min(IMPATIENCE_STAGNATION_MAX, past * IMPATIENCE_STAGNATION_RAMP)
+}
+
+/**
+ * Remembers when reputation last rose. A save from before this existed starts
+ * the count when it is first ticked, rather than inheriting a whole run of
+ * stagnation.
+ */
+export function noteReputation(s: RunState): void {
+  const rise = s.reputationRise
+  if (!rise || s.reputation > rise.level) {
+    s.reputationRise = { at: s.clock, level: s.reputation }
+  } else if (s.reputation < rise.level) {
+    rise.level = s.reputation
+  }
 }
 
 /**
