@@ -6,6 +6,7 @@ import {
   GLADE_STAKE_ART,
   GLADE_STAKE_STYLE,
   gladeAccessText,
+  SPARED_STYLE,
   type GladeAccess,
 } from '../mapShared'
 import { drawIcon, type SpriteTile } from './sprites'
@@ -21,6 +22,9 @@ import { drawIcon, type SpriteTile } from './sprites'
  */
 export function plateTile(glade: Glade, access: GladeAccess, percent: number, clearers: number): SpriteTile {
   const locked = access === 'locked'
+  // Left to the forest: a soft leaf-green border with no glow, the kind
+  // muted, and the truce on the status line beside a trees badge.
+  const spared = access === 'spared'
   const style = GLADE_KIND_STYLE[glade.kind]
   const text = gladeAccessText(access, percent / 100, clearers)
   return {
@@ -37,7 +41,7 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
       ctx.font = name
       const nameW = ctx.measureText(glade.name).width
       ctx.font = em
-      const emW = ctx.measureText(text).width
+      const emW = ctx.measureText(text).width + (spared ? 44 : 0)
       const showBar = percent > 0
       const inner = Math.max(kindW, nameW, emW, showBar ? 260 : 0)
       const pw = Math.min(w - 16, inner + 56)
@@ -45,13 +49,19 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
       const x = (w - pw) / 2
       const y = (h - ph) / 2
 
-      const border = locked ? 'rgba(255,255,255,0.18)' : access === 'clearing' ? '#6fbf72' : style.edge
+      const border = locked
+        ? 'rgba(255,255,255,0.18)'
+        : access === 'clearing'
+          ? '#6fbf72'
+          : spared
+            ? 'rgba(159, 220, 180, 0.6)'
+            : style.edge
       ctx.save()
       if (access === 'reachable') {
         ctx.shadowColor = style.edge
         ctx.shadowBlur = 18
       }
-      ctx.fillStyle = 'rgba(9, 13, 16, 0.86)'
+      ctx.fillStyle = spared ? 'rgba(12, 22, 15, 0.84)' : 'rgba(9, 13, 16, 0.86)'
       ctx.beginPath()
       ctx.roundRect(x, y, pw, ph, 22)
       ctx.fill()
@@ -64,7 +74,7 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
 
       const cx = w / 2
       let cy = y + 36
-      const kindColor = locked ? '#6d7a7a' : style.edge
+      const kindColor = locked ? '#6d7a7a' : spared ? '#9db394' : style.edge
       ctx.font = small
       ctx.fillStyle = kindColor
       const label = style.label.toUpperCase()
@@ -74,7 +84,7 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
 
       cy += 50
       ctx.font = name
-      ctx.fillStyle = locked ? '#b8c2bf' : '#eef3f0'
+      ctx.fillStyle = locked ? '#b8c2bf' : spared ? '#cfdcc9' : '#eef3f0'
       ctx.fillText(glade.name, cx, cy, pw - 30)
 
       if (showBar) {
@@ -91,9 +101,17 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
       }
 
       cy += showBar ? 36 : 46
-      ctx.font = em
-      ctx.fillStyle = locked ? '#7d8a8a' : '#d9b46a'
-      ctx.fillText(text, cx, cy, pw - 30)
+      if (spared) {
+        ctx.font = `italic ${em}`
+        ctx.fillStyle = '#aee0bd'
+        const tw = Math.min(ctx.measureText(text).width, pw - 74)
+        ctx.fillText(text, cx + 22, cy, pw - 74)
+        drawIcon(ctx, SPARED_STYLE.art, 34 / 24, [cx + 22 - tw / 2 - 44, cy - 18], false)
+      } else {
+        ctx.font = em
+        ctx.fillStyle = locked ? '#7d8a8a' : '#d9b46a'
+        ctx.fillText(text, cx, cy, pw - 30)
+      }
 
     },
   }

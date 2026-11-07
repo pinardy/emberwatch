@@ -131,21 +131,41 @@ export function placementHint(reason: string | null, parts: readonly string[]): 
 /** Ground fill of a glade that is not (yet) cleared ground. */
 export const HIDDEN_FILL = '#0c1013'
 
+/**
+ * A glade left to the forest: a soft leaf-green border and a mossy wash, so it
+ * reads at a glance as wild by choice rather than waiting for a crew. Its kind
+ * still shows on the plate.
+ */
+export const SPARED_STYLE = {
+  label: 'Left to the forest',
+  edge: '#9fdcb4',
+  /** Fogged ground tint (2D palette; the 3D scene brightens it). */
+  fog: '#1c3a26',
+  art: 'trees' as IconId,
+} as const
+
 /** Fill for a glade polygon in either renderer. */
 export function gladeFill(glade: Glade, palette: MapPalette): string {
   const look = gladeLook(glade)
   if (look === 'visible') return terrainColor(glade.terrain, palette)
-  const base = look === 'fogged' ? GLADE_KIND_STYLE[glade.kind].fog : HIDDEN_FILL
+  const base =
+    look === 'fogged'
+      ? glade.spared
+        ? SPARED_STYLE.fog
+        : GLADE_KIND_STYLE[glade.kind].fog
+      : HIDDEN_FILL
   return palette === '3d' ? shade(base, 1.25) : base
 }
 
 /**
  * How the player can act on a fogged glade: out of reach, ready to be
- * cleared, or already being cleared by a crew.
+ * cleared, already being cleared by a crew, or left to the forest (no crew
+ * may clear it while the truce stands).
  */
-export type GladeAccess = 'locked' | 'reachable' | 'clearing'
+export type GladeAccess = 'locked' | 'reachable' | 'clearing' | 'spared'
 
 export function gladeAccess(run: RunState, glade: Glade): GladeAccess {
+  if (glade.spared && !glade.cleared) return 'spared'
   if (glade.clearers > 0) return 'clearing'
   return isReachable(run, glade.id) ? 'reachable' : 'locked'
 }
@@ -164,13 +184,18 @@ export interface GladePlateInfo {
   stakes: GladeStake[]
 }
 
-/** Everything on a fogged glade's name plate. */
+/**
+ * Everything on a fogged glade's name plate. A glade left to the forest
+ * keeps its plate uncluttered: what clearing it could bring is moot while the
+ * truce stands, so its stakes stay in the Inspector.
+ */
 export function gladePlateInfo(run: RunState, glade: Glade): GladePlateInfo {
+  const access = gladeAccess(run, glade)
   return {
-    access: gladeAccess(run, glade),
+    access,
     pct: gladeProgress(glade),
     clearers: glade.clearers,
-    stakes: gladeStakesOf(glade),
+    stakes: access === 'spared' ? [] : gladeStakesOf(glade),
   }
 }
 
@@ -220,6 +245,7 @@ export function gladeStakesTitle(stakes: readonly GladeStake[]): string {
 
 /** One-line status under a glade's name; `pct` is clearing progress, 0..1. */
 export function gladeAccessText(access: GladeAccess, pct: number, clearers: number): string {
+  if (access === 'spared') return SPARED_STYLE.label
   if (access === 'clearing') return `⛏ ${clearers} clearing · ${Math.floor(pct * 100)}%`
   if (access === 'reachable') return pct > 0 ? `Reachable · ${Math.floor(pct * 100)}%` : 'Reachable'
   return `🔒 Out of reach`
