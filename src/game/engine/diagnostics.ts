@@ -18,6 +18,7 @@ import {
 import { computeModifiers, type Modifiers } from './modifiers'
 import { isFoodCamp } from './onboarding'
 import {
+  HEARTH_STORM_END_REACH,
   activeRecipe,
   canAfford,
   idleVillagers,
@@ -25,6 +26,7 @@ import {
   secondsUntilDeparture,
   totalHousing,
 } from './queries'
+import { coldVillagers, secondsUntilFrostLoss, villagersBeyond } from './society'
 import { despairRate } from './traits'
 
 /**
@@ -83,6 +85,27 @@ export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warnin
       severity: 'danger',
       text: `🏮 ${unlit} brazier${unlit > 1 ? 's have' : ' has'} gone cold — the homes around ${unlit > 1 ? 'them' : 'it'} are freezing. Bring wood.`,
     })
+  }
+
+  // The cold kills: say who is out in it and how long until it takes someone.
+  const frozen = coldVillagers(s)
+  if (frozen > 0) {
+    const eta = secondsUntilFrostLoss(s)
+    out.push({
+      id: 'frost',
+      severity: 'danger',
+      text: `🥶 ${frozen} villager${frozen > 1 ? 's sleep' : ' sleeps'} beyond every fire — the cold takes one in about ${formatDuration(eta)}. Raise a brazier or insulate their homes.`,
+    })
+  } else if (s.season.season === 'clearance') {
+    // The hearth's reach pulls in through the Storm: warn while there is time.
+    const exposed = villagersBeyond(s, HEARTH_STORM_END_REACH)
+    if (exposed > 0) {
+      out.push({
+        id: 'frost-forecast',
+        severity: 'caution',
+        text: `🥶 By the Storm's end the hearth's reach leaves ${exposed} villager${exposed > 1 ? 's' : ''} sleeping in the cold, and the cold kills. A brazier or insulated homes keep them warm.`,
+      })
+    }
   }
 
   // A species in despair is on a visible countdown, not a silent one.

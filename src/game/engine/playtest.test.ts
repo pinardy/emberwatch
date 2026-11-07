@@ -33,15 +33,17 @@ import {
   placeBuilding,
   canUpgradeBuilding,
   removeWorker,
+  reclaimGlade,
   setRecipe,
+  spareGlade,
   upgradeBuilding,
 } from './actions'
-import { GLADES_PER_REPUTATION, ROAD_MAX_LENGTH, TRADE_LOT } from './balance'
+import { GLADES_PER_REPUTATION, IMPATIENCE_PER_VILLAGER_LOST, ROAD_MAX_LENGTH, TRADE_LOT } from './balance'
 import { createRun } from './createRun'
 import { computeModifiers } from './modifiers'
 import { pendingBlight } from './blights'
 import { storageBlocked } from './forecast'
-import { QUEEN_DEADLINE_SECONDS, resolveBreakdowns, stallingImpatienceRate } from './society'
+import { impatienceParts, resolveBreakdowns } from './society'
 import {
   appeaseThreat,
   optionAffordable,
@@ -50,6 +52,7 @@ import {
   takeChoice,
 } from './events'
 import {
+  HEARTH_STORM_END_REACH,
   SERVICE_COVERAGE_RATIO,
   activeRecipe,
   canAfford,
@@ -88,7 +91,7 @@ import {
 import { productionRate } from './forecast'
 import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation, takeOrderOffer } from './orders'
 import { categoryRate, decreeGoal, decreeReputation } from './structure'
-import { baseServiceCapacity, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
+import { baseServiceCapacity, isInsulated, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 
 /**
  * End-to-end balance harness.
@@ -143,6 +146,10 @@ interface BotReport {
   lost: number
   /** Braziers raised to warm homes beyond the hearth. */
   braziers: number
+  /** Glades left to the forest at the end. */
+  spared: number
+  /** Villagers the Storm's cold took. */
+  frozen: number
   /** Upgrade tiers standing at the end, across every building. */
   upgrades: number
   /** Map modifiers the seed drew (or the test forced). */
@@ -168,8 +175,27 @@ interface BotReport {
   wardMinutes: number
   /** Impatience the Queen added for stalling (species below threshold). */
   stallImpatience: number
+  /** Impatience by cause over the whole run (see `ImpatienceSources`). */
+  impatienceBy: ImpatienceSources
+  /** Resolve above (or below) each present species' live reputation threshold at the end. */
+  overThreshold: number[]
   /** Where the run's amber came from and went. */
   amber: AmberLedger
+}
+
+/**
+ * Where the Queen's impatience came from: the passive rates (calendar and
+ * hostility, species below threshold, reputation standing still, the deadline)
+ * and the jumps between them — villagers lost, and everything else (lapsed
+ * decrees, declined offers, glade events, threat strikes, net of relief).
+ */
+interface ImpatienceSources {
+  calendar: number
+  stalling: number
+  stagnation: number
+  deadline: number
+  losses: number
+  events: number
 }
 
 /** Amber in and out over a run, by what moved it. */
@@ -201,6 +227,15 @@ function describeResolve(s: RunState): string {
   return resolveBreakdowns(s, mods)
     .map((b) => `${b.species}=${b.current.toFixed(0)}/${b.threshold}`)
     .join(' ')
+}
+
+/** Resolve minus the live reputation threshold, per species present. */
+function overThreshold(s: RunState): number[] {
+  const mods = computeModifiers(s)
+  const present = new Set(Object.values(s.villagers).map((v) => v.species))
+  return resolveBreakdowns(s, mods)
+    .filter((b) => present.has(b.species))
+    .map((b) => b.current - b.threshold)
 }
 
 function describeUnmet(s: RunState): string {
@@ -411,7 +446,9 @@ function warmSprawl(s: RunState): boolean {
     (b) =>
       b.built &&
       BUILDINGS[b.defId]?.category === 'housing' &&
-      !isWarmAt(s, b.pos) &&
+      !isInsulated(b) &&
+      // The hearth's reach pulls in through the Storm: plan for its end.
+      !isWarmAt(s, b.pos, HEARTH_STORM_END_REACH) &&
       // A planned (or guttering) brazier already covers it.
       !braziers.some((w) => dist(w.pos, b.pos) <= reach),
   )
@@ -866,14 +903,41 @@ function dumpSurplus(s: RunState): void {
 }
 
 /**
+ * Glades the bot reclaims before it weighs leaving the rest to the forest:
+ * enough for two of the Citadel's reclaimed-land points and the ground and
+ * deposits a full settlement needs.
+ */
+const GLADES_BEFORE_SPARING = 2 * GLADES_PER_REPUTATION
+/** Past that, hostility at which the bot spares the glades on its border. */
+const SPARE_AT_HOSTILITY = 25
+
+/**
  * Keeps a crew on the cheapest reachable glade. Expansion is not optional — the
  * starting glade cannot supply a growing settlement — so this runs *before*
- * staffing and takes its people first.
+ * staffing and takes its people first. Once the settlement holds enough land
+ * and the forest is pressing, every further glade costs hostility for loot it
+ * no longer needs, so the bot leaves the glades on its border to the forest
+ * instead (they calm it for as long as they stand).
  */
 function explore(s: RunState): void {
   const pop = population(s)
   // A hungry settlement needs its hands at home, not in the woods.
   if (pop < 6 || s.starving) return
+
+  // An open order for glades is worth clearing for first.
+  const gladeOrder = s.orders.some((o) => orderGoal(o)?.kind === 'gladesCleared')
+  if (
+    !gladeOrder &&
+    s.stats.gladesCleared >= GLADES_BEFORE_SPARING &&
+    s.hostility >= SPARE_AT_HOSTILITY
+  ) {
+    for (const g of Object.values(s.glades)) {
+      if (g.cleared || g.spared || !isReachable(s, g.id)) continue
+      // A crew more than halfway through finishes the job.
+      if (g.clearers > 0 && g.clearProgress >= g.clearWork / 2) continue
+      spareGlade(s, g.id)
+    }
+  }
 
   const inProgress = Object.values(s.glades).find((g) => !g.cleared && g.clearers > 0)
   const crew = Math.min(4, Math.max(2, Math.floor(pop / 8)))
@@ -885,9 +949,13 @@ function explore(s: RunState): void {
     return
   }
 
-  const target = Object.values(s.glades)
-    .filter((g) => !g.cleared && isReachable(s, g.id))
-    .sort((a, b) => a.clearWork - b.clearWork)[0]
+  const border = Object.values(s.glades).filter((g) => !g.cleared && isReachable(s, g.id))
+  let target = border.filter((g) => !g.spared).sort((a, b) => a.clearWork - b.clearWork)[0]
+  if (!target && gladeOrder) {
+    // The order is worth more than the truce: break it on the cheapest glade.
+    target = border.sort((a, b) => a.clearWork - b.clearWork)[0]
+    if (target) reclaimGlade(s, target.id)
+  }
   if (!target) return
   for (let i = 0; i < crew; i++) {
     if (addClearer(s, target.id) !== null) break
@@ -1237,6 +1305,16 @@ function playRun(
   const sources: ReputationSources = { orders: 0, decrees: 0, glades: 0, events: 0, resolve: 0 }
   let wardSeconds = 0
   let stallImpatience = 0
+  let frozen = 0
+  const impatienceBy: ImpatienceSources = {
+    calendar: 0,
+    stalling: 0,
+    stagnation: 0,
+    deadline: 0,
+    losses: 0,
+    events: 0,
+  }
+  const impatienceNow = () => s.impatience + s.impatienceProgress
   let firstRepMinute = Infinity
   let decreesMissed = 0
   const amber: AmberLedger = { earned: 0, earnedBy: {}, spent: {}, end: 0, caravans: false, visits: 0 }
@@ -1245,8 +1323,10 @@ function playRun(
 
   while (s.phase === 'playing' && s.clock < maxSeconds) {
     const beforeChoices = s.reputation
+    const impBeforeChoices = impatienceNow()
     booked(s, amber, 'events', () => answerChoices(s))
     sources.events += s.reputation - beforeChoices
+    impatienceBy.events += impatienceNow() - impBeforeChoices
     if (s.phase !== 'playing') break
 
     if (sinceDecision >= DECISION_INTERVAL) {
@@ -1265,13 +1345,28 @@ function playRun(
       staff(s)
     }
     if (s.buildings.hearth?.workers.length) wardSeconds += STEP
-    stallImpatience += stallingImpatienceRate(s) * computeModifiers(s).impatienceRate * STEP
+    const parts = impatienceParts(s, computeModifiers(s))
+    stallImpatience += parts.stalling * STEP
 
     const openOrders = s.orders.map((o) => o.defId)
     const gladesBefore = s.stats.gladesCleared
     const liveDecree = s.decree?.defId
     const decreesBefore = s.feats?.decreesMet ?? 0
+    const impBefore = impatienceNow()
+    const lostBefore = s.stats.villagersLost
+    const ticked = s.pendingChoices.length === 0
+    const frostBefore = s.frostExposure ?? 0
     booked(s, amber, 'tick', () => tick(s, STEP))
+    if (s.season.season === 'storm' && (s.frostExposure ?? 0) < frostBefore) frozen++
+    if (ticked) {
+      impatienceBy.calendar += (parts.calendar + parts.hostility) * STEP
+      impatienceBy.stalling += parts.stalling * STEP
+      impatienceBy.stagnation += parts.stagnation * STEP
+      impatienceBy.deadline += parts.deadline * STEP
+      const losses = (s.stats.villagersLost - lostBefore) * IMPATIENCE_PER_VILLAGER_LOST
+      impatienceBy.losses += losses
+      impatienceBy.events += impatienceNow() - impBefore - parts.total * STEP - losses
+    }
     if (liveDecree && !s.decree && (s.feats?.decreesMet ?? 0) === decreesBefore) decreesMissed++
     if (liveDecree && (s.feats?.decreesMet ?? 0) > decreesBefore) {
       sources.decrees += decreeReputation(s, DECREES[liveDecree])
@@ -1330,6 +1425,8 @@ function playRun(
     sources,
     lost: s.stats.villagersLost,
     braziers: countPlanned(s, 'brazier'),
+    spared: Object.values(s.glades).filter((g) => g.spared && !g.cleared).length,
+    frozen,
     upgrades: Object.values(s.buildings).reduce((sum, b) => sum + tierOf(b), 0),
     modifiers: s.runModifiers.join(','),
     commissionMet: judgeCommission(s)?.met ?? false,
@@ -1341,19 +1438,35 @@ function playRun(
     curve: Array.from({ length: Math.floor(s.clock / 60) }, (_, m) =>
       [...repCurve].reverse().find(([t]) => t <= (m + 1) * 60)?.[1] ?? 0,
     ),
-    cause: lossCause(s),
+    cause: lossCause(s, impatienceBy),
     blights: s.stormBlights ?? { forecast: 0, struck: 0, blunted: 0 },
     wardMinutes: wardSeconds / 60,
     stallImpatience,
+    impatienceBy,
+    overThreshold: overThreshold(s),
     amber,
   }
 }
 
-/** Why a run was lost, in the harness's words ('-' for a win). */
-function lossCause(s: RunState): string {
+/**
+ * Why a run was lost, in the harness's words ('-' for a win): 'abandoned'
+ * when the last villager left, otherwise whichever source fed the Queen's
+ * impatience most — the deadline overtime, reputation standing still,
+ * species below threshold, villagers lost, decrees and events, or the plain
+ * calendar.
+ */
+function lossCause(s: RunState, by: ImpatienceSources): string {
   if (s.phase !== 'lost') return '-'
   if (population(s) === 0) return 'abandoned'
-  return s.clock > QUEEN_DEADLINE_SECONDS ? 'deadline' : 'impatience'
+  const named: [string, number][] = [
+    ['deadline', by.deadline],
+    ['stagnation', by.stagnation],
+    ['unmet-needs', by.stalling],
+    ['villagers-lost', by.losses],
+    ['decrees/events', by.events],
+    ['calendar', by.calendar],
+  ]
+  return named.sort((a, b) => b[1] - a[1])[0][0]
 }
 
 /**
@@ -1423,8 +1536,26 @@ function summarise(label: string, reports: BotReport[]): string {
     ` · upgrades/run ${mean(reports.map((r) => r.upgrades)).toFixed(1)}` +
     ` · roads/run ${mean(reports.map((r) => r.roads)).toFixed(1)} linked ${mean(reports.map((r) => r.roadLinked)).toFixed(1)}` +
     ` · first rep ${median(reports.map((r) => r.firstRepMinute)).toFixed(1)}min (median)` +
-    ` · last-3min share in wins ${(mean(wins.map((r) => r.lateShare)) * 100).toFixed(0)}%`
+    ` · last-3min share in wins ${(mean(wins.map((r) => r.lateShare)) * 100).toFixed(0)}%` +
+    `\n${''.padEnd(20)} tension: median imp at win ${median(wins.map((r) => r.impatience)).toFixed(1)}` +
+    ` · median resolve over threshold at win ${median(wins.flatMap((r) => r.overThreshold)).toFixed(1)}` +
+    ` · all glades cleared ${((reports.filter((r) => r.gladesCleared >= 14).length / Math.max(1, reports.length)) * 100).toFixed(0)}%` +
+    ` · glades ${histogram(reports.map((r) => r.gladesCleared))}` +
+    ` · median braziers in wins ${median(wins.map((r) => r.braziers)).toFixed(1)}` +
+    ` · villagers lost ${reports.reduce((n, r) => n + r.lost, 0)} (${mean(reports.map((r) => r.lost)).toFixed(2)}/run, ${reports.reduce((n, r) => n + r.frozen, 0)} to frost)` +
+    ` · spared/run ${mean(reports.map((r) => r.spared)).toFixed(1)}` +
+    ` · causes ${histogram(losses.map((r) => r.cause))}`
   )
+}
+
+/** `value×count` pairs, most common first. */
+function histogram(values: (string | number)[]): string {
+  const counts = new Map<string | number, number>()
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1)
+  return [...counts.entries()]
+    .sort((a, b) => (typeof a[0] === 'number' && typeof b[0] === 'number' ? b[0] - a[0] : b[1] - a[1]))
+    .map(([v, n]) => `${v}×${n}`)
+    .join(' ') || '-'
 }
 
 /** Amber over a set of runs: median earned, spent by sink, and how many saw caravans. */
@@ -1451,8 +1582,8 @@ function summariseAmber(label: string, reports: BotReport[]): string {
 
 function logRun(seed: number, r: BotReport): void {
   console.log(
-    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · decrees ${r.decreesMet}/${r.decreesMet + r.decreesMissed} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · first rep ${r.firstRepMinute.toFixed(1)}min · late ${(r.lateShare * 100).toFixed(0)}% · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
-      ` · cause ${r.cause} · blights ${r.blights.struck}/${r.blights.blunted} of ${r.blights.forecast} · wards ${r.wardMinutes.toFixed(1)} · stallImp ${r.stallImpatience.toFixed(1)}` +
+    `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} spared ${r.spared} · frozen ${r.frozen} · orders ${r.ordersCompleted} · decrees ${r.decreesMet}/${r.decreesMet + r.decreesMissed} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · first rep ${r.firstRepMinute.toFixed(1)}min · late ${(r.lateShare * 100).toFixed(0)}% · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
+      ` · cause ${r.cause} · impBy cal ${r.impatienceBy.calendar.toFixed(1)} stall ${r.impatienceBy.stalling.toFixed(1)} stag ${r.impatienceBy.stagnation.toFixed(1)} dl ${r.impatienceBy.deadline.toFixed(1)} lost ${r.impatienceBy.losses.toFixed(1)} ev ${r.impatienceBy.events.toFixed(1)} · over ${r.overThreshold.map((x) => x.toFixed(0)).join('/')} · blights ${r.blights.struck}/${r.blights.blunted} of ${r.blights.forecast} · wards ${r.wardMinutes.toFixed(1)} · stallImp ${r.stallImpatience.toFixed(1)}` +
       ` · amber +${r.amber.earned.toFixed(0)} -${Object.entries(r.amber.spent).map(([k, v]) => `${k}:${v.toFixed(0)}`).join(',') || '0'} =${r.amber.end.toFixed(0)}${r.amber.caravans ? ` caravans ${r.amber.visits}` : ''}` +
       `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}\n    reputation by minute: ${r.curve.join(' ')}`,
   )

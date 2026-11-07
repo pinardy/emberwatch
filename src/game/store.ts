@@ -18,10 +18,12 @@ import {
   demolishBuilding,
   placeBuilding,
   recallEveryone,
+  reclaimGlade,
   removeClearer,
   removeWorker,
   rushConstruction,
   setRecipe,
+  spareGlade,
   sootheQueen,
   dumpStock,
   togglePause,
@@ -275,6 +277,10 @@ interface GameStore {
   pauseBuilding: (buildingId: string) => void
   clearGladeAdd: (gladeId: string) => void
   clearGladeRemove: (gladeId: string) => void
+  /** Leaves an uncleared glade to the forest (it calms hostility while it stands). */
+  spareGlade: (gladeId: string) => void
+  /** Breaks the truce on a spared glade so it can be cleared (costs hostility). */
+  reclaimGlade: (gladeId: string) => void
   /** Takes an option of the front choice, or of the queued choice at `index` (a founding pick). */
   chooseOption: (optionId: string, index?: number) => void
   chooseEventOption: (index: number) => void
@@ -754,6 +760,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   clearGladeAdd: (gladeId) => runCommand(set, get, (run) => addClearer(run, gladeId)),
   clearGladeRemove: (gladeId) =>
     runCommand(set, get, (run) => removeClearer(run, gladeId)),
+  spareGlade: (gladeId) => runCommand(set, get, (run) => spareGlade(run, gladeId)),
+  reclaimGlade: (gladeId) => runCommand(set, get, (run) => reclaimGlade(run, gladeId)),
   chooseOption: (optionId, index = 0) =>
     runCommand(set, get, (run) => {
       takeChoice(run, optionId, index)

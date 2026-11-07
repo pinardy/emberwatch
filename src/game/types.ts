@@ -401,6 +401,11 @@ export interface Glade {
   reward: ResourceBag
   /** Event that must be resolved when the glade is cleared. */
   eventId?: string
+  /**
+   * Left to the forest: it cannot be cleared while it stands spared, and it
+   * calms hostility for as long as it does. Absent (not spared) on older saves.
+   */
+  spared?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -1067,6 +1072,17 @@ export interface RunState {
    * saves (none yet).
    */
   stormBlights?: { forecast: number; struck: number; blunted: number }
+  /**
+   * When reputation last rose: the game clock and the whole points reached
+   * then. The Queen's stagnation impatience counts from here. Absent on older
+   * saves, which start the count when they load.
+   */
+  reputationRise?: { at: number; level: number }
+  /**
+   * Villager-seconds spent in cold homes this Storm; see
+   * `FROST_EXPOSURE_PER_LOSS`. Absent (0) on older saves.
+   */
+  frostExposure?: number
   /**
    * Blueprint drafts taken in a row that offered nothing toward a service the
    * settlement wants. Past `DRAFT_PITY` the next draft guarantees one. Absent

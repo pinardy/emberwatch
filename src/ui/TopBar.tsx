@@ -9,6 +9,12 @@ import {
   type DeadlineForecast,
 } from '../game/engine/forecast'
 import { idleVillagers, population, totalHousing } from '../game/engine/queries'
+import {
+  impatienceParts,
+  secondsSinceReputation,
+  type ImpatienceParts,
+} from '../game/engine/society'
+import { computeModifiers } from '../game/engine/modifiers'
 import { SPECIES } from '../game/content/species'
 import { useFrameDerived } from '../game/frameDerived'
 import { useGameStore, useHudRun } from '../game/store'
@@ -89,7 +95,8 @@ export function TopBar() {
   const settingsRef = useRef<HTMLDivElement>(null)
   const speedRef = useRef<HTMLDivElement>(null)
   // Modifiers and resolve walk the whole settlement: once per sim step, shared.
-  const derived = useFrameDerived()?.topBar ?? null
+  const frame = useFrameDerived()
+  const derived = frame?.topBar ?? null
 
   useDismiss(
     popover !== null,
@@ -106,6 +113,8 @@ export function TopBar() {
   const housing = totalHousing(run)
   const idle = idleVillagers(run).length
   const { breakdowns, rates, hearth, departures, deadline } = derived
+  const impParts = impatienceParts(run, frame?.mods ?? computeModifiers(run))
+  const stillFor = secondsSinceReputation(run)
   const untilStorm = secondsUntilStorm(run)
   const storm = run.season.season === 'storm'
   const hearthDanger = run.coldHearth || hearth.runway < RUNWAY_WARNING_SECONDS
@@ -245,12 +254,18 @@ export function TopBar() {
           rate={`+${rates.impatiencePerMinute.toFixed(2)}/min`}
           hint={`You lose if this fills. Grows ${rates.impatiencePerMinute.toFixed(
             2,
-          )} per minute right now — faster each year, once hostility passes ${IMPATIENCE_HOSTILITY_THRESHOLD}, and with every villager who leaves.${deadlineHint(
+          )} per minute right now${impatienceCauses(impParts, stillFor)}. It also jumps with every villager lost and every decree missed, and climbs faster each year, while reputation stands still, and once hostility passes ${IMPATIENCE_HOSTILITY_THRESHOLD}.${deadlineHint(
             deadline,
           )}`}
           floats={impFloats}
           pulseKey={run.impatience}
-          note={<DeadlineNote deadline={deadline} />}
+          note={
+            deadline.passed || deadline.imminent ? (
+              <DeadlineNote deadline={deadline} />
+            ) : (
+              <StagnationNote parts={impParts} stillFor={stillFor} />
+            )
+          }
         />
         <Meter
           label="Hostility"
@@ -261,10 +276,12 @@ export function TopBar() {
           max={MAX_HOSTILITY}
           fraction={run.hostility - Math.floor(run.hostility)}
           tone="warn"
-          rate={`+${rates.hostilityPerMinute.toFixed(1)}/min`}
-          hint={`Lowers resolve for everyone. Rises ${rates.hostilityPerMinute.toFixed(
+          rate={`${rates.hostilityPerMinute >= 0 ? '+' : '−'}${Math.abs(rates.hostilityPerMinute).toFixed(1)}/min`}
+          hint={`Lowers resolve for everyone. ${
+            rates.hostilityPerMinute >= 0 ? 'Rises' : 'Falls'
+          } ${Math.abs(rates.hostilityPerMinute).toFixed(
             1,
-          )} per minute right now, plus each cleared glade, threat strike and Storm. Above ${IMPATIENCE_HOSTILITY_THRESHOLD} it also wears on the Queen.`}
+          )} per minute right now, plus each cleared glade, threat strike and Storm. Every glade cleared makes it grow faster for good; glades left to the forest calm it. Above ${IMPATIENCE_HOSTILITY_THRESHOLD} it also wears on the Queen.`}
         />
       </div>
 
@@ -514,6 +531,45 @@ function statusAlerts(input: {
     })
   }
   return out
+}
+
+/**
+ * What the impatience rate is made of right now, largest first, for the
+ * meter's tooltip: " — 0.25 because reputation has not risen for 3m 10s,
+ * 0.16 from the calendar".
+ */
+function impatienceCauses(parts: ImpatienceParts, stillFor: number): string {
+  const named: [number, string][] = [
+    [parts.calendar, 'from the calendar'],
+    [parts.stagnation, `because reputation has not risen for ${formatDuration(stillFor)}`],
+    [parts.stalling, 'from species below their reputation threshold'],
+    [parts.hostility, 'from the forest\'s hostility'],
+    [parts.deadline, 'from the passed deadline'],
+  ]
+  const shown = named
+    .filter(([rate]) => rate * 60 >= 0.005)
+    .sort((a, b) => b[0] - a[0])
+    .map(([rate, why]) => `${(rate * 60).toFixed(2)} ${why}`)
+  return shown.length > 0 ? ` — ${shown.join(', ')}` : ''
+}
+
+/**
+ * Under the impatience meter while no deadline note is up: how long
+ * reputation has stood still, once the Queen has started to mind.
+ */
+function StagnationNote({ parts, stillFor }: { parts: ImpatienceParts; stillFor: number }) {
+  if (parts.stagnation <= 0) return null
+  const rate = `+${(parts.stagnation * 60).toFixed(2)}/min`
+  return (
+    <small className="meter-note deadline-note stagnation-note">
+      <span className="deadline-note-long">
+        No reputation for {formatDuration(stillFor)} · {rate}
+      </span>
+      <span className="deadline-note-short" aria-hidden>
+        Still {formatDuration(stillFor)}
+      </span>
+    </small>
+  )
 }
 
 /** Tooltip sentence on the impatience meter about the Queen's deadline. */
