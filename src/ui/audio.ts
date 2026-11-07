@@ -62,6 +62,26 @@ let musicMood: MusicMood | null = null
 let musicHeld = false
 let musicEngine: MusicEngine | null = null
 let musicLoading: Promise<void> | null = null
+/** Set once creating the context has failed: the game then plays on silent. */
+let audioUnavailable = false
+
+/**
+ * Sound is presentation only. A failure anywhere in it (a browser refusing a
+ * context, a node that cannot be scheduled) is logged once and swallowed,
+ * because the cues run inside the store's updates, where a throw would abort
+ * the sim step or command that triggered them.
+ */
+let loggedFailure = false
+function safely(what: string, fn: () => void): void {
+  try {
+    fn()
+  } catch (error) {
+    if (!loggedFailure) {
+      loggedFailure = true
+      console.warn(`Sound failed (${what}); the game plays on.`, error)
+    }
+  }
+}
 
 /** Slider position (0..1) to gain: squared, so the travel feels even to the ear. */
 export function levelToGain(level: number): number {
@@ -90,29 +110,48 @@ function hasGesture(): boolean {
 }
 
 function ensureContext(): Graph | null {
-  if (!hasGesture()) return null
+  if (!hasGesture() || audioUnavailable) return null
   if (typeof AudioContext === 'undefined') return null
   if (!graph) {
-    const ctx = new AudioContext()
-    const master = ctx.createGain()
-    master.gain.value = muted ? 0 : levelToGain(volume.master)
-    master.connect(ctx.destination)
-    const bus = (level: number) => {
-      const node = ctx.createGain()
-      node.gain.value = levelToGain(level)
-      node.connect(master)
-      return node
+    try {
+      graph = createGraph()
+    } catch (error) {
+      // Some browsers refuse a context (too many open, a locked-down policy).
+      audioUnavailable = true
+      console.warn('Sound is unavailable here; the game plays on silent.', error)
+      return null
     }
-    const effects = bus(volume.effects)
-    const ambience = bus(volume.ambience)
-    const music = bus(volume.music)
-    const duck = ctx.createGain()
-    duck.gain.value = 1
-    duck.connect(music)
-    graph = { ctx, master, effects, ambience, music, duck }
   }
-  if (graph.ctx.state === 'suspended') void graph.ctx.resume()
+  if (graph.ctx.state === 'suspended') {
+    try {
+      // Resuming is a promise that rejects when the browser says no (no
+      // gesture yet); the next gesture tries again.
+      void Promise.resolve(graph.ctx.resume()).catch(() => undefined)
+    } catch {
+      /* the next gesture tries again */
+    }
+  }
   return graph
+}
+
+function createGraph(): Graph {
+  const ctx = new AudioContext()
+  const master = ctx.createGain()
+  master.gain.value = muted ? 0 : levelToGain(volume.master)
+  master.connect(ctx.destination)
+  const bus = (level: number) => {
+    const node = ctx.createGain()
+    node.gain.value = levelToGain(level)
+    node.connect(master)
+    return node
+  }
+  const effects = bus(volume.effects)
+  const ambience = bus(volume.ambience)
+  const music = bus(volume.music)
+  const duck = ctx.createGain()
+  duck.gain.value = 1
+  duck.connect(music)
+  return { ctx, master, effects, ambience, music, duck }
 }
 
 /**
@@ -121,36 +160,42 @@ function ensureContext(): Graph | null {
  */
 export function unlockAudio(): void {
   gestured = true
-  const fresh = graph === null
-  if (!ensureContext() || !fresh) return
-  // Anything asked for before the gesture starts now.
-  applyRain()
-  syncMusic()
+  safely('unlock', () => {
+    const fresh = graph === null
+    if (!ensureContext() || !fresh) return
+    // Anything asked for before the gesture starts now.
+    applyRain()
+    syncMusic()
+  })
 }
 
 export function setMuted(value: boolean): void {
   muted = value
-  if (graph) {
-    graph.master.gain.setTargetAtTime(
-      value ? 0 : levelToGain(volume.master),
-      graph.ctx.currentTime,
-      LEVEL_SMOOTH_S,
-    )
-  }
-  syncMusic()
+  safely('mute', () => {
+    if (graph) {
+      graph.master.gain.setTargetAtTime(
+        value ? 0 : levelToGain(volume.master),
+        graph.ctx.currentTime,
+        LEVEL_SMOOTH_S,
+      )
+    }
+    syncMusic()
+  })
 }
 
 /** Applies the mixer levels; cheap to call on every settings change. */
 export function setVolume(next: VolumeSettings): void {
   volume = { ...next }
-  if (graph) {
-    const t = graph.ctx.currentTime
-    graph.master.gain.setTargetAtTime(muted ? 0 : levelToGain(volume.master), t, LEVEL_SMOOTH_S)
-    graph.effects.gain.setTargetAtTime(levelToGain(volume.effects), t, LEVEL_SMOOTH_S)
-    graph.ambience.gain.setTargetAtTime(levelToGain(volume.ambience), t, LEVEL_SMOOTH_S)
-    graph.music.gain.setTargetAtTime(levelToGain(volume.music), t, LEVEL_SMOOTH_S)
-  }
-  syncMusic()
+  safely('volume', () => {
+    if (graph) {
+      const t = graph.ctx.currentTime
+      graph.master.gain.setTargetAtTime(muted ? 0 : levelToGain(volume.master), t, LEVEL_SMOOTH_S)
+      graph.effects.gain.setTargetAtTime(levelToGain(volume.effects), t, LEVEL_SMOOTH_S)
+      graph.ambience.gain.setTargetAtTime(levelToGain(volume.ambience), t, LEVEL_SMOOTH_S)
+      graph.music.gain.setTargetAtTime(levelToGain(volume.music), t, LEVEL_SMOOTH_S)
+    }
+    syncMusic()
+  })
 }
 
 /** True when a channel can be heard at all: not muted, neither slider at 0. */
@@ -249,6 +294,10 @@ function duckMusic(): void {
 }
 
 export function cue(name: Cue): void {
+  safely(name, () => playCue(name))
+}
+
+function playCue(name: Cue): void {
   if (DUCKING_CUES.has(name)) duckMusic()
   switch (name) {
     case 'seasonDrizzle':
@@ -386,7 +435,7 @@ const RAIN: Record<Season, { gain: number; freq: number }> = {
 /** Starts (or retunes) the rain loop for the given season; null stops it. */
 export function setRainSeason(season: Season | null): void {
   wantedRain = season
-  applyRain()
+  safely('rain', applyRain)
 }
 
 function applyRain(): void {
@@ -432,13 +481,13 @@ function applyRain(): void {
 /** What the score should play; null when no run is on screen. */
 export function setMusicMood(mood: MusicMood | null): void {
   musicMood = mood
-  syncMusic()
+  safely('music', syncMusic)
 }
 
 /** Holds the score while the game is paused or the tab is hidden. */
 export function setMusicHeld(held: boolean): void {
   musicHeld = held
-  syncMusic()
+  safely('music', syncMusic)
 }
 
 /**
@@ -467,7 +516,7 @@ function syncMusic(): void {
         })
         .finally(() => {
           musicLoading = null
-          if (musicEngine) syncMusic()
+          if (musicEngine) safely('music', syncMusic)
         })
     }
     return
@@ -491,6 +540,8 @@ export function resetAudioForTests(): void {
   musicEngine?.dispose()
   graph = null
   gestured = false
+  audioUnavailable = false
+  loggedFailure = false
   rainSource = null
   rainFilter = null
   rainGain = null

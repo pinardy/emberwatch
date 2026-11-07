@@ -1,13 +1,16 @@
 import { useEffect } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import { useGameStore } from '../game/store'
 
 /** How long "ready to play offline" stays up. It is good news, not a question. */
 const OFFLINE_READY_MS = 4000
 
 /**
- * Service-worker status. `autoUpdate` installs new versions in the background,
- * so this is purely to tell the player what happened — and to let them reload
- * at a safe moment rather than mid-storm.
+ * Service-worker status. The worker is registered in `prompt` mode: a new
+ * version downloads in the background but waits until the player presses
+ * Reload here, so a running game never has its chunks swapped under it, and
+ * the player picks a safe moment rather than mid-storm. The run is saved
+ * before the page reloads.
  *
  * Neither form may sit on top of a primary action: "offline ready" is a small
  * pill that ignores the pointer and fades on its own, and "new version" is a
@@ -30,7 +33,14 @@ export function UpdatePrompt() {
     return (
       <div className="sw-toast is-strip" role="status">
         <span>A new version of Emberwatch is ready.</span>
-        <button type="button" className="primary" onClick={() => updateServiceWorker(true)}>
+        <button
+          type="button"
+          className="primary"
+          onClick={() => {
+            useGameStore.getState().saveNow()
+            void updateServiceWorker(true)
+          }}
+        >
           Reload
         </button>
         <button type="button" onClick={() => setNeedRefresh(false)}>

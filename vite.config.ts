@@ -76,7 +76,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // A new version waits for the player's Reload (UpdatePrompt) rather than
+      // swapping chunks under a running game.
+      registerType: 'prompt',
       includeAssets: ['favicon.svg'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],

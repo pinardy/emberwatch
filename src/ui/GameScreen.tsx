@@ -53,8 +53,10 @@ export function GameScreen() {
   const setPanel = useGameStore((s) => s.setPanel)
   const notice = useGameStore((s) => s.notice)
   const dismissNotice = useGameStore((s) => s.dismissNotice)
+  // After a crash the loop stays stopped until the player picks a recovery.
+  const crashed = useGameStore((s) => s.crash !== null)
 
-  useGameLoop(run !== null)
+  useGameLoop(run !== null && !crashed)
   useHotkeys(run !== null)
   useAudioCues(run)
   const unreadLog = useLogUnread(run, panel === 'log')
@@ -206,9 +208,9 @@ export function GameScreen() {
         )}
       </main>
 
-      <ChoiceModal />
-      {/* The summary and its chart are a separate chunk, fetched in idle time. */}
-      {run.phase !== 'playing' && <EndModal />}
+      {/* One dialog at a time: once the run is over, the summary (a separate
+          chunk, fetched in idle time) is the only one. */}
+      {run.phase === 'playing' ? <ChoiceModal /> : <EndModal />}
     </div>
   )
 }
