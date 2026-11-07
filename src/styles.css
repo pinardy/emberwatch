@@ -2273,8 +2273,9 @@ code {
 /* Placed by the overlay dock (.hud-top): top centre of the map. */
 .warnings {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 5px;
-  width: max-content;
+  width: fit-content;
   max-width: 100%;
   pointer-events: none;
 }
@@ -2292,7 +2293,9 @@ code {
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 12.5px;
+  line-height: 1.4;
   text-align: center;
+  overflow-wrap: anywhere;
   border: 1px solid;
 }
 
@@ -3102,6 +3105,9 @@ button.is-armed {
   grid-area: top;
   justify-self: center;
   display: grid;
+  /* One column exactly the region's width: an auto column would grow to a
+     long warning's one-line width and carry it out over the side panel. */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 6px;
   width: min(620px, 100%);
