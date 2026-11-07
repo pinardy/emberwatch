@@ -5064,3 +5064,22 @@ button.is-armed {
 .upgrade-card:disabled:not(.is-owned) strong {
   color: var(--muted);
 }
+
+/* The 3D map's minimap holds the top-left corner: the build banner wraps
+   between it and its mirror image rather than covering it (phones: beside it). */
+.map-wrap-3d .build-banner {
+  max-width: calc(100% - 2 * 190px);
+  white-space: normal;
+}
+
+@media (max-width: 700px) {
+  .map-wrap-3d .build-banner {
+    left: calc(50% + 59px);
+    max-width: calc(100% - 134px);
+  }
+}
+
+/* ...which can make it two lines: the warnings start below it. */
+.map-column:has(.map-wrap-3d .build-banner) .hud-top {
+  margin-top: 64px;
+}
