@@ -1451,6 +1451,36 @@ code {
   fill: var(--good);
 }
 
+/* A glade's stakes: chips under its plate, kept readable as the map zooms
+   out (the layer sets --stake-scale, and is-far when words would not fit). */
+.glade-stakes {
+  transform: scale(var(--stake-scale, 1));
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+}
+
+.glade-stake-chip {
+  fill: rgba(9, 13, 16, 0.9);
+  stroke-width: 1.5;
+}
+
+.glade-stake-label {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.glade-stake-dot,
+.glade-plates-2d.is-far .glade-stake-full {
+  display: none;
+}
+
+.glade-plates-2d.is-far .glade-stake-dot {
+  display: inline;
+}
+
 .map-controls {
   position: absolute;
   right: 10px;
@@ -1653,6 +1683,42 @@ code {
 
 .warn-text {
   color: var(--warn);
+}
+
+/* A glade's stakes in the Inspector: the map's chips, named and explained. */
+.stake-chips {
+  display: grid;
+  gap: 5px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stake-chip {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 10px 4px 6px;
+  background: var(--panel-2);
+  border: 1px solid;
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.stake-chip > .icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+}
+
+.stake-chip-text {
+  display: grid;
+}
+
+.stake-chip-text small {
+  color: var(--muted);
+  font-size: 11.5px;
 }
 
 /* ==========================================================================
@@ -2273,8 +2339,9 @@ code {
 /* Placed by the overlay dock (.hud-top): top centre of the map. */
 .warnings {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 5px;
-  width: max-content;
+  width: fit-content;
   max-width: 100%;
   pointer-events: none;
 }
@@ -2292,7 +2359,9 @@ code {
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 12.5px;
+  line-height: 1.4;
   text-align: center;
+  overflow-wrap: anywhere;
   border: 1px solid;
 }
 
@@ -2673,6 +2742,51 @@ code {
   box-shadow: inset 0 0 0 1px rgba(217, 180, 106, 0.35);
 }
 
+/* The caravan's rare item, and the run's trade agreement (TradePanel.tsx). */
+.trade-rare {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+.trade-rare-icon {
+  font-size: 22px;
+}
+
+.trade-rare-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.trade-rare-buy {
+  grid-column: 1 / -1;
+  border-color: var(--gold);
+}
+
+.trade-agreements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.trade-agreement em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.trade-elsewhere {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
 .wide-button {
   width: 100%;
   margin-top: 8px;
@@ -2855,6 +2969,94 @@ code {
 
 .minimap:hover {
   border-color: rgba(217, 180, 106, 0.6);
+}
+
+/* Settings → Show performance: a small readout in the map's top-right corner.
+   The warnings move down to make room for it. */
+.perf-readout {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 30;
+  display: grid;
+  gap: 1px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(9, 13, 16, 0.86);
+  color: #cfe0d6;
+  font-size: 11px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.map-column:has(.perf-readout) .hud-top {
+  padding-top: 40px;
+}
+
+/* The 3D glade plates for the keyboard: one Tab stop, out of sight until it
+   has focus, then a small panel over the map's top-left corner. */
+.glade-list {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 31;
+  width: min(280px, calc(100% - 80px));
+  max-height: calc(100% - 20px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: rgba(9, 13, 16, 0.96);
+  border: 1px solid rgba(217, 180, 106, 0.5);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.glade-list:not(:focus-within) {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.glade-list-hint {
+  margin: 0;
+  padding: 8px 12px 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.glade-list ul {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.glade-list button {
+  display: grid;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+}
+
+.glade-list button:focus-visible,
+.glade-list button[aria-current='true'] {
+  border-color: var(--gold);
+  background: rgba(217, 180, 106, 0.1);
+}
+
+.glade-list button small {
+  color: var(--muted);
+  font-size: 11.5px;
 }
 
 .threat-focus {
@@ -3102,6 +3304,9 @@ button.is-armed {
   grid-area: top;
   justify-self: center;
   display: grid;
+  /* One column exactly the region's width: an auto column would grow to a
+     long warning's one-line width and carry it out over the side panel. */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 6px;
   width: min(620px, 100%);

@@ -36,7 +36,7 @@ import {
   setRecipe,
   upgradeBuilding,
 } from './actions'
-import { GLADES_PER_REPUTATION, ROAD_MAX_LENGTH } from './balance'
+import { GLADES_PER_REPUTATION, ROAD_MAX_LENGTH, TRADE_LOT } from './balance'
 import { createRun } from './createRun'
 import { computeModifiers } from './modifiers'
 import { pendingBlight } from './blights'
@@ -72,6 +72,19 @@ import {
   roadNetwork,
 } from './roads'
 import { tick } from './tick'
+import {
+  AGREEMENT_PRICE,
+  buyOffer,
+  buyRare,
+  caravanAvailable,
+  commissionPrice,
+  commissionShipment,
+  offerPrice,
+  provisionsGood,
+  rarePrice,
+  sellResource,
+  signAgreement,
+} from './trade'
 import { productionRate } from './forecast'
 import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation, takeOrderOffer } from './orders'
 import { categoryRate, decreeGoal, decreeReputation } from './structure'
@@ -155,6 +168,31 @@ interface BotReport {
   wardMinutes: number
   /** Impatience the Queen added for stalling (species below threshold). */
   stallImpatience: number
+  /** Where the run's amber came from and went. */
+  amber: AmberLedger
+}
+
+/** Amber in and out over a run, by what moved it. */
+interface AmberLedger {
+  earned: number
+  earnedBy: Record<string, number>
+  spent: Record<string, number>
+  end: number
+  /** Whether a Trading Post stood (or traders came without one), and caravans seen. */
+  caravans: boolean
+  visits: number
+}
+
+/** Runs `fn` and books whatever it did to the amber purse under `key`. */
+function booked(s: RunState, ledger: AmberLedger, key: string, fn: () => void): void {
+  const before = s.stock.amber ?? 0
+  fn()
+  const delta = (s.stock.amber ?? 0) - before
+  if (delta > 0) {
+    ledger.earned += delta
+    ledger.earnedBy[key] = (ledger.earnedBy[key] ?? 0) + delta
+  }
+  else if (delta < 0) ledger.spent[key] = (ledger.spent[key] ?? 0) - delta
 }
 
 /** Snapshot of resolve versus the threshold each species must beat. */
@@ -329,6 +367,8 @@ function build(s: RunState, economyOnly = false): void {
 
   // 6. A cookhouse doubles what every one of those camps is worth.
   if (countPlanned(s, 'cookhouse') < 2 && pop > 18 && tryPlace(s, 'cookhouse')) return
+  // 7. Caravans spend the amber glades and decrees pile up.
+  if (countPlanned(s, 'tradingPost') < 1 && pop >= 10 && tryPlace(s, 'tradingPost')) return
 }
 
 /**
@@ -717,6 +757,8 @@ function staff(s: RunState): void {
     if (!def) return 0
     // The hearth's firekeeper is staffed by `tendWard`, never as filler.
     if (def.ward) return -1
+    // The Trading Post only turns planks into amber when planks are spare.
+    if (b.defId === 'tradingPost' && (s.stock.plank ?? 0) < 40) return -1
     const outputs = Object.keys(activeRecipe(b)?.outputs ?? {}) as ResourceId[]
     // Emergencies first: an empty larder or a dying hearth ends runs.
     if (hungry && outputs.some((id) => EDIBLE.includes(id))) return 7
@@ -852,6 +894,66 @@ function explore(s: RunState): void {
   }
 }
 
+/** Amber the bot keeps back for a threat's price before it trades. */
+const AMBER_RESERVE = 30
+
+/**
+ * Caravans, the way a competent player uses them: a rare blueprint toward a
+ * wanted service comes first; an agreement once there is a purse for it (the
+ * Provisioners' Guild when a service good cannot be made here, else the
+ * Factors' Compact for the surplus); a commission bridges a drafted venue
+ * whose workshop is not (the venue goes up once the goods are in); a strong
+ * cornerstone only from a deep purse. Surplus and
+ * the wanted good are sold down to what the settlement needs.
+ */
+function trade(s: RunState, ledger: AmberLedger): void {
+  if (!caravanAvailable(s)) return
+  const amber = () => s.stock.amber ?? 0
+  const caravan = s.caravan
+  const rare = caravan.rare
+  if (caravan.here && rare && !rare.sold) {
+    const price = rarePrice(s)
+    const worth =
+      rare.kind === 'blueprint'
+        ? relevantBlueprints(s).includes(rare.id) && amber() >= price + AMBER_RESERVE
+        : cornerstoneScore(rare.id) >= 2 && amber() >= price + AMBER_RESERVE + 60
+    if (worth) booked(s, ledger, `rare ${rare.kind}`, () => buyRare(s))
+  }
+  if (!caravan.agreement && caravan.visits >= 1 && amber() >= AGREEMENT_PRICE + AMBER_RESERVE) {
+    const good = provisionsGood(s)
+    const missing = !!good && !s.unlockedBuildings.some((id) => BUILDINGS[id]?.recipes.some((r) => (r.outputs[good] ?? 0) > 0))
+    booked(s, ledger, 'agreement', () => signAgreement(s, missing ? 'provisioners' : 'factors'))
+  }
+  // A venue drafted without the workshop that supplies it: buy its good in.
+  const starved = neededServices(s)
+    .map((need) => SERVICE_CHAIN[need])
+    .filter(
+      (chain) =>
+        s.unlockedBuildings.includes(chain.service) && !s.unlockedBuildings.includes(chain.producer),
+    )
+    .map((chain) => Object.keys(BUILDINGS[chain.service]?.recipes[0]?.inputs ?? {})[0] as ResourceId)
+    .filter((good) => (s.stock[good] ?? 0) < 10)
+  if (!caravan.commission && starved[0] && amber() >= commissionPrice(s, starved[0]) + AMBER_RESERVE) {
+    booked(s, ledger, 'commission', () => commissionShipment(s, starved[0]))
+  }
+  if (!caravan.here) return
+  caravan.offers.forEach((offer, index) => {
+    if (offer.sold) return
+    const wanted = offer.prepaid || (starved.includes(offer.resource) && amber() >= offerPrice(s, index) + AMBER_RESERVE)
+    if (wanted) booked(s, ledger, 'lots', () => buyOffer(s, index))
+  })
+  // Sell the wanted good, and anything piling up in a crowded store, down to target.
+  const crowded = storageUsed(s) > s.storageCap * 0.85
+  for (const r of RESOURCE_LIST) {
+    if (r.category === 'currency' || EDIBLE.includes(r.id)) continue
+    const keep = r.id === caravan.wants ? stockTarget(s, r.id) : crowded ? stockTarget(s, r.id) * 1.5 : Infinity
+    let guard = 0
+    while ((s.stock[r.id] ?? 0) - TRADE_LOT >= keep && guard++ < 10) {
+      booked(s, ledger, 'sales', () => sellResource(s, r.id))
+    }
+  }
+}
+
 /** Resolves whatever the sim is blocking on, preferring cheap safe options. */
 function answerChoices(s: RunState): void {
   let guard = 0
@@ -919,6 +1021,9 @@ function answerChoices(s: RunState): void {
         finisher ??
         choice.options.find((id) => wanted.has(id)) ??
         stones.find((id) => cornerstoneScore(id) >= 2) ??
+        // Nothing for the chains: a Trading Post turns the amber hoard into
+        // blueprints and service goods later on.
+        buildings.find((id) => id === 'tradingPost') ??
         buildings[0] ??
         choice.options[0]
       takeChoice(s, pick)
@@ -1134,20 +1239,24 @@ function playRun(
   let stallImpatience = 0
   let firstRepMinute = Infinity
   let decreesMissed = 0
+  const amber: AmberLedger = { earned: 0, earnedBy: {}, spent: {}, end: 0, caravans: false, visits: 0 }
   /** `[clock, reputation]` every few seconds, for the shape of the climb. */
   const repCurve: [number, number][] = [[0, 0]]
 
   while (s.phase === 'playing' && s.clock < maxSeconds) {
     const beforeChoices = s.reputation
-    answerChoices(s)
+    booked(s, amber, 'events', () => answerChoices(s))
     sources.events += s.reputation - beforeChoices
     if (s.phase !== 'playing') break
 
     if (sinceDecision >= DECISION_INTERVAL) {
       sinceDecision = 0
       // Threats compound; a competent player pays them off when they can.
-      for (const threat of [...s.threats]) appeaseThreat(s, threat.id)
+      booked(s, amber, 'threats', () => {
+        for (const threat of [...s.threats]) appeaseThreat(s, threat.id)
+      })
       dumpSurplus(s)
+      trade(s, amber)
       build(s, economyOnly)
       layRoads(s)
       explore(s)
@@ -1162,7 +1271,7 @@ function playRun(
     const gladesBefore = s.stats.gladesCleared
     const liveDecree = s.decree?.defId
     const decreesBefore = s.feats?.decreesMet ?? 0
-    tick(s, STEP)
+    booked(s, amber, 'tick', () => tick(s, STEP))
     if (liveDecree && !s.decree && (s.feats?.decreesMet ?? 0) === decreesBefore) decreesMissed++
     if (liveDecree && (s.feats?.decreesMet ?? 0) > decreesBefore) {
       sources.decrees += decreeReputation(s, DECREES[liveDecree])
@@ -1180,6 +1289,9 @@ function playRun(
     if (s.clock - repCurve[repCurve.length - 1][0] >= 5) repCurve.push([s.clock, s.reputation])
   }
   const finalRep = Math.max(1, s.reputation)
+  amber.end = s.stock.amber ?? 0
+  amber.caravans = caravanAvailable(s)
+  amber.visits = s.caravan.visits
   const lateFrom = [...repCurve].reverse().find(([t]) => t <= s.clock - 180)?.[1] ?? 0
   const lateShare = Math.max(0, s.reputation - lateFrom) / finalRep
   // Resolve is whatever the discrete sources do not explain.
@@ -1233,6 +1345,7 @@ function playRun(
     blights: s.stormBlights ?? { forecast: 0, struck: 0, blunted: 0 },
     wardMinutes: wardSeconds / 60,
     stallImpatience,
+    amber,
   }
 }
 
@@ -1314,10 +1427,33 @@ function summarise(label: string, reports: BotReport[]): string {
   )
 }
 
+/** Amber over a set of runs: median earned, spent by sink, and how many saw caravans. */
+function summariseAmber(label: string, reports: BotReport[]): string {
+  const spentTotal = (r: BotReport) => Object.values(r.amber.spent).reduce((a, b) => a + b, 0)
+  const perRun = (pick: (r: BotReport) => Record<string, number>) => {
+    const sums = new Map<string, number>()
+    for (const r of reports) {
+      for (const [k, v] of Object.entries(pick(r))) sums.set(k, (sums.get(k) ?? 0) + v)
+    }
+    return [...sums.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `${k} ${(v / reports.length).toFixed(0)}`)
+      .join(' ')
+  }
+  const bySink = perRun((r) => r.amber.spent)
+  const bySource = perRun((r) => r.amber.earnedBy)
+  const traders = reports.filter((r) => r.amber.caravans)
+  return (
+    `${label.padEnd(20)} amber earned ${median(reports.map((r) => r.amber.earned)).toFixed(0)} (median; per run from ${bySource}) spent ${median(reports.map(spentTotal)).toFixed(0)} left ${median(reports.map((r) => r.amber.end)).toFixed(0)}` +
+    ` · spent/run by sink: ${bySink || 'none'} · caravans in ${traders.length}/${reports.length} runs (${mean(traders.map((r) => r.amber.visits)).toFixed(1)} visits)`
+  )
+}
+
 function logRun(seed: number, r: BotReport): void {
   console.log(
     `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} · orders ${r.ordersCompleted} · decrees ${r.decreesMet}/${r.decreesMet + r.decreesMissed} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · first rep ${r.firstRepMinute.toFixed(1)}min · late ${(r.lateShare * 100).toFixed(0)}% · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
       ` · cause ${r.cause} · blights ${r.blights.struck}/${r.blights.blunted} of ${r.blights.forecast} · wards ${r.wardMinutes.toFixed(1)} · stallImp ${r.stallImpatience.toFixed(1)}` +
+      ` · amber +${r.amber.earned.toFixed(0)} -${Object.entries(r.amber.spent).map(([k, v]) => `${k}:${v.toFixed(0)}`).join(',') || '0'} =${r.amber.end.toFixed(0)}${r.amber.caravans ? ` caravans ${r.amber.visits}` : ''}` +
       `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}\n    reputation by minute: ${r.curve.join(' ')}`,
   )
 }
@@ -1339,6 +1475,8 @@ describe('balance harness', () => {
     })
     lines.push(summarise('all trios', competent))
     lines.push(summarise('economy-only', econ))
+    lines.push(summariseAmber('amber, all trios', competent))
+    lines.push(summariseAmber('amber, economy-only', econ))
     console.log(lines.join('\n'))
 
     // A roguelite that can stalemate is broken: every run must reach a verdict,
@@ -1355,8 +1493,8 @@ describe('balance harness', () => {
     )
 
     /*
-     * The bot plays competently but not well — it never trades, never soothes
-     * the Queen, and takes whatever the draft hands it. Most maps but not all
+     * The bot plays competently but not well — it trades only by rote, never
+     * soothes the Queen, and takes whatever the draft hands it. Most maps but not all
      * is the shape we want: a real player should comfortably beat this, and a
      * careless one should still lose sometimes.
      */

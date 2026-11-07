@@ -29,6 +29,8 @@ export interface Settings {
   renderer: '3d' | '2d'
   /** Real-time shadows in the 3D view — the main GPU cost on weak devices. */
   shadows: boolean
+  /** A small fps / frame time / draw call readout over the map (off by default). */
+  showPerf: boolean
 }
 
 export type VolumeChannel = 'master' | 'music' | 'effects' | 'ambience'
@@ -70,6 +72,7 @@ export function defaultSettings(): Settings {
     // Phones and small screens start without shadows (the main 3D GPU cost
     // there); the menu's Shadows setting turns them back on.
     shadows: !smallOrTouchScreen(),
+    showPerf: false,
   }
 }
 
@@ -218,6 +221,8 @@ export function loadSettings(): Settings {
     ...saved,
     autoPause: migrateAutoPause(saved.autoPause),
     volume: migrateVolume(saved.volume),
+    // Opt-in only: anything but an explicit `true` (older saves have none) is off.
+    showPerf: saved.showPerf === true,
   }
 }
 

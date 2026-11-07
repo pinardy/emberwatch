@@ -122,10 +122,12 @@ describe('app shell', () => {
     takeOpeningDraft()
     expect(currentRun().pendingChoices).toHaveLength(0)
 
-    // Game shell is up: meters, map, and the build panel.
-    expect(screen.getByText('Reputation')).toBeTruthy()
-    expect(screen.getByText('Impatience')).toBeTruthy()
-    expect(screen.getByText('Hostility')).toBeTruthy()
+    // Game shell is up: meters, map, and the build panel. (The map's glade
+    // stake chips can say "Reputation" too, so the meters are read in the top bar.)
+    const topBar = within(document.querySelector<HTMLElement>('header.topbar')!)
+    expect(topBar.getByText('Reputation')).toBeTruthy()
+    expect(topBar.getByText('Impatience')).toBeTruthy()
+    expect(topBar.getByText('Hostility')).toBeTruthy()
     expect(screen.getByRole('application', { name: /Settlement map/i })).toBeTruthy()
     expect(
       Array.from(document.querySelectorAll('button.build-card strong')).map(

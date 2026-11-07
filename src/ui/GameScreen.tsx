@@ -28,6 +28,7 @@ import { useAudioCues } from './useAudioCues'
 import { PANEL_KEY_LABEL, useGameLoop, useHotkeys } from './useGameLoop'
 import { VillagerPanel } from './VillagerPanel'
 import { Warnings } from './Warnings'
+import { PerfReadout } from './PerfReadout'
 import './hud-feedback.css'
 import { TAB_ART, threatArt } from '../game/content/artFamilies'
 
@@ -104,6 +105,7 @@ export function GameScreen() {
       <main className={`game-main ${founding ? 'is-founding' : ''}`}>
         <div className="map-column">
           <MapView />
+          <PerfReadout />
           {/*
             One overlay dock over the map, in fixed regions so nothing piles up
             or covers the map's middle: critical warnings and passing notices

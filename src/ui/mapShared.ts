@@ -187,6 +187,32 @@ export const GLADE_STAKE_ART: Record<GladeStake, IconId> = {
   pact: 'pact/handshake',
 }
 
+/**
+ * How each stake reads on the map: a one-word label, a colour of its own (so
+ * the lingering task's writ and the pact's handshake are told apart at a
+ * glance, not only by their small shapes) and what it means (`means`, and
+ * `hint` for a tooltip), for the plates and the Inspector.
+ */
+export const GLADE_STAKE_STYLE: Record<
+  GladeStake,
+  { label: string; color: string; means: string; hint: string }
+> = {
+  lives: stakeStyle('Lives', 'Lives', '#e7796d', 'a choice here can cost villagers.'),
+  threat: stakeStyle('Threat', 'Threat', '#e8a050', 'a choice here can set a threat on the settlement.'),
+  condition: stakeStyle(
+    'Task',
+    'Lingering task',
+    '#7db4e6',
+    'a choice here leaves a task that stays until it is dealt with.',
+  ),
+  reputation: stakeStyle('Reputation', 'Reputation', '#ecc75f', 'a choice here can bring reputation.'),
+  pact: stakeStyle('Pact', 'Pact', '#bd92ea', 'a choice here makes a pact with an effect that lasts the run.'),
+}
+
+function stakeStyle(label: string, name: string, color: string, means: string) {
+  return { label, color, means, hint: `${name}: ${means}` }
+}
+
 /** "Could bring: a threat or reputation" — the plate's tooltip for its stakes. */
 export function gladeStakesTitle(stakes: readonly GladeStake[]): string {
   return stakes.length > 0 ? `Clearing it could bring ${describeStakes([...stakes])}` : ''
