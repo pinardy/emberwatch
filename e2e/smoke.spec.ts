@@ -103,7 +103,90 @@ async function sampleClock(page: Page): Promise<ClockSample> {
   }
 }
 
+/** The longest warning the game writes, at its full length. */
+const LONG_WARNING =
+  'Stockpile full of Berries — 4 buildings have stopped. You can afford a Warehouse now — build one, or dump some Berries (select the hearth or a warehouse).'
+
+/**
+ * Puts a short danger and the long stockpile warning into the real warnings
+ * strip (its own list, its own classes) and returns where they landed, the
+ * dock's top region and the side panel.
+ */
+async function longWarningLayout(page: Page) {
+  return page.evaluate((text) => {
+    const list = document.querySelector('.hud-top .warnings-list')
+    if (!list) throw new Error('no warnings strip')
+    if (!list.querySelector('.e2e-warning')) {
+      for (const [severity, body] of [
+        ['danger', 'The Queen is nearly out of patience.'],
+        ['caution', text],
+      ]) {
+        const el = document.createElement('div')
+        el.className = `warning is-${severity} e2e-warning`
+        el.textContent = body
+        list.append(el)
+      }
+    }
+    const box = (el: Element | null) => {
+      const r = el!.getBoundingClientRect()
+      return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }
+    }
+    return {
+      warnings: [...list.querySelectorAll('.e2e-warning')].map(box),
+      region: box(document.querySelector('.hud-top')),
+      sidebar: box(document.querySelector('.sidebar')),
+      tabs: box(document.querySelector('.sidebar .tabs')),
+      width: document.documentElement.clientWidth,
+    }
+  }, LONG_WARNING)
+}
+
 test.describe('desktop', () => {
+  test('a long warning wraps inside the dock and never covers the side panel', async ({
+    page,
+  }) => {
+    const problems = watchForErrors(page)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await startSettlement(page)
+    for (const [width, height] of [
+      [1280, 800],
+      [1440, 900],
+      [1920, 1080],
+    ]) {
+      await page.setViewportSize({ width, height })
+      const layout = await longWarningLayout(page)
+      for (const w of layout.warnings) {
+        expect(w.left, `${width}px`).toBeGreaterThanOrEqual(layout.region.left - 1)
+        expect(w.right, `${width}px`).toBeLessThanOrEqual(layout.region.right + 1)
+        expect(w.right, `${width}px`).toBeLessThanOrEqual(layout.sidebar.left)
+      }
+      // The long one wraps rather than running out of the region.
+      const long = layout.warnings[1]
+      expect(long.bottom - long.top, `${width}px`).toBeGreaterThan(30)
+    }
+    expect(problems).toEqual([])
+  })
+
+  test('the keyboard reaches the 3D glade plates through the glade list', async ({ page }) => {
+    const problems = watchForErrors(page)
+    await startSettlement(page)
+    await expect(page.locator('.map-wrap-3d canvas')).toBeVisible({ timeout: 15_000 })
+    const list = page.getByRole('navigation', { name: 'Glades' })
+    const first = list.locator('button[tabindex="0"]')
+    await expect(first).toHaveCount(1)
+    // Out of sight until focused, then a readable panel.
+    expect((await list.boundingBox())?.width ?? 0).toBeLessThan(4)
+    await first.focus()
+    expect((await list.boundingBox())?.width ?? 0).toBeGreaterThan(150)
+    await page.keyboard.press('ArrowDown')
+    const picked = list.locator('button[tabindex="0"]')
+    const name = (await picked.locator('strong').textContent()) ?? ''
+    expect(name.length).toBeGreaterThan(0)
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.inspector')).toContainText(name)
+    expect(problems).toEqual([])
+  })
+
   test('a new settlement runs in real time and both maps render', async ({ page }) => {
     const problems = watchForErrors(page)
     await startSettlement(page)
@@ -225,6 +308,14 @@ test.describe('phone', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     )
     expect(overflow).toBeLessThanOrEqual(1)
+
+    // The warnings strip stays on the map, above the side panel's tabs.
+    const layout = await longWarningLayout(page)
+    for (const w of layout.warnings) {
+      expect(w.left).toBeGreaterThanOrEqual(0)
+      expect(w.right).toBeLessThanOrEqual(layout.width)
+      expect(w.bottom).toBeLessThanOrEqual(layout.tabs.top)
+    }
 
     expect(problems).toEqual([])
   })

@@ -4,7 +4,7 @@ import { useGameStore } from '../game/store'
 import { ACHIEVEMENT_LIST, achievementCount } from '../game/content/achievements'
 import { DailyMenuEntry } from './DailyScreen'
 import { SlotOneLiner } from './SaveSlots'
-import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
+import { AutoPauseFields, PauseOnBlurField, PerfField, SoundFields } from './SettingsFields'
 import { Icon } from './Icon'
 
 export function MenuScreen() {
@@ -124,6 +124,7 @@ export function MenuScreen() {
             />
             Shadows — turn off on slower devices
           </label>
+          <PerfField />
           <AutoPauseFields />
         </details>
 
