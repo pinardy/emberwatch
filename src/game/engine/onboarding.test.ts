@@ -16,7 +16,8 @@ import {
 import { foundingPart, foundingPicks, isFounding, migrateFounding } from './founding'
 import { migrateRun } from '../persistence'
 import { firstSteps, firstStepsComplete, firstStepTarget, isFoodCamp } from './onboarding'
-import { population } from './queries'
+import { population, storageUsed } from './queries'
+import { RUN_MODIFIER_LIST } from '../content/runModifiers'
 import { tick } from './tick'
 import type { FirstStepId } from './onboarding'
 import type { RunState } from '../types'
@@ -265,6 +266,19 @@ describe('draft appeal', () => {
 
 describe('the founding', () => {
   const kinds = (s: RunState) => s.pendingChoices.map((c) => foundingPart(c))
+
+  it('opens with room in the stockpile on every land, its storage counted before the clock starts', () => {
+    for (const def of RUN_MODIFIER_LIST) {
+      const s = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'], modifiers: [def.id] })
+      // The founding holds the clock, so the cap shown now must already be
+      // the one the first tick works out (Early Frost's woodshed included).
+      const ticked = structuredClone(s)
+      ticked.pendingChoices = []
+      tick(ticked, 0.125)
+      expect(s.storageCap, def.id).toBe(ticked.storageCap)
+      expect(storageUsed(s), def.id).toBeLessThan(s.storageCap)
+    }
+  })
 
   it('deals every opening pick as one founding, and the clock waits for all of it', () => {
     const s = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'] })

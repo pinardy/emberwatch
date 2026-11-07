@@ -38,6 +38,7 @@ import { pushLog } from './runLog'
 import { computeModifiers, seasonLengthFor } from './modifiers'
 import { yearLengthFor } from './forecast'
 import { makeRng } from './rng'
+import { computeStorageCap } from './queries'
 import { applyCommission, commissionLand } from './citadel'
 import { defaultFeats } from '../content/achievements'
 import {
@@ -262,6 +263,10 @@ export function createRun({
   // Season-length effects reach the opening Drizzle too (an early frost).
   const landMods = computeModifiers(state)
   state.season.length = seasonLengthFor('drizzle', 1, landMods)
+  // So does the land's storage (Early Frost's woodshed): counted now, as the
+  // first tick would, not after the founding — or its extra firewood reads as
+  // a full stockpile while the clock waits.
+  state.storageCap = computeStorageCap(state, BASE_STORAGE + landMods.globalStorage)
   // The first decree waits out Year 1 (DECREE_FIRST_DELAY is a base-length
   // year): follow the year this land actually has, so it still arrives as
   // Year 2 opens under Long Storms or an Early Frost.
