@@ -317,7 +317,7 @@ describe('app shell', () => {
       // the world by design, and a run of this length meets several at random
       // times. The loop is what's measured here, so answer any choice first,
       // and measure the row again if one arrives mid-row.
-      let simulated = 0
+      let simulated: number
       for (let attempt = 0; ; attempt++) {
         expect(attempt, 'interrupted on every attempt').toBeLessThan(10)
         answerPendingChoices()
