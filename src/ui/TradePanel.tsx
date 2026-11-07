@@ -61,6 +61,12 @@ export function TradePanel() {
         ) : (
           <CaravanVisit run={run} amber={amber} />
         )}
+        {(run.caravan.held ?? []).map((lot) => (
+          <p key={lot.resource} className="panel-hint" data-testid="trade-held">
+            <Icon of={RESOURCES[lot.resource]} /> {Math.ceil(lot.amount)} {RESOURCES[lot.resource]?.name}{' '}
+            from your commission wait at the hearth, unloaded as the stockpile has room.
+          </p>
+        ))}
       </section>
       {available && <Commission run={run} amber={amber} />}
       {available && <Agreement run={run} amber={amber} />}

@@ -899,6 +899,11 @@ export interface CaravanState {
   raresBought?: number
   /** A shipment paid for, to arrive with the next caravan. */
   commission?: { resource: ResourceId; amount: number } | null
+  /**
+   * Paid commission goods a departing caravan left at the hearth because the
+   * stockpile had no room; unloaded as room frees. Absent on older saves.
+   */
+  held?: { resource: ResourceId; amount: number }[]
   /** The run's trade agreement, once signed. */
   agreement?: TradeAgreementId | null
 }
@@ -1031,6 +1036,11 @@ export interface RunState {
   deposits: Record<string, WorldDeposit>
   obstacles: Obstacle[]
   buildings: Record<string, BuildingInstance>
+  /**
+   * Buildings placed so far: the next one's id is `b<counter>`. Ids from older
+   * saves (`b<count>_<clock>`) never take that shape, so they cannot collide.
+   */
+  buildingCounter: number
   villagers: Record<string, Villager>
   /**
    * Roads laid by the player. Absent on saves from before roads existed,

@@ -589,6 +589,13 @@ export function secondsPastDeadline(s: RunState): number {
  * (7 and a half, less 2, is 5 and a half), and the meter never drops below 0.
  */
 export function addImpatience(s: RunState, amount: number): void {
+  // Whole points only: a fraction in them (an older save, a hand edit) moves
+  // into the progress, so the meter can never step past its ceiling.
+  const whole = Math.floor(s.impatience)
+  if (whole !== s.impatience) {
+    s.impatienceProgress += s.impatience - whole
+    s.impatience = whole
+  }
   s.impatienceProgress += amount
   while (s.impatienceProgress >= 1 && s.impatience < s.maxImpatience) {
     s.impatienceProgress -= 1
@@ -599,7 +606,10 @@ export function addImpatience(s: RunState, amount: number): void {
     s.impatience -= 1
   }
   if (s.impatienceProgress < 0) s.impatienceProgress = 0
-  if (s.impatience >= s.maxImpatience) s.impatienceProgress = 0
+  if (s.impatience >= s.maxImpatience) {
+    s.impatience = s.maxImpatience
+    s.impatienceProgress = 0
+  }
 }
 
 export function addReputation(s: RunState, amount: number): void {
