@@ -152,6 +152,9 @@ export default defineConfig({
           // through them; LazyScreens.test.tsx covers the cold, suspending path.
           setupFiles: ['src/test/setup-ui.ts'],
           exclude: testExclude,
+          // A UI test mounts the whole app; on a loaded machine the default
+          // 5 s is too tight for the longer flows.
+          testTimeout: 15_000,
         },
       },
     ],

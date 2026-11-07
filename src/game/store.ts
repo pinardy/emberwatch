@@ -150,6 +150,21 @@ let lastHudFrame = Number.NEGATIVE_INFINITY
 let quietStep = false
 
 /**
+ * Clears the loop's module-level state (carry, auto-pause snapshot, HUD
+ * throttle, a pending idle save), so one UI test's frames cannot leak into the
+ * next. Tests only: `src/test/setup-ui.ts` calls it after each test.
+ */
+export function resetLoopStateForTests(): void {
+  cancelIdleSave?.()
+  cancelIdleSave = null
+  simCarry = 0
+  watched = null
+  saveFailing = false
+  lastHudFrame = Number.NEGATIVE_INFINITY
+  quietStep = false
+}
+
+/**
  * The things that refresh the HUD at once when a sim step changes them,
  * rather than at the next HUD tick: a season turning, the run ending, a
  * choice or a threat appearing, a building finishing, a new log line.
