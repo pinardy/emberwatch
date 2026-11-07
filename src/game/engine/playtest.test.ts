@@ -1978,6 +1978,30 @@ describe('balance harness', () => {
     for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
   }, 300_000)
 
+  /*
+   * Frost has killed nobody in the competent bot's runs: it keeps its homes
+   * inside the hearth's reach, raises braziers for any that sprawl, and its
+   * comfort upgrades insulate the starting shelters. That is a careful
+   * player's reward, not a toothless rule — a player who under-builds warmth
+   * (homes beside the camps, no braziers, no insulating upgrades) must still
+   * lose villagers to the cold in a fair share of runs.
+   */
+  it('the cold takes villagers from a player who under-builds warmth', () => {
+    const seeds = ALL_SEEDS.slice(0, FROST_SEED_COUNT)
+    const reports = TRIOS.flatMap((trio) => seeds.map((seed) => playRun(seed, trio, { carelessWarmth: true })))
+    const frozen = reports.reduce((n, r) => n + r.frozen, 0)
+    const struck = reports.filter((r) => r.frozen > 0).length
+    console.log(
+      `${summarise('careless warmth', reports)}\n${''.padEnd(20)} frost: ${frozen} villagers lost in ${struck}/${reports.length} runs` +
+        ` · median cold villager-seconds ${median(reports.map((r) => r.coldSeconds)).toFixed(0)}` +
+        ` · most cold at once ${Math.max(...reports.map((r) => r.peakCold))}`,
+    )
+    expect(struck).toBeGreaterThanOrEqual(Math.ceil(reports.length / 8))
+    expect(frozen).toBeGreaterThanOrEqual(struck)
+    // Punishing, not a death sentence: careless runs still reach a verdict in time.
+    for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
+  }, 300_000)
+
   it('grows a settlement past its starting six villagers', () => {
     const s = createRun({ seed: 4242, species: ['human', 'fox', 'harpy'] })
     let sinceDecision = Infinity
