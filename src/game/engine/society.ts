@@ -363,19 +363,54 @@ export function stepReputation(
 }
 
 /**
+ * Passive impatience per second right now, by cause. The sim adds `total`;
+ * the HUD names the larger causes, so the rate the player is shown — and why
+ * — is the rate that is applied. Every part but `deadline` already carries the
+ * cornerstones' calming (`mods.impatienceRate`).
+ */
+export interface ImpatienceParts {
+  /** The calendar: a base rate that grows each year. */
+  calendar: number
+  /** Hostility past `IMPATIENCE_HOSTILITY_THRESHOLD`. */
+  hostility: number
+  /** Villagers whose species sits below its reputation threshold. */
+  stalling: number
+  /** Time since reputation last rose (see `stagnationImpatienceRate`). */
+  stagnation: number
+  /** The Queen's deadline overtime. */
+  deadline: number
+  total: number
+}
+
+export function impatienceParts(s: RunState, mods: Modifiers): ImpatienceParts {
+  const calm = mods.impatienceRate
+  const yearScale = 1 + (s.season.year - 1) * IMPATIENCE_YEAR_SCALING
+  const calendar = IMPATIENCE_BASE * yearScale * calm
+  const hostility =
+    s.hostility > IMPATIENCE_HOSTILITY_THRESHOLD
+      ? (s.hostility - IMPATIENCE_HOSTILITY_THRESHOLD) * IMPATIENCE_PER_HOSTILITY_OVER * calm
+      : 0
+  const stalling = stallingImpatienceRate(s) * calm
+  const stagnation = 0
+  // The deadline is not softened by cornerstones: it is what ends every run.
+  const deadline = deadlineOvertimeRate(s)
+  return {
+    calendar,
+    hostility,
+    stalling,
+    stagnation,
+    deadline,
+    total: calendar + hostility + stalling + stagnation + deadline,
+  }
+}
+
+/**
  * Passive impatience gained per second right now, including the Queen's
  * deadline overtime. Shared by the sim and the HUD so the rate the player is
  * shown is the rate that is applied.
  */
 export function impatienceRate(s: RunState, mods: Modifiers): number {
-  const yearScale = 1 + (s.season.year - 1) * IMPATIENCE_YEAR_SCALING
-  let rate = IMPATIENCE_BASE * yearScale
-  if (s.hostility > IMPATIENCE_HOSTILITY_THRESHOLD) {
-    rate += (s.hostility - IMPATIENCE_HOSTILITY_THRESHOLD) * IMPATIENCE_PER_HOSTILITY_OVER
-  }
-  rate += stallingImpatienceRate(s)
-  // The deadline is not softened by cornerstones: it is what ends every run.
-  return rate * mods.impatienceRate + deadlineOvertimeRate(s)
+  return impatienceParts(s, mods).total
 }
 
 /**
