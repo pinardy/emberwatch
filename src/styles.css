@@ -3587,9 +3587,13 @@ button.is-armed {
     justify-self: center;
   }
 
-  /* Only the newest toast, on one line; the rest is in the Log (and its badge). */
+  /* Only the newest toast, on one line; the rest is in the Log (and its badge).
+     A grid item's minimum width is its content's by default, so without
+     min-width: 0 a long one-line toast widened the page instead of ending in
+     an ellipsis. */
   .hud-stack > .event-toasts {
     width: auto;
+    min-width: 0;
     justify-self: stretch;
   }
 
@@ -3599,6 +3603,8 @@ button.is-armed {
 
   .hud-stack .event-toast {
     white-space: nowrap;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .hud-stack .event-toast-text {
