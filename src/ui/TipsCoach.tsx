@@ -1,100 +1,16 @@
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
-import { idleVillagers } from '../game/engine/queries'
 import { useGameStore, useHudRun, useHudVersion } from '../game/store'
 import type { RunState } from '../game/types'
 import { FirstSteps, useFirstStepsOpen } from './FirstSteps'
+import { currentDialogTip, nextCornerTip, tipById, tipCopy, type Tip } from './tips'
 import { useEscapeLayer } from './useGameLoop'
 
 /**
  * Contextual first-time tips. Each fires once, when its condition first holds,
  * and stays until dismissed. Seen ids persist in localStorage so veterans are
- * never nagged twice.
+ * never nagged twice. The tips themselves are data, in `tips.ts`.
  */
-interface Tip {
-  id: string
-  title: string
-  text: string
-  when: (run: RunState) => boolean
-  /** Shown inside a dialog (via `DialogTip`) rather than in the corner. */
-  inDialog?: boolean
-  /**
-   * Once this holds the tip has done its job: it is put away (and counted as
-   * seen) without waiting for "Got it", or skipped if it never showed.
-   */
-  doneWhen?: (run: RunState) => boolean
-  /**
-   * Urgent tips may interrupt the First steps checklist; the rest wait until
-   * it is finished or dismissed, so the two never fight for the corner.
-   */
-  urgent?: boolean
-}
-
-/** The player has done something on purpose: placed a building or put someone to work. */
-function hasActed(run: RunState): boolean {
-  return (
-    Object.values(run.buildings).some((b) => b.defId !== 'ancientHearth') ||
-    Object.values(run.villagers).some((v) => v.assignment !== null)
-  )
-}
-
-const TIPS: Tip[] = [
-  {
-    id: 'welcome',
-    title: 'Welcome, Viceroy',
-    text: 'Fill the 👑 Reputation meter to win before the Queen’s ⏳ Impatience fills and she recalls you. Resolve above each species’ threshold is what earns reputation.',
-    // The run opens on the blueprint draft; welcome the player once it closes.
-    // While the First steps checklist is up, it carries this welcome instead.
-    when: (run) => run.clock < 30 && run.pendingChoices.length === 0,
-    doneWhen: hasActed,
-  },
-  {
-    id: 'first-draft',
-    title: 'Drafting a blueprint',
-    text: 'You can never unlock everything — pick buildings that satisfy the services your species actually want. The draft can be rerolled for amber.',
-    when: (run) => run.pendingChoices[0]?.kind === 'blueprint',
-    inDialog: true,
-  },
-  {
-    id: 'idle-builders',
-    title: 'Idle hands build',
-    text: 'Idle villagers are your construction crew and your glade clearers. The 💤 count in the top bar is your build speed.',
-    when: (run) => run.clock > 45 && idleVillagers(run).length >= 3,
-  },
-  {
-    id: 'first-glade',
-    title: 'Push into the forest',
-    text: 'Select a fogged glade next to your territory and assign clearers. Dangerous and forbidden glades hide richer loot — and a decision.',
-    when: (run) => run.clock > 90 && run.stats.gladesCleared === 0,
-  },
-  {
-    id: 'first-storm',
-    title: 'The Blightstorm',
-    text: 'Farms stop, gathering halves, and the hearth burns wood fast. Stockpile food and fuel during Clearance, and keep homes near the hearth’s warmth — or raise a brazier beside distant ones.',
-    when: (run) => run.season.season === 'storm' && run.season.year === 1,
-    urgent: true,
-  },
-  {
-    id: 'low-resolve',
-    title: 'Somebody is miserable',
-    text: 'A species below zero resolve will start leaving, and each departure feeds the Queen’s impatience. Check housing, food variety, and their service needs.',
-    when: (run) => Object.values(run.resolve).some((r) => r < 0),
-    urgent: true,
-  },
-  {
-    id: 'first-threat',
-    title: 'A threat is loose',
-    text: 'It will strike again and again until you pay it off from the red banner. Weigh the appeasement cost against what each strike is costing you.',
-    when: (run) => run.threats.length > 0,
-    urgent: true,
-  },
-  {
-    id: 'first-caravan',
-    title: 'A caravan is in town',
-    text: 'It leaves soon. Check the Trade tab — it pays double for one good this visit, its stock rotates every caravan, and from the second visit it carries a rare blueprint or cornerstone.',
-    when: (run) => run.caravan.here,
-  },
-]
 
 const TIPS_KEY = 'emberwatch.tips.v1'
 
@@ -157,14 +73,7 @@ export function TipsCoach() {
       return
     }
     if (active) return
-    const next = TIPS.find(
-      (tip) =>
-        !tip.inDialog &&
-        !seen.includes(tip.id) &&
-        (!checklist || tip.urgent) &&
-        tip.when(run) &&
-        !tip.doneWhen?.(run),
-    )
+    const next = nextCornerTip(run, seen, checklist)
     if (next) setActive(next)
   }, [run, version, seen, active, blocked, checklist, markSeen])
 
@@ -186,18 +95,22 @@ export function TipsCoach() {
 
   return (
     <div className="tip-coach" role="status" aria-label="Tip">
-      <TipBody tip={active} onDismiss={dismiss} />
+      <TipBody tip={active} run={run} onDismiss={dismiss} />
     </div>
   )
 }
 
-/** A tip shown inside a dialog, e.g. the first blueprint draft. */
+/**
+ * A tip shown inside a dialog, e.g. the first blueprint draft. Only one
+ * dialog tip shows at a time (`currentDialogTip`): where a dialog holds the
+ * place of two, the second waits until the first is dismissed or done.
+ */
 export function DialogTip({ id }: { id: string }) {
   const run = useHudRun()
   const seen = useSeenTips((s) => s.seen)
   const markSeen = useSeenTips((s) => s.markSeen)
-  const tip = TIPS.find((t) => t.id === id)
-  const visible = !!run && !!tip && !seen.includes(tip.id) && tip.when(run)
+  const tip = tipById(id)
+  const visible = !!run && !!tip && currentDialogTip(run, seen)?.id === id
   // Once shown in a dialog it has done its job, even if the player picked
   // without pressing "Got it" — do not repeat it at the next draft. Only
   // count it once the dialog has really moved on: StrictMode's rehearsal
@@ -209,23 +122,23 @@ export function DialogTip({ id }: { id: string }) {
       if (!now || !tip.when(now)) markSeen(id)
     }
   }, [visible, id, tip, markSeen])
-  if (!visible || !tip) return null
+  if (!visible || !tip || !run) return null
   return (
     <div className="tip-coach is-inline" role="note" aria-label="Tip">
-      <TipBody tip={tip} onDismiss={() => markSeen(tip.id)} />
+      <TipBody tip={tip} run={run} onDismiss={() => markSeen(tip.id)} />
     </div>
   )
 }
 
-function TipBody({ tip, onDismiss }: { tip: Tip; onDismiss: () => void }) {
+function TipBody({ tip, run, onDismiss }: { tip: Tip; run: RunState; onDismiss: () => void }) {
   return (
     <>
       <div className="tip-body">
         <strong>
           <span aria-hidden>💡 </span>
-          {tip.title}
+          {tipCopy(tip.title, run)}
         </strong>
-        <p>{tip.text}</p>
+        <p>{tipCopy(tip.text, run)}</p>
       </div>
       <button type="button" onClick={onDismiss} title="Dismiss tip (Esc)">
         Got it
