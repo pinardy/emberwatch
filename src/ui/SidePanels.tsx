@@ -7,6 +7,8 @@ import { modifierOngoingId } from '../game/engine/runModifiers'
 import { useGameStore, useHudRun } from '../game/store'
 import { Bar } from './Bar'
 import { DecreeCard } from './DecreeCard'
+import { CommissionCard } from './Commissions'
+import { COMMISSION_ONGOING_ID } from '../game/engine/citadel'
 import { orderTag } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
 import { RaceSparkline } from './RaceSparkline'
@@ -20,6 +22,8 @@ export function OrdersPanel() {
   if (!run) return null
   // Modifier effects live in `ongoing` too; they are listed with the land.
   const landIds = new Set((run.runModifiers ?? []).map(modifierOngoingId))
+  // ...and the commission's twist is on its own card.
+  landIds.add(COMMISSION_ONGOING_ID)
   const pacts = run.ongoing.filter((effect) => !landIds.has(effect.id))
   return (
     <div className="panel-body">
@@ -34,6 +38,7 @@ export function OrdersPanel() {
             ? 'You have already asked her for different orders this year.'
             : 'Once a year you may ask her for a different pair.'}
         </p>
+        <CommissionCard run={run} />
         <DecreeCard />
         {run.orders.map((order) => {
           const def = ORDERS[order.defId]

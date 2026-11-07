@@ -14,6 +14,7 @@ import {
   isAchievementTitle,
   migrateAchievementState,
 } from './achievements'
+import { COMMISSIONS, judgeCommission } from './commissions'
 import { emptyDailyLedger, isDateKey, migrateDailyLedger } from './daily'
 
 /**
@@ -739,6 +740,10 @@ function migrateHistoryEntry(raw: unknown): MetaHistoryEntry | null {
     entry.modifiers = e.modifiers.filter((m): m is string => typeof m === 'string')
   }
   if (isDateKey(e.daily)) entry.daily = e.daily
+  const c = e.commission as Record<string, unknown> | null | undefined
+  if (c && typeof c === 'object' && typeof c.id === 'string' && COMMISSIONS[c.id]) {
+    entry.commission = { id: c.id, met: c.met === true }
+  }
   return entry
 }
 
@@ -811,6 +816,11 @@ export interface RewardBreakdown {
   lines: RewardLine[]
   /** Sum of `lines`, before the edict bonus. */
   subtotal: number
+  /**
+   * The run's commission, whether it was met, and the supplies it added (a
+   * line in `lines` when met). Absent for a run without one.
+   */
+  commission?: { id: string; met: boolean; bonus: number }
   edict: number
   edictBonus: number
   total: number
@@ -830,10 +840,27 @@ export function supplyBreakdown(run: RunState): RewardBreakdown {
     { label: 'Orders fulfilled', amount: Math.floor(run.stats.ordersCompleted / 2) },
     { label: 'Years endured', amount: Math.min(5, Math.max(0, run.season.year - 1)) },
   ]
+  // A met commission pays a share of the run's own payout on top; the edict
+  // then multiplies both, so "double supplies" stays double under any edict.
+  const verdict = judgeCommission(run)
+  let commission: RewardBreakdown['commission']
+  if (verdict) {
+    const base = lines.reduce((sum, l) => sum + l.amount, 0)
+    const bonus = verdict.met ? Math.round((base * verdict.def.bonusPercent) / 100) : 0
+    commission = { id: verdict.def.id, met: verdict.met, bonus }
+    if (verdict.met) {
+      lines.push({
+        label: `Commission met: ${verdict.def.name} (+${verdict.def.bonusPercent}%)`,
+        amount: bonus,
+      })
+    }
+  }
   const subtotal = lines.reduce((sum, l) => sum + l.amount, 0)
   const edict = clampEdict(run.edict)
   const edictBonus = Math.round(subtotal * EDICT_REWARD_STEP * edict)
-  return { lines, subtotal, edict, edictBonus, total: subtotal + edictBonus }
+  const out: RewardBreakdown = { lines, subtotal, edict, edictBonus, total: subtotal + edictBonus }
+  if (commission) out.commission = commission
+  return out
 }
 
 export function supplyReward(run: RunState): number {
@@ -846,7 +873,8 @@ export function supplyReward(run: RunState): number {
  */
 export function bankRun(meta: MetaState, run: RunState, now = Date.now()): MetaState {
   const won = run.phase === 'won'
-  const reward = supplyReward(run)
+  const breakdown = supplyBreakdown(run)
+  const reward = breakdown.total
   const edict = clampEdict(run.edict)
   const entry: MetaHistoryEntry = {
     seed: run.seed,
@@ -860,6 +888,9 @@ export function bankRun(meta: MetaState, run: RunState, now = Date.now()): MetaS
     modifiers: [...(run.runModifiers ?? [])],
   }
   if (run.daily) entry.daily = run.daily
+  if (breakdown.commission) {
+    entry.commission = { id: breakdown.commission.id, met: breakdown.commission.met }
+  }
   return {
     ...meta,
     citadelSupplies: meta.citadelSupplies + reward,

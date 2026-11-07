@@ -9,6 +9,7 @@ import {
 } from './autoPause'
 import { earnedTitles } from './content/achievements'
 import { dailyExpedition, utcDateKey } from './content/daily'
+import { commissionOffer } from './content/commissions'
 import { META_UPGRADES, defaultMeta, purchaseUpgrade } from './content/meta'
 import { settleRun, type RunSettlement } from './progression'
 import {
@@ -216,6 +217,8 @@ interface GameStore {
     edict?: number,
     land?: LandChoice,
     slot?: SlotId,
+    /** A Citadel commission; ignored unless it is on the Citadel's current offer. */
+    commission?: string,
   ) => Promise<void>
   /**
    * Sets out on today's (UTC) daily expedition: fixed map, trio and edict, no
@@ -469,9 +472,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ meta: loadMeta(), settings: loadSettings() })
   },
 
-  startRun: (seed, species, edict, land, slot) =>
+  startRun: (seed, species, edict, land, slot, commission) =>
     withRunFactory(set, get, ({ createRun }) => {
       const meta = get().meta
+      const offered = commission && commissionOffer(meta).includes(commission)
       beginRun(set, get, slot, 'setup', () =>
         createRun({
           seed: seed ?? randomSeed(),
@@ -479,6 +483,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           species,
           edict: Math.min(edict ?? 0, meta.edictUnlocked),
           land,
+          commission: offered ? commission : undefined,
         }),
       )
     }),
