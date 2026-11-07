@@ -7,7 +7,7 @@ import type {
   RunState,
 } from '../types'
 import { hashInt, makeRng } from '../engine/rng'
-import { describeGoal, evaluateGoal } from './orders'
+import { describeGoal, evaluateGoal } from '../engine/goals'
 
 /**
  * Commissions: what the Citadel sends the next settlement out *for*.

@@ -2,8 +2,8 @@ import { feats } from './feats'
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CHARTERS, CHARTER_LIST } from '../content/charters'
 import { DECREES, DECREE_LIST } from '../content/decrees'
-import { categoryWords, describeGoal, evaluateGoal } from '../content/orders'
-import { RESOURCES, categoryTotal, resourceName } from '../content/resources'
+import { describeTimedGoal, goalCount, goalProgress } from './goals'
+import { RESOURCES, categoryTotal } from '../content/resources'
 import type {
   ActiveCondition,
   ConditionOutcome,
@@ -38,7 +38,6 @@ import { computeModifiers, type Modifiers } from './modifiers'
 import { DECLINE_CHOICE, takeOrderChoice } from './orders'
 import { grantProduced, spend } from './queries'
 import { makeRng, type Rng } from './rng'
-import { tierOf } from './upgrades'
 import { addImpatience, addReputation, loseVillager } from './society'
 import { recordEvent } from './timeline'
 
@@ -55,73 +54,6 @@ import { recordEvent } from './timeline'
  * Everything is declarative data held in `RunState`, and all randomness goes
  * through the run RNG, so saves and seeds replay exactly.
  */
-
-// ---------------------------------------------------------------------------
-// Goals that count from "now"
-// ---------------------------------------------------------------------------
-
-/**
- * The raw count behind a counting goal (lifetime production, buildings
- * standing, glades cleared), or `null` for goals that measure a level.
- * Decrees and conditions measure counting goals relative to a baseline taken
- * when they begin, so "produce 30 planks" means 30 *more*.
- */
-export function goalCount(goal: OrderGoal, s: RunState): number | null {
-  switch (goal.kind) {
-    case 'produced':
-      return s.producedTotals[goal.resource] ?? 0
-    case 'producedCategory':
-      return categoryTotal(s.producedTotals, goal.category)
-    case 'gladesCleared':
-      return s.stats.gladesCleared
-    /*
-     * Each finished construction job counts — a new building, or a tier
-     * raised on one already standing — so "build 2 more homes" can be met by
-     * upgrading two shelters, and a demolished-and-rebuilt site is not free.
-     */
-    case 'buildingId':
-      return constructionCount(s, (defId) => defId === goal.buildingId)
-    case 'buildingsOfCategory':
-      return constructionCount(s, (defId) => BUILDINGS[defId]?.category === goal.category)
-    default:
-      return null
-  }
-}
-
-/** Finished buildings matching `match`, plus every tier they have been raised. */
-function constructionCount(s: RunState, match: (defId: string) => boolean): number {
-  let n = 0
-  for (const b of Object.values(s.buildings)) {
-    if (b.built && match(b.defId)) n += 1 + tierOf(b)
-  }
-  return n
-}
-
-/** 0..1 progress toward a goal, counting from `baseline` where it applies. */
-export function goalProgress(goal: OrderGoal, s: RunState, baseline: number): number {
-  const count = goalCount(goal, s)
-  if (count === null) return evaluateGoal(goal, s)
-  const amount = 'amount' in goal ? goal.amount : 1
-  return Math.max(0, Math.min(1, (count - baseline) / amount))
-}
-
-/** Like `describeGoal`, but phrased for goals that count from now. */
-export function describeTimedGoal(goal: OrderGoal): string {
-  switch (goal.kind) {
-    case 'produced':
-      return `Produce ${goal.amount} more ${resourceName(goal.resource)}`
-    case 'producedCategory':
-      return `Produce ${goal.amount} more ${categoryWords(goal.category)}`
-    case 'gladesCleared':
-      return `Clear ${goal.amount} more glade${goal.amount === 1 ? '' : 's'}`
-    case 'buildingId':
-      return `Build or upgrade ${goal.amount} more ${BUILDINGS[goal.buildingId]?.name ?? goal.buildingId}`
-    case 'buildingsOfCategory':
-      return `Build or upgrade ${goal.amount} more ${goal.category} building${goal.amount === 1 ? '' : 's'}`
-    default:
-      return describeGoal(goal)
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Royal decrees

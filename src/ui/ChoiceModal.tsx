@@ -23,7 +23,7 @@ import type {
   ThreatSpec,
 } from '../game/types'
 import { formatDuration } from '../game/engine/forecast'
-import { describeTimedGoal } from '../game/engine/structure'
+import { describeTimedGoal } from '../game/engine/goals'
 import { IconText } from './IconText'
 import { describeStrike, describeWhileActive, outcomeWords } from './threatText'
 import { DialogTip } from './TipsCoach'

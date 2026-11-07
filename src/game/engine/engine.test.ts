@@ -5,7 +5,8 @@ import { CORNERSTONE_LIST } from '../content/cornerstones'
 import { cornerstonePool } from './citadel'
 import { DECREES, DECREE_LIST } from '../content/decrees'
 import { GLADE_EVENTS, GLADE_EVENT_LIST } from '../content/gladeEvents'
-import { ORDER_LIST, evaluateGoal } from '../content/orders'
+import { ORDER_LIST } from '../content/orders'
+import { evaluateGoal, goalProgress } from './goals'
 import { RESOURCES } from '../content/resources'
 import { VILLAGER_TRAITS, speciesSingular } from '../content/species'
 import { TERRAIN } from '../content/terrain'
@@ -100,13 +101,7 @@ import {
   stepBraziers,
   stormFuelPerSecond,
 } from './society'
-import {
-  checkCharter,
-  decreeCandidate,
-  goalProgress,
-  stepConditions,
-  stepDecree,
-} from './structure'
+import { checkCharter, decreeCandidate, stepConditions, stepDecree } from './structure'
 import { orderFeasible, takeOrderOffer } from './orders'
 import { tick } from './tick'
 import { proclaimFirstDecree } from '../../test/decrees'

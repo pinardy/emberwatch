@@ -6,8 +6,8 @@ import {
   decreeMissImpatience,
   decreeReputation,
   decreeStreakBonus,
-  describeTimedGoal,
 } from '../game/engine/structure'
+import { describeTimedGoal } from '../game/engine/goals'
 import { useHudRun } from '../game/store'
 import type { RunState } from '../game/types'
 import { Bar } from './Bar'

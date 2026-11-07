@@ -1,5 +1,6 @@
 import { BUILDINGS, BUILDING_LIST } from '../content/buildings'
-import { COUNTING_ORDER, ORDERS, ORDER_LIST, WRIT_LIST, describeGoal, evaluateGoal } from '../content/orders'
+import { COUNTING_ORDER, ORDERS, ORDER_LIST, WRIT_LIST } from '../content/orders'
+import { describeGoal, evaluateGoal, describeTimedGoal, goalCount, goalProgress } from './goals'
 import { RESOURCE_LIST } from '../content/resources'
 import type { DepositId, Order, OrderDef, OrderGoal, PendingChoice, ResourceId, RunState } from '../types'
 import {
@@ -17,7 +18,6 @@ import { computeModifiers } from './modifiers'
 import { averageResolve, grantProduced, spend, totalHousing } from './queries'
 import { makeRng, type Rng } from './rng'
 import { addImpatience, addReputation } from './society'
-import { describeTimedGoal, goalCount, goalProgress } from './structure'
 
 /**
  * The Queen's orders: three standing goals, each paying reputation when met.

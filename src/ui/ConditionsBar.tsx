@@ -1,5 +1,6 @@
 import { DECREES } from '../game/content/decrees'
-import { decreeGoal, describeTimedGoal } from '../game/engine/structure'
+import { decreeGoal } from '../game/engine/structure'
+import { describeTimedGoal } from '../game/engine/goals'
 import { useGameStore, useHudRun } from '../game/store'
 import { formatClock } from '../game/engine/forecast'
 import type { ActiveCondition } from '../game/types'
