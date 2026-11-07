@@ -6,7 +6,7 @@ import { ORDERS } from '../content/orders'
 import { DECREES } from '../content/decrees'
 import { RESOURCE_LIST } from '../content/resources'
 import { ALL_RUN_MODIFIER_LIST } from '../content/runModifiers'
-import { COMMISSION_LIST, judgeCommission } from '../content/commissions'
+import { COMMISSIONS, COMMISSION_LIST, judgeCommission } from '../content/commissions'
 import { SPECIES } from '../content/species'
 import { EDIBLE } from '../content/resources'
 import type {
@@ -107,6 +107,7 @@ import { productionRate } from './forecast'
 import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation, takeOrderOffer } from './orders'
 import { categoryRate, decreeGoal, decreeReputation } from './structure'
 import { baseServiceCapacity, isInsulated, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
+import { commissionAllowsSpend, describeCommission, tacticsFor, type BotKit } from './playtestCommissions'
 
 /**
  * End-to-end balance harness.
@@ -171,6 +172,8 @@ interface BotReport {
   modifiers: string
   /** The run's Citadel commission was met (false without one). */
   commissionMet: boolean
+  /** Its terms as they stood at the end ('' without one). */
+  commissionTerms: string
   /** Orders still open at the end, with progress — stuck ones explain slow runs. */
   openOrders: string
   /** Road stretches laid, and workplaces joined to a hub by road at the end. */
@@ -328,6 +331,7 @@ function tryPlace(s: RunState, defId: string, accept?: (pos: Vec2) => boolean): 
   if (!s.unlockedBuildings.includes(defId)) return false
   const def = BUILDINGS[defId]
   if (!def || !canAfford(s.stock, def.cost)) return false
+  if (!commissionAllowsSpend(s, defId, def.cost)) return false
   /*
    * A failed placement search scans every ring around its anchors, which is
    * the harness's dominant cost on crowded maps. Space only opens up when a
@@ -349,6 +353,9 @@ function tryPlace(s: RunState, defId: string, accept?: (pos: Vec2) => boolean): 
 }
 
 const noRoom = new WeakMap<RunState, Set<string>>()
+
+/** The bot's own moves, lent to the commission tactics (`playtestCommissions.ts`). */
+const COMMISSION_KIT: BotKit = { tryPlace, buildHousing, servesDecree }
 
 /** Needs demanded by the species actually living here. */
 function neededServices(s: RunState): ServiceNeed[] {
@@ -410,6 +417,8 @@ function build(s: RunState, economyOnly = false): void {
   ) {
     return
   }
+  // The Citadel commission's own build step, if it has one.
+  if (tacticsFor(s).build?.(s, COMMISSION_KIT)) return
 
   /*
    * 3. Services are the largest resolve lever in the game, so they get the
@@ -529,7 +538,8 @@ const ROAD_WOOD_RESERVE = 35
  */
 function layRoads(s: RunState): boolean {
   const wood = s.stock.wood ?? 0
-  if (wood < ROAD_WOOD_RESERVE + 2) return false
+  const reserve = Math.max(ROAD_WOOD_RESERVE, tacticsFor(s).woodFloor?.(s) ?? 0)
+  if (wood < reserve + 2) return false
   if (s.season.season === 'storm' && wood < 80) return false
   const net = roadNetwork(s)
   const targets: Vec2[] = [
@@ -557,7 +567,7 @@ function layRoads(s: RunState): boolean {
     for (const route of routesBetween(from, to)) {
       const pieces = splitRoute(route)
       const cost = pieces.reduce((sum, [a, b]) => sum + (roadCost(dist(a, b)).wood ?? 0), 0)
-      if (wood - cost < ROAD_WOOD_RESERVE) continue
+      if (wood - cost < reserve) continue
       if (pieces.some(([a, b]) => canPlaceRoad(s, a, b) !== null)) continue
       for (const [a, b] of pieces) placeRoad(s, a, b)
       return true
@@ -834,7 +844,8 @@ function staff(s: RunState): void {
   const reserve = builderReserve(s)
   const pop = population(s)
   const hungry = s.starving || foodStock(s) < pop * 4
-  const cold = (s.stock.wood ?? 0) < 30
+  const tactics = tacticsFor(s)
+  const cold = (s.stock.wood ?? 0) < Math.max(30, tactics.woodFloor?.(s) ?? 0)
 
   // Producers that feed a wanted service — a venue without goods is worthless,
   // so these outrank the raw economy.
@@ -851,6 +862,8 @@ function staff(s: RunState): void {
     if (!def) return 0
     // The hearth's firekeeper is staffed by `tendWard`, never as filler.
     if (def.ward) return -1
+    const own = tactics.staffPriority?.(s, b, COMMISSION_KIT)
+    if (own !== undefined) return own
     // The Trading Post only turns planks into amber when planks are spare.
     if (b.defId === 'tradingPost' && (s.stock.plank ?? 0) < 40) return -1
     const outputs = Object.keys(activeRecipe(b)?.outputs ?? {}) as ResourceId[]
@@ -921,11 +934,12 @@ function tendWard(s: RunState): void {
   if (!hearth) return
   const herbs = s.stock.herb ?? 0
   const staffed = hearth.workers.length > 0
-  if (staffed && (s.hostility < WARD_STOP || herbs < 2)) {
+  const ward = tacticsFor(s).ward?.(s) ?? { start: WARD_START, stop: WARD_STOP, minPopulation: 12 }
+  if (staffed && (s.hostility < ward.stop || herbs < 2)) {
     removeWorker(s, hearth.id)
     return
   }
-  if (!staffed && s.hostility >= WARD_START && population(s) >= 12) {
+  if (!staffed && s.hostility >= ward.start && population(s) >= ward.minPopulation) {
     if (herbs >= 6) assignWorker(s, hearth.id)
     // Keep one herbalist on herbs while the forest needs calming.
     const herbalists = Object.values(s.buildings).filter(
@@ -982,11 +996,13 @@ function explore(s: RunState): void {
   if (pop < 6 || s.starving) return
 
   // An open order for glades is worth clearing for first.
-  const gladeOrder = s.orders.some((o) => orderGoal(o)?.kind === 'gladesCleared')
+  const tactics = tacticsFor(s)
+  const gladeOrder =
+    s.orders.some((o) => orderGoal(o)?.kind === 'gladesCleared') || !!tactics.wantsGlades?.(s)
   if (
     !gladeOrder &&
     s.stats.gladesCleared >= GLADES_BEFORE_SPARING &&
-    s.hostility >= SPARE_AT_HOSTILITY
+    s.hostility >= (tactics.spareAt?.(s) ?? SPARE_AT_HOSTILITY)
   ) {
     for (const g of Object.values(s.glades)) {
       if (g.cleared || g.spared || !isReachable(s, g.id)) continue
@@ -1007,7 +1023,9 @@ function explore(s: RunState): void {
   }
 
   const border = Object.values(s.glades).filter((g) => !g.cleared && isReachable(s, g.id))
-  let target = border.filter((g) => !g.spared).sort((a, b) => a.clearWork - b.clearWork)[0]
+  let target =
+    tactics.preferGlade?.(s, border) ??
+    border.filter((g) => !g.spared).sort((a, b) => a.clearWork - b.clearWork)[0]
   if (!target && gladeOrder) {
     // The order is worth more than the truce: break it on the cheapest glade.
     target = border.sort((a, b) => a.clearWork - b.clearWork)[0]
@@ -1147,6 +1165,7 @@ function answerChoices(s: RunState): void {
       if (!finisher && !choice.options.some((id) => wanted.has(id)) && redrawForChains(s)) continue
       const pick =
         finisher ??
+        tacticsFor(s).blueprint?.(s, choice.options) ??
         choice.options.find((id) => wanted.has(id)) ??
         stones.find((id) => cornerstoneScore(id) >= 2) ??
         // Nothing for the chains: a Trading Post turns the amber hoard into
@@ -1397,7 +1416,7 @@ function pickDecree(s: RunState, choice: PendingChoice): string {
     .map((d) => ({ d, odds: decreeOdds(s, d) + 0.05 * (DECREES[d.defId]?.reputationReward ?? 0) }))
     .sort((a, b) => b.odds - a.odds)
   const best = ranked[0]
-  if (!best || best.odds < 0.5) return DECLINE_CHOICE
+  if (!best || best.odds < (tacticsFor(s).decreeBar?.(s) ?? 0.5)) return DECLINE_CHOICE
   return best.d.id
 }
 
@@ -1477,6 +1496,7 @@ function playRun(
         for (const threat of [...s.threats]) appeaseThreat(s, threat.id)
       })
       dumpSurplus(s)
+      booked(s, amber, 'commission tactics', () => tacticsFor(s).act?.(s))
       trade(s, amber)
       pullLevers(s, amber)
       if (s.phase !== 'playing') break
@@ -1578,6 +1598,7 @@ function playRun(
     upgrades: Object.values(s.buildings).reduce((sum, b) => sum + tierOf(b), 0),
     modifiers: s.runModifiers.join(','),
     commissionMet: judgeCommission(s)?.met ?? false,
+    commissionTerms: describeCommission(s),
     openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),
     roads: s.roads?.length ?? 0,
     roadLinked: Object.values(s.buildings).filter((b) => roadLinkOf(s, b).percent > 0).length,
@@ -1666,8 +1687,11 @@ const MODIFIER_SEED_COUNT = Number(ENV.PLAYTEST_MODIFIER_SEEDS ?? 6)
 /** Seeds per trio for the careless-warmth frost check. */
 const FROST_SEED_COUNT = Number(ENV.PLAYTEST_FROST_SEEDS ?? 6)
 
-/** Seeds per Citadel commission (trios rotate across them). */
-const COMMISSION_SEED_COUNT = Number(ENV.PLAYTEST_COMMISSION_SEEDS ?? 6)
+/**
+ * Seeds per Citadel commission (trios rotate across them). Twelve, so each
+ * commission has enough wins for "met in at least one" to be a real check.
+ */
+const COMMISSION_SEED_COUNT = Number(ENV.PLAYTEST_COMMISSION_SEEDS ?? 12)
 
 /** The Queen's deadline must end every run by about this point. */
 const VERDICT_BY_MINUTES = 40
@@ -1875,9 +1899,10 @@ describe('balance harness', () => {
   /*
    * A commission's twist is a run-long change like a land's, so each gets the
    * same check as the modifiers: forced on in turn over a few seeds (rotating
-   * the trios) against the same seeds with none. The objective only pays
-   * supplies home, so the bot does not chase it; how often it is met anyway
-   * is printed as a sense of each objective's difficulty.
+   * the trios) against the same seeds with none. The bot pursues each
+   * commission's terms the way a competent player would (its tactics are in
+   * `playtestCommissions.ts`), so how often the objective is met in wins is
+   * a measure of its difficulty — printed per commission, and never zero.
    */
   it('no Citadel commission makes runs unwinnable or trivial', () => {
     const seeds = ALL_SEEDS.slice(0, COMMISSION_SEED_COUNT)
@@ -1887,11 +1912,28 @@ describe('balance harness', () => {
     const lines = [summarise('no commission', baseline)]
     const results = COMMISSION_LIST.map((def) => {
       const reports = sweep(def.id)
+      if (ENV.PLAYTEST_VERBOSE) {
+        reports.forEach((r, i) => {
+          logRun(seeds[i], r)
+          console.log(`    commission ${def.id}: ${r.commissionMet ? 'MET' : 'not met'} · ${r.commissionTerms}`)
+        })
+      }
       const met = reports.filter((r) => r.commissionMet).length
       const wins = reports.filter((r) => r.phase === 'won').length
       lines.push(`${summarise(def.id, reports)} · objective met ${met}/${wins} wins`)
       return { id: def.id, reports }
     })
+    // One line per commission: how winnable, how often met, how long.
+    for (const { id, reports } of results) {
+      const wins = reports.filter((r) => r.phase === 'won')
+      const met = wins.filter((r) => r.commissionMet)
+      lines.push(
+        `${`commission ${id}`.padEnd(28)} won ${wins.length}/${reports.length}` +
+          ` · met ${met.length}/${wins.length} wins (+${COMMISSIONS[id].bonusPercent}%)` +
+          ` · median run ${median(reports.map((r) => r.exactMinutes)).toFixed(1)}min` +
+          ` · median win ${median(wins.map((r) => r.exactMinutes)).toFixed(1)}min`,
+      )
+    }
     console.log(lines.join('\n'))
 
     const baseShare = winShare(baseline)
@@ -1906,7 +1948,34 @@ describe('balance harness', () => {
       for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
       // Never met without a win, whatever else held.
       for (const r of reports) if (r.commissionMet) expect(r.phase).toBe('won')
+      // And never out of reach: a competent player pursuing it meets it in
+      // at least one win, so retuning cannot quietly make one impossible.
+      expect(wins.filter((r) => r.commissionMet).length, `${id} met in a win`).toBeGreaterThanOrEqual(1)
     }
+  }, 600_000)
+
+  /*
+   * Frost has killed nobody in the competent bot's runs: it keeps its homes
+   * inside the hearth's reach, raises braziers for any that sprawl, and its
+   * comfort upgrades insulate the starting shelters. That is a careful
+   * player's reward, not a toothless rule — a player who under-builds warmth
+   * (homes beside the camps, no braziers, no insulating upgrades) must still
+   * lose villagers to the cold in a fair share of runs.
+   */
+  it('the cold takes villagers from a player who under-builds warmth', () => {
+    const seeds = ALL_SEEDS.slice(0, FROST_SEED_COUNT)
+    const reports = TRIOS.flatMap((trio) => seeds.map((seed) => playRun(seed, trio, { carelessWarmth: true })))
+    const frozen = reports.reduce((n, r) => n + r.frozen, 0)
+    const struck = reports.filter((r) => r.frozen > 0).length
+    console.log(
+      `${summarise('careless warmth', reports)}\n${''.padEnd(20)} frost: ${frozen} villagers lost in ${struck}/${reports.length} runs` +
+        ` · median cold villager-seconds ${median(reports.map((r) => r.coldSeconds)).toFixed(0)}` +
+        ` · most cold at once ${Math.max(...reports.map((r) => r.peakCold))}`,
+    )
+    expect(struck).toBeGreaterThanOrEqual(Math.ceil(reports.length / 8))
+    expect(frozen).toBeGreaterThanOrEqual(struck)
+    // Punishing, not a death sentence: careless runs still reach a verdict in time.
+    for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
   }, 300_000)
 
   /*
