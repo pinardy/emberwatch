@@ -61,6 +61,7 @@ import {
   workerSlotsOf,
 } from '../game/engine/upgrades'
 import { IconText } from './IconText'
+import { useInspectorFocus } from './focusRequests'
 import { GladeStakeChips } from './GladeStakeChips'
 
 /**
@@ -112,11 +113,16 @@ export function Inspector() {
 /** The inspector's title row: icon, name, a line under it, and Close. */
 function InspectorHead({ icon, name, children }: { icon: ReactNode; name: ReactNode; children: ReactNode }) {
   const clearSelection = useGameStore((s) => s.clearSelection)
+  // Picked from a keyboard list: focus lands on the name, so the Inspector reads next.
+  const title = useRef<HTMLHeadingElement>(null)
+  useInspectorFocus(title, typeof name === 'string' ? name : '')
   return (
     <header className="inspector-head">
-      <span className="inspector-icon">{icon}</span>
+      <span className="inspector-icon" aria-hidden>{icon}</span>
       <div>
-        <strong>{name}</strong>
+        <h2 className="inspector-title" ref={title} tabIndex={-1}>
+          {name}
+        </h2>
         <small>{children}</small>
       </div>
       <button

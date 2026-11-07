@@ -44,6 +44,14 @@ import {
 } from './map2dState'
 import { RoadBanner } from './RoadTool'
 import { Icon, IconSymbols } from './Icon'
+import {
+  announcePlacement,
+  placeAtNearest,
+  useKeyGhost,
+  useKeyboardPlacement,
+  usePlacementView,
+} from './keyboardPlacement'
+import { MapAids, useControlsHelp } from './MapAids'
 import './map2d.css'
 
 /** Every icon the 2D map stamps, defined once as `<symbol>`s. */
@@ -64,6 +72,17 @@ const MAP_SYMBOLS: IconId[] = [
 const PAD = 2 * S
 const MIN_SCALE = 0.45
 const MAX_SCALE = 2.4
+/**
+ * Phones open the map closer in, at about the size the labels draw on a
+ * desktop (one SVG unit to most of a CSS pixel), so they are legible.
+ */
+const PHONE_UNIT_PX = 0.95
+const PHONE_MAX_SCALE = 5
+
+function phoneMap(): boolean {
+  if (typeof window === 'undefined') return false
+  return Math.min(window.innerWidth, window.innerHeight) < 600
+}
 
 /**
  * 2D fallback renderer: the same continuous world as the 3D view, drawn as
@@ -112,14 +131,28 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
     viewRef.current?.setAttribute('transform', `translate(${next.x} ${next.y}) scale(${next.scale})`)
     for (const listener of listeners.current) listener()
   }
+  const homeScale = useRef(1)
   const zoomBy = (factor: number) =>
-    applyView({ ...view.current, scale: clamp(view.current.scale * factor, MIN_SCALE, MAX_SCALE) })
+    applyView({
+      ...view.current,
+      scale: clamp(view.current.scale * factor, MIN_SCALE, Math.max(MAX_SCALE, homeScale.current * 1.5)),
+    })
   const panBy = (dx: number, dy: number) =>
     applyView({ ...view.current, x: view.current.x + dx, y: view.current.y + dy })
 
-  // A new run starts centred, with no ghost in hand.
+  // A new run starts centred, with no ghost in hand. Phones start closer in,
+  // so the glade plates and building labels are legible at a glance.
+  const homeView = (): MapView => ({ x: 0, y: 0, scale: homeScale.current })
   useLayoutEffect(() => {
-    applyView({ x: 0, y: 0, scale: 1 })
+    homeScale.current = 1
+    const svg = svgRef.current
+    const vb = svg?.viewBox?.baseVal
+    const rect = svg?.getBoundingClientRect()
+    if (phoneMap() && vb?.width && vb.height && rect?.width && rect.height) {
+      const unit = Math.min(rect.width / vb.width, rect.height / vb.height)
+      homeScale.current = clamp(PHONE_UNIT_PX / unit, 1, PHONE_MAX_SCALE)
+    }
+    applyView(homeView())
     setGhost(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run])
@@ -152,7 +185,7 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
    * via the OS key-repeat. Pressing "right" moves the camera right, so the
    * world slides left. H jumps back home to the hearth; R toggles warmth.
    */
-  useMapKey(MAP_KEYS.home, () => applyView({ x: 0, y: 0, scale: 1 }))
+  useMapKey(MAP_KEYS.home, () => applyView(homeView()))
   useMapKey(MAP_KEYS.warmth, () => useMapOverlays.getState().toggleWarmth())
   useEffect(() => {
     const STEP = 46
@@ -170,11 +203,52 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Fly-to requests from elsewhere in the UI (threat cards, the minimap).
-  useCameraFocus((p) => {
+  // Fly-to requests from elsewhere in the UI (threat cards, the lists).
+  const centreOn = (p: Vec2) => {
     const v = view.current
     applyView({ ...v, x: -p.x * S * v.scale, y: -p.y * S * v.scale })
+  }
+  useCameraFocus(centreOn)
+  const help = useControlsHelp('2d')
+
+  /** A world point's position inside the map wrap, in CSS pixels (0,0 in jsdom). */
+  const screenOf = (p: Vec2): Vec2 => {
+    const ctm = worldRef.current?.getScreenCTM?.()
+    const wrap = svgRef.current?.parentElement?.getBoundingClientRect()
+    if (!ctm || !wrap) return { x: 0, y: 0 }
+    const pt = new DOMPoint(p.x * S, p.y * S).matrixTransform(ctm)
+    return { x: pt.x - wrap.left, y: pt.y - wrap.top }
+  }
+
+  // Keyboard placement: the view's centre, screen axes, a step of about a
+  // building's width at this zoom, and panning to keep the ghost in view.
+  usePlacementView({
+    centre: () => {
+      const v = view.current
+      return { x: -v.x / (S * v.scale), y: -v.y / (S * v.scale) }
+    },
+    axes: () => ({ up: { x: 0, y: -1 }, right: { x: 1, y: 0 } }),
+    step: () => clamp(Math.round((1.2 / view.current.scale) * 4) / 4, 0.5, 2),
+    reveal: (p) => {
+      const wrap = svgRef.current?.parentElement?.getBoundingClientRect()
+      if (!wrap || wrap.width === 0) return
+      const at = screenOf(p)
+      const mx = wrap.width * 0.15
+      const my = wrap.height * 0.15
+      if (at.x < mx || at.x > wrap.width - mx || at.y < my || at.y > wrap.height - my) centreOn(p)
+    },
   })
+  // The keyboard ghost draws as the pointer ghost does.
+  useEffect(
+    () =>
+      useKeyGhost.subscribe((state, prev) => {
+        const g = state.ghost
+        if (!g || g === prev.ghost) return
+        setGhost({ pos: g.pos, screen: screenOf(g.pos), ok: g.ok, hint: g.hint })
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
 
   // ---- pointer ------------------------------------------------------------
 
@@ -331,7 +405,7 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
               useGameStore.getState().cancelBuildStep()
               setGhost(null)
             }}
-            role="application"
+            role="img"
             aria-label="Settlement map"
           >
             <IconSymbols ids={MAP_SYMBOLS} />
@@ -367,11 +441,14 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
         <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / 1.2)}>
           −
         </button>
-        <button type="button" aria-label="Recentre" onClick={() => applyView({ x: 0, y: 0, scale: 1 })}>
+        <button type="button" aria-label="Recentre" title="Recentre (H)" onClick={() => applyView(homeView())}>
           ⌖
         </button>
         <WarmthToggle />
+        {help.button}
       </div>
+      {help.panel}
+      <MapAids run={run} />
 
       <GhostHint />
       {buildMode && <BuildBanner buildMode={buildMode} />}
@@ -443,17 +520,61 @@ function cachedRoadPreview(run: RunState, anchor: Vec2 | null, pos: Vec2, erase:
 /** Shared banner for both renderers while a blueprint is in hand. */
 export function BuildBanner({ buildMode }: { buildMode: string }) {
   if (buildMode === ROAD_TOOL) return <RoadBanner />
+  return <BlueprintBanner key={buildMode} buildMode={buildMode} />
+}
+
+/**
+ * The blueprint in hand: how to place it, the one-press nearest spot, Cancel,
+ * and the live region that speaks each keyboard move's verdict. It takes
+ * focus when it appears (so the arrow keys and Enter place at once, and a
+ * screen reader reads what is in hand) and hands focus back when it goes.
+ */
+function BlueprintBanner({ buildMode }: { buildMode: string }) {
+  useKeyboardPlacement()
+  const host = useRef<HTMLDivElement>(null)
+  const announcement = useKeyGhost((s) => s.announcement)
+  const seq = useKeyGhost((s) => s.seq)
+  const name = BUILDINGS[buildMode]?.name ?? 'building'
   // Touch screens have no Esc key and nothing to click with.
   const touch = window.matchMedia?.('(pointer: coarse)').matches ?? false
+
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null
+    host.current?.focus({ preventScroll: true })
+    // Said after the live region exists, so it is announced.
+    announcePlacement(
+      touch
+        ? `Placing ${name}. Tap cleared ground, or use Place at the nearest valid spot.`
+        : `Placing ${name}. Arrow keys move the spot, Enter places, Escape cancels.`,
+    )
+    const node = host.current
+    return () => {
+      const now = document.activeElement
+      const lost = !now || now === document.body || (node?.contains(now) ?? false)
+      if (lost && before && before !== document.body && before.isConnected) {
+        before.focus({ preventScroll: true })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
-    <div className="build-banner">
+    <div className="build-banner" ref={host} tabIndex={-1} role="group" aria-label={`Placing ${name}`}>
       <span>
-        Placing <strong>{BUILDINGS[buildMode]?.name}</strong> —{' '}
-        {touch ? 'tap on cleared ground to place' : 'click on cleared ground · Esc cancels'}
+        Placing <strong>{name}</strong> —{' '}
+        {touch ? 'tap on cleared ground to place' : 'click on cleared ground, or arrows then Enter · Esc cancels'}
       </span>
+      <button type="button" className="build-banner-nearest" onClick={placeAtNearest}>
+        Place at the nearest valid spot
+      </button>
       <button type="button" onClick={() => useGameStore.getState().setBuildMode(null)}>
         Cancel
       </button>
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcement}
+        {/* A repeated sentence still re-announces. */}
+        {seq % 2 === 1 ? '\u00a0' : ''}
+      </p>
     </div>
   )
 }

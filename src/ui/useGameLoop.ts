@@ -149,8 +149,27 @@ function isTextEntry(target: EventTarget | null): boolean {
   return ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable
 }
 
+/** Controls that act on Space themselves. */
+const SPACE_CONTROLS =
+  'button, a[href], summary, input, select, textarea, [role="button"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"], [role="menuitem"], [role="option"]'
+
 /**
- * Keyboard shortcuts: Space pauses, 1–5 set speed, B/P/O/T/L open panels, Esc
+ * True when Space should go to the focused control. A control the mouse just
+ * clicked keeps focus without a visible ring (`:focus-visible` is false), and
+ * there Space still pauses, so pausing by mouse-then-Space keeps working.
+ */
+function ownsSpace(target: EventTarget | null): boolean {
+  const el = target as Element | null
+  if (!el || typeof el.closest !== 'function' || el.closest(SPACE_CONTROLS) === null) return false
+  try {
+    return el.matches(':focus-visible')
+  } catch {
+    return true // no :focus-visible support: side with the control
+  }
+}
+
+/**
+ * Keyboard shortcuts: Space pauses (unless a focused control wants it), 1–5 set speed, B/P/O/T/L open panels, Esc
  * closes the topmost thing (help, placement, selection, then tips).
  *
  * Everything is ignored while a blocking dialog is up — the draft and glade
@@ -178,6 +197,9 @@ export function useHotkeys(active: boolean): void {
       if (e.ctrlKey || e.metaKey || e.altKey) return
 
       if (e.key === ' ') {
+        // Space on a focused control belongs to the control (it presses a
+        // button, opens a summary, ticks a box); only elsewhere does it pause.
+        if (ownsSpace(e.target)) return
         e.preventDefault()
         // Holding Space would otherwise flicker between paused and running.
         if (!e.repeat) store.togglePlay()

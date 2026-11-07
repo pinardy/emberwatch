@@ -154,12 +154,15 @@ export function ResourceBar() {
             : 'Stockpile usage. Amber does not take up space.'
         }
       >
-        <span>
+        <span aria-hidden>
           <Icon id="warehouse" emoji="📦" />
         </span>
+        <span className="sr-only">Stockpile</span>
         <strong>
           {Math.floor(used)}
-          <small>/{run.storageCap}</small>
+          <small>
+            <span className="sr-only"> of </span>/{run.storageCap}
+          </small>
         </strong>
         <div className="storage-track">
           <div className="storage-fill" style={{ width: `${Math.min(100, capPct)}%` }} />
@@ -187,11 +190,14 @@ export function ResourceBar() {
           food.runway,
         )} without new food.`}
       >
-        <span>
+        <span aria-hidden>
           <Icon id="plate" emoji="🍽️" />
         </span>
+        <span className="sr-only">Food</span>
         <strong>{Math.floor(foodStock(run))}</strong>
-        <small className="food-variety">×{foodVariety(run)}</small>
+        <small className="food-variety">
+          <span className="sr-only">, kinds </span>×{foodVariety(run)}
+        </small>
         <span
           className="food-runway"
           aria-label={
@@ -214,9 +220,11 @@ export function ResourceBar() {
           >
             {group.items.map((item) => (
               <div className={itemClass(item)} key={item.id} title={describeItem(item)}>
-                <span>
+                <span aria-hidden>
                   <Icon of={RESOURCES[item.id]} />
                 </span>
+                {/* Read as "Wood 120", not a bare number. */}
+                <span className="sr-only">{RESOURCES[item.id]?.name ?? item.id} </span>
                 <strong>{Math.floor(item.amount)}</strong>
                 <TrendMark trend={item.trend} />
                 {isFlagged(item) && (

@@ -173,6 +173,8 @@ describe('overlay dock', () => {
       'hud-top',
       'hud-context',
       'bottom-stack',
+      // The news log stays mounted, empty, so its first toast is announced.
+      'event-toasts is-empty',
     ])
     expect(dock.querySelector('.hud-top > .warnings')).toBeTruthy()
 

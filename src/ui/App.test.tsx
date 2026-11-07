@@ -70,7 +70,7 @@ function takeOpeningDraft() {
     const panel = screen.getByRole('region', { name: /^The Founding/ })
     // The founding is not a pop-up: no dialog covers the map meanwhile.
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.getByRole('application', { name: /Settlement map/i })).toBeTruthy()
+    expect(screen.getByRole('img', { name: /Settlement map/i })).toBeTruthy()
     // Each option is a button whose accessible name starts with the icon+name.
     const options = within(panel)
       .getAllByRole('button')
@@ -128,7 +128,7 @@ describe('app shell', () => {
     expect(topBar.getByText('Reputation')).toBeTruthy()
     expect(topBar.getByText('Impatience')).toBeTruthy()
     expect(topBar.getByText('Hostility')).toBeTruthy()
-    expect(screen.getByRole('application', { name: /Settlement map/i })).toBeTruthy()
+    expect(screen.getByRole('img', { name: /Settlement map/i })).toBeTruthy()
     expect(
       Array.from(document.querySelectorAll('button.build-card strong')).map(
         (el) => el.textContent,
@@ -148,7 +148,7 @@ describe('app shell', () => {
     expect(screen.getByText(/click on cleared ground/i)).toBeTruthy()
 
     // The map draws the continuous world: glade polygons and feature markers.
-    const svg = screen.getByRole('application', { name: /Settlement map/i })
+    const svg = screen.getByRole('img', { name: /Settlement map/i })
     expect(svg.querySelectorAll('polygon.glade-poly').length).toBeGreaterThan(10)
     expect(svg.querySelectorAll('g.deposit').length).toBeGreaterThan(0)
 
@@ -201,7 +201,7 @@ describe('app shell', () => {
     const inspector = document.querySelector('.inspector') as HTMLElement
     expect(within(inspector).getByText(/warm during the Storm/i)).toBeTruthy()
     // Selecting a fire shows every warmth source: the hearth and this brazier.
-    const svg = screen.getByRole('application', { name: /Settlement map/i })
+    const svg = screen.getByRole('img', { name: /Settlement map/i })
     expect(svg.querySelectorAll('circle.warmth-ring').length).toBe(2)
   })
 
@@ -211,7 +211,7 @@ describe('app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
     takeOpeningDraft()
 
-    const svg = screen.getByRole('application', { name: /Settlement map/i })
+    const svg = screen.getByRole('img', { name: /Settlement map/i })
     const scaleOf = () => {
       const g = svg.querySelector('g[transform]') as SVGGElement
       return Number(/scale\(([\d.]+)\)/.exec(g.getAttribute('transform') ?? '')?.[1])
@@ -246,7 +246,7 @@ describe('app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
     takeOpeningDraft()
 
-    const svg = screen.getByRole('application', { name: /Settlement map/i })
+    const svg = screen.getByRole('img', { name: /Settlement map/i })
     const panOf = () => {
       const g = svg.querySelector('g[transform]') as SVGGElement
       const m = /translate\((-?[\d.]+) (-?[\d.]+)\)/.exec(g.getAttribute('transform') ?? '')
@@ -588,7 +588,7 @@ describe("the Queen's offers", () => {
     // The map is up and no dialog covers it; the picks stand beside it.
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(document.querySelector('[aria-modal="true"]')).toBeNull()
-    expect(screen.getByRole('application', { name: /Settlement map/i })).toBeTruthy()
+    expect(screen.getByRole('img', { name: /Settlement map/i })).toBeTruthy()
     const panel = screen.getByRole('region', { name: /^The Founding/ })
     // Every part of the founding is on show together.
     const part = (name: RegExp) => within(panel).getByRole('region', { name })
