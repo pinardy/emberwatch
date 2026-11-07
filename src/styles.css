@@ -323,7 +323,7 @@ code {
 
 .locked-tag {
   color: var(--warn);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 
 .seed-row {
@@ -1163,6 +1163,9 @@ code {
 }
 
 .resource-scroll {
+  /* The containing block for the items' screen-reader names, so they stay
+     inside the scroller instead of widening the page. */
+  position: relative;
   display: flex;
   gap: 6px;
   flex: 0 1 auto;
@@ -2236,6 +2239,7 @@ code {
 
 .modal header small {
   color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .modal-icon {
@@ -3110,7 +3114,7 @@ code {
 .glade-list-hint {
   margin: 0;
   padding: 8px 12px 4px;
-  font-size: 0.71875rem;
+  font-size: 0.75rem;
   color: var(--muted);
 }
 
@@ -3146,6 +3150,8 @@ code {
 /* The Inspector's name: a heading (it takes focus when picked from a list). */
 .inspector-title {
   margin: 0;
+  font-family: var(--font-ui);
+  letter-spacing: normal;
   font-size: inherit;
   font-weight: 700;
   line-height: 1.3;
@@ -4911,7 +4917,7 @@ button.is-armed {
 
 .upgrade-card .upgrade-opens {
   color: var(--gold);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 
 /* ==========================================================================
@@ -5027,4 +5033,34 @@ button.is-armed {
 
 :where(.screen) h3 {
   font-size: 1em;
+}
+
+/*
+ * Cards that are buttons but cannot be taken yet (a locked edict, species or
+ * commission on the setup screen, a Citadel upgrade not yet open): they keep
+ * full opacity, because their text says what they are and what opens them.
+ * The dashed, recessed look and muted text say "not yet" instead.
+ */
+.edict-step:disabled,
+.commission-card:disabled,
+.species-pick:disabled,
+.species-pick.is-locked,
+.upgrade-card:disabled {
+  opacity: 1;
+}
+
+.species-pick.is-locked,
+.upgrade-card:disabled:not(.is-owned) {
+  border-style: dashed;
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.species-pick.is-locked .species-icon,
+.upgrade-card:disabled:not(.is-owned) .option-icon {
+  opacity: 0.55;
+}
+
+.upgrade-card:disabled:not(.is-owned) strong {
+  color: var(--muted);
 }
