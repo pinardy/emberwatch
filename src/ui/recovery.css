@@ -1,0 +1,119 @@
+/* --- "Not saving" chip in the top bar ------------------------------------ */
+
+.save-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid #8a4a3f;
+  border-radius: 999px;
+  background: rgba(217, 105, 95, 0.16);
+  color: #f3c3bd;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.save-chip:hover {
+  background: rgba(217, 105, 95, 0.26);
+}
+
+.save-chip-anchor {
+  margin-right: 6px;
+}
+
+.save-chip-popover p {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.save-chip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 1679px) {
+  /* The short form keeps the warning without squeezing the meters; the
+     reason is a click away (and in the button's title). */
+  .save-chip-reason {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  /* On a phone the chip sits mid-row: its detail drops below the whole top
+     bar, edge to edge, rather than off the side of the screen. */
+  .topbar .save-chip-anchor {
+    position: static;
+  }
+
+  .topbar .save-chip-popover {
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
+}
+
+@media (pointer: coarse) {
+  .save-chip {
+    min-height: 44px;
+  }
+}
+
+/* --- Recovery overlay after a crash -------------------------------------- */
+
+.recovery-overlay {
+  /* Above every other dialog, the end-of-run summary included. */
+  z-index: 90;
+}
+
+.recovery-backdrop {
+  min-height: 100%;
+}
+
+.recovery-modal {
+  width: min(520px, 100%);
+}
+
+.recovery-modal h2 {
+  margin: 0 0 8px;
+}
+
+.recovery-details {
+  margin: 10px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.recovery-details code {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-deep);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recovery-actions button {
+  min-height: 40px;
+}
+
+.recovery-hint {
+  margin: 14px 0 0;
+  font-size: 13px;
+}
+
+@media (max-width: 560px) {
+  .recovery-actions button {
+    flex: 1 1 100%;
+  }
+}

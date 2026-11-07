@@ -3,6 +3,7 @@ import type { ComponentType, ReactNode } from 'react'
 import { latestSlot } from '../game/saveSlots'
 import { loadRunFactory } from '../game/store'
 import { loadIcons } from './Icon'
+import { preloadMapView3D } from './map3dLoader'
 import './lazy-screens.css'
 
 /*
@@ -57,17 +58,41 @@ function lazyScreen(load: Loader, fallback: ReactNode): LazyScreen {
   return Screen
 }
 
-/** If a chunk cannot be fetched (offline before it was cached), say so plainly. */
-class LoadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false }
-  static getDerivedStateFromError() {
-    return { failed: true }
+/**
+ * True for the errors a browser raises when a lazily loaded chunk cannot be
+ * fetched: offline before it was cached, or the game was updated and the old
+ * chunk is gone from the server.
+ */
+export function isChunkLoadError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  return (
+    error.name === 'ChunkLoadError' ||
+    /dynamically imported module|Importing a module script failed|error loading dynamically imported|Loading (CSS )?chunk|Unable to preload CSS/i.test(
+      error.message,
+    )
+  )
+}
+
+/**
+ * If a chunk cannot be fetched, say so plainly and offer a reload. Any other
+ * error is not this boundary's to explain: it is thrown on to the app's own
+ * boundary, which stops play and offers the recovery options.
+ */
+export class LoadBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
+  state: { error: unknown } = { error: null }
+  static getDerivedStateFromError(error: unknown) {
+    return { error: error ?? new Error('Unknown error') }
   }
   render() {
-    if (!this.state.failed) return this.props.children
+    const { error } = this.state
+    if (!error) return this.props.children
+    if (!isChunkLoadError(error)) throw error
     return (
       <div className="screen screen-loading" role="alert">
-        <p>This part of the game could not be loaded. Check your connection and reload.</p>
+        <p>
+          This part of the game could not be loaded: you may be offline, or the game was updated
+          since this page opened. Reload to fetch it.
+        </p>
         <button type="button" onClick={() => window.location.reload()}>
           Reload
         </button>
@@ -122,6 +147,8 @@ export function preloadScreens(): Promise<unknown> {
   return Promise.all([
     SetupScreen.preload(),
     GameScreen.preload(),
+    // The 3D map, when it is the renderer the game will show.
+    preloadMapView3D(),
     // The run factory and map generator, for "New settlement" and the daily.
     loadRunFactory(),
     CitadelScreen.preload(),
@@ -140,7 +167,10 @@ export function preloadScreens(): Promise<unknown> {
  * Continue straight away does not wait on the "Lighting the hearth" screen.
  */
 export function preloadScreensWhenIdle(): () => void {
-  if (hasSave()) void GameScreen.preload().catch(() => undefined)
+  if (hasSave()) {
+    void GameScreen.preload().catch(() => undefined)
+    void preloadMapView3D()
+  }
   const warmUp = () => void preloadScreens().catch(() => undefined)
   const w = window as Window & {
     requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number

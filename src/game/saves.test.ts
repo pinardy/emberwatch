@@ -599,3 +599,153 @@ describe('hostile save files', () => {
     expect(({} as Record<string, unknown>).defId).toBeUndefined()
   })
 })
+
+describe('choices waiting in a save', () => {
+  const withRun = (patch: (run: Record<string, unknown>) => void) => {
+    const file = valid()
+    patch(file.run as Record<string, unknown>)
+    return JSON.stringify(file)
+  }
+
+  it.each([
+    ['a draft without options', (r: Record<string, unknown>) => (r.pendingChoices = [{ kind: 'blueprint' }])],
+    ['a draft of unknown buildings', (r: Record<string, unknown>) => (r.pendingChoices = [{ kind: 'blueprint', options: ['deathStar'] }])],
+    ['an unknown kind of choice', (r: Record<string, unknown>) => (r.pendingChoices = [{ kind: 'riddle', options: ['a'] }])],
+    ['an unknown glade event', (r: Record<string, unknown>) => (r.pendingChoices = [{ kind: 'gladeEvent', options: ['nope'], gladeId: 'glade1' }])],
+    ['an unknown cornerstone', (r: Record<string, unknown>) => (r.pendingChoices = [{ kind: 'cornerstone', options: [7] }])],
+    ['a decree offer with a broken candidate', (r: Record<string, unknown>) => (r.pendingChoices = [{ kind: 'decree', options: ['d1'], decrees: [{ id: 'd1' }] }])],
+    ['an order offer without options', (r: Record<string, unknown>) => (r.orderOffers = [{ kind: 'order' }])],
+    ['an order offer that is not one', (r: Record<string, unknown>) => (r.orderOffers = [{ kind: 'cornerstone', options: ['sturdyScaffolds'] }])],
+    ['an active order with an unknown def', (r: Record<string, unknown>) => (r.orders = [{ id: 'o1', defId: 'nope', progress: 0, complete: false }])],
+    ['a broken royal decree', (r: Record<string, unknown>) => (r.decree = { id: 'd', defId: 'decree_planks' })],
+  ])('refuses %s', (_name, patch) => {
+    const result = parseSaveFile(withRun(patch))
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/damaged/)
+  })
+
+  it('accepts a draft that still has a card to pick beside one for content since removed', () => {
+    const text = withRun((r) => (r.pendingChoices = [{ kind: 'blueprint', options: ['retiredHall', 'brazier'] }]))
+    expect(parseSaveFile(text).ok).toBe(true)
+  })
+
+  it('still accepts the founding picks a fresh run waits on, and a played run', () => {
+    expect(newRun(5).pendingChoices.length).toBeGreaterThan(0)
+    expect(parseSaveFile(saveFileText(newRun(5))).ok).toBe(true)
+    expect(parseSaveFile(saveFileText(playedRun(6))).ok).toBe(true)
+  })
+
+  it('refuses a damaged local slot with a message instead of loading it', () => {
+    const run = newRun(9)
+    expect(saveToSlot('1', run, 50).ok).toBe(true)
+    const stored = JSON.parse(storage.data.get(slotKey('1'))!)
+    stored.pendingChoices = [{ kind: 'blueprint' }]
+    storage.data.set(slotKey('1'), JSON.stringify(stored))
+    expect(loadSlot('1')).toBeNull()
+    useGameStore.getState().resumeSaved('1')
+    expect(useGameStore.getState().run).toBeNull()
+    expect(useGameStore.getState().notice).toMatch(/Slot 1 could not be loaded.*damaged/)
+  })
+
+  it('lists slots even when storage throws on every read', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('SecurityError')
+      },
+      setItem: () => {
+        throw new Error('SecurityError')
+      },
+      removeItem: () => {},
+    })
+    expect(() => listSlots()).not.toThrow()
+    expect(listSlots().every((s) => s.meta === null)).toBe(true)
+  })
+})
+
+describe('a run that is not being saved says so until it is', () => {
+  it('keeps the reason up after the notice, and clears it once a save lands', async () => {
+    await useGameStore.getState().startRun(1)
+    expect(useGameStore.getState().saveError).toBeNull()
+    storage.opts.quotaBytes = 0
+    useGameStore.getState().saveNow()
+    expect(useGameStore.getState().saveError).toMatchObject({ reason: 'quota' })
+    // The notice goes; the run is still not being saved, and that stays known.
+    useGameStore.setState({ notice: null })
+    useGameStore.getState().saveNow()
+    expect(useGameStore.getState().saveError).toMatchObject({ reason: 'quota' })
+    storage.opts.quotaBytes = undefined
+    useGameStore.getState().saveNow()
+    expect(useGameStore.getState().saveError).toBeNull()
+  })
+
+  it('covers private modes where storage refuses every write', async () => {
+    await useGameStore.getState().startRun(1)
+    storage.storage.setItem = () => {
+      const error = new Error('The operation is insecure.')
+      error.name = 'SecurityError'
+      throw error
+    }
+    useGameStore.getState().saveNow()
+    expect(useGameStore.getState().saveError).toMatchObject({ reason: 'unavailable' })
+    expect(useGameStore.getState().saveError!.message).toMatch(/private mode/)
+  })
+})
+
+describe('two tabs on one Citadel', () => {
+  const META = 'emberwatch.meta.v1'
+
+  it('banks a run on top of what another tab saved to the Citadel since', async () => {
+    useGameStore.getState().boot()
+    await useGameStore.getState().startRun(1)
+    // Meanwhile another tab banks runs of its own.
+    storage.data.set(META, JSON.stringify({ ...defaultMeta(), citadelSupplies: 500, runsLost: 5 }))
+    const run = useGameStore.getState().run!
+    run.phase = 'lost'
+    useGameStore.getState().finishRun()
+    const stored = JSON.parse(storage.data.get(META)!)
+    expect(stored.runsLost).toBe(6)
+    expect(stored.citadelSupplies).toBeGreaterThanOrEqual(500)
+    expect(useGameStore.getState().meta.runsLost).toBe(6)
+  })
+
+  it('buys an upgrade without undoing another tab’s purchase', () => {
+    storage.data.set(META, JSON.stringify({ ...defaultMeta(), citadelSupplies: 100 }))
+    useGameStore.getState().boot()
+    storage.data.set(
+      META,
+      JSON.stringify({ ...defaultMeta(), citadelSupplies: 97, upgrades: ['deeperStores'] }),
+    )
+    useGameStore.getState().buyUpgrade('travelRations')
+    const stored = JSON.parse(storage.data.get(META)!)
+    expect(stored.upgrades).toContain('deeperStores')
+    expect(stored.upgrades).toContain('travelRations')
+  })
+
+  it('keeps Citadel progress in memory when a full disk refused to store it', async () => {
+    useGameStore.getState().boot()
+    useGameStore.setState({ meta: { ...defaultMeta(), citadelSupplies: 42 } })
+    // Storage unchanged since this tab read it: memory is the newer copy.
+    expect(useGameStore.getState().refreshMeta().citadelSupplies).toBe(42)
+  })
+
+  it('stops saving over a settlement another tab saved since, until told to', async () => {
+    await useGameStore.getState().startRun(1)
+    const mine = useGameStore.getState().run!
+    // The other tab resumed the same slot and saved it.
+    const theirs = JSON.parse(JSON.stringify(mine)) as RunState
+    theirs.clock = 999
+    expect(saveToSlot('auto', theirs, Date.now() + 10_000).ok).toBe(true)
+    useGameStore.getState().saveNow()
+    expect(loadSlot('auto')!.clock).toBe(999)
+    expect(useGameStore.getState().saveError).toMatchObject({ reason: 'conflict' })
+    // Further autosaves stay out of the way.
+    useGameStore.getState().saveNow()
+    expect(loadSlot('auto')!.clock).toBe(999)
+    // The player chooses to keep this tab's run.
+    useGameStore.getState().saveOverConflict()
+    expect(loadSlot('auto')!.clock).toBe(mine.clock)
+    expect(useGameStore.getState().saveError).toBeNull()
+    useGameStore.getState().saveNow()
+    expect(useGameStore.getState().saveError).toBeNull()
+  })
+})
