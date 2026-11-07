@@ -28,7 +28,7 @@ import { addImpatience } from './society'
  *    price that climbs with every set. It is the amber sink every run has,
  *    caravans or not, and the way to steer a draft that keeps missing. (A
  *    redraw toward a named service, on an open draft, is `redrawToward` in
- *    `events.ts`.)
+ *    `drafts.ts`.)
  *  - **The Grand Petition**, once per run when the Queen's patience is nearly
  *    spent: a costly plea that buys back impatience on a vow of reputation
  *    within a time limit. Break the vow and her patience snaps back harder.
