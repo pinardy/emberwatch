@@ -23,7 +23,7 @@ import type { RunState, SpeciesId } from '../game/types'
 import type { IconId } from '../art/icons'
 import { METER_ART, SEASON_ART } from '../game/content/art'
 import { Icon } from './Icon'
-import { AutoPauseFields, PauseOnBlurField, SoundFields } from './SettingsFields'
+import { AutoPauseFields, PauseOnBlurField, PerfField, SoundFields } from './SettingsFields'
 import { useDismiss } from './useGameLoop'
 import { signed } from './threatText'
 
@@ -326,6 +326,7 @@ export function TopBar() {
               <SoundFields />
               <PauseOnBlurField />
               <AutoPauseFields />
+              <PerfField />
             </div>
           )}
         </div>

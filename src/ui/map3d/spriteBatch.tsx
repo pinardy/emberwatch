@@ -162,6 +162,8 @@ export interface SpriteSpec {
   size: number
   /** Sideways shift in screen space, world units (keeps a badge beside its icon). */
   offsetX?: number
+  /** Upward shift in screen space, world units (keeps a chip under its plate). */
+  offsetY?: number
   /** Breathe and bob (threat markers); still under reduced motion. */
   pulse?: boolean
 }
@@ -225,10 +227,11 @@ export function BatchSprite({
   z,
   size,
   offsetX = 0,
+  offsetY = 0,
   pulse = false,
 }: SpriteSpec & { batch?: SpriteBatchStore }) {
   const id = useRef(0)
-  const spec: SpriteSpec = { tile, x, y, z, size, offsetX, pulse }
+  const spec: SpriteSpec = { tile, x, y, z, size, offsetX, offsetY, pulse }
   const latest = useRef(spec)
   latest.current = spec
   useLayoutEffect(() => {
@@ -240,14 +243,14 @@ export function BatchSprite({
   }, [batch])
   useLayoutEffect(() => {
     if (id.current) batch.update(id.current, latest.current)
-  }, [batch, tile.key, x, y, z, size, offsetX, pulse])
+  }, [batch, tile.key, x, y, z, size, offsetX, offsetY, pulse])
   return null
 }
 
 const VERTEX = /* glsl */ `
 attribute vec3 iPos;
 attribute vec4 iUv;
-attribute vec3 iSize;
+attribute vec4 iSize;
 uniform float uTime;
 uniform float uAspect;
 varying vec2 vUv;
@@ -261,7 +264,7 @@ void main() {
   }
   vec4 mvPosition = modelViewMatrix * vec4(anchor, 1.0);
   mvPosition.x += position.x * size * uAspect + iSize.y;
-  mvPosition.y += position.y * size;
+  mvPosition.y += position.y * size + iSize.w;
   gl_Position = projectionMatrix * mvPosition;
   vUv = vec2(iUv.x + uv.x * iUv.z, iUv.y + (1.0 - uv.y) * iUv.w);
   #include <fog_vertex>
@@ -353,7 +356,7 @@ export function SpriteBatchMesh({ batch, renderOrder = 10 }: { batch: SpriteBatc
       geometry.index = quad.index
       geometry.setAttribute('position', quad.getAttribute('position'))
       geometry.setAttribute('uv', quad.getAttribute('uv'))
-      for (const [name, size] of [['iPos', 3], ['iUv', 4], ['iSize', 3]] as const) {
+      for (const [name, size] of [['iPos', 3], ['iUv', 4], ['iSize', 4]] as const) {
         const attr = new THREE.InstancedBufferAttribute(new Float32Array(capacity * size), size)
         attr.setUsage(THREE.DynamicDrawUsage)
         geometry.setAttribute(name, attr)
@@ -386,9 +389,10 @@ export function SpriteBatchMesh({ batch, renderOrder = 10 }: { batch: SpriteBatc
       P[i * 3 + 1] = entry.y
       P[i * 3 + 2] = entry.z
       batch.atlas.rect(entry.slot, U, i * 4)
-      S[i * 3] = entry.size
-      S[i * 3 + 1] = entry.offsetX ?? 0
-      S[i * 3 + 2] = entry.pulse ? 1 : 0
+      S[i * 4] = entry.size
+      S[i * 4 + 1] = entry.offsetX ?? 0
+      S[i * 4 + 2] = entry.pulse ? 1 : 0
+      S[i * 4 + 3] = entry.offsetY ?? 0
     }
     geometry.instanceCount = order.length
     pos.needsUpdate = true

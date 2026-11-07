@@ -94,3 +94,22 @@ export function PauseOnBlurField() {
     </label>
   )
 }
+
+/**
+ * The opt-in performance readout (fps, frame time and the 3D map's draw
+ * calls), for checking the game on real hardware. Off by default.
+ */
+export function PerfField() {
+  const showPerf = useGameStore((s) => s.settings.showPerf)
+  const updateSettings = useGameStore((s) => s.updateSettings)
+  return (
+    <label>
+      <input
+        type="checkbox"
+        checked={showPerf}
+        onChange={(e) => updateSettings({ showPerf: e.target.checked })}
+      />
+      Show performance (fps, frame time, draw calls)
+    </label>
+  )
+}

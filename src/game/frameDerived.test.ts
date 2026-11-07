@@ -12,11 +12,18 @@ import {
 import { computeModifiers } from './engine/modifiers'
 import { secondsUntilDeparture, storageUsed } from './engine/queries'
 import { resolveBreakdowns } from './engine/society'
+import { withRunCache } from './engine/runCache'
 import { tick } from './engine/tick'
 import { frameDerived } from './frameDerived'
 import { HUD_INTERVAL_MS, IDLE_SAVE_TIMEOUT_MS, useGameStore } from './store'
 import { loadSlot } from './saveSlots'
 import type { RunState } from './types'
+
+// Counts run-cache scopes (passing straight through) for the lookup-cost test.
+vi.mock('./engine/runCache', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./engine/runCache')>()
+  return { ...actual, withRunCache: vi.fn(actual.withRunCache) }
+})
 
 function playedRun(seconds = 300): RunState {
   const run = createRun({ seed: 5150, species: ['human', 'beaver', 'lizard'], modifiers: [] })
@@ -59,6 +66,32 @@ describe('shared per-step derivations', () => {
     const b = frameDerived(run, 8)
     expect(b).not.toBe(a)
     expect(b.topBar.breakdowns).toEqual(resolveBreakdowns(run, computeModifiers(run)))
+  })
+
+  it('look up every building status in one run-cache scope, outside any scope', () => {
+    // Opening a scope checks every building, so a scope per lookup made a
+    // pass over the settlement quadratic.
+    const run = playedRun(120)
+    const base = Object.values(run.buildings)
+    for (let i = 0; Object.keys(run.buildings).length < 120; i++) {
+      const src = base[i % base.length]
+      const id = `copy${i}`
+      run.buildings[id] = { ...src, id, workers: [...src.workers], pos: { x: src.pos.x + 0.01 * (i + 1), y: src.pos.y } }
+    }
+    const derived = frameDerived(run, 41)
+    void derived.mods
+    void derived.storageUsed
+    const scopes = vi.mocked(withRunCache)
+    scopes.mockClear()
+    const all = Object.values(run.buildings)
+    const statuses = all.map((b) => derived.status(b))
+    expect(scopes).toHaveBeenCalledTimes(1)
+    const mods = computeModifiers(run)
+    all.forEach((b, i) => expect(statuses[i]).toEqual(buildingStatus(run, b, mods)))
+    // Repeated lookups are remembered; a building outside the run still gets one.
+    expect(derived.status(all[3])).toBe(statuses[3])
+    const stray = { ...all[0], id: 'stray' }
+    expect(derived.status(stray)).toEqual(buildingStatus(run, stray, mods))
   })
 })
 

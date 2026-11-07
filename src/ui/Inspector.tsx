@@ -60,6 +60,7 @@ import {
   workerSlotsOf,
 } from '../game/engine/upgrades'
 import { IconText } from './IconText'
+import { GladeStakeChips } from './GladeStakeChips'
 
 /**
  * Context panel for whatever the player last tapped: a building, a deposit,
@@ -681,6 +682,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
                   {stakes.length > 0 ? ` — it could cost or bring ${describeStakes(stakes)}.` : '.'}
                 </p>
               )}
+              {event && <GladeStakeChips stakes={stakes} />}
               <ScoutReport run={run} gladeId={gladeId} />
             </section>
 
