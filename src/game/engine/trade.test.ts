@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BUILDINGS } from '../content/buildings'
+import { COMMISSIONS, termStatus } from '../content/commissions'
 import { CORNERSTONES } from '../content/cornerstones'
 import { RESOURCES } from '../content/resources'
 import { TRADE_AGREEMENT_LIST } from '../content/tradeAgreements'
@@ -261,6 +262,33 @@ describe('trade agreements', () => {
     expect(lot).toBeTruthy()
     expect(lot.amount).toBeGreaterThanOrEqual(PROVISIONS_LOT)
     expect(s.caravan.offers.length).toBeGreaterThanOrEqual(CARAVAN_OFFERS)
+  })
+})
+
+describe('the Found a Trade Town commission', () => {
+  it('still counts caravans welcomed, and its quicker caravans stack with River Barges', () => {
+    const s = createRun({ seed: 4242, species: ['human', 'beaver', 'lizard'], modifiers: [], commission: 'tradeTown' })
+    let guard = 0
+    while (s.pendingChoices.length > 0 && guard++ < 10) takeChoice(s, s.pendingChoices[0].options[0])
+    expect(s.unlockedBuildings).toContain('tradingPost')
+    placeBuilding(s, 'tradingPost', findPlacement(s, 'tradingPost')!)
+    Object.values(s.buildings).find((b) => b.defId === 'tradingPost')!.built = true
+    // The commission's 20% quicker caravans come through the shared interval.
+    expect(caravanInterval(s)).toBeCloseTo(CARAVAN_INTERVAL * 0.8)
+    s.stock.amber = AGREEMENT_PRICE
+    expect(signAgreement(s, 'barges')).toBeNull()
+    expect(caravanInterval(s)).toBeCloseTo((CARAVAN_INTERVAL * 0.8) / BARGES_FREQUENCY)
+
+    const caravans = COMMISSIONS.tradeTown.terms.find((term) => term.kind === 'caravans')!
+    for (let visit = 1; visit <= 4; visit++) {
+      arrive(s)
+      expect(termStatus(caravans, s).detail).toBe(`${visit}/4`)
+      // Rare items and commissions do not touch the count.
+      s.stock.amber = 10_000
+      buyRare(s)
+      if (!s.caravan.commission) commissionShipment(s, 'plank')
+    }
+    expect(termStatus(caravans, s).state).toBe('met')
   })
 })
 

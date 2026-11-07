@@ -288,7 +288,7 @@ interface GameStore {
   /** Buys the caravan's rare blueprint or cornerstone. */
   buyRare: () => void
   /** Pays now for a lot of a good, delivered with the next caravan. */
-  commission: (resource: ResourceId) => void
+  commissionShipment: (resource: ResourceId) => void
   /** Signs the run's one trade agreement. */
   signAgreement: (id: TradeAgreementId) => void
   /** Throws a lot of a good out of a full stockpile. */
@@ -773,7 +773,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   buyLot: (index) => runCommand(set, get, (run) => buyOffer(run, index)),
   sell: (resource) => runCommand(set, get, (run) => sellResource(run, resource)),
   buyRare: () => runCommand(set, get, (run) => buyRare(run)),
-  commission: (resource) => runCommand(set, get, (run) => commissionShipment(run, resource)),
+  commissionShipment: (resource) => runCommand(set, get, (run) => commissionShipment(run, resource)),
   signAgreement: (id) => runCommand(set, get, (run) => signAgreement(run, id)),
   dump: (resource) => runCommand(set, get, (run) => dumpStock(run, resource)),
   appease: (threatId) => runCommand(set, get, (run) => appeaseThreat(run, threatId)),
