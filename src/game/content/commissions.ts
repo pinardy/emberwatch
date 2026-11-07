@@ -78,6 +78,12 @@ export interface CommissionDef {
   unlockedBy?: string
 }
 
+/*
+ * Terms and rewards are tuned against the balance harness's commission sweep,
+ * where the bot pursues each commission the way a competent player would: it
+ * should meet the objective in roughly 40-75% of the runs it wins, and the
+ * fewer runs end won *and* met, the more the commission pays.
+ */
 const defs: CommissionDef[] = [
   // ---- open from the first run ----------------------------------------------
   {
@@ -91,9 +97,9 @@ const defs: CommissionDef[] = [
     effects: [{ kind: 'gladeLoot', percent: 40 }],
     terms: [
       { kind: 'goal', goal: { kind: 'gladesCleared', amount: 12 } },
-      { kind: 'calmForest', max: 30 },
+      { kind: 'calmForest', max: 35 },
     ],
-    bonusPercent: 60,
+    bonusPercent: 70,
   },
   {
     id: 'lightWagons',
@@ -101,11 +107,11 @@ const defs: CommissionDef[] = [
     icon: '🛒',
     art: 'charter/cart',
     patron: "A quartermaster's wager",
-    twist: 'The wagons carry a quarter less, but the settlers travel light: builders work 15% faster.',
-    startStockPercent: -25,
+    twist: 'The wagons carry 15% less, but the settlers travel light: builders work 15% faster.',
+    startStockPercent: -15,
     effects: [{ kind: 'buildSpeed', percent: 15 }],
-    terms: [{ kind: 'maxLost', amount: 0 }],
-    bonusPercent: 60,
+    terms: [{ kind: 'maxLost', amount: 0 }, { kind: 'byYear', year: 3 }],
+    bonusPercent: 55,
   },
   {
     id: 'royalSurvey',
@@ -119,7 +125,7 @@ const defs: CommissionDef[] = [
       { kind: 'impatienceRate', percent: 10 },
     ],
     terms: [{ kind: 'byYear', year: 3 }],
-    bonusPercent: 50,
+    bonusPercent: 70,
   },
 
   // ---- opened by Citadel upgrades -------------------------------------------
@@ -140,7 +146,7 @@ const defs: CommissionDef[] = [
         goal: { kind: 'buildingId', buildingId: 'tradingPost', amount: 1 },
         label: 'Keep a Trading Post standing',
       },
-      { kind: 'caravans', amount: 4 },
+      { kind: 'caravans', amount: 5 },
     ],
     bonusPercent: 100,
     unlockedBy: 'merchantCharter',
@@ -169,8 +175,8 @@ const defs: CommissionDef[] = [
       { kind: 'newcomerRate', percent: -30 },
       { kind: 'foodUpkeep', percent: 10 },
     ],
-    terms: [{ kind: 'goal', goal: { kind: 'population', amount: 24 } }],
-    bonusPercent: 50,
+    terms: [{ kind: 'goal', goal: { kind: 'population', amount: 22 } }],
+    bonusPercent: 60,
     unlockedBy: 'openRoads',
   },
   {
@@ -179,12 +185,11 @@ const defs: CommissionDef[] = [
     icon: '🏮',
     art: 'charter/lantern',
     patron: "The Wardens' watch",
-    twist: 'The hearth burns 25% more wood, but the Clearance after each Storm works 15% faster.',
-    effects: [
-      { kind: 'hearthFuel', percent: 25 },
-      { kind: 'seasonProduction', season: 'clearance', percent: 15 },
-    ],
-    terms: [{ kind: 'warmHearth' }],
+    twist:
+      'The land always has Long Storms (25% longer, a bountiful Clearance after), and the hearth burns 40% more wood.',
+    land: 'longStorms',
+    effects: [{ kind: 'hearthFuel', percent: 40 }],
+    terms: [{ kind: 'warmHearth' }, { kind: 'calmForest', max: 20 }],
     bonusPercent: 50,
     unlockedBy: 'wardensWrit',
   },
@@ -201,7 +206,7 @@ const defs: CommissionDef[] = [
       { kind: 'decreeReputation', amount: 1 },
     ],
     terms: [{ kind: 'decrees', amount: 3 }],
-    bonusPercent: 60,
+    bonusPercent: 65,
     unlockedBy: 'charterOffice',
   },
   {
@@ -210,11 +215,13 @@ const defs: CommissionDef[] = [
     icon: '⚒️',
     art: 'charter/forge',
     patron: "The Masons' guild",
-    twist: 'The land always has Rich Veins, but the digging wakes the forest: hostility rises 10% faster.',
+    twist:
+      'The land always has Rich Veins and the guild sends Copper Mine and Smelter plans, but the digging wakes the forest: hostility rises 10% faster.',
     land: 'richVeins',
+    startBlueprints: ['copperMine', 'smelter'],
     effects: [{ kind: 'hostilityRate', percent: 10 }],
-    terms: [{ kind: 'goal', goal: { kind: 'produced', resource: 'copperBar', amount: 15 } }],
-    bonusPercent: 75,
+    terms: [{ kind: 'goal', goal: { kind: 'produced', resource: 'copperBar', amount: 40 } }],
+    bonusPercent: 80,
     unlockedBy: 'masonsArchive',
   },
 ]

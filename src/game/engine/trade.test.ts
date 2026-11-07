@@ -280,9 +280,10 @@ describe('the Found a Trade Town commission', () => {
     expect(caravanInterval(s)).toBeCloseTo((CARAVAN_INTERVAL * 0.8) / BARGES_FREQUENCY)
 
     const caravans = COMMISSIONS.tradeTown.terms.find((term) => term.kind === 'caravans')!
-    for (let visit = 1; visit <= 4; visit++) {
+    expect(caravans).toMatchObject({ amount: 5 })
+    for (let visit = 1; visit <= 5; visit++) {
       arrive(s)
-      expect(termStatus(caravans, s).detail).toBe(`${visit}/4`)
+      expect(termStatus(caravans, s).detail).toBe(`${visit}/5`)
       // Rare items and commissions do not touch the count.
       s.stock.amber = 10_000
       buyRare(s)
