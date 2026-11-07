@@ -39,7 +39,7 @@ import { ROAD_TOOL, canStartRoad, placeRoad, removeRoad, roadAt, snapRoadPoint }
 import type { LandChoice } from './engine/runModifiers'
 import { unassign } from './engine/society'
 import { tick } from './engine/tick'
-import { buyOffer, sellResource } from './engine/trade'
+import { buyOffer, buyRare, commissionShipment, sellResource, signAgreement } from './engine/trade'
 import {
   loadMeta,
   loadSettings,
@@ -56,7 +56,7 @@ import {
   saveToSlot,
   type SlotId,
 } from './saveSlots'
-import type { MetaState, ResourceId, RunState, SpeciesId, Vec2 } from './types'
+import type { MetaState, ResourceId, RunState, SpeciesId, TradeAgreementId, Vec2 } from './types'
 
 /**
  * The run factory and the map generator (with the Delaunay library) are only
@@ -279,6 +279,12 @@ interface GameStore {
   reroll: () => void
   buyLot: (index: number) => void
   sell: (resource: ResourceId) => void
+  /** Buys the caravan's rare blueprint or cornerstone. */
+  buyRare: () => void
+  /** Pays now for a lot of a good, delivered with the next caravan. */
+  commissionShipment: (resource: ResourceId) => void
+  /** Signs the run's one trade agreement. */
+  signAgreement: (id: TradeAgreementId) => void
   /** Throws a lot of a good out of a full stockpile. */
   dump: (resource: ResourceId) => void
   appease: (threatId: string) => void
@@ -758,6 +764,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   reroll: () => runCommand(set, get, (run) => rerollChoice(run)),
   buyLot: (index) => runCommand(set, get, (run) => buyOffer(run, index)),
   sell: (resource) => runCommand(set, get, (run) => sellResource(run, resource)),
+  buyRare: () => runCommand(set, get, (run) => buyRare(run)),
+  commissionShipment: (resource) => runCommand(set, get, (run) => commissionShipment(run, resource)),
+  signAgreement: (id) => runCommand(set, get, (run) => signAgreement(run, id)),
   dump: (resource) => runCommand(set, get, (run) => dumpStock(run, resource)),
   appease: (threatId) => runCommand(set, get, (run) => appeaseThreat(run, threatId)),
   rush: (buildingId) => runCommand(set, get, (run) => rushConstruction(run, buildingId)),
