@@ -914,6 +914,13 @@ export interface PendingChoice {
    * and on older saves (blueprints only).
    */
   mixed?: boolean
+  /**
+   * Dealt at the founding, before the first tick: the opening blueprint
+   * drafts, the founding cornerstone and the founding writ. They are made
+   * together from the Founding panel beside the map, in any order, rather
+   * than one modal after another. Absent on every later choice.
+   */
+  founding?: boolean
 }
 
 /**
@@ -1113,6 +1120,12 @@ export interface RunState {
 
   /** FIFO queue — a glade event and a reputation milestone can land together. */
   pendingChoices: PendingChoice[]
+  /**
+   * Choices of two orders for empty order slots. Unlike `pendingChoices` they
+   * never stop the clock: they wait in the Orders panel, and the slot stays
+   * empty until one is taken. Absent on older saves (migrated on load).
+   */
+  orderOffers: PendingChoice[]
 
   /** Newest first, capped. */
   log: LogEntry[]

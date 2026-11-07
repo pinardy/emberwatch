@@ -9,7 +9,7 @@ import { Bar } from './Bar'
 import { DecreeCard } from './DecreeCard'
 import { CommissionCard } from './Commissions'
 import { COMMISSION_ONGOING_ID } from '../game/engine/citadel'
-import { orderTag } from './QueenChoice'
+import { OrderOffer, orderTag } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
 import { RaceSparkline } from './RaceSparkline'
 import { Icon } from './Icon'
@@ -34,11 +34,14 @@ export function OrdersPanel() {
         </div>
         <p className="panel-hint">
           Completing an order grants reputation immediately; the Queen then offers two
-          more to choose from. {run.orderDeclineYear === run.season.year
+          more to choose from here, and the slot waits empty until you pick. {run.orderDeclineYear === run.season.year
             ? 'You have already asked her for different orders this year.'
             : 'Once a year you may ask her for a different pair.'}
         </p>
         <CommissionCard run={run} />
+        {(run.orderOffers ?? []).map((offer, index) => (
+          <OrderOffer key={offer.orders?.[0]?.id ?? index} run={run} offer={offer} index={index} />
+        ))}
         <DecreeCard />
         {run.orders.map((order) => {
           const def = ORDERS[order.defId]
@@ -61,7 +64,9 @@ export function OrdersPanel() {
             </div>
           )
         })}
-        {run.orders.length === 0 && <p className="muted">No orders outstanding.</p>}
+        {run.orders.length === 0 && (run.orderOffers ?? []).length === 0 && (
+          <p className="muted">No orders outstanding.</p>
+        )}
       </section>
 
       <section className="build-group">

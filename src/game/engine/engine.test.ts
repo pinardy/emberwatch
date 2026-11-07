@@ -107,7 +107,7 @@ import {
   stepConditions,
   stepDecree,
 } from './structure'
-import { orderFeasible } from './orders'
+import { orderFeasible, takeOrderOffer } from './orders'
 import { tick } from './tick'
 import { proclaimFirstDecree } from '../../test/decrees'
 import { loadRun } from '../persistence'
@@ -160,9 +160,13 @@ function run(state: RunState, seconds: number, step = 0.125): void {
   }
 }
 
-/** Always takes the first offered option. */
+/** Always takes the first offered option, order offers included. */
 function drainChoices(state: RunState): void {
   let guard = 0
+  while (state.orderOffers.length > 0 && guard++ < 20) {
+    takeOrderOffer(state, 0, state.orderOffers[0].options[0])
+  }
+  guard = 0
   while (state.pendingChoices.length > 0 && guard++ < 20) {
     const choice = state.pendingChoices[0]
     if (choice.kind === 'gladeEvent') resolveGladeEvent(state, chooseAffordable(state))
@@ -505,8 +509,9 @@ describe('orders', () => {
     tick(state, 0.125)
     expect(state.reputation).toBeGreaterThan(0)
     expect(state.orders.some((o) => o.defId === 'stock_plank_30')).toBe(false)
-    // Every empty slot is offered as a choice of two.
-    const offers = state.pendingChoices.filter((c) => c.kind === 'order')
+    // Every empty slot is offered as a choice of two, in the Orders panel.
+    expect(state.pendingChoices.filter((c) => c.kind === 'order')).toHaveLength(0)
+    const offers = state.orderOffers
     expect(offers).toHaveLength(3)
     for (const offer of offers) expect(offer.options).toHaveLength(2)
     drainChoices(state)

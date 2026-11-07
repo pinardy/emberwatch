@@ -89,7 +89,7 @@ import {
   signAgreement,
 } from './trade'
 import { productionRate } from './forecast'
-import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation } from './orders'
+import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation, takeOrderOffer } from './orders'
 import { categoryRate, decreeGoal, decreeReputation } from './structure'
 import { baseServiceCapacity, isInsulated, isUpgrading, tierOf, workerSlotsOf } from './upgrades'
 
@@ -1025,6 +1025,12 @@ function trade(s: RunState, ledger: AmberLedger): void {
 /** Resolves whatever the sim is blocking on, preferring cheap safe options. */
 function answerChoices(s: RunState): void {
   let guard = 0
+  // Order offers wait in the Orders panel without stopping the clock; the bot
+  // still takes one the moment it appears.
+  while (s.orderOffers.length > 0 && guard++ < 20) {
+    takeOrderOffer(s, 0, pickOrder(s, s.orderOffers[0]))
+  }
+  guard = 0
   while (s.pendingChoices.length > 0 && guard++ < 20) {
     const choice = s.pendingChoices[0]
     if (choice.kind === 'gladeEvent') {

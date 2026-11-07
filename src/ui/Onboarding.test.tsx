@@ -76,9 +76,10 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('first steps checklist', () => {
-  it('waits behind the opening draft, then shows instead of the welcome tip', () => {
+  it('waits for the founding picks, then shows instead of the welcome tip', () => {
     startRun()
-    // A dialog is up: nothing may sit underneath it.
+    // The founding is being made: the checklist waits until the clock can run.
+    expect(screen.getByRole('region', { name: /^The Founding/ })).toBeTruthy()
     expect(screen.queryByRole('region', { name: /First steps/i })).toBeNull()
     takeOpeningDraft()
 
@@ -153,6 +154,49 @@ describe('first steps checklist', () => {
 
     placeNow('shelter')
     expect(screen.queryByRole('status', { name: 'Tip' })).toBeNull()
+  })
+})
+
+describe('the founding panel', () => {
+  it('shows the settlers and the land beside the first draft, with its tip', () => {
+    useGameStore.setState({ screen: 'menu' })
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
+    fireEvent.change(screen.getByLabelText(/Map seed/i), { target: { value: '4242' } })
+    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
+    const run = currentRun()
+    const panel = screen.getByRole('region', { name: /^The Founding/ })
+    expect(within(panel).getByRole('heading', { level: 2 }).textContent).toBe('The Founding')
+    // Its parts at a glance, each a jump to its picks.
+    const steps = within(panel).getByRole('list', { name: 'Founding picks' })
+    expect(within(steps).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      '1 Blueprints ×3',
+      '2 Cornerstone',
+      '3 The founding writ',
+    ])
+    for (const sp of run.speciesPool) expect(within(panel).getByText(SPECIES[sp].name)).toBeTruthy()
+    expect(within(panel).getByRole('list', { name: /Lay of the land/i })).toBeTruthy()
+    // The first-draft tip sits with the blueprints, not under a dialog.
+    const blueprints = within(panel).getByRole('region', { name: /Blueprints/ })
+    expect(within(blueprints).getByText(/Drafting a blueprint/)).toBeTruthy()
+    // Each blueprint card says what it does for services, as in a draft.
+    const cards = within(blueprints).getAllByRole('button').filter((b) => b.className.includes('option'))
+    expect(cards.length).toBe(run.pendingChoices[0].options.length)
+    expect(within(blueprints).queryAllByTestId('draft-need').length).toBeGreaterThan(0)
+    // Picking one lists it as chosen, and deals the next draft in its place.
+    const name = cards[0].querySelector('strong')!.textContent!
+    fireEvent.click(cards[0])
+    const chosen = within(within(panel).getByRole('region', { name: /Blueprints/ })).getByRole('list', {
+      name: /Blueprints chosen/,
+    })
+    expect(within(chosen).getByText(new RegExp(name))).toBeTruthy()
+    expect(within(panel).getByText(/4 picks left/)).toBeTruthy()
+    expect(within(steps).getAllByRole('button')[0].textContent).toBe('1 Blueprints ×2')
+    // The jump takes focus to that part's first card.
+    fireEvent.click(within(steps).getByRole('button', { name: /founding writ/ }))
+    const writ = within(panel).getByRole('region', { name: /founding writ/i })
+    expect(writ.contains(document.activeElement)).toBe(true)
+    expect(document.activeElement?.className).toMatch(/option/)
   })
 })
 
