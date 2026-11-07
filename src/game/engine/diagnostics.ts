@@ -28,6 +28,7 @@ import {
 } from './queries'
 import { coldVillagers, secondsUntilFrostLoss, villagersBeyond } from './society'
 import { despairRate } from './traits'
+import { petitionOpen, petitionVowLeft, retreatOffered } from './levers'
 
 /**
  * Things that are quietly going wrong.
@@ -248,11 +249,33 @@ export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warnin
     })
   }
 
+  const vowLeft = petitionVowLeft(s)
+  if (vowLeft > 0 && s.petition) {
+    const owed = s.petition.target - s.reputation
+    out.push({
+      id: 'petition-vow',
+      severity: vowLeft <= RUNWAY_WARNING_SECONDS ? 'danger' : 'caution',
+      text: `🕊️ Your vow to the Queen: ${owed} more reputation within ${formatDuration(vowLeft)}, or her patience snaps.`,
+    })
+  }
+
+  // The levers for a run that is slipping away live in the Orders panel.
+  const levers = [petitionOpen(s) && 'a Grand Petition', retreatOffered(s) && 'a Retreat to the Citadel']
+    .filter(Boolean)
+    .join(' or ')
   if (s.impatience >= s.maxImpatience - 3) {
     out.push({
       id: 'impatience',
       severity: 'danger',
-      text: "⏳ The Queen is nearly out of patience.",
+      text: levers
+        ? `⏳ The Queen is nearly out of patience — ${levers} is open in Orders.`
+        : '⏳ The Queen is nearly out of patience.',
+    })
+  } else if (levers) {
+    out.push({
+      id: 'levers',
+      severity: 'caution',
+      text: `👑 The Queen's patience is running low — ${levers} is open in Orders.`,
     })
   }
 

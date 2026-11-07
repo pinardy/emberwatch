@@ -32,10 +32,12 @@ import {
 import { ROAD_MIN_LENGTH, SPEED_OPTIONS, TICK_SECONDS, type GameSpeed } from './engine/balance'
 import {
   appeaseThreat,
+  redrawToward,
   rerollChoice,
   resolveGladeEvent,
   takeChoice,
 } from './engine/events'
+import { buyArchitectPlans, grandPetition, retreatToCitadel } from './engine/levers'
 import { takeOrderOffer } from './engine/orders'
 import { randomSeed } from './engine/rng'
 import { ROAD_TOOL, canStartRoad, placeRoad, removeRoad, roadAt, snapRoadPoint } from './engine/roads'
@@ -59,7 +61,7 @@ import {
   saveToSlot,
   type SlotId,
 } from './saveSlots'
-import type { MetaState, ResourceId, RunState, SpeciesId, TradeAgreementId, Vec2 } from './types'
+import type { MetaState, ResourceId, RunState, ServiceNeed, SpeciesId, TradeAgreementId, Vec2 } from './types'
 
 /**
  * The run factory and the map generator (with the Delaunay library) are only
@@ -303,6 +305,14 @@ interface GameStore {
   /** Starts raising a building to its next upgrade tier. */
   upgrade: (buildingId: string) => void
   soothe: () => void
+  /** Buys the Queen's Architect's plans for a service (at the hearth). */
+  buyPlans: (need: ServiceNeed) => void
+  /** Redraws the open blueprint draft around a piece of `need`'s chain. */
+  redrawToward: (need: ServiceNeed, index?: number) => void
+  /** Makes the run's one Grand Petition. */
+  petition: () => void
+  /** Ends a lost run now with a Retreat to the Citadel. */
+  retreat: () => void
   recallAll: () => void
   dismissNotice: () => void
   buyUpgrade: (id: string) => void
@@ -791,6 +801,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
   rush: (buildingId) => runCommand(set, get, (run) => rushConstruction(run, buildingId)),
   upgrade: (buildingId) => runCommand(set, get, (run) => upgradeBuilding(run, buildingId)),
   soothe: () => runCommand(set, get, (run) => sootheQueen(run)),
+  buyPlans: (need) => runCommand(set, get, (run) => buyArchitectPlans(run, need)),
+  redrawToward: (need, index = 0) => runCommand(set, get, (run) => redrawToward(run, need, index)),
+  petition: () => runCommand(set, get, (run) => grandPetition(run)),
+  retreat: () =>
+    runCommand(set, get, (run) => {
+      const error = retreatToCitadel(run)
+      if (!error) get().saveNow()
+      return error
+    }),
   recallAll: () =>
     runCommand(set, get, (run) => {
       recallEveryone(run)

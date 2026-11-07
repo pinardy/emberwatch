@@ -43,14 +43,29 @@ import { createRun } from './createRun'
 import { computeModifiers } from './modifiers'
 import { pendingBlight } from './blights'
 import { storageBlocked } from './forecast'
-import { impatienceParts, resolveBreakdowns } from './society'
+import { coldVillagers, impatienceParts, resolveBreakdowns, secondsPastDeadline } from './society'
 import {
   appeaseThreat,
   optionAffordable,
+  redrawTargets,
+  redrawToward,
   relevantBlueprints,
   resolveGladeEvent,
   takeChoice,
+  targetedRedrawCost,
 } from './events'
+import {
+  architectBlocked,
+  architectOffers,
+  architectPrice,
+  buyArchitectPlans,
+  grandPetition,
+  petitionBlocked,
+  petitionOpen,
+  petitionVowLeft,
+  retreatOffered,
+  retreatToCitadel,
+} from './levers'
 import {
   HEARTH_STORM_END_REACH,
   SERVICE_COVERAGE_RATIO,
@@ -184,6 +199,17 @@ interface BotReport {
   overThreshold: number[]
   /** Where the run's amber came from and went. */
   amber: AmberLedger
+  /** Villager-seconds slept cold through the Storms, and the most cold at once. */
+  coldSeconds: number
+  peakCold: number
+  /** Needs left not fully served at the end (the `unmet` list's length). */
+  unmetCount: number
+  /** The Grand Petition: never made, its vow kept, broken, or still live at the end. */
+  petition: 'none' | 'kept' | 'broken' | 'live'
+  /** Ended by a Retreat to the Citadel. */
+  retreated: boolean
+  /** Plans bought from the Queen's Architect. */
+  plans: number
 }
 
 /**
@@ -212,11 +238,19 @@ interface AmberLedger {
   visits: number
 }
 
+/** Amber moved by bookings nested inside the one running now (booked twice otherwise). */
+let nestedDelta = 0
+
 /** Runs `fn` and books whatever it did to the amber purse under `key`. */
 function booked(s: RunState, ledger: AmberLedger, key: string, fn: () => void): void {
   const before = s.stock.amber ?? 0
+  const outer = nestedDelta
+  nestedDelta = 0
   fn()
-  const delta = (s.stock.amber ?? 0) - before
+  const total = (s.stock.amber ?? 0) - before
+  // What an inner booking already counted (a redraw inside a draft answer).
+  const delta = total - nestedDelta
+  nestedDelta = outer + total
   if (delta > 0) {
     ledger.earned += delta
     ledger.earnedBy[key] = (ledger.earnedBy[key] ?? 0) + delta
@@ -422,11 +456,32 @@ function build(s: RunState, economyOnly = false): void {
  * upgraded does a home go up out in the cold.
  */
 function buildHousing(s: RunState): boolean {
+  // A careless player raises homes wherever there is room, warm or not.
+  if (botStyle.get(s)?.carelessWarmth) return carelessHome(s)
   for (const defId of ['cabin', 'shelter']) {
     if (tryPlace(s, defId, (pos) => isWarmAt(s, pos))) return true
   }
   if (tryUpgrade(s, ['cabin', 'shelter'])) return true
   return tryPlace(s, 'cabin') || tryPlace(s, 'shelter')
+}
+
+/**
+ * A home the way a player who forgets the Storm raises one: beside the camps
+ * where its residents work (the newest camp first), wherever that is.
+ */
+function carelessHome(s: RunState): boolean {
+  const camps = Object.values(s.buildings).filter(
+    (b) => b.built && BUILDINGS[b.defId]?.category === 'gathering',
+  )
+  for (const defId of ['cabin', 'shelter']) {
+    if (!s.unlockedBuildings.includes(defId) || !canAfford(s.stock, BUILDINGS[defId].cost)) continue
+    for (const camp of [...camps].reverse()) {
+      const pos = findPlacement(s, defId, camp.pos)
+      if (pos && placeBuilding(s, defId, pos) === null) return true
+    }
+    if (tryPlace(s, defId)) return true
+  }
+  return false
 }
 
 /**
@@ -436,6 +491,7 @@ function buildHousing(s: RunState): boolean {
  */
 function comfortUpgrade(s: RunState): boolean {
   const pop = population(s)
+  if (botStyle.get(s)?.carelessWarmth) return false
   if (pop < 12 || comfortableHousing(s) >= pop * 0.6) return false
   if ((s.stock.plank ?? 0) < 15) return false
   if (Object.values(s.buildings).some((b) => b.defId === 'shelter' && isUpgrading(b))) return false
@@ -448,6 +504,7 @@ function comfortUpgrade(s: RunState): boolean {
  * among them rather than eating the resolve penalty.
  */
 function warmSprawl(s: RunState): boolean {
+  if (botStyle.get(s)?.carelessWarmth) return false
   if (!s.unlockedBuildings.includes('brazier')) return false
   const braziers = Object.values(s.buildings).filter((b) => BUILDINGS[b.defId]?.warmth)
   const reach = BUILDINGS.brazier?.warmth?.radius ?? 0
@@ -1103,6 +1160,9 @@ function answerChoices(s: RunState): void {
       const finisher = choice.options
         .filter((id) => ranked.includes(id))
         .sort((a, b) => ranked.indexOf(a) - ranked.indexOf(b))[0]
+      // Nothing toward the chains on offer: ask the Queen's architect to
+      // redraw it around the most useful missing piece, when amber allows.
+      if (!finisher && !choice.options.some((id) => wanted.has(id)) && redrawForChains(s)) continue
       const pick =
         finisher ??
         tacticsFor(s).blueprint?.(s, choice.options) ??
@@ -1126,6 +1186,74 @@ function answerChoices(s: RunState): void {
     }
   }
 }
+
+/**
+ * A targeted redraw of the open blueprint draft toward the piece the chains
+ * want most — only for a settlement that will staff it (not the
+ * economy-only control) and with amber to spare.
+ */
+function redrawForChains(s: RunState): boolean {
+  if (botStyle.get(s)?.economyOnly || s.clock <= 0) return false
+  const ledger = botLedger.get(s)
+  const ranked = relevantBlueprints(s)
+  const target = redrawTargets(s)
+    .filter((t) => ranked.includes(t.piece))
+    .sort((a, b) => ranked.indexOf(a.piece) - ranked.indexOf(b.piece))[0]
+  if (!target || (s.stock.amber ?? 0) < targetedRedrawCost(s) + AMBER_RESERVE) return false
+  let ok = false
+  const go = () => {
+    ok = redrawToward(s, target.need) === null
+  }
+  if (ledger) booked(s, ledger, 'redraw', go)
+  else go()
+  return ok
+}
+
+/** The ledger of the run being played, for spends made deep in the bot. */
+const botLedger = new WeakMap<RunState, AmberLedger>()
+
+/**
+ * The levers a competent player pulls when a run is going wrong:
+ *  - the Queen's Architect at the hearth, for the plans of a wanted service
+ *    the drafts keep missing — once the settlement is big enough to staff it,
+ *    keeping the amber reserve, and only for a piece the chains want now;
+ *  - the Grand Petition when the Queen's patience is nearly spent and the
+ *    finish is within reach;
+ *  - the Retreat to the Citadel once the run is lost in all but name: the
+ *    petition spent (or out of reach) and her patience almost gone.
+ */
+function pullLevers(s: RunState, ledger: AmberLedger): void {
+  const economyOnly = botStyle.get(s)?.economyOnly
+  const short = s.maxReputation - s.reputation
+  if (petitionBlocked(s) === null && short <= PETITION_MAX_SHORT) {
+    booked(s, ledger, 'petition', () => grandPetition(s))
+  }
+  if (retreatOffered(s) && !petitionOpen(s)) {
+    // Past the deadline the overtime only steepens: that far short, it is over.
+    const broken = s.petition?.outcome === 'broken'
+    const overtime = secondsPastDeadline(s) > 0 && !petitionVowLeft(s)
+    const nearlyGone = s.impatience + s.impatienceProgress >= s.maxImpatience - RETREAT_WITHIN
+    if (broken || overtime || nearlyGone) {
+      retreatToCitadel(s)
+      return
+    }
+  }
+  if (economyOnly || population(s) < 10) return
+  const ranked = relevantBlueprints(s)
+  const offer = architectOffers(s)[0]
+  if (!offer || !ranked.includes(offer.piece)) return
+  // A caravan selling that very blueprint is the cheaper way.
+  const rare = s.caravan.here ? s.caravan.rare : null
+  if (rare && !rare.sold && rare.id === offer.piece) return
+  if ((s.stock.amber ?? 0) < architectPrice(s) + AMBER_RESERVE) return
+  if (architectBlocked(s, offer.need)) return
+  booked(s, ledger, 'architect', () => buyArchitectPlans(s, offer.need))
+}
+
+/** The bot petitions only with victory this close… */
+const PETITION_MAX_SHORT = 8
+/** …and retreats once impatience is this close to the limit with no petition left. */
+const RETREAT_WITHIN = 3
 
 /** True when paying `price` would still be possible after the option's own cost. */
 function canAffordAfter(s: RunState, o: GladeEventOptionDef, price: ResourceBag): boolean {
@@ -1300,7 +1428,16 @@ interface PlayOptions {
   modifiers?: string[]
   /** Found the run on this Citadel commission. */
   commission?: string
+  /**
+   * Plays like someone who under-builds warmth: homes go up beside the camps
+   * wherever they stand, shelters are never raised into insulated lodges, and
+   * no brazier is ever lit (the frost check).
+   */
+  carelessWarmth?: boolean
 }
+
+/** The options a run is being played with, for decisions deep in the bot. */
+const botStyle = new WeakMap<RunState, PlayOptions>()
 
 /** Where a run's reputation came from. */
 interface ReputationSources {
@@ -1319,12 +1456,15 @@ function playRun(
 ): BotReport {
   const { economyOnly = false, maxMinutes = 45, modifiers, commission } = options
   const s = createRun({ seed, species, modifiers, commission })
+  botStyle.set(s, options)
   let sinceDecision = Infinity
   const maxSeconds = maxMinutes * 60
   const sources: ReputationSources = { orders: 0, decrees: 0, glades: 0, events: 0, resolve: 0 }
   let wardSeconds = 0
   let stallImpatience = 0
   let frozen = 0
+  let coldSeconds = 0
+  let peakCold = 0
   const impatienceBy: ImpatienceSources = {
     calendar: 0,
     stalling: 0,
@@ -1337,6 +1477,7 @@ function playRun(
   let firstRepMinute = Infinity
   let decreesMissed = 0
   const amber: AmberLedger = { earned: 0, earnedBy: {}, spent: {}, end: 0, caravans: false, visits: 0 }
+  botLedger.set(s, amber)
   /** `[clock, reputation]` every few seconds, for the shape of the climb. */
   const repCurve: [number, number][] = [[0, 0]]
 
@@ -1357,6 +1498,8 @@ function playRun(
       dumpSurplus(s)
       booked(s, amber, 'commission tactics', () => tacticsFor(s).act?.(s))
       trade(s, amber)
+      pullLevers(s, amber)
+      if (s.phase !== 'playing') break
       build(s, economyOnly)
       layRoads(s)
       explore(s)
@@ -1378,6 +1521,11 @@ function playRun(
     const frostBefore = s.frostExposure ?? 0
     booked(s, amber, 'tick', () => tick(s, STEP))
     if (s.season.season === 'storm' && (s.frostExposure ?? 0) < frostBefore) frozen++
+    if (s.season.season === 'storm') {
+      const c = coldVillagers(s)
+      coldSeconds += c * STEP
+      peakCold = Math.max(peakCold, c)
+    }
     if (ticked) {
       impatienceBy.calendar += (parts.calendar + parts.hostility) * STEP
       impatienceBy.stalling += parts.stalling * STEP
@@ -1466,6 +1614,12 @@ function playRun(
     impatienceBy,
     overThreshold: overThreshold(s),
     amber,
+    coldSeconds,
+    peakCold,
+    unmetCount: describeUnmet(s) === 'none' ? 0 : describeUnmet(s).split(',').length,
+    petition: s.petition ? (s.petition.outcome ?? 'live') : 'none',
+    retreated: !!s.retreated,
+    plans: s.architectPlans ?? 0,
   }
 }
 
@@ -1478,6 +1632,7 @@ function playRun(
  */
 function lossCause(s: RunState, by: ImpatienceSources): string {
   if (s.phase !== 'lost') return '-'
+  if (s.retreated) return 'retreat'
   if (population(s) === 0) return 'abandoned'
   const named: [string, number][] = [
     ['deadline', by.deadline],
@@ -1529,6 +1684,9 @@ const ECON_SEEDS = SEEDS.slice(0, Math.max(1, Math.ceil(SEEDS.length / 2)))
 /** Seeds per forced map modifier (trios rotate across them). */
 const MODIFIER_SEED_COUNT = Number(ENV.PLAYTEST_MODIFIER_SEEDS ?? 6)
 
+/** Seeds per trio for the careless-warmth frost check. */
+const FROST_SEED_COUNT = Number(ENV.PLAYTEST_FROST_SEEDS ?? 6)
+
 /**
  * Seeds per Citadel commission (trios rotate across them). Twelve, so each
  * commission has enough wins for "met in at least one" to be a real check.
@@ -1568,8 +1726,24 @@ function summarise(label: string, reports: BotReport[]): string {
     ` · median braziers in wins ${median(wins.map((r) => r.braziers)).toFixed(1)}` +
     ` · villagers lost ${reports.reduce((n, r) => n + r.lost, 0)} (${mean(reports.map((r) => r.lost)).toFixed(2)}/run, ${reports.reduce((n, r) => n + r.frozen, 0)} to frost)` +
     ` · spared/run ${mean(reports.map((r) => r.spared)).toFixed(1)}` +
-    ` · causes ${histogram(losses.map((r) => r.cause))}`
+    ` · causes ${histogram(losses.map((r) => r.cause))}` +
+    `\n${''.padEnd(20)} levers: loss minute ${median(losses.map((r) => r.exactMinutes)).toFixed(1)} (median)` +
+    ` · unmet needs at end ${median(wins.map((r) => r.unmetCount)).toFixed(1)} in wins, ${median(losses.map((r) => r.unmetCount)).toFixed(1)} in losses (median)` +
+    ` · plans/run ${mean(reports.map((r) => r.plans)).toFixed(2)}` +
+    ` · petitions ${reports.filter((r) => r.petition !== 'none').length} (${petitionOutcomes(reports)})` +
+    ` · retreats ${reports.filter((r) => r.retreated).length} (median minute ${median(reports.filter((r) => r.retreated).map((r) => r.exactMinutes)).toFixed(1)})`
   )
+}
+
+/** "kept 3 (won 2) broken 1 (won 0)": how petitions ended, and how their runs did. */
+function petitionOutcomes(reports: BotReport[]): string {
+  return (['kept', 'broken', 'live'] as const)
+    .map((o) => {
+      const rs = reports.filter((r) => r.petition === o)
+      return rs.length ? `${o} ${rs.length} (won ${rs.filter((r) => r.phase === 'won').length})` : ''
+    })
+    .filter(Boolean)
+    .join(' ') || '-'
 }
 
 /** `value×count` pairs, most common first. */
@@ -1598,9 +1772,13 @@ function summariseAmber(label: string, reports: BotReport[]): string {
   const bySink = perRun((r) => r.amber.spent)
   const bySource = perRun((r) => r.amber.earnedBy)
   const traders = reports.filter((r) => r.amber.caravans)
+  const split = (rs: BotReport[]) =>
+    `earned ${median(rs.map((r) => r.amber.earned)).toFixed(0)} spent ${median(rs.map(spentTotal)).toFixed(0)} left ${median(rs.map((r) => r.amber.end)).toFixed(0)}`
+  const homebound = reports.filter((r) => !r.amber.caravans)
   return (
     `${label.padEnd(20)} amber earned ${median(reports.map((r) => r.amber.earned)).toFixed(0)} (median; per run from ${bySource}) spent ${median(reports.map(spentTotal)).toFixed(0)} left ${median(reports.map((r) => r.amber.end)).toFixed(0)}` +
-    ` · spent/run by sink: ${bySink || 'none'} · caravans in ${traders.length}/${reports.length} runs (${mean(traders.map((r) => r.amber.visits)).toFixed(1)} visits)`
+    ` · spent/run by sink: ${bySink || 'none'} · caravans in ${traders.length}/${reports.length} runs (${mean(traders.map((r) => r.amber.visits)).toFixed(1)} visits)` +
+    ` · with caravans ${split(traders)} · without ${split(homebound)} (medians)`
   )
 }
 
@@ -1608,6 +1786,7 @@ function logRun(seed: number, r: BotReport): void {
   console.log(
     `seed ${seed}: ${r.phase} · Y${r.years} ${r.minutes}min · rep ${r.reputation} imp ${r.impatience} · pop ${r.population} lost ${r.lost} · glades ${r.gladesCleared} spared ${r.spared} · frozen ${r.frozen} · orders ${r.ordersCompleted} · decrees ${r.decreesMet}/${r.decreesMet + r.decreesMissed} · bld ${r.buildings} · host ${r.hostility} · braziers ${r.braziers} · upgrades ${r.upgrades} · roads ${r.roads}/${r.roadLinked} linked · first rep ${r.firstRepMinute.toFixed(1)}min · late ${(r.lateShare * 100).toFixed(0)}% · ${r.resolve} · unmet ${r.unmetNeeds}${r.starving ? ' STARVING' : ''}${r.coldHearth ? ' COLD' : ''}` +
       ` · cause ${r.cause} · impBy cal ${r.impatienceBy.calendar.toFixed(1)} stall ${r.impatienceBy.stalling.toFixed(1)} stag ${r.impatienceBy.stagnation.toFixed(1)} dl ${r.impatienceBy.deadline.toFixed(1)} lost ${r.impatienceBy.losses.toFixed(1)} ev ${r.impatienceBy.events.toFixed(1)} · over ${r.overThreshold.map((x) => x.toFixed(0)).join('/')} · blights ${r.blights.struck}/${r.blights.blunted} of ${r.blights.forecast} · wards ${r.wardMinutes.toFixed(1)} · stallImp ${r.stallImpatience.toFixed(1)}` +
+      ` · plans ${r.plans} petition ${r.petition}${r.retreated ? ' RETREAT' : ''}` +
       ` · amber +${r.amber.earned.toFixed(0)} -${Object.entries(r.amber.spent).map(([k, v]) => `${k}:${v.toFixed(0)}`).join(',') || '0'} =${r.amber.end.toFixed(0)}${r.amber.caravans ? ` caravans ${r.amber.visits}` : ''}` +
       `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · open orders: ${r.openOrders}\n    reputation by minute: ${r.curve.join(' ')}`,
   )
@@ -1649,7 +1828,8 @@ describe('balance harness', () => {
 
     /*
      * The bot plays competently but not well — it trades only by rote, never
-     * soothes the Queen, and takes whatever the draft hands it. Most maps but not all
+     * soothes the Queen, and steers a draft only toward the chain piece it
+     * ranks first. Most maps but not all
      * is the shape we want: a real player should comfortably beat this, and a
      * careless one should still lose sometimes.
      */
@@ -1773,6 +1953,30 @@ describe('balance harness', () => {
       expect(wins.filter((r) => r.commissionMet).length, `${id} met in a win`).toBeGreaterThanOrEqual(1)
     }
   }, 600_000)
+
+  /*
+   * Frost has killed nobody in the competent bot's runs: it keeps its homes
+   * inside the hearth's reach, raises braziers for any that sprawl, and its
+   * comfort upgrades insulate the starting shelters. That is a careful
+   * player's reward, not a toothless rule — a player who under-builds warmth
+   * (homes beside the camps, no braziers, no insulating upgrades) must still
+   * lose villagers to the cold in a fair share of runs.
+   */
+  it('the cold takes villagers from a player who under-builds warmth', () => {
+    const seeds = ALL_SEEDS.slice(0, FROST_SEED_COUNT)
+    const reports = TRIOS.flatMap((trio) => seeds.map((seed) => playRun(seed, trio, { carelessWarmth: true })))
+    const frozen = reports.reduce((n, r) => n + r.frozen, 0)
+    const struck = reports.filter((r) => r.frozen > 0).length
+    console.log(
+      `${summarise('careless warmth', reports)}\n${''.padEnd(20)} frost: ${frozen} villagers lost in ${struck}/${reports.length} runs` +
+        ` · median cold villager-seconds ${median(reports.map((r) => r.coldSeconds)).toFixed(0)}` +
+        ` · most cold at once ${Math.max(...reports.map((r) => r.peakCold))}`,
+    )
+    expect(struck).toBeGreaterThanOrEqual(Math.ceil(reports.length / 8))
+    expect(frozen).toBeGreaterThanOrEqual(struck)
+    // Punishing, not a death sentence: careless runs still reach a verdict in time.
+    for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
+  }, 300_000)
 
   it('grows a settlement past its starting six villagers', () => {
     const s = createRun({ seed: 4242, species: ['human', 'fox', 'harpy'] })

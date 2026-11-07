@@ -1,0 +1,207 @@
+import { BUILDINGS } from '../content/buildings'
+import { NEED_LABELS } from '../content/species'
+import type { RunState, ServiceNeed, SpeciesId } from '../types'
+import {
+  ARCHITECT_PLANS_GROWTH,
+  ARCHITECT_PLANS_PRICE,
+  PETITION_AMBER,
+  PETITION_BROKEN_IMPATIENCE,
+  PETITION_FROM_YEAR,
+  PETITION_KEPT_RELIEF,
+  PETITION_RELIEF,
+  PETITION_VOW_REPUTATION,
+  PETITION_VOW_SECONDS,
+  PETITION_WITHIN,
+  RETREAT_IMPATIENCE_SHARE,
+  RETREAT_REPUTATION_SHORT,
+} from './balance'
+import { chainPieceFor, relevantBlueprints, serviceDemand } from './events'
+import { spend } from './queries'
+import { pushLog } from './runLog'
+import { addImpatience } from './society'
+
+/**
+ * The player's levers on a run that is going wrong, all paid for:
+ *
+ *  - **The Queen's Architect** (at the hearth) sells plans — the next
+ *    blueprint of a service the settlement needs, named by the player — at a
+ *    price that climbs with every set. It is the amber sink every run has,
+ *    caravans or not, and the way to steer a draft that keeps missing. (A
+ *    redraw toward a named service, on an open draft, is `redrawToward` in
+ *    `events.ts`.)
+ *  - **The Grand Petition**, once per run when the Queen's patience is nearly
+ *    spent: a costly plea that buys back impatience on a vow of reputation
+ *    within a time limit. Break the vow and her patience snaps back harder.
+ *  - **The Retreat to the Citadel**, offered once a run is lost in all but
+ *    name: end it now and send home what it has earned, rather than wait for
+ *    the Queen's patience to run out.
+ */
+
+// ---------------------------------------------------------------------------
+// The Queen's Architect
+// ---------------------------------------------------------------------------
+
+export interface ArchitectOffer {
+  need: ServiceNeed
+  /** The blueprint the plans would be for (see `chainPieceFor`). */
+  piece: string
+  /** The run's species that want this service. */
+  species: SpeciesId[]
+}
+
+/** Amber for the next set of plans. */
+export function architectPrice(s: RunState): number {
+  return ARCHITECT_PLANS_PRICE + (s.architectPlans ?? 0) * ARCHITECT_PLANS_GROWTH
+}
+
+/**
+ * What the architect can draw up: one set of plans per service the run's
+ * species want whose chain still has a locked piece — the most useful first
+ * (the order the draft ranks pieces in), then the rest by how many species
+ * want them.
+ */
+export function architectOffers(s: RunState): ArchitectOffer[] {
+  const ranked = relevantBlueprints(s)
+  const rank = (id: string) => {
+    const i = ranked.indexOf(id)
+    return i < 0 ? ranked.length : i
+  }
+  const offers: ArchitectOffer[] = []
+  for (const [need, species] of serviceDemand(s.speciesPool)) {
+    const piece = chainPieceFor(s, need)
+    if (piece) offers.push({ need, piece, species })
+  }
+  return offers.sort((a, b) => rank(a.piece) - rank(b.piece) || b.species.length - a.species.length)
+}
+
+/** Why plans cannot be bought right now, or `null`. */
+export function architectBlocked(s: RunState, need?: ServiceNeed): string | null {
+  if (s.phase !== 'playing') return 'The run is over.'
+  if (s.pendingChoices.some((c) => c.kind === 'blueprint')) return 'Finish the open blueprint draft first.'
+  const offers = architectOffers(s)
+  if (offers.length === 0) return 'Every service your settlers want can already be built.'
+  if (need && !offers.some((o) => o.need === need)) return 'Nothing more of that service can be drafted.'
+  if ((s.stock.amber ?? 0) < architectPrice(s)) return 'Not enough amber.'
+  return null
+}
+
+/** Buys the architect's plans for `need`: its next blueprint, unlocked at once. */
+export function buyArchitectPlans(s: RunState, need: ServiceNeed): string | null {
+  const blocked = architectBlocked(s, need)
+  if (blocked) return blocked
+  const offer = architectOffers(s).find((o) => o.need === need)
+  if (!offer) return 'Nothing more of that service can be drafted.'
+  const price = architectPrice(s)
+  spend(s.stock, { amber: price })
+  s.architectPlans = (s.architectPlans ?? 0) + 1
+  s.unlockedBuildings.push(offer.piece)
+  pushLog(
+    s,
+    `📐 The Queen's architect hands over plans for a ${BUILDINGS[offer.piece]?.name ?? offer.piece} (${NEED_LABELS[need]?.name ?? need}), for ${price} amber.`,
+    'good',
+  )
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// The Grand Petition
+// ---------------------------------------------------------------------------
+
+/** Impatience at which the petition opens. */
+export function petitionThreshold(s: RunState): number {
+  return s.maxImpatience - PETITION_WITHIN
+}
+
+/**
+ * Why the Grand Petition cannot be made right now, or `null`. `'used'` and
+ * `'early'` say it is not on offer at all (the UI hides it); the rest are
+ * shortfalls worth showing.
+ */
+export function petitionBlocked(s: RunState): 'used' | 'early' | 'amber' | null {
+  if (s.petition || s.phase !== 'playing') return 'used'
+  if (s.season.year < PETITION_FROM_YEAR) return 'early'
+  if (s.impatience + s.impatienceProgress < petitionThreshold(s)) return 'early'
+  if ((s.stock.amber ?? 0) < PETITION_AMBER) return 'amber'
+  return null
+}
+
+/** True while the petition is on offer (affordable or not). */
+export function petitionOpen(s: RunState): boolean {
+  const blocked = petitionBlocked(s)
+  return blocked === null || blocked === 'amber'
+}
+
+/**
+ * Makes the Grand Petition: pays its price; the Queen forgives
+ * `PETITION_RELIEF` impatience and restarts her count of reputation standing
+ * still, on a vow of `PETITION_VOW_REPUTATION` reputation within
+ * `PETITION_VOW_SECONDS`.
+ */
+export function grandPetition(s: RunState): string | null {
+  const blocked = petitionBlocked(s)
+  if (blocked === 'used') return 'The Queen hears one Grand Petition a run.'
+  if (blocked === 'early') return 'The Queen will not hear a Grand Petition yet.'
+  if (blocked === 'amber') return 'Not enough amber.'
+  spend(s.stock, { amber: PETITION_AMBER })
+  addImpatience(s, -PETITION_RELIEF)
+  // A fresh hearing: the stagnation count starts again from now.
+  s.reputationRise = { at: s.clock, level: s.reputation }
+  s.petition = {
+    at: s.clock,
+    deadline: s.clock + PETITION_VOW_SECONDS,
+    target: Math.min(s.maxReputation, s.reputation + PETITION_VOW_REPUTATION),
+  }
+  pushLog(
+    s,
+    `🕊️ The Queen grants your Grand Petition: −${PETITION_RELIEF} impatience, on your vow of ${PETITION_VOW_REPUTATION} reputation within ${PETITION_VOW_SECONDS / 60} minutes.`,
+    'good',
+  )
+  return null
+}
+
+/** Seconds left on a live vow (0 when there is none). */
+export function petitionVowLeft(s: RunState): number {
+  const p = s.petition
+  return p && !p.outcome ? Math.max(0, p.deadline - s.clock) : 0
+}
+
+/** Judges a live vow: kept the moment reputation reaches it, broken when time runs out. */
+export function stepPetition(s: RunState): void {
+  const p = s.petition
+  if (!p || p.outcome) return
+  if (s.reputation >= p.target) {
+    p.outcome = 'kept'
+    addImpatience(s, -PETITION_KEPT_RELIEF)
+    pushLog(s, `🕊️ Your vow to the Queen is kept. She is gracious: −${PETITION_KEPT_RELIEF} impatience.`, 'good')
+  } else if (s.clock >= p.deadline) {
+    p.outcome = 'broken'
+    addImpatience(s, PETITION_BROKEN_IMPATIENCE)
+    pushLog(s, `💢 Your vow to the Queen is broken. Her patience snaps: +${PETITION_BROKEN_IMPATIENCE} impatience.`, 'bad')
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The Retreat to the Citadel
+// ---------------------------------------------------------------------------
+
+/** True once the run is lost in all but name, and the Retreat is offered. */
+export function retreatOffered(s: RunState): boolean {
+  if (s.phase !== 'playing' || s.clock <= 0) return false
+  const impatience = s.impatience + s.impatienceProgress
+  return (
+    impatience >= s.maxImpatience * RETREAT_IMPATIENCE_SHARE &&
+    s.maxReputation - s.reputation >= RETREAT_REPUTATION_SHORT
+  )
+}
+
+/**
+ * Retreats to the Citadel: the run ends now, as a loss, and sends home the
+ * supplies it has earned so far.
+ */
+export function retreatToCitadel(s: RunState): string | null {
+  if (!retreatOffered(s)) return 'The settlement can still be held.'
+  s.phase = 'lost'
+  s.retreated = true
+  pushLog(s, `🏰 You lead the settlers home to the Citadel. The settlement is given back to the forest.`, 'info')
+  return null
+}

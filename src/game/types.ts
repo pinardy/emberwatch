@@ -869,6 +869,22 @@ export type TradeAgreementId = 'provisioners' | 'barges' | 'factors'
  * The optional fields are the amber levers added later; older saves load
  * without them and read as "none yet".
  */
+/**
+ * The Grand Petition: a once-per-run plea made when the Queen's patience is
+ * nearly spent. She forgives some impatience and grants a fresh hearing on
+ * a vow — reputation within a time limit — and breaking it costs dearly.
+ */
+export interface GrandPetition {
+  /** Clock second it was granted. */
+  at: number
+  /** Clock second the vow falls due. */
+  deadline: number
+  /** Reputation the vow is met at (the level when granted plus the vow). */
+  target: number
+  /** Live until judged. */
+  outcome?: 'kept' | 'broken'
+}
+
 export interface CaravanState {
   here: boolean
   /** Seconds until arrival while away; seconds until departure while here. */
@@ -1117,6 +1133,18 @@ export interface RunState {
   /** Amber sinks scale with use, so these count uses. */
   rerollsUsed: number
   soothesUsed: number
+  /**
+   * Plans bought from the Queen's Architect at the hearth (each dearer than
+   * the last). Absent on older saves (reads as 0).
+   */
+  architectPlans?: number
+  /** The run's Grand Petition, once made (once per run). */
+  petition?: GrandPetition
+  /**
+   * The run was ended by a Retreat to the Citadel rather than by the Queen's
+   * patience running out (`phase` is still `'lost'`).
+   */
+  retreated?: boolean
 
   /** FIFO queue — a glade event and a reputation milestone can land together. */
   pendingChoices: PendingChoice[]
