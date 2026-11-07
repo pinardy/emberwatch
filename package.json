@@ -12,7 +12,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --project sim --project ui",
+    "test:balance": "vitest run --project balance",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
   },
