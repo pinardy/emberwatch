@@ -55,7 +55,10 @@ export interface FrameDerived {
     departures: Partial<Record<SpeciesId, number>>
     deadline: DeadlineForecast
   }
-  /** `buildingStatus(run, b, mods, storageUsed)`, remembered per building. */
+  /**
+   * `buildingStatus(run, b, mods, storageUsed)`. The first lookup fills in
+   * every building's at once, so a pass over the settlement is linear.
+   */
   status(b: BuildingInstance): BuildingStatus
 }
 
@@ -148,14 +151,30 @@ class Derived implements FrameDerived {
     })
   }
 
+  /**
+   * Every building's status is filled in on the first lookup, inside one
+   * run-cache scope: opening a scope checks every building against the
+   * cache's snapshot, so a scope per lookup made a map's pass over the
+   * settlement quadratic. A building that is not in the run (none should be)
+   * gets its own scope.
+   */
   status(b: BuildingInstance): BuildingStatus {
     let hit = this.statuses.get(b)
-    if (!hit) {
-      const mods = this.mods
-      const used = this.storageUsed
-      hit = withRunCache(this.run, () => buildingStatus(this.run, b, mods, used))
-      this.statuses.set(b, hit)
+    if (hit) return hit
+    const run = this.run
+    const mods = this.mods
+    const used = this.storageUsed
+    if (this.statuses.size === 0) {
+      withRunCache(run, () => {
+        for (const each of Object.values(run.buildings)) {
+          this.statuses.set(each, buildingStatus(run, each, mods, used))
+        }
+      })
+      hit = this.statuses.get(b)
+      if (hit) return hit
     }
+    hit = withRunCache(run, () => buildingStatus(run, b, mods, used))
+    this.statuses.set(b, hit)
     return hit
   }
 }

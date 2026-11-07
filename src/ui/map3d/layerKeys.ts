@@ -1,6 +1,5 @@
 import { BUILDINGS } from '../../game/content/buildings'
 import { warmthSources } from '../../game/engine/queries'
-import { withRunCache } from '../../game/engine/runCache'
 import { frameDerived } from '../../game/frameDerived'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, RunState } from '../../game/types'
@@ -94,14 +93,9 @@ export interface BuildingView {
 
 /**
  * Every building's view. Statuses come from the shared per-step derivations
- * (`frameDerived`), so the maps and the HUD compute them once per version;
- * one run-cache scope around the batch spares each status its own cache check.
+ * (`frameDerived`), so the maps and the HUD compute them once per version.
  */
 export function buildingViews(run: RunState, version: number): BuildingView[] {
-  return withRunCache(run, () => views(run, version))
-}
-
-function views(run: RunState, version: number): BuildingView[] {
   const derived = frameDerived(run, version)
   const sources = warmthSources(run)
   return Object.values(run.buildings).map((building) => {
