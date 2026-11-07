@@ -456,7 +456,7 @@ export function settlementServiceGoods(s: RunState): ResourceId[] {
 }
 
 /** True when some building this run can raise makes `good`. */
-function canMake(s: RunState, good: ResourceId): boolean {
+function hasBlueprintFor(s: RunState, good: ResourceId): boolean {
   return s.unlockedBuildings.some((id) =>
     BUILDINGS[id]?.recipes.some((r) => ((r.outputs as Record<string, number>)[good] ?? 0) > 0),
   )
@@ -468,7 +468,7 @@ function canMake(s: RunState, good: ResourceId): boolean {
  */
 export function provisionsGood(s: RunState): ResourceId | null {
   const goods = settlementServiceGoods(s)
-  return goods.find((g) => !canMake(s, g)) ?? goods[0] ?? null
+  return goods.find((g) => !hasBlueprintFor(s, g)) ?? goods[0] ?? null
 }
 
 function addProvisions(s: RunState): void {

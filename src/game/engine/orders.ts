@@ -91,7 +91,7 @@ function depositExists(s: RunState, kind: DepositId): boolean {
  * has, from inputs that can themselves be made. Tools need a toolshop *and*
  * a smelter *and* a copper mine on an ore seam.
  */
-export function canMake(s: RunState, resource: ResourceId, seen: ReadonlySet<string> = new Set()): boolean {
+export function hasProductionChain(s: RunState, resource: ResourceId, seen: ReadonlySet<string> = new Set()): boolean {
   if (seen.has(resource)) return false
   const path = new Set(seen).add(resource)
   for (const id of s.unlockedBuildings) {
@@ -101,7 +101,7 @@ export function canMake(s: RunState, resource: ResourceId, seen: ReadonlySet<str
       if (((recipe.outputs as Record<string, number>)[resource] ?? 0) <= 0) continue
       if (recipe.requiresDeposit && !depositExists(s, recipe.requiresDeposit)) continue
       const inputs = Object.keys(recipe.inputs) as ResourceId[]
-      if (inputs.every((input) => canMake(s, input, path))) return true
+      if (inputs.every((input) => hasProductionChain(s, input, path))) return true
     }
   }
   return false
@@ -112,10 +112,10 @@ export function orderFeasible(goal: OrderGoal, s: RunState): boolean {
   switch (goal.kind) {
     case 'stock':
     case 'produced':
-      return canMake(s, goal.resource)
+      return hasProductionChain(s, goal.resource)
     case 'stockCategory':
     case 'producedCategory':
-      return RESOURCE_LIST.some((r) => r.category === goal.category && canMake(s, r.id))
+      return RESOURCE_LIST.some((r) => r.category === goal.category && hasProductionChain(s, r.id))
     case 'buildingId':
       return s.unlockedBuildings.includes(goal.buildingId)
     case 'buildingsOfCategory':

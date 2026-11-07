@@ -60,8 +60,11 @@ export interface Pose {
   moving: boolean
 }
 
-/** Stable 0..1 hash of a string and a salt (FNV-1a). */
-export function hash01(key: string, salt: number): number {
+/**
+ * Stable 0..1 hash of a string and a salt (FNV-1a), for walking routes. It
+ * mixes differently from map3d's `hash01`, so the two are not interchangeable.
+ */
+export function routeHash01(key: string, salt: number): number {
   let h = 2166136261 ^ salt
   for (let i = 0; i < key.length; i++) {
     h ^= key.charCodeAt(i)
@@ -80,8 +83,8 @@ function footprint(b: BuildingInstance): number {
 
 /** A spot just outside a building's footprint, different per villager. */
 function doorstep(b: BuildingInstance, villagerId: string, salt: number, spread = 0.12): Vec2 {
-  const angle = hash01(villagerId, salt) * Math.PI * 2
-  const r = footprint(b) + 0.18 + hash01(villagerId, salt + 1) * spread
+  const angle = routeHash01(villagerId, salt) * Math.PI * 2
+  const r = footprint(b) + 0.18 + routeHash01(villagerId, salt + 1) * spread
   return { x: b.pos.x + Math.cos(angle) * r, y: b.pos.y + Math.sin(angle) * r }
 }
 
@@ -279,7 +282,7 @@ export function deriveVillagerRoutes(run: RunState, net: RoadNetwork = roadNetwo
   const circles = Object.values(run.buildings).map((b) => ({ pos: b.pos, r: footprint(b) }))
   const fire = (id: string, salt: number): Vec2 => {
     if (hearth) return doorstep(hearth, id, salt, 1.1)
-    const angle = hash01(id, salt) * Math.PI * 2
+    const angle = routeHash01(id, salt) * Math.PI * 2
     return { x: Math.cos(angle) * 1.6, y: Math.sin(angle) * 1.6 }
   }
 
@@ -292,7 +295,7 @@ export function deriveVillagerRoutes(run: RunState, net: RoadNetwork = roadNetwo
     const assignment = v.assignment
     if (assignment?.startsWith('clearing:')) {
       const glade = run.glades[assignment.slice('clearing:'.length)]
-      const angle = hash01(v.id, 31) * Math.PI * 2
+      const angle = routeHash01(v.id, 31) * Math.PI * 2
       const spot = glade
         ? { x: glade.center.x + Math.cos(angle) * 0.9, y: glade.center.y + Math.sin(angle) * 0.9 }
         : meal
@@ -331,7 +334,7 @@ export function deriveVillagerRoutes(run: RunState, net: RoadNetwork = roadNetwo
       id: v.id,
       species: v.species,
       ...line,
-      phase: hash01(v.id, 71) * line.period,
+      phase: routeHash01(v.id, 71) * line.period,
       rest,
     }
   })

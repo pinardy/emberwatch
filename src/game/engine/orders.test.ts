@@ -23,7 +23,7 @@ import { productionRate } from './forecast'
 import { computeModifiers } from './modifiers'
 import {
   DECLINE_CHOICE,
-  canMake,
+  hasProductionChain,
   drawOrder,
   isWritChoice,
   offerOrders,
@@ -122,21 +122,21 @@ describe('order draws', () => {
   it('only offers goals the settlement has a whole chain for', () => {
     const s = openedRun()
     s.unlockedBuildings = [...STARTING_BLUEPRINTS]
-    expect(canMake(s, 'wood')).toBe(true)
-    expect(canMake(s, 'tool')).toBe(false)
-    expect(canMake(s, 'plank')).toBe(true)
-    expect(canMake(s, 'ale')).toBe(false)
+    expect(hasProductionChain(s, 'wood')).toBe(true)
+    expect(hasProductionChain(s, 'tool')).toBe(false)
+    expect(hasProductionChain(s, 'plank')).toBe(true)
+    expect(hasProductionChain(s, 'ale')).toBe(false)
     // A toolshop alone is not a route to tools: the bars need a smelter and
     // the ore a mine on a seam.
     s.unlockedBuildings.push('toolshop')
-    expect(canMake(s, 'tool')).toBe(false)
+    expect(hasProductionChain(s, 'tool')).toBe(false)
     s.unlockedBuildings.push('smelter', 'copperMine')
     const hasOre = Object.values(s.deposits).some((d) => d.kind === 'orePatch')
-    expect(canMake(s, 'tool')).toBe(hasOre)
+    expect(hasProductionChain(s, 'tool')).toBe(hasOre)
     // Without an ore seam anywhere on the map, no copper chain exists.
     const deposits = s.deposits
     s.deposits = Object.fromEntries(Object.entries(deposits).filter(([, d]) => d.kind !== 'orePatch'))
-    expect(canMake(s, 'tool')).toBe(false)
+    expect(hasProductionChain(s, 'tool')).toBe(false)
     expect(orderEligible(ORDERS.stock_tool_8.goal, s)).toBe(false)
     expect(orderEligible(ORDERS.ship_tool_8.goal, s)).toBe(false)
     s.deposits = deposits
