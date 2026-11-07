@@ -29,13 +29,12 @@ import { BASE_DRAFT_OPTIONS, cornerstonePool, gladeEventOptions } from './engine
 import { createRun } from './engine/createRun'
 import {
   offerBlueprint,
-  optionAffordable,
   offerCornerstone,
   rerollChoice,
   rerollCost,
-  resolveGladeEvent,
   takeChoice,
-} from './engine/events'
+} from './engine/drafts'
+import { optionAffordable, resolveGladeEvent } from './engine/glades'
 import { computeModifiers } from './engine/modifiers'
 import { loadMeta, loadRun, saveMeta, saveRun } from './persistence'
 import { useGameStore } from './store'

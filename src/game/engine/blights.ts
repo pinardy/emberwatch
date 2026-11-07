@@ -8,7 +8,7 @@ import {
 } from './balance'
 import { pushLog } from './runLog'
 import { makeRng } from './rng'
-import { addCondition, applyOutcome } from './structure'
+import { addCondition, applyOutcome } from './outcomes'
 
 /**
  * Storm blights: the forest's hostility made concrete. At each Clearance one

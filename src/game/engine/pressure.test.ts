@@ -23,18 +23,10 @@ import { announceBlight, blightPrepAmount, blightsAt, pendingBlight } from './bl
 import { blueprintDraftSize } from './citadel'
 import { createRun } from './createRun'
 import { collectWarnings } from './diagnostics'
-import {
-  describeStakes,
-  draftOwesChain,
-  gladeStakes,
-  offerBlueprint,
-  relevantBlueprints,
-  rerollChoice,
-  resolveGladeEvent,
-  stepThreats,
-  takeChoice,
-  unleashThreat,
-} from './events'
+import { describeStakes, gladeStakes, resolveGladeEvent } from './glades'
+import { draftOwesChain, offerBlueprint, rerollChoice, takeChoice } from './drafts'
+import { relevantBlueprints } from './serviceChains'
+import { stepThreats, unleashThreat } from './threats'
 import { buildingStatus } from './forecast'
 import { computeModifiers } from './modifiers'
 import { larderHeadroom, stepProduction, storageLimitFor } from './production'

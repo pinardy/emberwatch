@@ -15,7 +15,7 @@ import {
 } from './content/achievements'
 import { BUILDINGS, BUILDING_LIST } from './content/buildings'
 import { META_VERSION, bankRun, defaultMeta, migrateMeta, supplyReward } from './content/meta'
-import { appeaseThreat } from './engine/events'
+import { appeaseThreat } from './engine/threats'
 import { createRun } from './engine/createRun'
 import { stepDecree } from './engine/structure'
 import { tick } from './engine/tick'

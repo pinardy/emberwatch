@@ -30,13 +30,9 @@ import {
   upgradeBuilding,
 } from './engine/actions'
 import { ROAD_MIN_LENGTH, SPEED_OPTIONS, TICK_SECONDS, type GameSpeed } from './engine/balance'
-import {
-  appeaseThreat,
-  redrawToward,
-  rerollChoice,
-  resolveGladeEvent,
-  takeChoice,
-} from './engine/events'
+import { appeaseThreat } from './engine/threats'
+import { redrawToward, rerollChoice, takeChoice } from './engine/drafts'
+import { resolveGladeEvent } from './engine/glades'
 import { buyArchitectPlans, grandPetition, retreatToCitadel } from './engine/levers'
 import { takeOrderOffer } from './engine/orders'
 import { randomSeed } from './engine/rng'

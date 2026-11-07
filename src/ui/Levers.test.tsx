@@ -8,7 +8,7 @@ import {
   PETITION_RELIEF,
   YEAR_SECONDS,
 } from '../game/engine/balance'
-import { offerBlueprint, targetedRedrawCost } from '../game/engine/events'
+import { offerBlueprint, targetedRedrawCost } from '../game/engine/drafts'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { ChoiceModal } from './ChoiceModal'

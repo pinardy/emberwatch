@@ -1,6 +1,6 @@
 import { NEED_ART } from '../game/content/art'
 import { NEED_LABELS } from '../game/content/species'
-import { draftAppeal } from '../game/engine/events'
+import { draftAppeal } from '../game/engine/serviceChains'
 import type { RunState, ServiceNeed } from '../game/types'
 import { Icon } from './Icon'
 

@@ -15,7 +15,7 @@ import {
   RETREAT_IMPATIENCE_SHARE,
   RETREAT_REPUTATION_SHORT,
 } from './balance'
-import { chainPieceFor, relevantBlueprints, serviceDemand } from './events'
+import { chainPieceFor, relevantBlueprints, serviceDemand } from './serviceChains'
 import { spend } from './queries'
 import { pushLog } from './runLog'
 import { addImpatience } from './society'

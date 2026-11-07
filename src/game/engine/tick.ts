@@ -17,12 +17,10 @@ import {
   forecastStormBlight,
   passStormConditions,
 } from './blights'
-import {
-  checkMilestones,
-  stepClearing,
-  stepNewcomers,
-  stepThreats,
-} from './events'
+import { checkMilestones } from './drafts'
+import { stepClearing } from './glades'
+import { stepNewcomers } from './newcomers'
+import { stepThreats } from './threats'
 import { stepOrders } from './orders'
 import { computeModifiers, seasonLengthFor, type Modifiers } from './modifiers'
 import { stepProduction } from './production'

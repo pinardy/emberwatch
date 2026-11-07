@@ -19,7 +19,7 @@ import {
 } from './actions'
 import { DEMOLISH_REFUND_BUILT, RUSH_COST_PER_SECOND } from './balance'
 import { createRun } from './createRun'
-import { takeChoice } from './events'
+import { takeChoice } from './drafts'
 import { buildingStatus } from './forecast'
 import { computeModifiers } from './modifiers'
 import { stepProduction, workRate } from './production'

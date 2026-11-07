@@ -27,7 +27,7 @@ import {
   YEAR_SECONDS,
   VILLAGER_TRAIT_CHANCE,
 } from './balance'
-import { offerBlueprint, offerCornerstone } from './events'
+import { offerBlueprint, offerCornerstone } from './drafts'
 import { drawOrder, offerWrit } from './orders'
 import { markFounding } from './founding'
 import { defaultDecreeState } from './structure'

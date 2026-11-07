@@ -51,7 +51,7 @@ import type {
 import { ScoutReport } from './ScoutReport'
 import { DumpStock } from './DumpStock'
 import { ArchitectSection } from './ArchitectSection'
-import { describeStakes, gladeStakes } from '../game/engine/events'
+import { describeStakes, gladeStakes } from '../game/engine/glades'
 import { againWord, useConfirm } from './useConfirm'
 import { UpgradeSection } from './UpgradeSection'
 import {

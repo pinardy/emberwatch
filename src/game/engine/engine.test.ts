@@ -52,20 +52,17 @@ import { collectWarnings } from './diagnostics'
 import { hearthForecast } from './forecast'
 import { describePlacement } from './placement'
 import { createRun } from './createRun'
+import { addVillager } from './newcomers'
+import { appeaseThreat, stepThreats } from './threats'
 import {
-  addVillager,
-  appeaseThreat,
   describeOptionCost,
   describeOptionShortfall,
   optionAffordable,
-  relevantBlueprints,
-  rerollChoice,
-  rerollCost,
   resolveGladeEvent,
   spendFood,
-  stepThreats,
-  takeChoice,
-} from './events'
+} from './glades'
+import { relevantBlueprints } from './serviceChains'
+import { rerollChoice, rerollCost, takeChoice } from './drafts'
 import { dist, pointInPolygon } from './geometry'
 import { gladeAt } from './mapgen'
 import { computeModifiers } from './modifiers'

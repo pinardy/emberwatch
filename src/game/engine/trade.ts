@@ -21,7 +21,7 @@ import {
   TRADE_LOT,
 } from './balance'
 import { cornerstonePool } from './citadel'
-import { relevantBlueprints } from './events'
+import { relevantBlueprints } from './serviceChains'
 import { pushLog } from './runLog'
 import { computeModifiers, type Modifiers } from './modifiers'
 import { canAfford, grant, spend, storageUsed } from './queries'

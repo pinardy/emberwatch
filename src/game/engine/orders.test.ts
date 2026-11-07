@@ -18,7 +18,7 @@ import {
   REWARD_MILESTONES,
 } from './balance'
 import { createRun } from './createRun'
-import { checkMilestones, takeChoice } from './events'
+import { checkMilestones, takeChoice } from './drafts'
 import { productionRate } from './forecast'
 import { computeModifiers } from './modifiers'
 import {

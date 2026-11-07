@@ -9,7 +9,8 @@ import type { RunState } from '../types'
 import { findPlacement, placeBuilding } from './actions'
 import { CARAVAN_INTERVAL, CARAVAN_OFFERS, CARAVAN_STAY, CARAVAN_WANT_BONUS, TRADE_LOT } from './balance'
 import { createRun } from './createRun'
-import { relevantBlueprints, takeChoice } from './events'
+import { relevantBlueprints } from './serviceChains'
+import { takeChoice } from './drafts'
 import { storageUsed } from './queries'
 import {
   AGREEMENT_PRICE,
