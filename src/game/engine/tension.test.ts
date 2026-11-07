@@ -43,7 +43,8 @@ import {
   stagnationImpatienceRate,
   stepFrost,
 } from './society'
-import { hostilityGrowth, hostilityRate, sparedGladeCalmOf, tick } from './tick'
+import { tick } from './tick'
+import { hostilityGrowth, hostilityRate, sparedGladeCalmOf } from './hostility'
 
 /**
  * Mid-run tension: a Queen who minds reputation standing still, expectations

@@ -16,7 +16,7 @@ import {
   HOSTILITY_RATE_PER_CLEARED_GLADE,
   SPARED_GLADE_RECLAIM_HOSTILITY,
 } from '../game/engine/balance'
-import { sparedGladeCalmOf } from '../game/engine/tick'
+import { sparedGladeCalmOf } from '../game/engine/hostility'
 import { DEPOSIT_INFO } from '../game/engine/mapgen'
 import { computeModifiers } from '../game/engine/modifiers'
 import { availableRecipes, idleVillagers } from '../game/engine/queries'
