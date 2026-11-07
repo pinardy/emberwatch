@@ -547,9 +547,11 @@ export const LARDER_HEADROOM_MIN = 20
 
 /**
  * Blueprint drafts in a row that may pass without offering a piece of a
- * wanted service chain; the next one guarantees one.
+ * wanted service chain; the next one guarantees one. Two since a draft can be
+ * steered for amber (a redraw toward a named service, or the architect's
+ * plans at the hearth), so the free guarantee comes later.
  */
-export const DRAFT_PITY = 1
+export const DRAFT_PITY = 2
 
 /**
  * Hostility one firekeeper's offering at the hearth calms (two herbs, every
@@ -590,8 +592,13 @@ export const IMPATIENCE_STAGNATION_MAX = 0.008
  * as much) — what pleased a young settlement is taken for granted later, so
  * resolve does not plateau far above the reputation threshold once services
  * stand, and a service lost late hurts more than one never built…
+ *
+ * Raised from 3 when the Queen's Architect and the targeted redraw let a
+ * player buy the service chains the draft withheld: with fewer needs left
+ * unserved, the late game asks more of the services that stand (tuned with
+ * the balance harness back to ~75%).
  */
-export const RESOLVE_EXPECTATION_PER_YEAR = 3
+export const RESOLVE_EXPECTATION_PER_YEAR = 4
 /**
  * …and this much per villager past `RESOLVE_EXPECTATION_CROWD_FROM`: a bigger
  * settlement expects more of its viceroy.
@@ -638,3 +645,43 @@ export const HEARTH_REACH_STEP = 0.25
  * minute; exposure clears when the Storm passes.
  */
 export const FROST_EXPOSURE_PER_LOSS = 360
+
+// ---------------------------------------------------------------------------
+// Levers: the Queen's Architect (an amber sink at the hearth that steers the
+// draft), the Grand Petition (a last-chance gamble) and the Retreat to the
+// Citadel (an honourable early end). See `levers.ts`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Amber for the architect's plans — a blueprint toward a service of your
+ * choosing, bought at the hearth — before any is bought, and the rise with
+ * each. Dearer than a caravan's rare blueprint (100, +50), so the Trading
+ * Post keeps its own bargains, and steep enough that a second set of plans
+ * costs most of a run's amber.
+ */
+export const ARCHITECT_PLANS_PRICE = 140
+export const ARCHITECT_PLANS_GROWTH = 70
+/** Added to the reroll price for a redraw toward a named service. */
+export const TARGETED_REDRAW_SURCHARGE = 25
+
+/** The Grand Petition opens once impatience is within this much of the limit… */
+export const PETITION_WITHIN = 5
+/** …from this year (once per run), for this much amber. */
+export const PETITION_FROM_YEAR = 2
+export const PETITION_AMBER = 120
+/** Impatience the Queen forgives when she grants it. */
+export const PETITION_RELIEF = 5
+/** The vow: this much reputation, earned within this many seconds… */
+export const PETITION_VOW_REPUTATION = 3
+export const PETITION_VOW_SECONDS = 360
+/** …or her patience snaps back by this much more. A vow kept forgives a little more. */
+export const PETITION_BROKEN_IMPATIENCE = 6
+export const PETITION_KEPT_RELIEF = 1
+
+/**
+ * The Retreat to the Citadel is offered once the Queen's impatience has
+ * passed this share of the limit while reputation is still at least this many
+ * points short of victory: the run is lost in all but name.
+ */
+export const RETREAT_IMPATIENCE_SHARE = 0.7
+export const RETREAT_REPUTATION_SHORT = 6

@@ -25,6 +25,7 @@ import {
   REROLL_BASE_COST,
   REROLL_COST_GROWTH,
   REWARD_MILESTONES,
+  TARGETED_REDRAW_SURCHARGE,
   THREAT_APPEASE_GROWTH,
   THREAT_STRIKE_GROWTH,
   THREAT_STRIKES_BEFORE_LOSS,
@@ -518,6 +519,27 @@ export function relevantBlueprints(s: RunState): string[] {
   )
 }
 
+/**
+ * The next locked blueprint of `need`'s chain: its venue while none is
+ * unlocked, then a workshop for a good that venue hands out and nothing here
+ * makes yet. `null` once the chain is whole (or nothing of it can be drafted).
+ * Ordered the way the draft ranks pieces, so the same chain always asks for
+ * the same next piece.
+ */
+export function chainPieceFor(s: RunState, need: ServiceNeed): string | null {
+  const drafted = (id: string) => s.unlockedBuildings.includes(id)
+  const venues = BUILDING_LIST.filter((b) => b.service?.need === need)
+  const venue = venues.find((v) => drafted(v.id))
+  if (!venue) return venues.find((v) => BLUEPRINT_POOL.includes(v.id))?.id ?? null
+  for (const good of serviceGoods(venue.id)) {
+    const producers = producersOf(good)
+    if (producers.some((p) => drafted(p.id))) continue
+    const piece = producers.find((p) => BLUEPRINT_POOL.includes(p.id))
+    if (piece) return piece.id
+  }
+  return null
+}
+
 /** Which of these species want each service need, in need order of first appearance. */
 export function serviceDemand(species: SpeciesId[]): Map<ServiceNeed, SpeciesId[]> {
   const demand = new Map<ServiceNeed, SpeciesId[]>()
@@ -591,7 +613,16 @@ export function draftOwesChain(s: RunState): boolean {
 function buildBlueprintOptions(
   s: RunState,
   mixed: boolean,
-  { exclude = [], pity = true }: { exclude?: string[]; pity?: boolean } = {},
+  {
+    exclude = [],
+    pity = true,
+    force,
+  }: {
+    exclude?: string[]
+    pity?: boolean
+    /** A blueprint that must be among the options (a targeted redraw). */
+    force?: string
+  } = {},
 ): string[] {
   const rng = makeRng(s.seed, s.rngCursor)
   const pool = BLUEPRINT_POOL.filter(
@@ -607,7 +638,8 @@ function buildBlueprintOptions(
   const options: string[] = []
   // `relevantBlueprints` is priority-ordered, so take from the front.
   const relevant = relevantBlueprints(s).filter((id) => !exclude.includes(id))
-  if (pity && relevant.length > 0 && draftOwesChain(s)) options.push(relevant[0])
+  if (force && pool.includes(force)) options.push(force)
+  else if (pity && relevant.length > 0 && draftOwesChain(s)) options.push(relevant[0])
   for (const id of rng.shuffle(pool)) {
     if (options.length >= blueprintSlots) break
     if (!options.includes(id)) options.push(id)
@@ -766,6 +798,62 @@ export function rerollChoice(s: RunState, index = 0): string | null {
   spend(s.stock, { amber: cost })
   s.rerollsUsed++
   pushLog(s, `The offer is redrawn for ${cost} amber.`, 'info')
+  return null
+}
+
+/**
+ * Amber for a targeted redraw — asking the Queen's architect for a blueprint
+ * toward one service. It rides the reroll ladder (and steepens it), plus a
+ * surcharge, and a Citadel free reroll does not cover it.
+ */
+export function targetedRedrawCost(s: RunState): number {
+  return REROLL_BASE_COST + s.rerollsUsed * REROLL_COST_GROWTH + TARGETED_REDRAW_SURCHARGE
+}
+
+/**
+ * Services a targeted redraw of the draft at `index` could ask for: each need
+ * of the run's species whose chain still has a locked piece that the draft
+ * is not already showing, with that piece. Empty for anything but a
+ * blueprint draft.
+ */
+export function redrawTargets(s: RunState, index = 0): { need: ServiceNeed; piece: string }[] {
+  const choice = s.pendingChoices[index]
+  if (!choice || choice.kind !== 'blueprint') return []
+  const out: { need: ServiceNeed; piece: string }[] = []
+  for (const need of serviceDemand(s.speciesPool).keys()) {
+    const piece = chainPieceFor(s, need)
+    if (piece && !choice.options.includes(piece)) out.push({ need, piece })
+  }
+  return out
+}
+
+/**
+ * The targeted redraw: a fresh hand for the open blueprint draft, like a
+ * reroll, except that one card is the next piece of `need`'s chain (see
+ * `chainPieceFor`). The rest is drawn at random, so the draft is still a
+ * choice — and the pick can still be something else.
+ */
+export function redrawToward(s: RunState, need: ServiceNeed, index = 0): string | null {
+  const choice = s.pendingChoices[index]
+  if (!choice || choice.kind !== 'blueprint') return 'Only a blueprint draft can be redrawn toward a service.'
+  const target = redrawTargets(s, index).find((t) => t.need === need)
+  if (!target) return 'Nothing more of that service can be drafted here.'
+  const cost = targetedRedrawCost(s)
+  if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'
+  const fresh = buildBlueprintOptions(s, !!choice.mixed, {
+    exclude: choice.options.filter((id) => id !== target.piece),
+    pity: false,
+    force: target.piece,
+  })
+  if (!fresh.includes(target.piece)) return 'There is nothing else to offer.'
+  choice.options = fresh
+  spend(s.stock, { amber: cost })
+  s.rerollsUsed++
+  pushLog(
+    s,
+    `📐 The Queen's architect redraws the offer around ${BUILDINGS[target.piece]?.name ?? target.piece}, for ${cost} amber.`,
+    'info',
+  )
   return null
 }
 

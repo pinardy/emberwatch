@@ -5,7 +5,8 @@ import { BUILDINGS } from '../game/content/buildings'
 import { COMMISSIONS } from '../game/content/commissions'
 import { STORM_BLIGHT_LIST } from '../game/content/stormBlights'
 import { isReachable, spareGlade } from '../game/engine/actions'
-import { IMPATIENCE_STAGNATION_GRACE } from '../game/engine/balance'
+import { IMPATIENCE_STAGNATION_GRACE, PETITION_WITHIN, YEAR_SECONDS } from '../game/engine/balance'
+import { architectPrice, buyArchitectPlans, grandPetition } from '../game/engine/levers'
 import { announceBlight } from '../game/engine/blights'
 import { createRun } from '../game/engine/createRun'
 import { addVillager, takeChoice } from '../game/engine/events'
@@ -83,6 +84,9 @@ describe('tip list', () => {
       'stagnation',
       'expectations',
       'glade-truce',
+      'architect',
+      'grand-petition',
+      'retreat',
     ]) {
       expect(tipById(id), id).toBeTruthy()
     }
@@ -193,6 +197,45 @@ describe('tip triggers', () => {
     s.caravan.rare.sold = false
     s.caravan.here = false
     expect(fires(s, 'caravan-amber')).toBe(false)
+  })
+
+  it("the Queen's Architect: once plans are affordable, done once a set is bought", () => {
+    const s = newRun()
+    s.clock = 120
+    s.unlockedBuildings = s.unlockedBuildings.filter((id) => id !== 'tavern' && id !== 'brewery')
+    s.stock.amber = architectPrice(s) - 1
+    expect(fires(s, 'architect')).toBe(false)
+    s.stock.amber = architectPrice(s)
+    expect(fires(s, 'architect')).toBe(true)
+    expect(buyArchitectPlans(s, 'luxury')).toBeNull()
+    expect(fires(s, 'architect')).toBe(false)
+  })
+
+  it('the Grand Petition: while it is open, urgent, done once made', () => {
+    const s = newRun()
+    s.season.year = 4
+    s.clock = 3 * YEAR_SECONDS + 10
+    s.stock.amber = 500
+    s.impatience = s.maxImpatience - PETITION_WITHIN - 1
+    expect(fires(s, 'grand-petition')).toBe(false)
+    s.impatience = s.maxImpatience - PETITION_WITHIN
+    expect(fires(s, 'grand-petition')).toBe(true)
+    expect(fires(s, 'grand-petition', true)).toBe(true)
+    expect(grandPetition(s)).toBeNull()
+    expect(fires(s, 'grand-petition')).toBe(false)
+  })
+
+  it('the Retreat: while the run is lost in all but name', () => {
+    const s = newRun()
+    s.season.year = 5
+    s.clock = 4 * YEAR_SECONDS + 10
+    s.reputation = 10
+    s.impatience = 10
+    expect(fires(s, 'retreat')).toBe(false)
+    s.impatience = 15
+    expect(fires(s, 'retreat')).toBe(true)
+    s.reputation = s.maxReputation - 2
+    expect(fires(s, 'retreat')).toBe(false)
   })
 
   it('an inline order choice: while a slot waits, done once it is filled', () => {
