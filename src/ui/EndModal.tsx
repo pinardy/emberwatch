@@ -35,7 +35,7 @@ export function EndModal() {
       <div className={`modal modal-end ${won ? 'is-won' : 'is-lost'}`}>
         <header>
           <span className="modal-icon">
-            {won ? <Icon id="reputation" /> : retreated ? <Icon id="warehouse" emoji="🏰" /> : <Icon id="fog" emoji="🌫️" />}
+            {won ? <Icon id="reputation" /> : retreated ? <Icon id="guildHouse" emoji="🏛️" /> : <Icon id="fog" emoji="🌫️" />}
           </span>
           <div>
             <h2>{won ? 'The settlement holds' : retreated ? 'Retreated to the Citadel' : 'The settlement is lost'}</h2>

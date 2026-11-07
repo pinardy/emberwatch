@@ -63,7 +63,7 @@ export function GrandPetitionCard({ run }: { run: RunState }) {
       </strong>
       <small>
         Once a run. She forgives {PETITION_RELIEF} impatience and gives you a fresh hearing — on your vow of{' '}
-        {PETITION_VOW_REPUTATION} reputation within {formatDuration(PETITION_VOW_SECONDS)}. Break it and her patience
+        {PETITION_VOW_REPUTATION} reputation within {PETITION_VOW_SECONDS / 60} minutes. Break it and her patience
         snaps: +{PETITION_BROKEN_IMPATIENCE} impatience.
       </small>
       <button type="button" className="wide-button" disabled={short} onClick={() => petition()}>
@@ -86,7 +86,7 @@ export function RetreatCard({ run }: { run: RunState }) {
   return (
     <div className="order-card retreat-card" data-testid="retreat">
       <strong>
-        <Icon id="warehouse" emoji="🏰" /> Retreat to the Citadel
+        <Icon id="guildHouse" emoji="🏛️" /> Retreat to the Citadel
       </strong>
       <small>
         The run looks lost. End it now and lead the settlers home: the Citadel receives the {supplies} supplies this
