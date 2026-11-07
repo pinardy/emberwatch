@@ -1,12 +1,6 @@
 import { create } from 'zustand'
 import { useStoreWithEqualityFn } from 'zustand/traditional'
-import {
-  autoPauseHits,
-  autoPauseNotice,
-  watchRun,
-  type AutoPauseHit,
-  type RunWatch,
-} from './autoPause'
+import { autoPauseNotice } from './autoPause'
 import { earnedTitles } from './content/achievements'
 import { dailyExpedition, utcDateKey } from './content/daily'
 import { commissionOffer } from './content/commissions'
@@ -29,7 +23,7 @@ import {
   togglePause,
   upgradeBuilding,
 } from './engine/actions'
-import { ROAD_MIN_LENGTH, SPEED_OPTIONS, TICK_SECONDS, type GameSpeed } from './engine/balance'
+import { ROAD_MIN_LENGTH, type GameSpeed } from './engine/balance'
 import { appeaseThreat } from './engine/threats'
 import { redrawToward, rerollChoice, takeChoice } from './engine/drafts'
 import { resolveGladeEvent } from './engine/glades'
@@ -39,8 +33,8 @@ import { randomSeed } from './engine/rng'
 import { ROAD_TOOL, canStartRoad, placeRoad, removeRoad, roadAt, snapRoadPoint } from './engine/roads'
 import type { LandChoice } from './engine/runModifiers'
 import { unassign } from './engine/society'
-import { tick } from './engine/tick'
 import { buyOffer, buyRare, commissionShipment, sellResource, signAgreement } from './engine/trade'
+import { advanceLoop, dropCarry, forgetRun, isQuietStep, resetLoopState } from './loop'
 import {
   META_KEY,
   loadMeta,
@@ -90,41 +84,9 @@ export function loadRunFactory(): Promise<RunFactory> {
 export const RUN_FACTORY_FAILED_NOTICE =
   'Could not load the map generator. Check your connection and try again.'
 
-/** Fewest simulated seconds a single frame may consume, at any speed. */
-const MAX_FRAME_BUDGET = 2
-const MAX_STEPS_PER_FRAME = 64
-/**
- * Longest real frame the loop feeds the sim; mirrors the clamp in
- * `useGameLoop`, so anything longer is a backgrounded or frozen tab.
- */
-export const MAX_FRAME_REAL_SECONDS = 0.5
-
-/**
- * Most simulated seconds one frame may owe. It scales with speed so a slow
- * device at 5× (a frame of up to half a second) still gets all its time,
- * with one tick of headroom for the carry, while a tab returning from the
- * background still cannot fast-forward more than one long frame's worth.
- */
-export function frameBudget(speed: number): number {
-  return Math.max(MAX_FRAME_BUDGET, speed * MAX_FRAME_REAL_SECONDS + TICK_SECONDS)
-}
-
-// The step cap must never be what slows the top speed down.
-if (MAX_STEPS_PER_FRAME * TICK_SECONDS < frameBudget(Math.max(...SPEED_OPTIONS))) {
-  throw new Error('MAX_STEPS_PER_FRAME cannot cover a full frame at top speed')
-}
-
-/**
- * Simulated seconds owed to the world but not yet ticked. Lives outside the
- * store because it changes every frame and nothing renders from it.
- */
-let simCarry = 0
-
-/**
- * What the auto-pause triggers last saw of the run, to compare against after
- * the next step. Keyed by the run object, so a new or resumed run starts fresh.
- */
-let watched: { run: RunState; snapshot: RunWatch } | null = null
+// The game loop's clock (frame budget, carry, auto-pause watch, HUD
+// throttle) lives in loop.ts; these stay part of the store's API.
+export { HUD_INTERVAL_MS, MAX_FRAME_REAL_SECONDS, frameBudget } from './loop'
 
 /**
  * When this tab last wrote the active slot (the slot index's `savedAt`), or
@@ -142,23 +104,11 @@ function stampSlot(slot: SlotId | null): void {
 export const SLOT_CONFLICT_MESSAGE =
   'Not saving: this settlement was saved from another tab since. Saving here would overwrite that progress.'
 
-/**
- * Real milliseconds between HUD refreshes while the game loop runs: the HUD
- * clock (`hudVersion`) ticks at about 8 Hz however fast the sim steps.
- */
-export const HUD_INTERVAL_MS = 125
-
 /** Longest an idle-time autosave may wait for the browser to be idle. */
 export const IDLE_SAVE_TIMEOUT_MS = 2000
 
 /** Cancels the pending idle-time autosave, if one is waiting. */
 let cancelIdleSave: (() => void) | null = null
-
-/** `performance.now()` of the game loop's last HUD refresh. */
-let lastHudFrame = Number.NEGATIVE_INFINITY
-
-/** True while `advance` publishes a sim step that leaves the HUD clock alone. */
-let quietStep = false
 
 /**
  * Clears the loop's module-level state (carry, auto-pause snapshot, HUD
@@ -168,20 +118,8 @@ let quietStep = false
 export function resetLoopStateForTests(): void {
   cancelIdleSave?.()
   cancelIdleSave = null
-  simCarry = 0
-  watched = null
   slotStamp = null
-  lastHudFrame = Number.NEGATIVE_INFINITY
-  quietStep = false
-}
-
-/**
- * The things that refresh the HUD at once when a sim step changes them,
- * rather than at the next HUD tick: a season turning, the run ending, a
- * choice or a threat appearing, a building finishing, a new log line.
- */
-function hudMark(run: RunState): string {
-  return `${run.season.season}|${run.season.year}|${run.phase}|${run.pendingChoices.length}|${run.threats.length}|${run.stats.buildingsBuilt}|${run.log[0]?.id ?? -1}`
+  resetLoopState()
 }
 
 export type Screen =
@@ -748,83 +686,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   advance: (realSeconds, now) => {
     const { run, speed, settings, crash } = get()
     if (crash) return
-    const watching = Object.values(settings.autoPause).some(Boolean)
-    const autoPause = (hits: AutoPauseHit[]) => {
-      simCarry = 0
-      set({ speed: 0, notice: autoPauseNotice(hits), ...bump(get) })
-    }
-    if (!run || speed === 0 || run.phase !== 'playing' || run.pendingChoices.length > 0) {
-      // Nothing is running, so nothing may carry into the next frame.
-      simCarry = 0
-      // Whatever happens while the player has paused (a choice answered, a
-      // trigger switched on) is not news when they resume. A choice that
-      // halts a running game is different: if answering it unleashes a
-      // threat, that should still pause once the world moves again.
-      if (run && watching && (speed === 0 || run.phase !== 'playing')) {
-        watched = { run, snapshot: watchRun(run) }
-      }
-      return
-    }
-
-    let before: RunWatch | null = null
-    if (watching) {
-      before = watched?.run === run ? watched.snapshot : watchRun(run)
-      // Transitions since the last frame — e.g. a threat from a choice.
-      const now = watchRun(run)
-      const hits = autoPauseHits(before, now, run, settings.autoPause)
-      watched = { run, snapshot: now }
-      if (hits.length > 0) {
-        autoPause(hits)
-        return
-      }
-      before = now
-    } else {
-      watched = null
-    }
-
-    /*
-     * A frame at 60 Hz is ~0.017 s, far shorter than one fixed tick, so the
-     * unspent remainder carries into the next frame. Without the carry no
-     * frame ever reaches a whole tick and the world stands still on any
-     * display faster than 8 fps. The clamp stops a backgrounded tab from
-     * fast-forwarding on return; it grows with speed (see `frameBudget`) so a
-     * low frame rate at 4× or 5× is not silently slowed to the 1× budget.
-     */
-    simCarry = Math.min(simCarry + realSeconds * speed, frameBudget(speed))
-    const mark = simCarry >= TICK_SECONDS ? hudMark(run) : ''
-    let steps = 0
-    while (simCarry >= TICK_SECONDS && steps < MAX_STEPS_PER_FRAME) {
-      tick(run, TICK_SECONDS)
-      simCarry -= TICK_SECONDS
-      steps++
-      if (before) {
-        // Checked every tick, so a pause lands on the moment, not a frame late.
-        const now = watchRun(run)
-        const hits = autoPauseHits(before, now, run, settings.autoPause)
-        before = now
-        watched = { run, snapshot: now }
-        if (hits.length > 0) {
-          autoPause(hits)
-          return
-        }
-      }
-      if (run.phase !== 'playing' || run.pendingChoices.length > 0) {
-        simCarry = 0
-        break
-      }
-    }
-    if (steps === 0) return
-    if (now === undefined || now - lastHudFrame >= HUD_INTERVAL_MS || hudMark(run) !== mark) {
-      if (now !== undefined) lastHudFrame = now
-      set(bump(get))
-    } else {
-      quietStep = true
-      try {
-        set({ version: get().version + 1 })
-      } finally {
-        quietStep = false
-      }
-    }
+    advanceLoop(run, speed, settings.autoPause, realSeconds, now, {
+      pause: (hits) => set({ speed: 0, notice: autoPauseNotice(hits), ...bump(get) }),
+      publish: (hud) => set(hud ? bump(get) : { version: get().version + 1 }),
+    })
   },
 
   // Pausing or changing speed refreshes the HUD, so a paused game shows
@@ -1014,7 +879,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     console.error('Emberwatch stopped after an error:', error)
     cancelIdleSave?.()
     cancelIdleSave = null
-    simCarry = 0
+    dropCarry()
     const message = error instanceof Error ? error.message : String(error)
     set({ crash: message || 'Unknown error', speed: 0 })
   },
@@ -1032,8 +897,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       selectedGlade: null,
       saveError: null,
     }
-    simCarry = 0
-    watched = null
+    forgetRun()
     const loaded = how === 'reload' && activeSlot ? loadSlotChecked(activeSlot) : null
     if (loaded?.ok) {
       stampSlot(activeSlot)
@@ -1073,7 +937,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
  * change the run and bump only `version` still refresh the whole HUD.
  */
 useGameStore.subscribe((s, prev) => {
-  if (!quietStep && s.version !== prev.version && s.hudVersion === prev.hudVersion) {
+  if (!isQuietStep() && s.version !== prev.version && s.hudVersion === prev.hudVersion) {
     useGameStore.setState({ hudVersion: s.hudVersion + 1 })
   }
 })
