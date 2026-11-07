@@ -1,12 +1,19 @@
 import { GLADE_ART } from '../../game/content/art'
-import { gladeStakesOf } from '../../game/engine/events'
+import type { GladeStake } from '../../game/engine/events'
 import type { Glade } from '../../game/types'
-import { GLADE_KIND_STYLE, GLADE_STAKE_ART, gladeAccessText, type GladeAccess } from '../mapShared'
+import {
+  GLADE_KIND_STYLE,
+  GLADE_STAKE_ART,
+  GLADE_STAKE_STYLE,
+  gladeAccessText,
+  type GladeAccess,
+} from '../mapShared'
 import { drawIcon, type SpriteTile } from './sprites'
 
 /**
  * A fogged glade's name plate, painted into the plate atlas: kind (icon and
  * label in the kind's colour), name, clearing progress and how to reach it.
+ * Its stakes hang under it as chips of their own (`stakeChipTile`).
  * The look follows the old DOM plate — dark glass, a kind-coloured border
  * that glows when reachable, green while a crew is clearing, grey when out of
  * reach. A canvas plate costs nothing per frame; the DOM plates rewrote their
@@ -16,9 +23,8 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
   const locked = access === 'locked'
   const style = GLADE_KIND_STYLE[glade.kind]
   const text = gladeAccessText(access, percent / 100, clearers)
-  const stakes = gladeStakesOf(glade)
   return {
-    key: `p:${glade.id}:${access}:${percent}:${clearers}:${stakes.join(',')}`,
+    key: `p:${glade.id}:${access}:${percent}:${clearers}`,
     draw: (ctx, w, h) => {
       const font = 'system-ui, -apple-system, "Segoe UI", sans-serif'
       const small = `600 30px ${font}`
@@ -35,8 +41,7 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
       const showBar = percent > 0
       const inner = Math.max(kindW, nameW, emW, showBar ? 260 : 0)
       const pw = Math.min(w - 16, inner + 56)
-      const stakeRow = stakes.length > 0 ? 44 : 0
-      const ph = (showBar ? 196 : 172) + stakeRow
+      const ph = plateHeight(percent)
       const x = (w - pw) / 2
       const y = (h - ph) / 2
 
@@ -90,16 +95,74 @@ export function plateTile(glade: Glade, access: GladeAccess, percent: number, cl
       ctx.fillStyle = locked ? '#7d8a8a' : '#d9b46a'
       ctx.fillText(text, cx, cy, pw - 30)
 
-      // What the waiting event could lead to, as a row of small icons.
-      if (stakes.length > 0) {
-        cy += 40
-        const size = 30
-        const gap = 40
-        const left = cx - ((stakes.length - 1) * gap) / 2
-        stakes.forEach((k, i) => {
-          drawIcon(ctx, GLADE_STAKE_ART[k], size / 24, [left + i * gap - size / 2, cy - size / 2], true)
-        })
-      }
+    },
+  }
+}
+
+/** Plate height in tile pixels: taller while a progress bar shows. */
+export function plateHeight(percent: number): number {
+  return percent > 0 ? 196 : 172
+}
+
+/** Plate tiles are this many pixels tall (the plate atlas's tile height). */
+const PLATE_TILE_H = 256
+/** A stake chip's height as a share of the plate sprite's. */
+export const STAKE_CHIP_SHARE = 0.4
+
+export interface StakeChipPlacement {
+  stake: GladeStake
+  /** Height in world units. */
+  size: number
+  /** Screen-space shifts from the plate's anchor, world units. */
+  offsetX: number
+  offsetY: number
+}
+
+/**
+ * Where a glade's stake chips sit for a plate drawn `plateSize` world units
+ * tall: one row, centred just under the plate. The chips are sprites of
+ * their own (one shared tile per stake), so they can be far larger than the
+ * plate's text without making every plate taller.
+ */
+export function stakeChipPlacements(
+  stakes: readonly GladeStake[],
+  percent: number,
+  plateSize: number,
+): StakeChipPlacement[] {
+  const size = plateSize * STAKE_CHIP_SHARE
+  const pitch = size * 1.08
+  const plateBottom = ((plateHeight(percent) / 2) * plateSize) / PLATE_TILE_H
+  const offsetY = -(plateBottom + size / 2 + size * 0.04)
+  return stakes.map((stake, i) => ({
+    stake,
+    size,
+    offsetX: (i - (stakes.length - 1) / 2) * pitch,
+    offsetY,
+  }))
+}
+
+/**
+ * One stake as a round chip: its icon on dark glass inside a ring of the
+ * stake's colour (the lingering task's writ and the pact's handshake differ
+ * in colour as well as shape). Shared by every glade with that stake.
+ */
+export function stakeChipTile(stake: GladeStake): SpriteTile {
+  const style = GLADE_STAKE_STYLE[stake]
+  return {
+    key: `stake:${stake}`,
+    draw: (ctx, w, h) => {
+      const cx = w / 2
+      const cy = h / 2
+      const r = Math.min(w, h) / 2 - 6
+      ctx.fillStyle = 'rgba(9, 13, 16, 0.92)'
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.lineWidth = 7
+      ctx.strokeStyle = style.color
+      ctx.stroke()
+      const icon = r * 1.5
+      drawIcon(ctx, GLADE_STAKE_ART[stake], icon / 24, [cx - icon / 2, cy - icon / 2], true)
     },
   }
 }

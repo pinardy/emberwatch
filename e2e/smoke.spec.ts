@@ -167,6 +167,26 @@ test.describe('desktop', () => {
     expect(problems).toEqual([])
   })
 
+  test('the keyboard reaches the 3D glade plates through the glade list', async ({ page }) => {
+    const problems = watchForErrors(page)
+    await startSettlement(page)
+    await expect(page.locator('.map-wrap-3d canvas')).toBeVisible({ timeout: 15_000 })
+    const list = page.getByRole('navigation', { name: 'Glades' })
+    const first = list.locator('button[tabindex="0"]')
+    await expect(first).toHaveCount(1)
+    // Out of sight until focused, then a readable panel.
+    expect((await list.boundingBox())?.width ?? 0).toBeLessThan(4)
+    await first.focus()
+    expect((await list.boundingBox())?.width ?? 0).toBeGreaterThan(150)
+    await page.keyboard.press('ArrowDown')
+    const picked = list.locator('button[tabindex="0"]')
+    const name = (await picked.locator('strong').textContent()) ?? ''
+    expect(name.length).toBeGreaterThan(0)
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.inspector')).toContainText(name)
+    expect(problems).toEqual([])
+  })
+
   test('a new settlement runs in real time and both maps render', async ({ page }) => {
     const problems = watchForErrors(page)
     await startSettlement(page)

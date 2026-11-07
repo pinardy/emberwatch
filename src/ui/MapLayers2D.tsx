@@ -8,6 +8,7 @@ import { warmthSources } from '../game/engine/queries'
 import { ROAD_TOOL } from '../game/engine/roads'
 import { useGameStore } from '../game/store'
 import type { GladeKind, RunState } from '../game/types'
+import type { GladeStake } from '../game/engine/events'
 import { IconUse } from './Icon'
 import {
   clearedKey,
@@ -26,6 +27,7 @@ import {
   gladeAccessText,
   gladeStakesTitle,
   GLADE_STAKE_ART,
+  GLADE_STAKE_STYLE,
   gladeAccess,
   gladeFill,
   gladeLook,
@@ -378,8 +380,34 @@ export function RoadGhost2D({ run }: { run: RunState }) {
 export const GladePlateLayer2D = memo(function GladePlateLayer2D({ run }: { run: RunState }) {
   useRunKey(gladePlateKey)
   const interaction = useMapInteraction()
+  const layer = useRef<SVGGElement>(null)
+  const bus = useContext(ViewBusContext)
+  // The stake chips keep a readable size on screen as the map zooms out: the
+  // camera's scale and the map's size on screen set a CSS scale and a class,
+  // written straight to the layer (no React render on a zoom).
+  useLayoutEffect(() => {
+    const g = layer.current
+    const svg = g?.ownerSVGElement
+    if (!g || !svg) return
+    const update = () => {
+      const vb = svg.viewBox?.baseVal
+      const rect = svg.getBoundingClientRect()
+      if (!vb || !vb.width || !vb.height || !rect.width || !rect.height) return
+      const px = Math.min(rect.width / vb.width, rect.height / vb.height) * bus.get().scale
+      g.style.setProperty('--stake-scale', stakeScale(px).toFixed(3))
+      g.classList.toggle('is-far', px < STAKE_FAR_PX)
+    }
+    update()
+    const unsubscribe = bus.subscribe(update)
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    resize?.observe(svg)
+    return () => {
+      unsubscribe()
+      resize?.disconnect()
+    }
+  }, [bus])
   return (
-    <g className="glade-plates-2d">
+    <g ref={layer} className="glade-plates-2d">
       {Object.values(run.glades).map((glade) => {
         if (!glade.discovered || glade.cleared) return null
         const info = gladePlateInfo(run, glade)
@@ -423,34 +451,122 @@ export const GladePlateLayer2D = memo(function GladePlateLayer2D({ run }: { run:
             <text y={28} className="glade-crew" style={reachable ? undefined : { fill: '#6d7a7a' }}>
               {gladeAccessText(info.access, pct, info.clearers)}
             </text>
-            {info.stakes.length > 0 && (
-              <g className="glade-stakes">
-                <title>{gladeStakesTitle(info.stakes)}</title>
-                <rect
-                  x={-(info.stakes.length * 15 + 6) / 2}
-                  y={36}
-                  width={info.stakes.length * 15 + 6}
-                  height={18}
-                  rx={9}
-                  className="glade-plate"
-                />
-                {info.stakes.map((k, i) => (
-                  <IconUse
-                    key={k}
-                    id={GLADE_STAKE_ART[k]}
-                    x={-(info.stakes.length - 1) * 7.5 + i * 15}
-                    y={45}
-                    size={13}
-                  />
-                ))}
-              </g>
-            )}
+            {info.stakes.length > 0 && <GladeStakes2D stakes={info.stakes} />}
           </g>
         )
       })}
     </g>
   )
 })
+
+/** Where the stake chips start, under the plate (whose bottom is y = 34). */
+const STAKE_TOP = 38
+/** Labelled chips: height, row pitch and the gap between chips. */
+const CHIP_H = 20
+const CHIP_PITCH = 23
+const CHIP_GAP = 4
+/** Rough width of one character of a chip's 10px label. */
+const CHIP_CHAR_W = 5.9
+/** Zoomed out: round icon chips, with their spacing. */
+const DOT_R = 11
+const DOT_PITCH = 25
+/**
+ * Below this many screen pixels per map unit (a phone's default view, or a
+ * desktop zoomed out) the chips drop their words and keep a fixed size on
+ * screen, so they stay readable while the plates shrink with the map.
+ */
+export const STAKE_FAR_PX = 0.75
+/** Screen pixels per map unit the chips never shrink below. */
+const STAKE_MIN_PX = 0.95
+
+/** How much the stake chips are scaled up at `px` screen pixels per map unit. */
+export function stakeScale(px: number): number {
+  return px > 0 ? Math.min(3, Math.max(1, STAKE_MIN_PX / px)) : 1
+}
+
+export interface StakeChip {
+  stake: GladeStake
+  /** Labelled chip: left edge, top and width. */
+  x: number
+  y: number
+  w: number
+  /** Round chip: centre. */
+  cx: number
+  cy: number
+}
+
+/** Rows of `perRow` items at most, balanced (3 → 2 + 1, 4 → 2 + 2). */
+function rowsOf<T>(items: T[], perRow: number): T[][] {
+  const rows: T[][] = []
+  for (let i = 0; i < items.length; i += perRow) rows.push(items.slice(i, i + perRow))
+  return rows
+}
+
+/** Where each chip sits, centred under the plate, in both looks. */
+export function stakeChipLayout(stakes: readonly GladeStake[]): StakeChip[] {
+  const out = new Map<GladeStake, StakeChip>()
+  rowsOf([...stakes], 2).forEach((row, r) => {
+    const widths = row.map((k) => 26 + GLADE_STAKE_STYLE[k].label.length * CHIP_CHAR_W)
+    let x = -(widths.reduce((a, b) => a + b, 0) + CHIP_GAP * (row.length - 1)) / 2
+    row.forEach((k, i) => {
+      out.set(k, { stake: k, x, y: STAKE_TOP + r * CHIP_PITCH, w: widths[i], cx: 0, cy: 0 })
+      x += widths[i] + CHIP_GAP
+    })
+  })
+  rowsOf([...stakes], 3).forEach((row, r) => {
+    row.forEach((k, i) => {
+      const chip = out.get(k)!
+      chip.cx = (i - (row.length - 1) / 2) * DOT_PITCH
+      chip.cy = STAKE_TOP + DOT_R + r * DOT_PITCH
+    })
+  })
+  return stakes.map((k) => out.get(k)!)
+}
+
+/**
+ * What a glade's waiting event could lead to, as chips under its plate: the
+ * stake's icon on its own colour with its name, each explained on hover.
+ * Both looks are drawn; the layer's zoom class picks one (see map2d.css).
+ */
+function GladeStakes2D({ stakes }: { stakes: GladeStake[] }) {
+  return (
+    <g className="glade-stakes">
+      <title>{gladeStakesTitle(stakes)}</title>
+      {stakeChipLayout(stakes).map((chip) => {
+        const style = GLADE_STAKE_STYLE[chip.stake]
+        return (
+          <g key={chip.stake} className={`glade-stake is-${chip.stake}`} data-stake={chip.stake}>
+            <title>{style.hint}</title>
+            <g className="glade-stake-full">
+              <rect
+                x={chip.x}
+                y={chip.y}
+                width={chip.w}
+                height={CHIP_H}
+                rx={CHIP_H / 2}
+                className="glade-stake-chip"
+                style={{ stroke: style.color }}
+              />
+              <IconUse id={GLADE_STAKE_ART[chip.stake]} x={chip.x + 12} y={chip.y + CHIP_H / 2} size={14} />
+              <text
+                x={chip.x + 22}
+                y={chip.y + CHIP_H / 2}
+                className="glade-stake-label"
+                style={{ fill: style.color }}
+              >
+                {style.label}
+              </text>
+            </g>
+            <g className="glade-stake-dot">
+              <circle cx={chip.cx} cy={chip.cy} r={DOT_R} className="glade-stake-chip" style={{ stroke: style.color }} />
+              <IconUse id={GLADE_STAKE_ART[chip.stake]} x={chip.cx} y={chip.cy} size={15} />
+            </g>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Villagers: a canvas over the SVG

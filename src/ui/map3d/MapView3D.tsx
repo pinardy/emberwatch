@@ -7,6 +7,7 @@ import { threatArt } from '../../game/content/artFamilies'
 import { BUILDINGS } from '../../game/content/buildings'
 import { canPlaceBuilding, footprintOf } from '../../game/engine/actions'
 import { pairsWith } from '../../game/engine/adjacency'
+import { gladeStakesOf } from '../../game/engine/events'
 import { HEARTH_WARMTH_RADIUS } from '../../game/engine/balance'
 import { describePlacement } from '../../game/engine/placement'
 import { warmthSources } from '../../game/engine/queries'
@@ -17,6 +18,7 @@ import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
 import { FellingForest, ForestCover } from './ForestCover'
 import { onGhostRequest } from './ghostBus'
+import { GladeList } from './GladeList'
 import { MiniMap } from './MiniMap'
 import { Paths } from './Paths'
 import { RoadGhost3D, RoadLayer, type RoadCursor } from './Roads'
@@ -58,7 +60,7 @@ import {
   warmthKey,
 } from './layerKeys'
 import { GHOST_BAD_MAT, GHOST_OK_MAT, GhostConfirm3D, GhostHint3D, GOLD, IconSprite, NO_RAYCAST } from './models'
-import { plateTile } from './plates'
+import { plateTile, stakeChipPlacements, stakeChipTile } from './plates'
 import { BatchSprite, ICON_BATCH, PLATE_BATCH, SpriteBatchMesh } from './spriteBatch'
 
 const CAMERA_HOME: [number, number, number] = [0, 15, 12]
@@ -469,8 +471,10 @@ const GladePlates = memo(function GladePlates({ run }: { run: RunState }) {
 })
 
 /**
- * A plate painted into the plate atlas (one draw call for every plate).
- * Clicking the glade's ground selects it, plate or not.
+ * A plate painted into the plate atlas (one draw call for every plate), with
+ * its stakes as chips underneath in the icon batch (one shared tile per
+ * stake). Clicking the glade's ground selects it, plate or not, and the
+ * Inspector names each stake.
  */
 const GladePlate = memo(function GladePlate({
   glade,
@@ -483,15 +487,30 @@ const GladePlate = memo(function GladePlate({
   percent: number
   clearers: number
 }) {
+  const stakes = gladeStakesOf(glade)
   return (
-    <BatchSprite
-      batch={PLATE_BATCH}
-      tile={plateTile(glade, access, percent, clearers)}
-      x={glade.center.x}
-      y={1.7}
-      z={glade.center.y}
-      size={PLATE_SIZE}
-    />
+    <>
+      <BatchSprite
+        batch={PLATE_BATCH}
+        tile={plateTile(glade, access, percent, clearers)}
+        x={glade.center.x}
+        y={1.7}
+        z={glade.center.y}
+        size={PLATE_SIZE}
+      />
+      {stakeChipPlacements(stakes, percent, PLATE_SIZE).map((chip) => (
+        <BatchSprite
+          key={chip.stake}
+          tile={stakeChipTile(chip.stake)}
+          x={glade.center.x}
+          y={1.7}
+          z={glade.center.y}
+          size={chip.size}
+          offsetX={chip.offsetX}
+          offsetY={chip.offsetY}
+        />
+      ))}
+    </>
   )
 })
 
@@ -668,6 +687,7 @@ export function MapView3D() {
       </Canvas>
 
       <MiniMap run={run} controls={controls} />
+      <GladeList run={run} />
 
       <div className="map-controls">
         <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.8)}>
