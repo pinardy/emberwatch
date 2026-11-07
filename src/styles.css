@@ -2926,6 +2926,32 @@ code {
   border-color: rgba(217, 180, 106, 0.6);
 }
 
+/* Settings → Show performance: a small readout in the map's top-right corner.
+   The warnings move down to make room for it. */
+.perf-readout {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 30;
+  display: grid;
+  gap: 1px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(9, 13, 16, 0.86);
+  color: #cfe0d6;
+  font-size: 11px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.map-column:has(.perf-readout) .hud-top {
+  padding-top: 40px;
+}
+
 /* The 3D glade plates for the keyboard: one Tab stop, out of sight until it
    has focus, then a small panel over the map's top-left corner. */
 .glade-list {

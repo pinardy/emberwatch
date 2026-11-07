@@ -21,6 +21,7 @@ import { onGhostRequest } from './ghostBus'
 import { GladeList } from './GladeList'
 import { MiniMap } from './MiniMap'
 import { Paths } from './Paths'
+import { PerfProbe } from './PerfProbe'
 import { RoadGhost3D, RoadLayer, type RoadCursor } from './Roads'
 import { Smoke } from './Smoke'
 import { Villagers } from './Villagers'
@@ -684,6 +685,7 @@ export function MapView3D() {
         <GladePlates run={run} />
         <SpriteBatchMesh batch={ICON_BATCH} renderOrder={10} />
         <SpriteBatchMesh batch={PLATE_BATCH} renderOrder={11} />
+        <PerfProbe />
       </Canvas>
 
       <MiniMap run={run} controls={controls} />
