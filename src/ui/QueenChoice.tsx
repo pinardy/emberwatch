@@ -12,12 +12,8 @@ import {
   orderGoal,
   orderReputation,
 } from '../game/engine/orders'
-import {
-  decreeGoal,
-  decreeReputation,
-  decreeStreakBonus,
-  describeTimedGoal,
-} from '../game/engine/structure'
+import { decreeGoal, decreeReputation, decreeStreakBonus } from '../game/engine/structure'
+import { describeTimedGoal } from '../game/engine/goals'
 import { useGameStore } from '../game/store'
 import type { Order, PendingChoice, RoyalDecree, RunState } from '../game/types'
 import { Bar } from './Bar'

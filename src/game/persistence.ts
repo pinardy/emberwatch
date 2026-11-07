@@ -1,6 +1,6 @@
 import { defaultAutoPause, migrateAutoPause, type AutoPauseSettings } from './autoPause'
 import { defaultFeats } from './content/achievements'
-import { defaultMeta, emptyCitadelPerks, migrateMeta } from './content/meta'
+import { defaultMeta, emptyCitadelPerks, migrateMeta } from './engine/meta'
 import { migrateOrders } from './engine/orders'
 import { migrateFounding } from './engine/founding'
 import { defaultDecreeState } from './engine/structure'

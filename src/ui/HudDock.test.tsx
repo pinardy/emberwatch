@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BUILDINGS } from '../game/content/buildings'
 import { createRun } from '../game/engine/createRun'
-import { takeChoice } from '../game/engine/events'
+import { takeChoice } from '../game/engine/drafts'
 import { useGameStore } from '../game/store'
 import type { BuildingInstance, RunState } from '../game/types'
 import { GameScreen } from './GameScreen'

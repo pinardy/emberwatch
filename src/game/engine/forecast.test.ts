@@ -10,7 +10,7 @@ import {
 } from './balance'
 import { createRun } from './createRun'
 import { collectWarnings } from './diagnostics'
-import { takeChoice } from './events'
+import { takeChoice } from './drafts'
 import {
   buildingStatus,
   deadlineForecast,

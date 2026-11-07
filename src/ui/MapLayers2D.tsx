@@ -8,7 +8,7 @@ import { warmthSources } from '../game/engine/queries'
 import { ROAD_TOOL } from '../game/engine/roads'
 import { useGameStore } from '../game/store'
 import type { GladeKind, RunState } from '../game/types'
-import type { GladeStake } from '../game/engine/events'
+import type { GladeStake } from '../game/engine/glades'
 import { IconUse } from './Icon'
 import {
   clearedKey,

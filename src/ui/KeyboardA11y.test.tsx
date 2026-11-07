@@ -4,7 +4,7 @@ import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
 import { canPlaceBuilding, findPlacement, placeBuilding } from '../game/engine/actions'
 import { createRun } from '../game/engine/createRun'
-import { takeChoice } from '../game/engine/events'
+import { takeChoice } from '../game/engine/drafts'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import {

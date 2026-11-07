@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { IMPATIENCE_HOSTILITY_THRESHOLD, SEASON_INFO } from '../game/engine/balance'
-import { MAX_HOSTILITY } from '../game/engine/tick'
+import { MAX_HOSTILITY } from '../game/engine/hostility'
 import {
   RUNWAY_WARNING_SECONDS,
   formatDuration,

@@ -15,7 +15,7 @@ import {
   hostilityResolvePenalty,
 } from './balance'
 import { createRun } from './createRun'
-import { takeChoice } from './events'
+import { takeChoice } from './drafts'
 import { computeModifiers } from './modifiers'
 import { resolveBreakdowns } from './society'
 import { decreeMissImpatience, stepDecree } from './structure'

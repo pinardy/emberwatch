@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
-import { defaultMeta } from '../game/content/meta'
+import { defaultMeta } from '../game/engine/meta'
 import { createRun } from '../game/engine/createRun'
 import { saveFileText } from '../game/saveFile'
 import { SLOT_IDS, listSlots, loadSlot, saveToSlot } from '../game/saveSlots'

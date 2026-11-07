@@ -8,10 +8,8 @@ import {
   describeOptionCost,
   describeOptionShortfall,
   optionAffordable,
-  redrawTargets,
-  rerollCost,
-  targetedRedrawCost,
-} from '../game/engine/events'
+} from '../game/engine/glades'
+import { redrawTargets, rerollCost, targetedRedrawCost } from '../game/engine/drafts'
 import { NEED_ART } from '../game/content/art'
 import { NEED_LABELS } from '../game/content/species'
 import { useGameStore, useHudRun } from '../game/store'
@@ -23,7 +21,7 @@ import type {
   ThreatSpec,
 } from '../game/types'
 import { formatDuration } from '../game/engine/forecast'
-import { describeTimedGoal } from '../game/engine/structure'
+import { describeTimedGoal } from '../game/engine/goals'
 import { IconText } from './IconText'
 import { describeStrike, describeWhileActive, outcomeWords } from './threatText'
 import { DialogTip } from './TipsCoach'

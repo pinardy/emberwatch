@@ -10,7 +10,8 @@ import { modifiersClash, runModifierDefs } from './runModifiers'
 
 /**
  * In-run reads of the Citadel's perks (`RunState.citadel`). Kept apart from
- * `events.ts` so the draft and event code only asks one-line questions.
+ * `drafts.ts` and `glades.ts` so the draft and event code only asks one-line
+ * questions.
  *
  * Every read tolerates a missing `citadel` field: hand-built test states and
  * any save that slipped past `loadRun`'s defaults behave like a run with no

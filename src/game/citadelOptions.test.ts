@@ -1,15 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { CHARTERS } from './content/charters'
 import { GLADE_EVENTS } from './content/gladeEvents'
-import {
-  HEARTH_STYLES,
-  META_UPGRADES,
-  META_UPGRADE_LIST,
-  citadelLoadout,
-  defaultMeta,
-  emptyCitadelPerks,
-  purchaseUpgrade,
-} from './content/meta'
+import { HEARTH_STYLES, META_UPGRADES, META_UPGRADE_LIST } from './content/meta'
+import { citadelLoadout, defaultMeta, emptyCitadelPerks, purchaseUpgrade } from './engine/meta'
 import {
   ALL_RUN_MODIFIER_LIST,
   CITADEL_RUN_MODIFIER_LIST,

@@ -20,7 +20,8 @@ import {
 } from './balance'
 import { createRun } from './createRun'
 import { collectWarnings } from './diagnostics'
-import { addVillager, takeChoice } from './events'
+import { addVillager } from './newcomers'
+import { takeChoice } from './drafts'
 import { gladeAt } from './mapgen'
 import { computeModifiers } from './modifiers'
 import {
@@ -43,7 +44,8 @@ import {
   stagnationImpatienceRate,
   stepFrost,
 } from './society'
-import { hostilityGrowth, hostilityRate, sparedGladeCalmOf, tick } from './tick'
+import { tick } from './tick'
+import { hostilityGrowth, hostilityRate, sparedGladeCalmOf } from './hostility'
 
 /**
  * Mid-run tension: a Queen who minds reputation standing still, expectations

@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 887 tests: simulation, roads, sound, forecasts, Citadel, harness smoke, UI
+npm test           # 891 tests: simulation, roads, sound, forecasts, Citadel, harness smoke, UI
 npm run test:balance  # the full balance harness (a few minutes)
 npm run lint       # ESLint, including the engine purity rules
 npm run check      # typecheck + lint + npm test (what the pre-commit hook runs)
@@ -68,16 +68,16 @@ src/
   game/
     types.ts            # the whole domain model; RunState is plain & serialisable
     content/            # data-only definitions: resources, buildings, species,
-                        # terrain, cornerstones, glade events, orders, meta upgrades,
-                        # Citadel commissions
-    engine/             # pure simulation — no React, no DOM
+                        # terrain, cornerstones, glade events, orders, the
+                        # Citadel's upgrade tree & edict ladder, commissions
+    engine/             # pure rules — no React, no DOM
       balance.ts        #   every tunable number, in one place
       rng.ts            #   counter-based RNG: a value is f(seed, cursor)
-      geometry.ts       #   plain 2D maths: distances, point-in-polygon
+      geometry.ts       #   plain 2D maths: distances, segments, point-in-polygon
       mapgen.ts         #   continuous world: glades, terrain, lookups
       worldgen.ts       #   generating one: Voronoi glades, scattered deposits
                         #   & obstacles (loaded only to create a run)
-      tick.ts           #   one fixed step of the world
+      tick.ts           #   one fixed step of the world (nothing imports it back)
       runCache.ts       #   adjacency & settlement counts remembered across
                         #   ticks, so a tick costs what changed
       production.ts     #   construction, recipes, deposits, terrain yields
@@ -86,12 +86,25 @@ src/
       roads.ts          #   road rules, and the derived (never saved) road
                         #   graph behind the work bonus, cached per run
       society.ts        #   food, resolve, reputation, impatience, departures
-      events.ts         #   glade clearing, drafts, threats, newcomers
+      hostility.ts      #   the forest's passive hostility, for the tick and
+                        #   the HUD's forecast alike
+      glades.ts         #   glade clearing, what a glade's event puts at
+                        #   stake, paying for and applying its options
+      threats.ts        #   threats loosed, striking, growing bolder, appeased
+      newcomers.ts      #   villagers arriving at the hearth
+      serviceChains.ts  #   need → venue → goods → producer: which blueprints
+                        #   a settlement's residents are still missing
+      drafts.ts         #   milestone drafts, taking any queued choice,
+                        #   rerolls and targeted redraws
+      goals.ts          #   goal progress & wording, shared by orders,
+                        #   decrees, conditions and commissions
+      outcomes.ts       #   starting a lingering condition, and settling
+                        #   what one pays or costs when it ends
       orders.ts         #   the Queen's orders: fitting draws, choices of
                         #   two, the founding writ, counting orders
       structure.ts      #   mid-run beats: timed decrees (sized from live
-                        #   output, offered in pairs), the charter,
-                        #   lingering glade conditions
+                        #   output, offered in pairs), the charter, and
+                        #   lingering conditions lifting or lapsing
       traits.ts         #   species quirks & villager quirks as multipliers
       trade.ts          #   caravan visits, offers, buying and selling, rare
                         #   items, commissions, trade agreements
@@ -101,9 +114,15 @@ src/
       diagnostics.ts    #   "what is quietly going wrong" for the warning strip
       timeline.ts       #   bounded run history & key moments for the end-screen
                         #   chart; never touches the RNG
-    store.ts            # zustand store + the game loop's entry point; its
+      meta.ts           #   between runs: buying upgrades, the run-start
+                        #   loadout, edicts, the meta save's migration, and
+                        #   the supplies a finished run banks
+    store.ts            # zustand store: run, meta, settings and commands; its
                         # subscription hooks (see the comment there) keep a
                         # sim step from re-rendering the whole HUD
+    loop.ts             # the game loop's clock, driven by the store's
+                        # `advance`: frame budget & carry, fixed ticks,
+                        # auto-pause checks between them, the ~8 Hz HUD throttle
     frameDerived.ts     # the HUD's (and maps') settlement-wide numbers, once per sim step
   ui/                   # React components; read the sim, never contain rules
                         # (audio.ts synthesises all cues & rain through a
@@ -126,10 +145,11 @@ src/
                         #   lighting & shader rain — all lazy-loaded
 ```
 
-Two rules keep this maintainable:
+Three rules keep this maintainable:
 
 1. **The engine never imports React.** `RunState` is a plain object mutated by pure functions, which is why the balance harness below can play thousands of simulated minutes in a couple of seconds.
-2. **Content is data, not code.** Buildings declare recipes, cornerstones declare effects, orders declare goals. Adding a service building automatically feeds into the blueprint draft logic — nothing has a switch over building ids.
+2. **Content is data, not code.** Buildings declare recipes, cornerstones declare effects, orders declare goals; the rules that read them live in `engine/`. Adding a service building automatically feeds into the blueprint draft logic — nothing has a switch over building ids.
+3. **No runtime import cycles in `src/game`.** Modules depend one way (the tick at the top, `balance`/`rng`/`geometry` at the bottom); `importCycles.test.ts` fails if a cycle of value imports reappears. Type-only imports may loop.
 
 ### Determinism
 
@@ -174,9 +194,10 @@ The test files:
 - **`regressions.test.ts`** — engine bugs from the quality pass, each failing before its fix: building ids never reused after a demolition (and old saves' ids kept apart), impatience kept to whole points under its ceiling, no choice left open when a run ends, the threat strike log's rounded amounts and resource names, and `migrateRun` never throwing.
 - **`Robustness.test.tsx`** and **`MapFallback.test.tsx`** — when something goes wrong: the top bar's "Not saving" chip, a game-loop crash stopping the loop and every save behind the recovery overlay (reload the last save, export, menu), the app's error boundary, chunk-load errors told apart from bugs, overlays giving way to a blocking dialog, the end screen as the only dialog, and the 3D map falling back to 2D when it throws or its WebGL context is lost (and preloaded only when it is the renderer).
 - **`Tips.test.tsx`** — the coach: every tip's trigger (founding, decree choice, commission, stagnation, expectations, glade truce, Storm blight, frost, a caravan's rare find, an open order slot), seen tips never return, one tip at a time in the corner and in dialogs, tips that put themselves away; the founding's held clock and *How to play* are checked in `Onboarding.test.tsx`.
-- **`mapShared.test.ts`**, **`MapView2D.test.tsx`** and **`map3d/plates.test.ts`** — the shared map helpers and both renderers' glade plates (a glade left to the forest on its plate, border and ground): glade kinds, district plates, building badges, obstacles, the Storm's ground wash, warmth, roads and villagers, that static geometry is not rebuilt on every tick, and that the map layers' building views re-derive at once after a command but only on the HUD clock while the sim ticks.
+- **`mapShared.test.ts`**, **`MapView2D.test.tsx`** and **`map3d/plates.test.ts`** — the shared map helpers and both renderers' glade plates (a glade left to the forest on its plate, border and ground): glade kinds, district plates, a click on a shared glade border picking the engine's glade, building badges, obstacles, the Storm's ground wash, warmth, roads and villagers, that static geometry is not rebuilt on every tick, and that the map layers' building views re-derive at once after a command but only on the HUD clock while the sim ticks.
 - **`runCache.test.ts`** and **`frameDerived.test.ts`** — the performance layer: the cached adjacency and settlement counts answer exactly what the plain queries do, before and after hand edits and engine changes mid-tick and through a played run; the HUD's shared per-step numbers equal the engine functions they stand for, and every building's status for a step is looked up in one run-cache scope (a scope per lookup made a pass over the settlement quadratic); the HUD clock throttles sim steps but not commands, pauses or season turns; the idle-time autosave.
 - **`roads.test.ts`** — the road graph and its bonus (directness, junctions, warehouse hubs), the rules for laying roads, the cache that keeps the per-tick cost a lookup, and old saves without roads.
+- **`importCycles.test.ts`** — no runtime import cycles among `src/game`'s modules: it parses each with the TypeScript parser, leaves out type-only imports and dynamic `import()`, and checks its own cycle finder on a small graph.
 - **`villagerRoutes.test.ts`** — the walking villagers' routes: a pure function of the run, following roads where they run and walking straight where they do not.
 - **`audio.test.ts`**, **`music.test.ts`** and **`SoundSettings.test.tsx`** — sound, against a small fake `AudioContext` (`src/test/fakeAudio.ts`): no context before a user gesture, each volume bus wired into the master at its saved level, mute, ducking, older settings migrating to the default levels, a refused context, a rejected resume or a failing cue never reaching the game, and the sliders in both settings panels. For the score: seasonal palettes, a seeded composer that stays in key and does not loop, look-ahead scheduling, the crossfade on a change of season, and holding while paused or hidden.
 - **`LazyScreens.test.tsx`** — the lazily loaded screens from cold: each shows its loading state, then renders, and all are preloaded in idle time (the game screen at once when there is a save to continue). The other UI tests preload them first (`src/test/setup-ui.ts`) and click straight through.

@@ -42,16 +42,10 @@ import { computeModifiers } from '../modifiers'
 import { pendingBlight } from '../blights'
 import { storageBlocked } from '../forecast'
 import { coldVillagers, impatienceParts, resolveBreakdowns, secondsPastDeadline } from '../society'
-import {
-  appeaseThreat,
-  optionAffordable,
-  redrawTargets,
-  redrawToward,
-  relevantBlueprints,
-  resolveGladeEvent,
-  takeChoice,
-  targetedRedrawCost,
-} from '../events'
+import { appeaseThreat } from '../threats'
+import { optionAffordable, resolveGladeEvent } from '../glades'
+import { redrawTargets, redrawToward, takeChoice, targetedRedrawCost } from '../drafts'
+import { relevantBlueprints } from '../serviceChains'
 import {
   architectBlocked,
   architectOffers,

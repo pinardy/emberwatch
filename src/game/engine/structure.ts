@@ -2,12 +2,10 @@ import { feats } from './feats'
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST } from '../content/buildings'
 import { CHARTERS, CHARTER_LIST } from '../content/charters'
 import { DECREES, DECREE_LIST } from '../content/decrees'
-import { categoryWords, describeGoal, evaluateGoal } from '../content/orders'
-import { RESOURCES, categoryTotal, resourceName } from '../content/resources'
+import { describeTimedGoal, goalCount, goalProgress } from './goals'
+import { RESOURCES, categoryTotal } from '../content/resources'
 import type {
   ActiveCondition,
-  ConditionOutcome,
-  ConditionSpec,
   DecreeDef,
   OrderGoal,
   PendingChoice,
@@ -28,18 +26,17 @@ import {
   DECREE_RATE_SHARE,
   DECREE_STREAK_AMBER,
   DECREE_STREAK_AMBER_CAP,
-  IMPATIENCE_PER_VILLAGER_LOST,
 } from './balance'
 import { pushLog } from './runLog'
 import { blightTally } from './blights'
-import { relevantBlueprints, unleashThreat } from './events'
+import { relevantBlueprints } from './serviceChains'
 import { productionRate } from './forecast'
 import { computeModifiers, type Modifiers } from './modifiers'
 import { DECLINE_CHOICE, takeOrderChoice } from './orders'
 import { grantProduced, spend } from './queries'
+import { applyOutcome } from './outcomes'
 import { makeRng, type Rng } from './rng'
-import { tierOf } from './upgrades'
-import { addImpatience, addReputation, loseVillager } from './society'
+import { addImpatience, addReputation } from './society'
 import { recordEvent } from './timeline'
 
 /**
@@ -55,73 +52,6 @@ import { recordEvent } from './timeline'
  * Everything is declarative data held in `RunState`, and all randomness goes
  * through the run RNG, so saves and seeds replay exactly.
  */
-
-// ---------------------------------------------------------------------------
-// Goals that count from "now"
-// ---------------------------------------------------------------------------
-
-/**
- * The raw count behind a counting goal (lifetime production, buildings
- * standing, glades cleared), or `null` for goals that measure a level.
- * Decrees and conditions measure counting goals relative to a baseline taken
- * when they begin, so "produce 30 planks" means 30 *more*.
- */
-export function goalCount(goal: OrderGoal, s: RunState): number | null {
-  switch (goal.kind) {
-    case 'produced':
-      return s.producedTotals[goal.resource] ?? 0
-    case 'producedCategory':
-      return categoryTotal(s.producedTotals, goal.category)
-    case 'gladesCleared':
-      return s.stats.gladesCleared
-    /*
-     * Each finished construction job counts — a new building, or a tier
-     * raised on one already standing — so "build 2 more homes" can be met by
-     * upgrading two shelters, and a demolished-and-rebuilt site is not free.
-     */
-    case 'buildingId':
-      return constructionCount(s, (defId) => defId === goal.buildingId)
-    case 'buildingsOfCategory':
-      return constructionCount(s, (defId) => BUILDINGS[defId]?.category === goal.category)
-    default:
-      return null
-  }
-}
-
-/** Finished buildings matching `match`, plus every tier they have been raised. */
-function constructionCount(s: RunState, match: (defId: string) => boolean): number {
-  let n = 0
-  for (const b of Object.values(s.buildings)) {
-    if (b.built && match(b.defId)) n += 1 + tierOf(b)
-  }
-  return n
-}
-
-/** 0..1 progress toward a goal, counting from `baseline` where it applies. */
-export function goalProgress(goal: OrderGoal, s: RunState, baseline: number): number {
-  const count = goalCount(goal, s)
-  if (count === null) return evaluateGoal(goal, s)
-  const amount = 'amount' in goal ? goal.amount : 1
-  return Math.max(0, Math.min(1, (count - baseline) / amount))
-}
-
-/** Like `describeGoal`, but phrased for goals that count from now. */
-export function describeTimedGoal(goal: OrderGoal): string {
-  switch (goal.kind) {
-    case 'produced':
-      return `Produce ${goal.amount} more ${resourceName(goal.resource)}`
-    case 'producedCategory':
-      return `Produce ${goal.amount} more ${categoryWords(goal.category)}`
-    case 'gladesCleared':
-      return `Clear ${goal.amount} more glade${goal.amount === 1 ? '' : 's'}`
-    case 'buildingId':
-      return `Build or upgrade ${goal.amount} more ${BUILDINGS[goal.buildingId]?.name ?? goal.buildingId}`
-    case 'buildingsOfCategory':
-      return `Build or upgrade ${goal.amount} more ${goal.category} building${goal.amount === 1 ? '' : 's'}`
-    default:
-      return describeGoal(goal)
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Royal decrees
@@ -516,77 +446,6 @@ export function takeCharter(s: RunState, choice: PendingChoice, charterId: strin
 // ---------------------------------------------------------------------------
 // Lingering conditions
 // ---------------------------------------------------------------------------
-
-/** Starts a lingering condition left behind by a glade event. */
-export function addCondition(s: RunState, spec: ConditionSpec, gladeId: string): ActiveCondition {
-  const condition: ActiveCondition = {
-    ...spec,
-    id: `c${s.conditionCounter++}`,
-    gladeId,
-    baseline: goalCount(spec.resolveBy, s) ?? 0,
-    progress: 0,
-    ...(spec.deadline !== undefined ? { timeLeft: spec.deadline } : {}),
-  }
-  condition.progress = goalProgress(spec.resolveBy, s, condition.baseline)
-  s.conditions.push(condition)
-  pushLog(s, `${spec.icon} ${spec.name}: ${spec.description}`, 'bad')
-  return condition
-}
-
-/** Applies a condition's payout or penalty, returning log fragments. */
-export function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined): string[] {
-  if (!outcome) return []
-  const parts: string[] = []
-  if (outcome.reputation) {
-    addReputation(s, outcome.reputation)
-    parts.push(`reputation +${outcome.reputation}`)
-  }
-  if (outcome.hostility) {
-    s.hostility = Math.max(0, s.hostility + outcome.hostility)
-    parts.push(`hostility ${outcome.hostility > 0 ? '+' : ''}${outcome.hostility}`)
-  }
-  if (outcome.impatience) {
-    addImpatience(s, outcome.impatience)
-    parts.push(outcome.impatience > 0 ? 'the Queen frets' : 'the Queen is pleased')
-  }
-  if (outcome.gain) {
-    grantProduced(s, outcome.gain)
-    parts.push('supplies arrive')
-  }
-  if (outcome.villagerLoss) {
-    for (let i = 0; i < outcome.villagerLoss; i++) {
-      const victim = Object.values(s.villagers)[0]
-      if (!victim) break
-      loseVillager(s, victim)
-      addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
-      parts.push(`${victim.name} leaves`)
-    }
-  }
-  if (outcome.spoil) {
-    const { category, share } = outcome.spoil
-    let lost = 0
-    for (const [id, amount] of Object.entries(s.stock)) {
-      if (RESOURCES[id as keyof typeof RESOURCES]?.category !== category) continue
-      const take = Math.floor((amount ?? 0) * share)
-      if (take <= 0) continue
-      spend(s.stock, { [id]: take })
-      lost += take
-    }
-    if (lost > 0) parts.push(`${lost} ${category === 'rawFood' ? 'food' : 'goods'} spoiled`)
-  }
-  if (outcome.threat) {
-    unleashThreat(s, outcome.threat, '')
-    parts.push(`${outcome.threat.name} is loose`)
-  }
-  if (outcome.condition) {
-    const follow = addCondition(s, outcome.condition, '')
-    // Damage that lasts "for the Storm" counts down to the Storm's end.
-    if (follow.passesWithStorm && s.season.season === 'storm') {
-      follow.timeLeft = Math.max(0, s.season.length - s.season.elapsed)
-    }
-  }
-  return parts
-}
 
 /** Lifts conditions whose goal is met; fails timed ones whose deadline passed. */
 export function stepConditions(s: RunState, dt: number): void {

@@ -3,7 +3,7 @@ import { BUILDINGS } from '../content/buildings'
 import { CORNERSTONES } from '../content/cornerstones'
 import { DECREES } from '../content/decrees'
 import { GLADE_EVENTS } from '../content/gladeEvents'
-import { bankRun, defaultMeta, migrateMeta } from '../content/meta'
+import { bankRun, defaultMeta, migrateMeta } from './meta'
 import {
   MAX_RUN_MODIFIERS,
   MIN_RUN_MODIFIERS,
@@ -22,7 +22,8 @@ import {
   STARTING_STOCK,
 } from './balance'
 import { createRun } from './createRun'
-import { optionAffordable, resolveGladeEvent, takeChoice } from './events'
+import { optionAffordable, resolveGladeEvent } from './glades'
+import { takeChoice } from './drafts'
 import { stepOrders } from './orders'
 import { hearthForecast, secondsUntilStorm } from './forecast'
 import { DEPOSIT_RADIUS } from './mapgen'

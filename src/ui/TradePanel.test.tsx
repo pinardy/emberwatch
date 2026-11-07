@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BUILDINGS } from '../game/content/buildings'
 import { TRADE_AGREEMENTS } from '../game/content/tradeAgreements'
-import { relevantBlueprints } from '../game/engine/events'
+import { relevantBlueprints } from '../game/engine/serviceChains'
 import {
   AGREEMENT_PRICE,
   COMMISSION_LOT,

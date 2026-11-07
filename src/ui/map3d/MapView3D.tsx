@@ -7,7 +7,7 @@ import { threatArt } from '../../game/content/artFamilies'
 import { BUILDINGS } from '../../game/content/buildings'
 import { canPlaceBuilding, footprintOf } from '../../game/engine/actions'
 import { pairsWith } from '../../game/engine/adjacency'
-import { gladeStakesOf } from '../../game/engine/events'
+import { gladeStakesOf } from '../../game/engine/glades'
 import { HEARTH_WARMTH_RADIUS } from '../../game/engine/balance'
 import { describePlacement } from '../../game/engine/placement'
 import { warmthSources } from '../../game/engine/queries'
@@ -27,6 +27,7 @@ import { Villagers } from './Villagers'
 import { BuildBanner, WarmthToggle } from '../MapView2D'
 import {
   MAP_KEYS,
+  fogGladeAt,
   gladeAccess,
   gladeLook,
   gladeProgress,
@@ -49,7 +50,7 @@ import {
   type ZoomBucket,
   DepositNode,
 } from './entities'
-import { GladeEdges, GroundSurface, gladeAt } from './Ground'
+import { GladeEdges, GroundSurface } from './Ground'
 import {
   buildingLayer,
   depositKey,
@@ -157,8 +158,8 @@ function GroundPlane({ run, buildMode }: { run: RunState; buildMode: string | nu
     const state = useGameStore.getState()
     const pos = { x: e.point.x, y: e.point.z }
     // Uncleared ground: a fogged glade is selected, hidden ones ignore clicks.
-    const glade = gladeAt(run, pos)
-    if (glade && !glade.cleared) {
+    const glade = fogGladeAt(run, pos)
+    if (glade) {
       if (glade.discovered) state.selectGlade(glade.id)
       return
     }

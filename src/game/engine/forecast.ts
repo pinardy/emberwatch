@@ -26,7 +26,7 @@ import {
   secondsPastDeadline,
   stormFuelPerSecond,
 } from './society'
-import { hostilityRate } from './tick'
+import { hostilityRate } from './hostility'
 import { recipesOf } from './upgrades'
 
 /**

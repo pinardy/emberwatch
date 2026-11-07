@@ -1,5 +1,5 @@
 import { memo, useId, useRef, useState } from 'react'
-import { gladeStakesOf } from '../../game/engine/events'
+import { gladeStakesOf } from '../../game/engine/glades'
 import { useGameStore } from '../../game/store'
 import { requestInspectorFocus } from '../focusRequests'
 import type { Glade, RunState } from '../../game/types'

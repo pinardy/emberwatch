@@ -1,9 +1,5 @@
-import {
-  EDICTS,
-  EDICT_REWARD_STEP,
-  MAX_EDICT,
-  edictLabel,
-} from '../game/content/meta'
+import { EDICTS, EDICT_REWARD_STEP, MAX_EDICT } from '../game/content/meta'
+import { edictLabel } from '../game/engine/meta'
 import { edictArt } from '../game/content/art'
 import { Icon } from './Icon'
 
