@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 720 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
+npm test           # 716 tests: simulation, roads, sound, forecasts, Citadel, balance harness, UI
 npm run build      # typecheck + production build + service worker
 npm run preview    # serve the built PWA (installable, works offline)
 npm run test:e2e   # real-browser smoke test (Playwright + Chromium)
@@ -127,7 +127,7 @@ All run randomness is `f(seed, cursor)` with the cursor stored inside `RunState`
 
 ## Testing
 
-`npm test` runs forty-one test files:
+`npm test` runs forty test files:
 
 - **`engine.test.ts`** — the simulation: RNG determinism, world geometry, map generation invariants, placement rules, production, season cycling, starvation, glade clearing, orders, win/loss, and a save/load round trip.
 - **`playtest.test.ts`** — a **balance harness**. A heuristic bot plays whole runs end to end: it builds a food and wood economy, houses everyone, drafts and staffs service chains (moving workers off camps whose output is piling up), joins its workplaces to the hearth by road when it has wood to spare, clears glades, takes the more promising of each pair of orders, and answers the decree it is most likely to meet (staffing that decree's producers first) or begs off when neither looks likely. It also plays the pressure systems the way a careful player would: it finishes chains before starting new ones in a draft and takes a strong cornerstone over an idle blueprint, staffs the makers of whatever the coming Storm blight asks for, sets a firekeeper at the hearth once hostility bites, dumps surplus when a full store has stopped production and no warehouse is affordable, and takes a greedy event option only when it pays reputation and its threat can be paid off at once (or its task is nearly met). Each verbose run line ends with why a lost run was lost, blights struck and turned aside, firekeeper minutes and impatience from stalling. It plays 24 seeds for each of four species trios, plus an *economy-only* control bot that never builds services, and asserts that every run reaches a verdict before 40 minutes, that early collapses are rare, that a competent-but-not-great player wins most maps but not all, that the economy-only bot essentially never wins, and that the trios stay within a band of each other. It prints a per-trio summary including where the winning reputation came from:
