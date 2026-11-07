@@ -245,7 +245,7 @@ export function RunTimelineChart({ run }: { run: RunState }) {
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const last = samples.length - 1
     const step = e.shiftKey ? 5 : 1
-    let next: number | null = null
+    let next: number | null
     if (e.key === 'ArrowLeft') next = Math.max(0, index - step)
     else if (e.key === 'ArrowRight') next = Math.min(last, index + step)
     else if (e.key === 'Home') next = 0

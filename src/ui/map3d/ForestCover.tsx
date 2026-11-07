@@ -173,6 +173,7 @@ export function FellingForest({ glades }: { glades: Record<string, Glade> }) {
   const [falling, setFalling] = useState<FallingGrove[]>([])
 
   // Glades mutate in place, so compare cleared ids after every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- no deps on purpose; it sets state only on a new clearing
   useEffect(() => {
     if (REDUCED_MOTION) return
     const cleared = Object.values(glades).filter((g) => g.cleared)
