@@ -295,7 +295,7 @@ export function describeTerm(term: CommissionTerm): string {
     case 'caravans':
       return `Welcome ${term.amount} caravans`
     case 'byYear':
-      return `Hold the settlement by the end of Year ${term.year}`
+      return `Do it by the end of Year ${term.year}`
     case 'maxLost':
       return term.amount === 0
         ? 'Lose no villagers'
