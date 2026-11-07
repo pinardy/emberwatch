@@ -13,10 +13,12 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
+    "check": "npm run typecheck && npm run lint && npm test",
     "test": "vitest run --project sim --project ui",
     "test:balance": "vitest run --project balance",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
