@@ -37,6 +37,7 @@ import { pushLog } from './runLog'
 import { computeModifiers, seasonLengthFor } from './modifiers'
 import { yearLengthFor } from './forecast'
 import { makeRng } from './rng'
+import { applyCommission, commissionLand } from './citadel'
 import { defaultFeats } from '../content/achievements'
 import {
   applyRunModifiers,
@@ -69,6 +70,12 @@ export interface NewRunOptions {
    * upgrade applies.
    */
   daily?: string
+  /**
+   * A Citadel commission (id in `COMMISSIONS`): its twist is applied at the
+   * founding and its objective judged at the end. The caller checks it was
+   * on offer; unknown ids found a run without one.
+   */
+  commission?: string
 }
 
 /** A settlement never starts with fewer villagers than this, whatever the edict. */
@@ -82,6 +89,7 @@ export function createRun({
   modifiers,
   land: landChoice,
   daily,
+  commission,
 }: NewRunOptions): RunState {
   const rng = makeRng(seed, 0)
   // Citadel upgrades and the chosen edict, folded into plain numbers.
@@ -90,7 +98,8 @@ export function createRun({
   const edictMods = edictModifiers(edictLevel)
   // The land's character comes from the seed (its own RNG stream), and shapes
   // the map before anything is placed on it.
-  const runModifiers = modifiers ?? landFor(seed, loadout, landChoice)
+  // A commission may promise a land of its own (the Deep Works' veins).
+  const runModifiers = commissionLand(modifiers ?? landFor(seed, loadout, landChoice), commission)
   const { world, glades, deposits, obstacles } = generateMap(rng, mapgenHooksFor(runModifiers))
 
   const available = meta
@@ -246,6 +255,8 @@ export function createRun({
 
   // --- the land's modifiers --------------------------------------------------
   applyRunModifiers(state, runModifiers)
+  // The commission's twist, folded in like the land's (no commission: no change).
+  applyCommission(state, commission)
   // Season-length effects reach the opening Drizzle too (an early frost).
   const landMods = computeModifiers(state)
   state.season.length = seasonLengthFor('drizzle', 1, landMods)
