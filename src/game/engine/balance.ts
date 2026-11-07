@@ -201,7 +201,12 @@ export const REPUTATION_PER_RESOLVE_POINT = 0.001
 export const REPUTATION_UNSERVED_SHARE = 0.1
 /** Impatience gained for each villager that leaves or dies. */
 export const IMPATIENCE_PER_VILLAGER_LOST = 0.6
-/** Baseline impatience per second (grows each year). */
+/**
+ * Baseline impatience per second (grows each year). Lowered from 0.0022 when
+ * the Queen began reacting to reputation standing still
+ * (`IMPATIENCE_STAGNATION_*`): less of her patience runs on the calendar,
+ * more on what the settlement is doing.
+ */
 export const IMPATIENCE_BASE = 0.0016
 export const IMPATIENCE_YEAR_SCALING = 0.18
 /**
@@ -567,11 +572,16 @@ export const WARD_HOSTILITY_PER_OFFERING = 0.3
 export const IMPATIENCE_STAGNATION_GRACE = 60
 /**
  * Past the grace, stagnation impatience per second grows by this much for
- * every further second without a reputation point — gentle at first (a
- * minute past the grace adds ~0.1 a minute), a real push after four…
+ * every further second without a reputation point — gentle at first (ten
+ * seconds past the grace adds ~0.06 a minute)…
  */
 export const IMPATIENCE_STAGNATION_RAMP = 0.0001
-/** …up to this many per second (~0.6 a minute) for a settlement gone still. */
+/**
+ * …up to this many per second (~0.5 a minute, reached 80 s past the grace)
+ * for a settlement gone still. Tuned with the balance harness: a stronger,
+ * steeper version killed slow runs it should have pushed; this one turns most
+ * long stalls into readable losses while winners pay a point or two.
+ */
 export const IMPATIENCE_STAGNATION_MAX = 0.008
 
 /**
@@ -581,12 +591,12 @@ export const IMPATIENCE_STAGNATION_MAX = 0.008
  * resolve does not plateau far above the reputation threshold once services
  * stand, and a service lost late hurts more than one never built…
  */
-export const RESOLVE_EXPECTATION_PER_YEAR = 2
+export const RESOLVE_EXPECTATION_PER_YEAR = 3
 /**
  * …and this much per villager past `RESOLVE_EXPECTATION_CROWD_FROM`: a bigger
  * settlement expects more of its viceroy.
  */
-export const RESOLVE_EXPECTATION_PER_VILLAGER = 0.2
+export const RESOLVE_EXPECTATION_PER_VILLAGER = 0.25
 export const RESOLVE_EXPECTATION_CROWD_FROM = 15
 
 /**
