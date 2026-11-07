@@ -8,7 +8,8 @@ import {
   type CommissionDef,
   type TermStatus,
 } from '../game/content/commissions'
-import { META_UPGRADES, type RewardBreakdown } from '../game/content/meta'
+import { META_UPGRADES } from '../game/content/meta'
+import { type RewardBreakdown } from '../game/engine/meta'
 import { metaUpgradeArt } from '../game/content/artFamilies'
 import type { MetaState, RunState } from '../game/types'
 import { Icon } from './Icon'

@@ -7,7 +7,7 @@ import {
   WORK_TAG_LABELS,
 } from '../game/content/species'
 import { parseSeed, randomSeed } from '../game/engine/rng'
-import { citadelLoadout } from '../game/content/meta'
+import { citadelLoadout } from '../game/engine/meta'
 import { landFor, type LandChoice } from '../game/engine/runModifiers'
 import { listSlots, type SlotId } from '../game/saveSlots'
 import { useGameStore } from '../game/store'

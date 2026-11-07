@@ -1,5 +1,5 @@
 import { BUILDINGS, STARTING_BLUEPRINTS } from '../content/buildings'
-import { citadelLoadout, clampEdict, edictLabel, edictModifiers } from '../content/meta'
+import { citadelLoadout, clampEdict, edictLabel, edictModifiers } from './meta'
 import {
   SPECIES,
   STARTING_SPECIES,

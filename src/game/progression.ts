@@ -1,6 +1,6 @@
 import { evaluateAchievements, type AchievementDef } from './content/achievements'
 import { dailyResultOf, dailyStreak, recordDaily } from './content/daily'
-import { bankRun, supplyReward } from './content/meta'
+import { bankRun, supplyReward } from './engine/meta'
 import type { DailyResult, MetaState, RunState } from './types'
 
 /**

@@ -7,6 +7,8 @@ import {
   MAX_EDICT,
   META_UPGRADES,
   META_UPGRADE_LIST,
+} from './content/meta'
+import {
   META_VERSION,
   bankRun,
   citadelLoadout,
@@ -15,7 +17,7 @@ import {
   purchaseUpgrade,
   supplyBreakdown,
   supplyReward,
-} from './content/meta'
+} from './engine/meta'
 import { BUILDINGS } from './content/buildings'
 import {
   MAX_IMPATIENCE,

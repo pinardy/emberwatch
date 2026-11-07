@@ -4,7 +4,8 @@ import { autoPauseNotice } from './autoPause'
 import { earnedTitles } from './content/achievements'
 import { dailyExpedition, utcDateKey } from './content/daily'
 import { commissionOffer } from './content/commissions'
-import { META_UPGRADES, defaultMeta, purchaseUpgrade } from './content/meta'
+import { META_UPGRADES } from './content/meta'
+import { defaultMeta, purchaseUpgrade } from './engine/meta'
 import { settleRun, type RunSettlement } from './progression'
 import {
   addClearer,

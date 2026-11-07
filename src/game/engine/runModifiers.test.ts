@@ -3,7 +3,7 @@ import { BUILDINGS } from '../content/buildings'
 import { CORNERSTONES } from '../content/cornerstones'
 import { DECREES } from '../content/decrees'
 import { GLADE_EVENTS } from '../content/gladeEvents'
-import { bankRun, defaultMeta, migrateMeta } from '../content/meta'
+import { bankRun, defaultMeta, migrateMeta } from './meta'
 import {
   MAX_RUN_MODIFIERS,
   MIN_RUN_MODIFIERS,

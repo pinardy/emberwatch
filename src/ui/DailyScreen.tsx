@@ -10,7 +10,8 @@ import {
   runMinutes,
   utcDateKey,
 } from '../game/content/daily'
-import { EDICTS, edictLabel } from '../game/content/meta'
+import { EDICTS } from '../game/content/meta'
+import { edictLabel } from '../game/engine/meta'
 import { SPECIES } from '../game/content/species'
 import { useGameStore, SLOTS_FULL_NOTICE } from '../game/store'
 import type { DailyResult } from '../game/types'

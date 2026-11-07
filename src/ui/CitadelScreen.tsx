@@ -1,11 +1,5 @@
-import {
-  META_BRANCHES,
-  META_UPGRADES,
-  META_UPGRADE_LIST,
-  edictNumeral,
-  missingPrerequisites,
-  upgradeStatus,
-} from '../game/content/meta'
+import { META_BRANCHES, META_UPGRADES, META_UPGRADE_LIST } from '../game/content/meta'
+import { edictNumeral, missingPrerequisites, upgradeStatus } from '../game/engine/meta'
 import { COMMISSIONS, commissionsOpenedBy, unlockedCommissions, COMMISSION_LIST } from '../game/content/commissions'
 import { SPECIES } from '../game/content/species'
 import { runModifierDefs } from '../game/engine/runModifiers'

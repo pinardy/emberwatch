@@ -14,7 +14,7 @@ import {
   type AchievementContext,
 } from './content/achievements'
 import { BUILDINGS, BUILDING_LIST } from './content/buildings'
-import { META_VERSION, bankRun, defaultMeta, migrateMeta, supplyReward } from './content/meta'
+import { META_VERSION, bankRun, defaultMeta, migrateMeta, supplyReward } from './engine/meta'
 import { appeaseThreat } from './engine/threats'
 import { createRun } from './engine/createRun'
 import { stepDecree } from './engine/structure'
