@@ -1,4 +1,4 @@
-import type { GladeStake } from '../game/engine/events'
+import type { GladeStake } from '../game/engine/glades'
 import { Icon } from './Icon'
 import { GLADE_STAKE_ART, GLADE_STAKE_STYLE } from './mapShared'
 

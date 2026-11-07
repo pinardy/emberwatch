@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createRun } from '../game/engine/createRun'
-import { resolveGladeEvent, takeChoice } from '../game/engine/events'
+import { resolveGladeEvent } from '../game/engine/glades'
+import { takeChoice } from '../game/engine/drafts'
 import { TICK_SECONDS } from '../game/engine/balance'
 import { buildRoadNetwork, placeRoad } from '../game/engine/roads'
 import { tick } from '../game/engine/tick'

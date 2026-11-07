@@ -11,14 +11,8 @@ import {
   unlockedCommissions,
 } from './content/commissions'
 import { CORNERSTONES } from './content/cornerstones'
-import {
-  META_UPGRADES,
-  META_UPGRADE_LIST,
-  bankRun,
-  defaultMeta,
-  migrateMeta,
-  supplyBreakdown,
-} from './content/meta'
+import { META_UPGRADES, META_UPGRADE_LIST } from './content/meta'
+import { bankRun, defaultMeta, migrateMeta, supplyBreakdown } from './engine/meta'
 import { RUN_MODIFIERS } from './content/runModifiers'
 import { COMMISSION_ONGOING_ID, commissionLand } from './engine/citadel'
 import { createRun } from './engine/createRun'

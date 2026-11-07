@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { defaultMeta } from './content/meta'
+import { defaultMeta } from './engine/meta'
 import { createRun } from './engine/createRun'
 import { tick } from './engine/tick'
 import { loadRun } from './persistence'

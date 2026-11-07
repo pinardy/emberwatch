@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BUILDINGS } from '../content/buildings'
-import { supplyReward } from '../content/meta'
+import { supplyReward } from './meta'
 import type { RunState } from '../types'
 import {
   ARCHITECT_PLANS_GROWTH,
@@ -21,14 +21,14 @@ import {
 } from './balance'
 import { createRun } from './createRun'
 import { collectWarnings } from './diagnostics'
+import { chainPieceFor } from './serviceChains'
 import {
-  chainPieceFor,
   offerBlueprint,
   redrawTargets,
   redrawToward,
   takeChoice,
   targetedRedrawCost,
-} from './events'
+} from './drafts'
 import {
   architectBlocked,
   architectOffers,

@@ -1,5 +1,5 @@
 import { GLADE_ART } from '../../game/content/art'
-import type { GladeStake } from '../../game/engine/events'
+import type { GladeStake } from '../../game/engine/glades'
 import type { Glade } from '../../game/types'
 import {
   GLADE_KIND_STYLE,

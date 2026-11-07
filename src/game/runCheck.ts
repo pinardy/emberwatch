@@ -20,7 +20,9 @@ type Rec = Record<string, unknown>
 export function isRec(value: unknown): value is Rec {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
-function finite(value: unknown): value is number {
+
+/** A real number: not NaN, not ±Infinity, not a numeric string. */
+export function finite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 function isVec(value: unknown): boolean {

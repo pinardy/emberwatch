@@ -2,7 +2,7 @@ import type { GladeEventDef } from '../types'
 
 /**
  * Glade events fire the moment a dangerous or forbidden glade finishes
- * clearing. Options are resolved by `engine/events.ts`; anything the player
+ * clearing. Options are resolved by `engine/glades.ts`; anything the player
  * cannot afford is shown but disabled.
  *
  * Design invariants the engine and the balance bot rely on:

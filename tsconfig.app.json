@@ -28,5 +28,5 @@
     }
   },
   "include": ["src"],
-  "exclude": ["src/styles.test.ts"]
+  "exclude": ["src/styles.test.ts", "src/game/importCycles.test.ts"]
 }

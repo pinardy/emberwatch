@@ -3,32 +3,24 @@ import { feats } from './feats'
 import type { RunState, Season } from '../types'
 import {
   BASE_STORAGE,
-  HOSTILITY_CALM_PER_SPARED_GLADE,
-  HOSTILITY_PER_POPULATION,
-  HOSTILITY_PER_SECOND,
   HOSTILITY_PER_STORM,
-  HOSTILITY_RATE_PER_CLEARED_GLADE,
-  HOSTILITY_SEASON_MULTIPLIER,
-  HOSTILITY_YEAR_SCALING,
   NEWCOMER_SEASONS,
   newcomerInterval,
   QUEEN_DEADLINE_YEAR,
   SEASON_INFO,
   SEASON_ORDER,
-  SPARED_GLADE_WEIGHT,
 } from './balance'
+import { MAX_HOSTILITY, stepHostility } from './hostility'
 import { pushLog } from './runLog'
 import {
   breakStormBlights,
   forecastStormBlight,
   passStormConditions,
 } from './blights'
-import {
-  checkMilestones,
-  stepClearing,
-  stepNewcomers,
-  stepThreats,
-} from './events'
+import { checkMilestones } from './drafts'
+import { stepClearing } from './glades'
+import { stepNewcomers } from './newcomers'
+import { stepThreats } from './threats'
 import { stepOrders } from './orders'
 import { computeModifiers, seasonLengthFor, type Modifiers } from './modifiers'
 import { stepProduction } from './production'
@@ -51,8 +43,6 @@ import {
   stepReputation,
   stepResolve,
 } from './society'
-
-export const MAX_HOSTILITY = 100
 
 /** The Queen's deadline log line: the toast and the Log both read it. */
 export const DEADLINE_PASSED_LOG =
@@ -149,44 +139,6 @@ function tickPlaying(s: RunState, dt: number): void {
 export function closeOpenChoices(s: RunState): void {
   if (s.pendingChoices.length > 0) s.pendingChoices = []
   if ((s.orderOffers ?? []).length > 0) s.orderOffers = []
-}
-
-/**
- * Passive hostility gained per second right now (before storms, glades and
- * threat strikes). Shared with the HUD so its forecast matches the sim. It
- * grows with the year, the population and every glade reclaimed, and glades
- * left to the forest calm it — enough of them and it falls.
- */
-export function hostilityRate(s: RunState, rateMultiplier: number): number {
-  return hostilityGrowth(s, rateMultiplier) - sparedGladeCalm(s)
-}
-
-/** The forest's passive growth, before glades left to it calm it. */
-export function hostilityGrowth(s: RunState, rateMultiplier: number): number {
-  const yearScale = 1 + (s.season.year - 1) * HOSTILITY_YEAR_SCALING
-  const popScale = 1 + population(s) * HOSTILITY_PER_POPULATION
-  const seasonScale = HOSTILITY_SEASON_MULTIPLIER[s.season.season]
-  const gladeScale = 1 + s.stats.gladesCleared * HOSTILITY_RATE_PER_CLEARED_GLADE
-  return HOSTILITY_PER_SECOND * yearScale * popScale * seasonScale * gladeScale * rateMultiplier
-}
-
-/** Hostility per second one spared glade of this kind calms. */
-export function sparedGladeCalmOf(kind: keyof typeof SPARED_GLADE_WEIGHT): number {
-  return HOSTILITY_CALM_PER_SPARED_GLADE * SPARED_GLADE_WEIGHT[kind]
-}
-
-/** Hostility per second calmed by every glade left to the forest. */
-export function sparedGladeCalm(s: RunState): number {
-  let calm = 0
-  for (const g of Object.values(s.glades)) {
-    if (g.spared && !g.cleared) calm += sparedGladeCalmOf(g.kind)
-  }
-  return calm
-}
-
-function stepHostility(s: RunState, dt: number, rateMultiplier: number): void {
-  const gain = hostilityRate(s, rateMultiplier) * dt
-  s.hostility = Math.min(MAX_HOSTILITY, Math.max(0, s.hostility + gain))
 }
 
 function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {

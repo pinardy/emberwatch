@@ -1,9 +1,5 @@
-import {
-  EDICT_REWARD_STEP,
-  MAX_EDICT,
-  edictLabel,
-  supplyBreakdown,
-} from '../game/content/meta'
+import { EDICT_REWARD_STEP, MAX_EDICT } from '../game/content/meta'
+import { edictLabel, supplyBreakdown } from '../game/engine/meta'
 import { useGameStore, useHudRun } from '../game/store'
 import { Overlay } from './ChoiceModal'
 import { CommissionEnd } from './Commissions'

@@ -17,7 +17,7 @@ import {
   shiftDateKey,
   utcDateKey,
 } from './content/daily'
-import { bankRun, defaultMeta, migrateMeta } from './content/meta'
+import { bankRun, defaultMeta, migrateMeta } from './engine/meta'
 import { RUN_MODIFIERS } from './content/runModifiers'
 import { createRun } from './engine/createRun'
 import { drawRunModifiers } from './engine/runModifiers'

@@ -1,5 +1,5 @@
 import { RESOURCES } from '../game/content/resources'
-import { supplyReward } from '../game/content/meta'
+import { supplyReward } from '../game/engine/meta'
 import {
   PETITION_AMBER,
   PETITION_BROKEN_IMPATIENCE,

@@ -292,14 +292,6 @@ export const GroundSurface = memo(function GroundSurface({ run }: { run: RunStat
   )
 })
 
-/** The fogged glade a ground point falls in, if any (clicks select it). */
-export function gladeAt(run: RunState, p: Vec2): Glade | null {
-  for (const glade of Object.values(run.glades)) {
-    if (pointInPolygon(p, glade.polygon)) return glade
-  }
-  return null
-}
-
 /** Width of a fogged glade's kind border, in world units. */
 const EDGE_WIDTH = 0.16
 

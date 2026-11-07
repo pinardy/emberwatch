@@ -19,7 +19,7 @@ import {
   ROAD_WOOD_PER_UNIT,
   ROAD_WORK_BONUS,
 } from './balance'
-import { dist, pointInPolygon } from './geometry'
+import { closestT, dist, distToSegment, pointInPolygon } from './geometry'
 import { gladeAt, insideWorld } from './mapgen'
 import { canAfford, grant, spend, storageUsed } from './queries'
 
@@ -44,22 +44,6 @@ const NODE_EPS = 0.05
 // ---------------------------------------------------------------------------
 // Geometry
 // ---------------------------------------------------------------------------
-
-/** Parameter (0..1) of the point on segment a→b closest to p. */
-export function closestT(p: Vec2, a: Vec2, b: Vec2): number {
-  const dx = b.x - a.x
-  const dy = b.y - a.y
-  const l2 = dx * dx + dy * dy
-  if (l2 < 1e-12) return 0
-  const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2
-  return t < 0 ? 0 : t > 1 ? 1 : t
-}
-
-/** Distance from p to the segment a→b. */
-export function distToSegment(p: Vec2, a: Vec2, b: Vec2): number {
-  const t = closestT(p, a, b)
-  return Math.hypot(a.x + (b.x - a.x) * t - p.x, a.y + (b.y - a.y) * t - p.y)
-}
 
 export function roadLength(road: Pick<RoadSegment, 'a' | 'b'>): number {
   return dist(road.a, road.b)

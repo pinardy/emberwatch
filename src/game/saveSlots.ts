@@ -9,6 +9,7 @@ import {
   type LoadResult,
   type WriteFailure,
 } from './persistence'
+import { finite } from './runCheck'
 import type { RunPhase, RunState, Season, SpeciesId } from './types'
 
 /*
@@ -89,10 +90,6 @@ export function slotMeta(run: RunState, savedAt: number): SlotMeta {
 
 const SEASONS: readonly string[] = ['drizzle', 'clearance', 'storm']
 const PHASES: readonly string[] = ['playing', 'won', 'lost']
-
-function finite(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
 
 /** Index entries are checked like any other stored data: never trusted blind. */
 function validMeta(value: unknown): value is SlotMeta {

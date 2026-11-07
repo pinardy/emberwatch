@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BUILDINGS, BUILDING_LIST } from '../content/buildings'
-import { evaluateGoal } from '../content/orders'
+import { evaluateGoal, goalCount, goalProgress, describeTimedGoal } from './goals'
 import { RESOURCES } from '../content/resources'
 import { loadRun } from '../persistence'
 import type { BuildingInstance, RunState, Vec2 } from '../types'
@@ -19,7 +19,7 @@ import {
 } from './actions'
 import { DEMOLISH_REFUND_BUILT, RUSH_COST_PER_SECOND } from './balance'
 import { createRun } from './createRun'
-import { takeChoice } from './events'
+import { takeChoice } from './drafts'
 import { buildingStatus } from './forecast'
 import { computeModifiers } from './modifiers'
 import { stepProduction, workRate } from './production'
@@ -36,7 +36,6 @@ import {
   workerCapacity,
 } from './queries'
 import { resolveBreakdowns } from './society'
-import { goalCount, goalProgress, describeTimedGoal } from './structure'
 import { tick } from './tick'
 import {
   describeUpgrade,
