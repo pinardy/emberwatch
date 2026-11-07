@@ -256,9 +256,9 @@ describe('commissions: judging the objective', () => {
   it('counts caravans, decrees and impatience from the run', () => {
     const trade = run('tradeTown')
     const [post, caravans] = COMMISSIONS.tradeTown.terms
-    trade.caravan.visits = 4
-    expect(termStatus(caravans, trade)).toMatchObject({ state: 'open', detail: '4/5' })
     trade.caravan.visits = 5
+    expect(termStatus(caravans, trade)).toMatchObject({ state: 'open', detail: '5/6' })
+    trade.caravan.visits = 6
     expect(termStatus(caravans, trade).state).toBe('met')
     expect(termStatus(post, ended(trade, 'won')).state).toBe('failed')
 
@@ -295,7 +295,7 @@ describe('commissions: the reward', () => {
     const won = ended(s, 'won')
     const base = supplyBreakdown(plainWon)
     const paid = supplyBreakdown(won)
-    const bonus = Math.round((base.subtotal * 70) / 100)
+    const bonus = Math.round((base.subtotal * 65) / 100)
     expect(paid.commission).toEqual({ id: 'holdFrontier', met: true, bonus })
     expect(paid.subtotal).toBe(base.subtotal + bonus)
     expect(paid.lines.at(-1)?.label).toMatch(/Commission met: Hold the Frontier/)
@@ -303,7 +303,7 @@ describe('commissions: the reward', () => {
     expect(edict.total).toBe(paid.subtotal + Math.round(paid.subtotal * 0.5))
     // Found a Trade Town doubles the run's own payout.
     const trade = ended({ ...run('tradeTown'), stats: s.stats, season: s.season }, 'won')
-    trade.caravan.visits = 5
+    trade.caravan.visits = 6
     trade.buildings.post = { ...trade.buildings.hearth, id: 'post', defId: 'tradingPost' }
     const doubled = supplyBreakdown(trade)
     expect(doubled.commission?.met).toBe(true)

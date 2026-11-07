@@ -193,8 +193,9 @@ const royalWorks: CommissionTactics = {
 /**
  * The Deep Works: take the copper chain from a draft if the plans are not in
  * hand, clear toward a copper seam if none is at home, raise the smelter (the
- * dear part, in bricks) and then a mine on the seam, and keep them staffed —
- * the mine only while ore is short — until the bars are made.
+ * dear part, in bricks — so a clay pit and brickyard first if none stands)
+ * and then a mine on the seam, and keep them staffed — the mine only while
+ * ore is short — until the bars are made.
  */
 const COPPER_CHAIN = ['copperMine', 'smelter']
 const copperShort = (s: RunState) =>
@@ -216,7 +217,11 @@ const deepWorks: CommissionTactics = {
   },
   build: (s, kit) => {
     if (!copperShort(s) || !openingDone(s) || population(s) < 8) return false
-    if (countPlanned(s, 'smelter') < 1) return kit.tryPlace(s, 'smelter')
+    if (countPlanned(s, 'smelter') < 1) {
+      if (kit.tryPlace(s, 'smelter')) return true
+      // Short of bricks: the brick chain the smelter is priced in.
+      return ['clayPit', 'brickyard'].some((id) => countPlanned(s, id) < 1 && kit.tryPlace(s, id))
+    }
     return countPlanned(s, 'copperMine') < 1 && kit.tryPlace(s, 'copperMine')
   },
   staffPriority: (s, b) => {

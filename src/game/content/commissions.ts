@@ -99,7 +99,7 @@ const defs: CommissionDef[] = [
       { kind: 'goal', goal: { kind: 'gladesCleared', amount: 12 } },
       { kind: 'calmForest', max: 35 },
     ],
-    bonusPercent: 70,
+    bonusPercent: 65,
   },
   {
     id: 'lightWagons',
@@ -111,7 +111,7 @@ const defs: CommissionDef[] = [
     startStockPercent: -15,
     effects: [{ kind: 'buildSpeed', percent: 15 }],
     terms: [{ kind: 'maxLost', amount: 0 }, { kind: 'byYear', year: 3 }],
-    bonusPercent: 55,
+    bonusPercent: 70,
   },
   {
     id: 'royalSurvey',
@@ -125,7 +125,7 @@ const defs: CommissionDef[] = [
       { kind: 'impatienceRate', percent: 10 },
     ],
     terms: [{ kind: 'byYear', year: 3 }],
-    bonusPercent: 70,
+    bonusPercent: 65,
   },
 
   // ---- opened by Citadel upgrades -------------------------------------------
@@ -146,7 +146,7 @@ const defs: CommissionDef[] = [
         goal: { kind: 'buildingId', buildingId: 'tradingPost', amount: 1 },
         label: 'Keep a Trading Post standing',
       },
-      { kind: 'caravans', amount: 5 },
+      { kind: 'caravans', amount: 6 },
     ],
     bonusPercent: 100,
     unlockedBy: 'merchantCharter',
@@ -175,8 +175,8 @@ const defs: CommissionDef[] = [
       { kind: 'newcomerRate', percent: -30 },
       { kind: 'foodUpkeep', percent: 10 },
     ],
-    terms: [{ kind: 'goal', goal: { kind: 'population', amount: 22 } }],
-    bonusPercent: 60,
+    terms: [{ kind: 'goal', goal: { kind: 'population', amount: 21 } }],
+    bonusPercent: 70,
     unlockedBy: 'openRoads',
   },
   {
@@ -206,7 +206,7 @@ const defs: CommissionDef[] = [
       { kind: 'decreeReputation', amount: 1 },
     ],
     terms: [{ kind: 'decrees', amount: 3 }],
-    bonusPercent: 65,
+    bonusPercent: 70,
     unlockedBy: 'charterOffice',
   },
   {

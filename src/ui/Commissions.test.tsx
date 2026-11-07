@@ -78,7 +78,7 @@ describe('choosing a commission on the setup screen', () => {
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
     const pick = screen.getByRole('radio', { name: /Hold the Frontier/i })
     expect(pick.textContent).toMatch(/Clear 12 glades/)
-    expect(pick.textContent).toMatch(/\+70% supplies if met/)
+    expect(pick.textContent).toMatch(/\+65% supplies if met/)
     fireEvent.click(pick)
     expect(pick.getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
@@ -134,7 +134,7 @@ describe('the commission on the end screen', () => {
     expect(verdict.textContent).toMatch(/Met: \+\d+ supplies/)
     expect(within(verdict).getAllByRole('img', { name: 'met' })).toHaveLength(3)
     const supplies = screen.getByRole('region', { name: /Citadel supplies/i })
-    expect(supplies.textContent).toMatch(/Commission met: Hold the Frontier \(\+70%\)/)
+    expect(supplies.textContent).toMatch(/Commission met: Hold the Frontier \(\+65%\)/)
   })
 
   it('says it was not met, and pays nothing extra, when the run is lost', () => {
