@@ -36,8 +36,9 @@ export interface PlacementPreview {
 
 /** "+25% farming", "−20% build speed", "+25% clay". */
 export function describeTerrainEffect(effect: TerrainEffect): string {
-  const sign = effect.percent >= 0 ? '+' : '−'
-  const amount = `${sign}${Math.abs(effect.percent)}%`
+  const percent = 'percent' in effect ? effect.percent : 0
+  const sign = percent >= 0 ? '+' : '−'
+  const amount = `${sign}${Math.abs(percent)}%`
   switch (effect.kind) {
     case 'workSpeed':
       return `${amount} ${effect.tag}`
@@ -45,6 +46,10 @@ export function describeTerrainEffect(effect: TerrainEffect): string {
       return `${amount} ${effect.resource === 'copperOre' ? 'copper ore' : effect.resource}`
     case 'buildSpeed':
       return `${amount} build speed`
+    case 'seasonWork':
+      return `${amount} work in the ${effect.season === 'storm' ? 'Storm' : effect.season === 'drizzle' ? 'Drizzle' : 'Clearance'}`
+    case 'warmHomes':
+      return 'warm in every Storm'
   }
 }
 

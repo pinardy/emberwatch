@@ -11,6 +11,7 @@ import { CornerstoneOption, DraftOption, RerollButton } from './ChoiceModal'
 import { Icon } from './Icon'
 import { OrderOption } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
+import { TerrainPlanLine, planOf } from './TerrainPlan'
 import { ReputationProfileLine } from './EnvoyStatus'
 import { runReputationProfile } from '../game/engine/reputation'
 import { DialogTip } from './TipsCoach'
@@ -103,6 +104,10 @@ export function FoundingPanel() {
         ) : (
           <p className="muted">This land has no particular character.</p>
         )}
+        <div className="land-strip">
+          <span>The ground:</span>
+          <TerrainPlanLine plan={planOf(run.world)} compact />
+        </div>
         <ReputationProfileLine profile={runReputationProfile(run)} className="rep-profile-strip" />
         <p className="founding-settlers">
           <span>Settlers:</span>

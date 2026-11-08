@@ -18,6 +18,7 @@ import {
 } from '../game/engine/balance'
 import { sparedGladeCalmOf } from '../game/engine/hostility'
 import { DEPOSIT_INFO } from '../game/engine/mapgen'
+import { GladeGround, barrierReachHint } from './GladeGround'
 import { computeModifiers } from '../game/engine/modifiers'
 import { availableRecipes, idleVillagers } from '../game/engine/queries'
 import {
@@ -102,6 +103,7 @@ export function Inspector() {
               : `${deposit.amount} harvests remaining.`}{' '}
             Place a camp within reach to work it.
           </p>
+          {DEPOSIT_INFO[deposit.kind].note && <p className="muted deposit-note">{DEPOSIT_INFO[deposit.kind].note}</p>}
         </div>
       </div>
     )
@@ -651,6 +653,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
         ) : !reachable ? (
           <p className="muted">
             Too far. Clear a glade that borders this one before your crews can reach it.
+            {barrierReachHint(run) ? ` ${barrierReachHint(run)}` : ''}
           </p>
         ) : glade.spared ? (
           <SparedGlade run={run} glade={glade} />
@@ -697,6 +700,7 @@ function GladeInspector({ run, gladeId }: { run: RunState; gladeId: string }) {
             <LeaveToForest run={run} glade={glade} />
           </>
         )}
+        <GladeGround glade={glade} />
       </div>
     </div>
   )

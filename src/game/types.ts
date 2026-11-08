@@ -328,7 +328,7 @@ export interface AdjacencyBonus {
 // Map
 // ---------------------------------------------------------------------------
 
-export type TerrainId = 'clearing' | 'forest' | 'marsh' | 'rock' | 'fertile'
+export type TerrainId = 'clearing' | 'forest' | 'marsh' | 'rock' | 'fertile' | 'cinder'
 
 /**
  * What the ground under a building does to it. Declarative like cornerstone
@@ -341,6 +341,10 @@ export type TerrainEffect =
   | { kind: 'yield'; resource: ResourceId; percent: number }
   /** Every building raised here goes up faster (or slower). */
   | { kind: 'buildSpeed'; percent: number }
+  /** Every workplace here works faster (or slower) in one season. */
+  | { kind: 'seasonWork'; season: Season; percent: number }
+  /** Homes here stay warm through the Storm, beyond every fire. */
+  | { kind: 'warmHomes' }
 
 export interface TerrainDef {
   id: TerrainId
@@ -360,6 +364,12 @@ export type DepositId =
   | 'vegetation'
   | 'game'
   | 'fertileSoil'
+  /** The Cinderwood's standing dead timber: quick wood, but it runs out. */
+  | 'deadfall'
+  /** The Cinderwood's fireweed: herbs and fibre from one harvest. */
+  | 'fireweed'
+  /** The ruins field's tumbled stonework: stone and old bricks, salvaged. */
+  | 'ruins'
 
 /** A point in continuous world space. +x east, +y south (screen-like). */
 export interface Vec2 {
@@ -371,6 +381,105 @@ export interface Vec2 {
 export interface WorldInfo {
   width: number
   height: number
+  /**
+   * How the glades are laid out (`content/layouts.ts`). Absent on saves from
+   * before layouts, which were all rings; migration fills it in.
+   */
+  layout?: LayoutId
+  /** Which biome claims part of the map. Absent on older saves (woodland). */
+  biome?: BiomeId
+  /**
+   * Water and cliffs running along glade borders, with the crossings left
+   * open. Glades on either side are neighbours only at a crossing. Absent
+   * (none) on the rings layout and older saves.
+   */
+  barriers?: Barrier[]
+}
+
+export type LayoutId = 'rings' | 'river' | 'ridge' | 'ruins'
+
+/** How a layout places its glade centres (`engine/worldgen.ts`). */
+export type LayoutSeeding =
+  /** Two jittered rings around the hearth: six close, eight far. */
+  | { kind: 'rings' }
+  /**
+   * A spine of glades running one way from the hearth (at these distances),
+   * leaning `terrainWeight` times toward ground of `terrain`, with `lowland` glades (close, far) everywhere but
+   * a `corridor` either side of it.
+   */
+  | { kind: 'spine'; steps: number[]; corridor: number; terrain: TerrainId; terrainWeight: number; lowland: [number, number] }
+  /** `count` glades scattered anywhere, `minGap` apart and `hearthGap` clear of the hearth. */
+  | { kind: 'scatter'; count: number; minGap: number; hearthGap: number }
+export type BiomeId = 'woodland' | 'cinderwood'
+
+/** A river or a cliff line along glade borders (see `WorldInfo.barriers`). */
+export interface Barrier {
+  kind: 'river' | 'cliff'
+  /** Its course, as border segments (unordered; each drawn on its own). */
+  segments: [Vec2, Vec2][]
+  /** Fords or passes: where the barrier is open, at a shared border's middle. */
+  crossings: Vec2[]
+}
+
+/**
+ * A map layout: where the glade centres go and which borders a barrier runs
+ * along. Generation is in `engine/worldgen.ts`; this is what it reads.
+ */
+export interface LayoutDef {
+  id: LayoutId
+  name: string
+  icon: string
+  /** One line for the setup screen and the Founding. */
+  blurb: string
+  /** How-to-play and Inspector wording. */
+  detail: string
+  /** Relative odds of a seed drawing it (lands can multiply these). */
+  weight: number
+  /** Where the glade centres go. */
+  seeding: LayoutSeeding
+  /** Where its biome region falls, when a biome is drawn. */
+  biomeRegion: 'wedge' | 'farSide' | 'flank'
+  /**
+   * Splits the glades in two (a river's banks, the ridge and the lowland);
+   * the barrier runs along every border between the halves.
+   */
+  split?: { kind: 'line'; far: number } | { kind: 'spine' }
+  /** The barrier along the split, if any. */
+  barrier?: Barrier['kind']
+  /**
+   * Openings in the barrier, spread as far apart as they will go from the
+   * one nearest the hearth. `fromHearth`: may that one touch the hearth's glade?
+   */
+  crossings?: { count: number; fromHearth: boolean }
+  /** Theme weights for glades beside the barrier (silt on a river's banks). */
+  bankWeights?: Partial<Record<TerrainId, number>>
+  /** Glade-event pool its dangerous glades draw from first, if any. */
+  eventPool?: string
+  /** Extra deposit added to this share of its glades (the ruins' salvage). */
+  extraDeposit?: { kind: DepositId; chance: number }
+}
+
+/**
+ * A biome: a region of the map with its own ground, deposits and events.
+ * The default woodland has none of these and generates today's map.
+ */
+export interface BiomeDef {
+  id: BiomeId
+  name: string
+  icon: string
+  blurb: string
+  detail: string
+  weight: number
+  /** The ground every glade of its region takes. */
+  terrain?: TerrainId
+  /** Deposit themes its glades draw from (each with a food source in its first four). */
+  themes?: { deposits: DepositId[] }[]
+  /** Glade-event pool its dangerous and forbidden glades draw from first. */
+  eventPool?: string
+  /** Multiplies the clearing work of its glades. */
+  clearWorkScale?: number
+  /** Share of the non-hearth glades it claims (roughly). */
+  share?: number
 }
 
 /**
@@ -389,10 +498,13 @@ export interface WorldDeposit {
   gladeId: string
 }
 
-/** Unbuildable ground — a crag, a sink of deep mire. Purely spatial. */
+/**
+ * Unbuildable ground — a crag, a sink of deep mire, or a stretch of a
+ * barrier's water or cliff edge. Purely spatial.
+ */
 export interface Obstacle {
   id: string
-  kind: 'crag' | 'mire'
+  kind: 'crag' | 'mire' | 'water' | 'cliff'
   pos: Vec2
   radius: number
   gladeId: string
@@ -775,6 +887,10 @@ export interface MapgenHooks {
   smallGladeOdds?: number
   /** Multiplies the loot of glades of each kind. */
   rewardScale?: Partial<Record<GladeKind, number>>
+  /** Multiplies the odds of each map layout (see `content/layouts.ts`). */
+  layoutWeights?: Partial<Record<LayoutId, number>>
+  /** Multiplies the odds of each biome. */
+  biomeWeights?: Partial<Record<BiomeId, number>>
 }
 
 export interface RunModifierDef {
@@ -950,6 +1066,11 @@ export interface GladeEventDef {
   kind: Exclude<GladeKind, 'settlement' | 'small'>
   description: string
   options: GladeEventOptionDef[]
+  /**
+   * A biome's or layout's own event (`'cinderwood'`, `'ruins'`): drawn only
+   * by its glades, never by the default pools.
+   */
+  pool?: string
 }
 
 // ---------------------------------------------------------------------------

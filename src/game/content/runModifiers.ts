@@ -40,6 +40,8 @@ const defs: RunModifierDef[] = [
     mapgen: {
       themeWeights: { fertile: 2.5, marsh: 3 },
       depositScale: { fertileSoil: 1.5 },
+      // A floodplain has its river.
+      layoutWeights: { river: 3 },
     },
   },
   {
@@ -97,6 +99,8 @@ const defs: RunModifierDef[] = [
     mapgen: {
       smallGladeOdds: 0.5,
       rewardScale: { dangerous: 1.5, forbidden: 1.5 },
+      // Old stonework everywhere: the ruins field is likelier.
+      layoutWeights: { ruins: 3 },
     },
     excludes: ['restlessForest'],
   },
@@ -151,7 +155,8 @@ const defs: RunModifierDef[] = [
     icon: '🪵',
     tone: 'mixed',
     description: 'A quarter of the outlying timber has turned to stone, but what remains is dense and burns slowly: the hearth and braziers use 20% less wood.',
-    mapgen: { depositScale: { trees: 0.75 } },
+    // Dead wood is the Cinderwood's own: a burn scar is likelier.
+    mapgen: { depositScale: { trees: 0.75 }, biomeWeights: { cinderwood: 2 } },
     effects: [
       { kind: 'hearthFuel', percent: -20 },
     ],

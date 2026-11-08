@@ -144,16 +144,26 @@ export const SPARED_STYLE = {
   art: 'trees' as IconId,
 } as const
 
+/**
+ * A biome's ground shows through the fog: its glades wear this tint while
+ * fogged (in place of their kind's) and a faint one while still hidden, so
+ * the region it claims reads from the first minute.
+ */
+export const TERRAIN_FOG: Partial<Record<TerrainId, { fog: string; hidden: string }>> = {
+  cinder: { fog: '#33221d', hidden: '#1a1210' },
+}
+
 /** Fill for a glade polygon in either renderer. */
 export function gladeFill(glade: Glade, palette: MapPalette): string {
   const look = gladeLook(glade)
   if (look === 'visible') return terrainColor(glade.terrain, palette)
+  const biome = TERRAIN_FOG[glade.terrain]
   const base =
     look === 'fogged'
       ? glade.spared
         ? SPARED_STYLE.fog
-        : GLADE_KIND_STYLE[glade.kind].fog
-      : HIDDEN_FILL
+        : (biome?.fog ?? GLADE_KIND_STYLE[glade.kind].fog)
+      : (biome?.hidden ?? HIDDEN_FILL)
   return palette === '3d' ? shade(base, 1.25) : base
 }
 
@@ -278,6 +288,9 @@ export const DEPOSIT_TINT: Record<DepositId, string> = {
   vegetation: '#9ccf5a',
   game: '#8a5a3a',
   fertileSoil: '#d9c25a',
+  deadfall: '#5a4a44',
+  fireweed: '#d4567f',
+  ruins: '#c9bfa8',
 }
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,10 @@ import {
 } from '../game/content/species'
 import { parseSeed, randomSeed } from '../game/engine/rng'
 import { citadelLoadout } from '../game/engine/meta'
-import { landFor, type LandChoice } from '../game/engine/runModifiers'
+import { landFor, mapgenHooksFor, type LandChoice } from '../game/engine/runModifiers'
+import { commissionLand } from '../game/engine/citadel'
+import { drawTerrainPlan } from '../game/engine/terrainPlan'
+import { TerrainPlanLine } from './TerrainPlan'
 import { listSlots, type SlotId } from '../game/saveSlots'
 import { useGameStore } from '../game/store'
 import type { SpeciesId } from '../game/types'
@@ -87,6 +90,15 @@ export function SetupScreen() {
   const land = useMemo(
     () => (previewSeed === null ? [] : landFor(previewSeed, powers, landChoice)),
     [previewSeed, powers, landChoice],
+  )
+
+  // …and so does the ground: its layout and biome, which the land can lean.
+  const plan = useMemo(
+    () =>
+      previewSeed === null
+        ? null
+        : drawTerrainPlan(previewSeed, mapgenHooksFor(commissionLand(land, commission ?? undefined))),
+    [previewSeed, land, commission],
   )
 
   const start = () => {
@@ -185,11 +197,16 @@ export function SetupScreen() {
             {previewSeed === null ? (
               <p className="muted">
                 Every map has one or two modifiers of its own — richer veins, longer
-                Storms, restless woods. A random map reveals them when you set out; enter
-                a seed to see them now.
+                Storms, restless woods — and a layout and ground of its own: rings of
+                glades, a river vale, a long ridge, an old ruin field, perhaps a burned
+                Cinderwood. A random map reveals them when you set out; enter a seed to
+                see them now.
               </p>
             ) : (
-              <RunModifierList ids={land} />
+              <>
+                <RunModifierList ids={land} />
+                {plan && <TerrainPlanLine plan={plan} />}
+              </>
             )}
             <LandOptions
               powers={powers}

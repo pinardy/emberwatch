@@ -7,6 +7,7 @@ import { migrateFounding } from './engine/founding'
 import { defaultDecreeState } from './engine/structure'
 import { createTimeline } from './engine/timeline'
 import { defaultCaravan } from './engine/trade'
+import { migrateWorld } from './engine/terrainPlan'
 import { isRec, runProblem } from './runCheck'
 import type { GrandPetition, MetaState, RunState } from './types'
 
@@ -256,6 +257,8 @@ function migrateRunUnchecked(raw: unknown): RunState | null {
   }
   if (typeof run.retreated !== 'boolean') delete run.retreated
   migrateClimax(run)
+  // Saves from before layouts and biomes: rings in the old woodland.
+  migrateWorld(run)
   // Saves from before errands have none open; damaged ones are dropped.
   migrateErrands(run)
   return run

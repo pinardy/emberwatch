@@ -4,6 +4,7 @@ import type {
   BuildingDef,
   BuildingInstance,
   Glade,
+  Obstacle,
   ResourceBag,
   RoadSegment,
   RunState,
@@ -378,6 +379,14 @@ export function canStartRoad(s: RunState, p: Vec2): string | null {
   return null
 }
 
+/** What stops a road at each kind of obstacle. */
+const ROAD_BLOCKED: Record<Obstacle['kind'], string> = {
+  mire: 'A mire swallows the way.',
+  crag: 'A crag blocks the way.',
+  water: 'The river runs here — cross at a ford.',
+  cliff: 'A cliff edge — cross at a pass.',
+}
+
 /** Why the stretch a→b may not be laid, or null if it may. */
 export function canPlaceRoad(s: RunState, a: Vec2, b: Vec2): string | null {
   const length = dist(a, b)
@@ -386,7 +395,7 @@ export function canPlaceRoad(s: RunState, a: Vec2, b: Vec2): string | null {
   if (!insideWorld(s.world, a) || !insideWorld(s.world, b)) return 'Beyond the forest edge.'
   for (const o of s.obstacles) {
     if (distToSegment(o.pos, a, b) < o.radius + ROAD_HALF_WIDTH) {
-      return o.kind === 'mire' ? 'A mire swallows the way.' : 'A crag blocks the way.'
+      return ROAD_BLOCKED[o.kind]
     }
   }
   for (const d of Object.values(s.deposits)) {

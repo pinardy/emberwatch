@@ -369,8 +369,8 @@ const ForestLayer = memo(function ForestLayer({ run }: { run: RunState }) {
   useRunKey(forestKey)
   return (
     <>
-      <ForestCover glades={Object.values(run.glades)} />
-      <FellingForest glades={run.glades} />
+      <ForestCover glades={Object.values(run.glades)} obstacles={run.obstacles} />
+      <FellingForest glades={run.glades} obstacles={run.obstacles} />
     </>
   )
 })

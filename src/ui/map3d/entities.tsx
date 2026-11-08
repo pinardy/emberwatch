@@ -112,7 +112,8 @@ export const DepositInstances = memo(function DepositInstances({
       if (run.glades[d.gladeId]?.cleared) out.push(...depositParts(d))
     }
     for (const o of run.obstacles) {
-      if (run.glades[o.gladeId]?.cleared) out.push(...obstacleParts(o))
+      // A barrier's cliff edge stands whatever the fog: it is the lie of the land.
+      if (o.kind === 'cliff' || o.kind === 'water' || run.glades[o.gladeId]?.cleared) out.push(...obstacleParts(o))
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps

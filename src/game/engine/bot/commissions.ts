@@ -117,7 +117,8 @@ const tradeTown: CommissionTactics = {
   act: (s) => {
     const need = term(s, 'caravans')?.amount ?? 0
     if (!caravanAvailable(s) || s.caravan.agreement || s.caravan.visits >= need) return
-    if ((s.stock.amber ?? 0) >= AGREEMENT_PRICE + RESERVE) signAgreement(s, 'barges')
+    // Six caravans is the term: the barges are worth every amber at once.
+    if ((s.stock.amber ?? 0) >= AGREEMENT_PRICE) signAgreement(s, 'barges')
   },
 }
 

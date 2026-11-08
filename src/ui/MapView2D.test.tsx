@@ -321,6 +321,12 @@ describe('2D map parity', () => {
 
   it('defines a symbol for every icon the map stamps, glade stakes included', async () => {
     startGame()
+    // Every glade in view, so every glade's stakes are stamped (a map whose
+    // first neighbours are all small glades would otherwise show none).
+    act(() => {
+      for (const glade of Object.values(currentRun().glades)) glade.discovered = true
+      useGameStore.setState({ version: useGameStore.getState().version + 1 })
+    })
     const stakes = document.querySelectorAll('g.glade-stakes use')
     expect(stakes.length).toBeGreaterThan(0)
     await waitFor(() => expect(document.querySelector('svg defs symbol')).not.toBeNull())

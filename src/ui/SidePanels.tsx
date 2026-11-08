@@ -12,6 +12,7 @@ import { CommissionCard } from './Commissions'
 import { COMMISSION_ONGOING_ID } from '../game/engine/citadel'
 import { OrderOffer, orderTag } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
+import { TerrainPlanLine, planOf } from './TerrainPlan'
 import { RaceSparkline } from './RaceSparkline'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
@@ -140,6 +141,7 @@ export function OrdersPanel() {
           <h3>Lay of the land</h3>
           <p className="panel-hint">This map's own character, drawn from its seed.</p>
           <RunModifierList ids={run.runModifiers} />
+          <TerrainPlanLine plan={planOf(run.world)} />
         </section>
       )}
 
