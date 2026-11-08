@@ -19,8 +19,12 @@ function resolveBase(raw: string | undefined): string {
   return withLead.endsWith('/') ? withLead : `${withLead}/`
 }
 
-/** Real-browser smoke tests live in e2e/ and run under Playwright, not vitest. */
-const testExclude = [...configDefaults.exclude, 'e2e/**']
+/**
+ * Real-browser smoke tests live in e2e/ and run under Playwright, not vitest.
+ * Agent worktrees under .claude/ hold whole copies of the repo; collecting
+ * them would run every test several times over.
+ */
+const testExclude = [...configDefaults.exclude, 'e2e/**', '.claude/**']
 
 /**
  * The full balance harness (minutes of whole-run sweeps) is its own project:
