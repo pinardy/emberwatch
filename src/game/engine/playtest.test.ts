@@ -11,6 +11,7 @@ import {
   mean,
   summarise,
   summariseAmber,
+  summarisePlateaus,
   winShare,
 } from './bot/harness'
 
@@ -42,6 +43,7 @@ describe('balance harness', () => {
       return reports
     })
     lines.push(summarise('all trios', competent))
+    lines.push(summarisePlateaus('all trios', competent))
     lines.push(summarise('economy-only', econ))
     lines.push(summariseAmber('amber, all trios', competent))
     lines.push(summariseAmber('amber, economy-only', econ))

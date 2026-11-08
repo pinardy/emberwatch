@@ -82,6 +82,7 @@ import {
   roadNetwork,
 } from '../roads'
 import { tick } from '../tick'
+import { openErrands, runErrand } from '../errands'
 import {
   AGREEMENT_PRICE,
   buyOffer,
@@ -205,6 +206,8 @@ export interface BotReport {
   retreated: boolean
   /** Plans bought from the Queen's Architect. */
   plans: number
+  /** Errands offered and met over the run, and the reputation they paid. */
+  errands: { offered: number; met: number; reputation: number }
 }
 
 /**
@@ -1245,6 +1248,47 @@ function pullLevers(s: RunState, ledger: AmberLedger): void {
   booked(s, ledger, 'architect', () => buyArchitectPlans(s, offer.need))
 }
 
+/**
+ * Errands, taken when they are cheap — the way a player glances at one and
+ * does it if it costs nothing they need: a hand-over the stockpile can spare
+ * (keeping the wood the hearth and roads want), a sale while the caravan is
+ * here, a hand for an empty workplace or a half-cleared glade when more are
+ * idle than the builders need, a home when one can be raised anyway. Errands
+ * met by ordinary play (holding stock, leaving builders free) need nothing.
+ */
+export function runErrands(s: RunState): void {
+  for (const e of [...openErrands(s)]) {
+    const goal = e.goal
+    const idle = idleVillagers(s)
+    switch (goal.kind) {
+      case 'deliver': {
+        // Food is judged by the larder as a whole: a few meals a head kept back.
+        const spare = EDIBLE.includes(goal.resource)
+          ? foodStock(s) - goal.amount >= population(s) * (s.season.season === 'drizzle' ? 4 : 8)
+          : (s.stock[goal.resource] ?? 0) >= goal.amount + ROAD_WOOD_RESERVE
+        if (spare) runErrand(s, e.id)
+        break
+      }
+      case 'sell':
+        if ((s.stock[goal.resource] ?? 0) >= TRADE_LOT + 10 && goal.resource !== 'herb') runErrand(s, e.id)
+        break
+      case 'staff': {
+        const b = s.buildings[goal.buildingId]
+        if (b && b.workers.length === 0 && idle.length > builderReserve(s)) assignWorker(s, b.id, idle[0].id)
+        break
+      }
+      case 'clear':
+        if (s.glades[goal.gladeId]?.clearers === 0 && idle.length > builderReserve(s)) addClearer(s, goal.gladeId)
+        break
+      case 'count':
+        if (idle.length > builderReserve(s) && openSites(s) === 0) buildHousing(s)
+        break
+      default:
+        break
+    }
+  }
+}
+
 /** The bot petitions only with victory this close… */
 const PETITION_MAX_SHORT = 8
 /** …and retreats once impatience is this close to the limit with no petition left. */
@@ -1441,6 +1485,8 @@ export interface ReputationSources {
   glades: number
   events: number
   resolve: number
+  /** Errands met (fractional points). */
+  errands?: number
 }
 
 /** Plays one run to its conclusion (or `maxMinutes` of game time). */
@@ -1501,6 +1547,7 @@ export function playRun(
       tuneRecipes(s)
       tendWard(s)
       staff(s)
+      runErrands(s)
     }
     if (s.buildings.hearth?.workers.length) wardSeconds += STEP
     const parts = impatienceParts(s, computeModifiers(s))
@@ -1552,6 +1599,7 @@ export function playRun(
   amber.visits = s.caravan.visits
   const lateFrom = [...repCurve].reverse().find(([t]) => t <= s.clock - 180)?.[1] ?? 0
   const lateShare = Math.max(0, s.reputation - lateFrom) / finalRep
+  sources.errands = s.errandBook?.reputation ?? 0
   // Resolve is whatever the discrete sources do not explain.
   sources.resolve = Math.max(
     0,
@@ -1560,7 +1608,8 @@ export function playRun(
       sources.orders -
       sources.decrees -
       sources.glades -
-      sources.events,
+      sources.events -
+      sources.errands,
   )
 
   return {
@@ -1615,6 +1664,11 @@ export function playRun(
     petition: s.petition ? (s.petition.outcome ?? 'live') : 'none',
     retreated: !!s.retreated,
     plans: s.architectPlans ?? 0,
+    errands: {
+      offered: s.errandBook?.offered ?? 0,
+      met: s.errandBook?.met ?? 0,
+      reputation: s.errandBook?.reputation ?? 0,
+    },
   }
 }
 

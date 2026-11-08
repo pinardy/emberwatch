@@ -71,11 +71,11 @@ export function summarise(label: string, reports: BotReport[]): string {
   const wins = reports.filter((r) => r.phase === 'won')
   const losses = reports.filter((r) => r.phase === 'lost')
   const stalls = reports.filter((r) => r.phase === 'playing')
-  const src = (k: keyof ReputationSources) => mean(wins.map((r) => r.sources[k])).toFixed(1)
+  const src = (k: keyof ReputationSources) => mean(wins.map((r) => r.sources[k] ?? 0)).toFixed(1)
   return (
     `${label.padEnd(20)} won ${wins.length}/${reports.length} lost ${losses.length} stall ${stalls.length} early-collapse ${reports.filter(isEarlyCollapse).length}` +
     ` · avg win ${mean(wins.map((r) => r.exactMinutes)).toFixed(1)}min · longest ${Math.max(...reports.map((r) => r.exactMinutes)).toFixed(1)}min` +
-    ` · rep in wins: orders ${src('orders')} decrees ${src('decrees')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')}` +
+    ` · rep in wins: orders ${src('orders')} decrees ${src('decrees')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')} errands ${src('errands')}` +
     ` · upgrades/run ${mean(reports.map((r) => r.upgrades)).toFixed(1)}` +
     ` · roads/run ${mean(reports.map((r) => r.roads)).toFixed(1)} linked ${mean(reports.map((r) => r.roadLinked)).toFixed(1)}` +
     ` · first rep ${median(reports.map((r) => r.firstRepMinute)).toFixed(1)}min (median)` +
@@ -93,6 +93,45 @@ export function summarise(label: string, reports: BotReport[]): string {
     ` · plans/run ${mean(reports.map((r) => r.plans)).toFixed(2)}` +
     ` · petitions ${reports.filter((r) => r.petition !== 'none').length} (${petitionOutcomes(reports)})` +
     ` · retreats ${reports.filter((r) => r.retreated).length} (median minute ${median(reports.filter((r) => r.retreated).map((r) => r.exactMinutes)).toFixed(1)})`
+  )
+}
+
+/**
+ * The longest stretch of whole minutes in which reputation did not rise, and
+ * the minute it began, read from a run's reputation-by-minute curve (counted
+ * from the start of the run, at 0 reputation).
+ */
+export function longestFlat(curve: number[]): { minutes: number; from: number } {
+  const points = [0, ...curve]
+  let best = { minutes: 0, from: 0 }
+  let start = 0
+  for (let m = 1; m < points.length; m++) {
+    if (points[m] > points[m - 1]) start = m
+    else if (m - start > best.minutes) best = { minutes: m - start, from: start }
+  }
+  return best
+}
+
+/** Minutes of flat reputation that count as a plateau. */
+export const PLATEAU_MINUTES = 5
+
+/**
+ * Reputation plateaus in wins, and what errands did about them: wins with a
+ * stretch of `PLATEAU_MINUTES` or more without a point, the median longest
+ * stretch and where those plateaus begin, and errands offered, met and the
+ * reputation they paid per run.
+ */
+export function summarisePlateaus(label: string, reports: BotReport[]): string {
+  const wins = reports.filter((r) => r.phase === 'won')
+  const flats = wins.map((r) => longestFlat(r.curve))
+  const plateaus = flats.filter((f) => f.minutes >= PLATEAU_MINUTES)
+  const errands = (pick: (r: BotReport) => number) => mean(reports.map(pick)).toFixed(2)
+  return (
+    `${label.padEnd(20)} plateaus: wins with a ${PLATEAU_MINUTES}+ min flat stretch ${plateaus.length}/${wins.length}` +
+    ` · median longest flat ${median(flats.map((f) => f.minutes)).toFixed(1)}min` +
+    ` · plateau start ${median(plateaus.map((f) => f.from)).toFixed(1)}min (median)` +
+    ` · errands/run offered ${errands((r) => r.errands.offered)} met ${errands((r) => r.errands.met)}` +
+    ` · rep from errands/run ${errands((r) => r.errands.reputation)}`
   )
 }
 
