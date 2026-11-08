@@ -206,7 +206,10 @@ export function CitadelScreen() {
                         )}
                       </td>
                       <td>{entry.years}</td>
-                      <td>{entry.reputation}</td>
+                      <td>
+                        {entry.reputation}
+                        {entry.glory ? <small className="ledger-glory" title="Glory: reputation earned while the envoy rode"> +{entry.glory}</small> : null}
+                      </td>
                       <td>{entry.supplies !== undefined ? `+${entry.supplies}` : '—'}</td>
                       <td>
                         <code>{entry.seed}</code>

@@ -11,6 +11,8 @@ import { CornerstoneOption, DraftOption, RerollButton } from './ChoiceModal'
 import { Icon } from './Icon'
 import { OrderOption } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
+import { ReputationProfileLine } from './EnvoyStatus'
+import { runReputationProfile } from '../game/engine/reputation'
 import { DialogTip } from './TipsCoach'
 import { cornerstoneArt } from '../game/content/artFamilies'
 import './founding.css'
@@ -101,6 +103,7 @@ export function FoundingPanel() {
         ) : (
           <p className="muted">This land has no particular character.</p>
         )}
+        <ReputationProfileLine profile={runReputationProfile(run)} className="rep-profile-strip" />
         <p className="founding-settlers">
           <span>Settlers:</span>
           {run.speciesPool.map((sp) => (

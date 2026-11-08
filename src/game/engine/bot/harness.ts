@@ -75,7 +75,7 @@ export function summarise(label: string, reports: BotReport[]): string {
   return (
     `${label.padEnd(20)} won ${wins.length}/${reports.length} lost ${losses.length} stall ${stalls.length} early-collapse ${reports.filter(isEarlyCollapse).length}` +
     ` · avg win ${mean(wins.map((r) => r.exactMinutes)).toFixed(1)}min · longest ${Math.max(...reports.map((r) => r.exactMinutes)).toFixed(1)}min` +
-    ` · rep in wins: orders ${src('orders')} decrees ${src('decrees')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')}` +
+    ` · rep in wins: orders ${src('orders')} decrees ${src('decrees')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')} trade ${src('trade')} (glory ${mean(wins.map((r) => r.glory)).toFixed(1)})` +
     ` · upgrades/run ${mean(reports.map((r) => r.upgrades)).toFixed(1)}` +
     ` · roads/run ${mean(reports.map((r) => r.roads)).toFixed(1)} linked ${mean(reports.map((r) => r.roadLinked)).toFixed(1)}` +
     ` · first rep ${median(reports.map((r) => r.firstRepMinute)).toFixed(1)}min (median)` +
@@ -92,7 +92,27 @@ export function summarise(label: string, reports: BotReport[]): string {
     ` · unmet needs at end ${median(wins.map((r) => r.unmetCount)).toFixed(1)} in wins, ${median(losses.map((r) => r.unmetCount)).toFixed(1)} in losses (median)` +
     ` · plans/run ${mean(reports.map((r) => r.plans)).toFixed(2)}` +
     ` · petitions ${reports.filter((r) => r.petition !== 'none').length} (${petitionOutcomes(reports)})` +
-    ` · retreats ${reports.filter((r) => r.retreated).length} (median minute ${median(reports.filter((r) => r.retreated).map((r) => r.exactMinutes)).toFixed(1)})`
+    ` · retreats ${reports.filter((r) => r.retreated).length} (median minute ${median(reports.filter((r) => r.retreated).map((r) => r.exactMinutes)).toFixed(1)})` +
+    `\n${''.padEnd(20)} ${summariseApproach(reports)}`
+  )
+}
+
+/**
+ * The Envoy's approach over a set of runs: how often it was entered and held,
+ * what ended the ones that were not, when the envoy set out, and the years
+ * the wins landed in.
+ */
+export function summariseApproach(reports: BotReport[]): string {
+  const entered = reports.filter((r) => r.approach !== 'none')
+  const held = entered.filter((r) => r.approach === 'held')
+  const failed = entered.filter((r) => r.approach !== 'held')
+  const wins = reports.filter((r) => r.phase === 'won')
+  return (
+    `envoy: entered ${entered.length}/${reports.length} held ${held.length}` +
+    ` · approach losses ${histogram(failed.map((r) => r.approach))}` +
+    ` · set out minute ${median(entered.map((r) => r.envoyMinute)).toFixed(1)} (median)` +
+    ` · wait ${median(held.map((r) => r.exactMinutes - r.envoyMinute)).toFixed(1)}min (median)` +
+    ` · wins by year ${histogram(wins.map((r) => `Y${r.years}`).sort())}`
   )
 }
 

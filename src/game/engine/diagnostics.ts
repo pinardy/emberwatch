@@ -18,7 +18,7 @@ import {
 import { computeModifiers, type Modifiers } from './modifiers'
 import { isFoodCamp } from './onboarding'
 import {
-  HEARTH_STORM_END_REACH,
+  stormEndReach,
   activeRecipe,
   canAfford,
   idleVillagers,
@@ -29,6 +29,8 @@ import {
 import { coldVillagers, secondsUntilFrostLoss, villagersBeyond } from './society'
 import { despairRate } from './traits'
 import { petitionOpen, petitionVowLeft, retreatOffered } from './levers'
+import { envoyPopulationFloor, envoyRiding } from './climax'
+import { ENVOY_COLD_HEARTH_SECONDS, ENVOY_UNREST_SECONDS } from './balance'
 
 /**
  * Things that are quietly going wrong.
@@ -88,6 +90,8 @@ export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warnin
     })
   }
 
+  out.push(...envoyWarnings(s))
+
   // The cold kills: say who is out in it and how long until it takes someone.
   const frozen = coldVillagers(s)
   if (frozen > 0) {
@@ -98,8 +102,9 @@ export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warnin
       text: `🥶 ${frozen} villager${frozen > 1 ? 's sleep' : ' sleeps'} beyond every fire — the cold takes one in about ${formatDuration(eta)}. Raise a brazier or insulate their homes.`,
     })
   } else if (s.season.season === 'clearance') {
-    // The hearth's reach pulls in through the Storm: warn while there is time.
-    const exposed = villagersBeyond(s, HEARTH_STORM_END_REACH)
+    // The hearth's reach pulls in through the Storm (further in a Long Night
+    // or the forest's last stand): warn while there is time.
+    const exposed = villagersBeyond(s, stormEndReach(s))
     if (exposed > 0) {
       out.push({
         id: 'frost-forecast',
@@ -361,4 +366,44 @@ function foodAdvice(s: RunState): string {
   return s.unlockedBuildings.includes('cookhouse')
     ? 'Build another food camp or a Cookhouse.'
     : 'Build another food camp.'
+}
+
+/**
+ * While the Queen's envoy rides, what is closing in on a collapse that would
+ * lose the run before she arrives: the hearth's cold seconds, unrest building,
+ * and how many more villagers the settlement can lose.
+ */
+function envoyWarnings(s: RunState): Warning[] {
+  if (!envoyRiding(s)) return []
+  const e = s.envoy
+  const out: Warning[] = []
+  if (s.coldHearth) {
+    const left = Math.max(0, ENVOY_COLD_HEARTH_SECONDS - e.coldSeconds)
+    out.push({
+      id: 'envoy-hearth',
+      severity: 'danger',
+      text: `🐎 The hearth is cold: ${formatDuration(left)} more in all and the settlement breaks up before the envoy arrives.`,
+    })
+  }
+  if (e.unrestSeconds > 0) {
+    out.push({
+      id: 'envoy-unrest',
+      severity: 'danger',
+      text: `🐎 Most villagers are discontented, well below their reputation threshold: ${formatDuration(
+        Math.max(0, ENVOY_UNREST_SECONDS - e.unrestSeconds),
+      )} more of this unrest and the settlement breaks up before the envoy arrives.`,
+    })
+  }
+  const spare = population(s) - envoyPopulationFloor(e)
+  if (spare <= 1) {
+    out.push({
+      id: 'envoy-population',
+      severity: spare <= 0 ? 'danger' : 'caution',
+      text:
+        spare <= 0
+          ? '🐎 One more villager lost and the settlement cannot hold until the envoy arrives.'
+          : '🐎 Two more villagers lost and the settlement cannot hold until the envoy arrives.',
+    })
+  }
+  return out
 }

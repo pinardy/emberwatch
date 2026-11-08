@@ -2,6 +2,9 @@ import { BUILDINGS } from '../content/buildings'
 import { COMPLEX_FOOD, EDIBLE, RESOURCES } from '../content/resources'
 import { serviceCapacity } from './adjacency'
 import {
+  ENVOY_REACH_FLOOR_BASE,
+  ENVOY_REACH_FLOOR_MIN,
+  ENVOY_REACH_PER_HOSTILITY,
   HEARTH_REACH_STEP,
   HEARTH_STORM_REACH_FLOOR,
   HEARTH_WARMTH_RADIUS,
@@ -96,18 +99,60 @@ export interface WarmthSource {
  */
 export function hearthWarmthRadius(s: RunState): number {
   if (s.season.season !== 'storm') return HEARTH_WARMTH_RADIUS
-  return hearthReachAt(Math.min(1, s.season.elapsed / Math.max(1, s.season.length)))
+  return hearthReachAt(
+    Math.min(1, s.season.elapsed / Math.max(1, s.season.length)),
+    stormReachFloor(s),
+  )
 }
 
-/** The hearth's reach `progress` (0..1) of the way through a Storm. */
-export function hearthReachAt(progress: number): number {
-  const raw = HEARTH_WARMTH_RADIUS * (1 - (1 - HEARTH_STORM_REACH_FLOOR) * progress)
+/** The hearth's reach `progress` (0..1) of the way through a Storm that ends at `floor`. */
+export function hearthReachAt(progress: number, floor = HEARTH_STORM_REACH_FLOOR): number {
+  const raw = HEARTH_WARMTH_RADIUS * (1 - (1 - floor) * progress)
   // Whole steps, rounded up: the ring pulls in a few times, not every tick.
   return Math.ceil(raw / HEARTH_REACH_STEP - 1e-9) * HEARTH_REACH_STEP
 }
 
-/** The hearth's reach at the end of a Storm — the edge a home must sit inside to stay warm all Storm. */
+/** The hearth's reach at the end of an ordinary Storm — the edge a home must sit inside to stay warm all Storm. */
 export const HEARTH_STORM_END_REACH = hearthReachAt(1)
+
+/** Percent change to the Storm's reach floor from a set of effects (the Long Night's). */
+function reachPercent(effects: readonly { kind: string; percent?: number }[] | undefined): number {
+  let pct = 0
+  for (const e of effects ?? []) if (e.kind === 'hearthReach') pct += e.percent ?? 0
+  return pct
+}
+
+/**
+ * The share of `HEARTH_WARMTH_RADIUS` the hearth's reach shrinks to by the end
+ * of this Storm: 70% in an ordinary one, less in the forest's last stand
+ * while the envoy rides (the more hostile the forest, the less), and less
+ * again under the Long Night. With `forecast`, a blight still on its way
+ * counts as if it had struck — what a careful player plans for.
+ */
+export function stormReachFloor(s: RunState, forecast = false): number {
+  let floor = HEARTH_STORM_REACH_FLOOR
+  if (s.envoy && !s.envoy.outcome) {
+    floor = Math.min(
+      floor,
+      Math.max(ENVOY_REACH_FLOOR_MIN, ENVOY_REACH_FLOOR_BASE - s.hostility * ENVOY_REACH_PER_HOSTILITY),
+    )
+  }
+  let pct = 0
+  for (const c of s.conditions ?? []) {
+    pct += reachPercent(c.whileActive)
+    if (forecast && c.breaksWithStorm) pct += reachPercent(c.onFail?.condition?.whileActive)
+  }
+  return Math.max(0.2, floor * (1 + pct / 100))
+}
+
+/**
+ * The hearth's reach at the end of the coming (or current) Storm, with the
+ * envoy's last stand and any forecast Long Night counted: the edge a home
+ * must sit inside to stay warm all of it.
+ */
+export function stormEndReach(s: RunState): number {
+  return hearthReachAt(1, stormReachFloor(s, true))
+}
 
 /**
  * Every live warmth source: the hearth (always — a cold hearth has its own

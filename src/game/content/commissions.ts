@@ -3,6 +3,7 @@ import type {
   CornerstoneEffect,
   MetaState,
   OrderGoal,
+  ReputationProfile,
   ResourceBag,
   RunState,
 } from '../types'
@@ -76,6 +77,8 @@ export interface CommissionDef {
   bonusPercent: number
   /** Citadel upgrade that puts this commission on the board; absent = open. */
   unlockedBy?: string
+  /** What the Queen values on this commission: multipliers on each reputation source. */
+  reputation?: ReputationProfile
 }
 
 /*
@@ -95,9 +98,11 @@ const defs: CommissionDef[] = [
     twist: 'The forest starts restless (hostility 8), but every glade gives up 40% more loot.',
     startHostility: 8,
     effects: [{ kind: 'gladeLoot', percent: 40 }],
+    reputation: { glades: 1.5 },
     terms: [
       { kind: 'goal', goal: { kind: 'gladesCleared', amount: 12 } },
-      { kind: 'calmForest', max: 35 },
+      // 40, not 35, since the envoy's last stand surges the forest at the end.
+      { kind: 'calmForest', max: 40 },
     ],
     bonusPercent: 65,
   },
@@ -140,6 +145,7 @@ const defs: CommissionDef[] = [
     startBlueprints: ['tradingPost'],
     startStock: { amber: 20, wood: -10 },
     effects: [{ kind: 'caravanInterval', percent: -20 }],
+    reputation: { trade: 1 },
     terms: [
       {
         kind: 'goal',
@@ -160,6 +166,7 @@ const defs: CommissionDef[] = [
     twist: 'The Queen lays a rare cornerstone at the founding, and expects more for it: impatience grows 20% faster.',
     royalCornerstone: true,
     effects: [{ kind: 'impatienceRate', percent: 20 }],
+    reputation: { decrees: 1.5, resolve: 0.75 },
     terms: [{ kind: 'calmCourt', share: 1 / 4 }],
     bonusPercent: 60,
     unlockedBy: 'citadelBlessing',
@@ -175,7 +182,9 @@ const defs: CommissionDef[] = [
       { kind: 'newcomerRate', percent: -30 },
       { kind: 'foodUpkeep', percent: 10 },
     ],
-    terms: [{ kind: 'goal', goal: { kind: 'population', amount: 21 } }],
+    reputation: { resolve: 1.25, orders: 0.85 },
+    // 23, not 21: the Envoy's approach gives a settlement one more season to grow.
+    terms: [{ kind: 'goal', goal: { kind: 'population', amount: 23 } }],
     bonusPercent: 70,
     unlockedBy: 'openRoads',
   },
@@ -189,7 +198,8 @@ const defs: CommissionDef[] = [
       'The land always has Long Storms (25% longer, a bountiful Clearance after), and the hearth burns 40% more wood.',
     land: 'longStorms',
     effects: [{ kind: 'hearthFuel', percent: 40 }],
-    terms: [{ kind: 'warmHearth' }, { kind: 'calmForest', max: 20 }],
+    // 25, not 20, since the envoy's last stand surges the forest at the end.
+    terms: [{ kind: 'warmHearth' }, { kind: 'calmForest', max: 25 }],
     bonusPercent: 50,
     unlockedBy: 'wardensWrit',
   },
@@ -205,7 +215,8 @@ const defs: CommissionDef[] = [
       { kind: 'decreeMissPenalty', percent: 25 },
       { kind: 'decreeReputation', amount: 1 },
     ],
-    terms: [{ kind: 'decrees', amount: 3 }],
+    // 4, not 3: the Envoy's approach leaves time for one more decree.
+    terms: [{ kind: 'decrees', amount: 4 }],
     bonusPercent: 70,
     unlockedBy: 'charterOffice',
   },

@@ -1,0 +1,96 @@
+/* ==========================================================================
+   The Envoy's approach: the top-bar countdown that stands in for the
+   impatience meter, the Glory line under reputation, the end screen's
+   account, and the reputation profile on land and commission cards.
+   ========================================================================== */
+
+.meter-envoy .meter-fill {
+  background: linear-gradient(90deg, #56708a, var(--gold));
+}
+
+.meter-envoy .meter-head strong {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.meter-envoy .envoy-note {
+  color: var(--gold);
+}
+
+.meter-envoy.is-critical .envoy-note {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.glory-note {
+  color: var(--gold);
+}
+
+.end-envoy {
+  margin: 12px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+.end-envoy.is-fell {
+  border-left-color: var(--bad);
+}
+
+.end-envoy h3 {
+  margin: 0 0 4px;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.end-envoy p {
+  margin: 0 0 6px;
+  font-size: 0.8125rem;
+}
+
+.end-envoy .end-glory strong {
+  color: var(--gold);
+}
+
+.end-rep-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 2px 12px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.end-rep-sources li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* "Here the Queen values: reclaimed land ×2 · completed orders ×0.75" */
+.rep-profile {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.75rem;
+  color: var(--gold);
+}
+
+.rep-profile-strip {
+  display: block;
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+  color: var(--gold);
+}
+
+/* The envoy's pennant on the run timeline. */
+.tl-mark.is-envoy {
+  fill: var(--gold);
+  stroke: var(--gold);
+  stroke-width: 1.2;
+}

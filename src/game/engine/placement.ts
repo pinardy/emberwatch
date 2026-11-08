@@ -4,7 +4,7 @@ import type { DepositId, RunState, TerrainEffect, TerrainId, Vec2 } from '../typ
 import { adjacencyHints, adjacencyStatusAt, type AdjacencyStatus } from './adjacency'
 import { gladeAt } from './mapgen'
 import { depositsInRangeOf, terrainEffectsFor } from './production'
-import { HEARTH_STORM_END_REACH, homesWithin, isWarmAt } from './queries'
+import { homesWithin, isWarmAt, stormEndReach } from './queries'
 import { describeRoadLink, roadLinkPreview, type RoadLink } from './roads'
 
 /**
@@ -91,7 +91,7 @@ export function describePlacement(s: RunState, defId: string, pos: Vec2): Placem
     parts.push(
       !warm
         ? '❄ Cold in the Storm — build a brazier'
-        : isWarmAt(s, pos, HEARTH_STORM_END_REACH)
+        : isWarmAt(s, pos, stormEndReach(s))
           ? '🔥 Warm in the Storm'
           : "🔥 Warm until late in the Storm, when the hearth's reach pulls in",
     )

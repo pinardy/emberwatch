@@ -13,6 +13,7 @@ import type {
   GladeEventOptionDef,
   Order,
   PendingChoice,
+  ReputationProfile,
   ResourceBag,
   ResourceId,
   RoyalDecree,
@@ -36,12 +37,25 @@ import {
   spareGlade,
   upgradeBuilding,
 } from '../actions'
-import { GLADES_PER_REPUTATION, IMPATIENCE_PER_VILLAGER_LOST, ROAD_MAX_LENGTH, TRADE_LOT } from '../balance'
+import {
+  GLADES_PER_REPUTATION,
+  HEARTH_FUEL_PER_SECOND,
+  IMPATIENCE_PER_VILLAGER_LOST,
+  RESOLVE_LEAVE_THRESHOLD,
+  ROAD_MAX_LENGTH,
+  TRADE_LOT,
+} from '../balance'
 import { createRun } from '../createRun'
 import { computeModifiers } from '../modifiers'
-import { pendingBlight } from '../blights'
 import { storageBlocked } from '../forecast'
-import { coldVillagers, impatienceParts, resolveBreakdowns, secondsPastDeadline } from '../society'
+import {
+  coldVillagers,
+  impatienceParts,
+  resolveBreakdowns,
+  secondsPastDeadline,
+  stalledShare,
+  stormFuelPerSecond,
+} from '../society'
 import { appeaseThreat } from '../threats'
 import { optionAffordable, resolveGladeEvent } from '../glades'
 import { redrawTargets, redrawToward, takeChoice, targetedRedrawCost } from '../drafts'
@@ -59,7 +73,6 @@ import {
   retreatToCitadel,
 } from '../levers'
 import {
-  HEARTH_STORM_END_REACH,
   SERVICE_COVERAGE_RATIO,
   activeRecipe,
   canAfford,
@@ -70,8 +83,11 @@ import {
   isWarmAt,
   serviceCoverage,
   storageUsed,
+  stormEndReach,
   totalHousing,
 } from '../queries'
+import { envoyRiding } from '../climax'
+import { reputationMultiplier } from '../reputation'
 import { dist } from '../geometry'
 import {
   benefitsFromRoad,
@@ -96,8 +112,8 @@ import {
   signAgreement,
 } from '../trade'
 import { productionRate } from '../forecast'
-import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation, takeOrderOffer } from '../orders'
-import { categoryRate, decreeGoal, decreeReputation } from '../structure'
+import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, takeOrderOffer } from '../orders'
+import { categoryRate, decreeGoal } from '../structure'
 import { baseServiceCapacity, isInsulated, isUpgrading, tierOf, workerSlotsOf } from '../upgrades'
 import { commissionAllowsSpend, describeCommission, tacticsFor, type BotKit } from './commissions'
 
@@ -205,6 +221,24 @@ export interface BotReport {
   retreated: boolean
   /** Plans bought from the Queen's Architect. */
   plans: number
+  /**
+   * The Envoy's approach: never entered, held until she arrived, or lost —
+   * to a collapse (`collapsed:<cause>`), an emptied settlement or the end of
+   * the harness clock.
+   */
+  approach: 'none' | 'held' | `collapsed:${string}` | 'abandoned' | 'unfinished'
+  /** Minute the envoy set out (Infinity if she never did). */
+  envoyMinute: number
+  /** Reputation earned past the maximum while she rode. */
+  glory: number
+  /**
+   * How close the approach came to collapsing: the lowest population as a
+   * share of what it was when she set out, the lowest resolve any species
+   * reached above its leaving point, and the seconds the hearth stood cold.
+   */
+  approachLow: { population: number; resolve: number; cold: number; halfStalled: number; allStalled: number }
+  /** Long Nights forecast and fallen (struck) over the run. */
+  longNights: { forecast: number; struck: number }
 }
 
 /**
@@ -441,7 +475,7 @@ export function build(s: RunState, economyOnly = false): void {
   // 6. A cookhouse doubles what every one of those camps is worth.
   if (countPlanned(s, 'cookhouse') < 2 && pop > 18 && tryPlace(s, 'cookhouse')) return
   // 7. Caravans spend the amber glades and decrees pile up.
-  if (countPlanned(s, 'tradingPost') < 1 && pop >= 10 && tryPlace(s, 'tradingPost')) return
+  if (countPlanned(s, 'tradingPost') < 1 && pop >= tradingPostAt(s) && tryPlace(s, 'tradingPost')) return
 }
 
 /**
@@ -508,8 +542,9 @@ function warmSprawl(s: RunState): boolean {
       b.built &&
       BUILDINGS[b.defId]?.category === 'housing' &&
       !isInsulated(b) &&
-      // The hearth's reach pulls in through the Storm: plan for its end.
-      !isWarmAt(s, b.pos, HEARTH_STORM_END_REACH) &&
+      // The hearth's reach pulls in through the Storm: plan for its end —
+      // further in the envoy's last stand or a forecast Long Night.
+      !isWarmAt(s, b.pos, stormEndReach(s)) &&
       // A planned (or guttering) brazier already covers it.
       !braziers.some((w) => dist(w.pos, b.pos) <= reach),
   )
@@ -533,7 +568,7 @@ const ROAD_WOOD_RESERVE = 35
  */
 function layRoads(s: RunState): boolean {
   const wood = s.stock.wood ?? 0
-  const reserve = Math.max(ROAD_WOOD_RESERVE, tacticsFor(s).woodFloor?.(s) ?? 0)
+  const reserve = Math.max(ROAD_WOOD_RESERVE, tacticsFor(s).woodFloor?.(s) ?? 0, envoyWoodFloor(s))
   if (wood < reserve + 2) return false
   if (s.season.season === 'storm' && wood < 80) return false
   const net = roadNetwork(s)
@@ -799,7 +834,7 @@ function stockTarget(s: RunState, id: ResourceId): number {
     // Keep a Storm's worth of food in hand before the Storm arrives.
     return s.season.season === 'drizzle' ? pop * 7 + 40 : pop * 11 + 40
   }
-  if (id === 'wood') return 120
+  if (id === 'wood') return Math.max(120, envoyWoodFloor(s) * 1.25)
   return 60
 }
 
@@ -808,8 +843,10 @@ function saturated(s: RunState, b: BuildingInstance): boolean {
   const recipe = activeRecipe(b)
   const outputs = Object.keys(recipe?.outputs ?? {}) as ResourceId[]
   if (outputs.length === 0) return false
-  // Output an open order or the live decree is counting is never surplus.
+  // Output an open order or the live decree is counting is never surplus,
+  // nor goods a forecast blight wants made.
   if (servesDecree(s, b) || servesOrder(s, b)) return false
+  if (outputs.some((id) => blightGoods(s).includes(id))) return false
   if (EDIBLE.some((id) => outputs.includes(id))) {
     return foodStock(s) >= stockTarget(s, outputs[0])
   }
@@ -840,7 +877,7 @@ export function staff(s: RunState): void {
   const pop = population(s)
   const hungry = s.starving || foodStock(s) < pop * 4
   const tactics = tacticsFor(s)
-  const cold = (s.stock.wood ?? 0) < Math.max(30, tactics.woodFloor?.(s) ?? 0)
+  const cold = (s.stock.wood ?? 0) < Math.max(30, tactics.woodFloor?.(s) ?? 0, envoyWoodFloor(s))
 
   // Producers that feed a wanted service — a venue without goods is worthless,
   // so these outrank the raw economy.
@@ -849,8 +886,8 @@ export function staff(s: RunState): void {
     serviceProducers.add('herbalistsCamp')
   }
 
-  // The coming Storm's blight asks for a good: its makers jump the queue.
-  const prepGood = blightGood(s)
+  // The coming Storm's blights ask for goods: their makers jump the queue.
+  const prepGoods = blightGoods(s)
 
   const priority = (b: BuildingInstance): number => {
     const def = BUILDINGS[b.defId]
@@ -865,7 +902,7 @@ export function staff(s: RunState): void {
     // Emergencies first: an empty larder or a dying hearth ends runs.
     if (hungry && outputs.some((id) => EDIBLE.includes(id))) return 7
     if (cold && outputs.includes('wood')) return 7
-    if (prepGood && outputs.includes(prepGood)) return 6
+    if (outputs.some((id) => prepGoods.includes(id))) return 6
     if (saturated(s, b)) return -1
     // Then services and their supply chains — they are what keeps resolve up.
     if (def.category === 'service') return 5
@@ -897,21 +934,33 @@ export function staff(s: RunState): void {
   }
 }
 
-/** The good the coming Storm's blight asks to be made, if one is forecast. */
-function blightGood(s: RunState): ResourceId | null {
-  const goal = pendingBlight(s)?.resolveBy
-  return goal?.kind === 'produced' || goal?.kind === 'stock' ? goal.resource : null
+/**
+ * The goods the coming Storm's blights ask to be made, if any are forecast —
+ * one in an ordinary year, up to three in the envoy's last stand — and the
+ * goods that lift a Storm's lasting damage early (the forest's dread).
+ */
+function blightGoods(s: RunState): ResourceId[] {
+  const goods: ResourceId[] = []
+  for (const c of s.conditions) {
+    if (!(c.breaksWithStorm || c.passesWithStorm) || c.progress >= 1) continue
+    const goal = c.resolveBy
+    if ((goal.kind === 'produced' || goal.kind === 'stock') && !goods.includes(goal.resource)) {
+      goods.push(goal.resource)
+    }
+  }
+  return goods
 }
 
-/** Places a producer of the forecast blight's good when none is standing. */
+/** Places a producer of each forecast blight's good when none is standing. */
 function prepareForBlight(s: RunState): boolean {
-  const good = blightGood(s)
-  if (!good) return false
-  const makers = STARTING_BLUEPRINTS.filter((id) =>
-    BUILDINGS[id]?.recipes.some((r) => (r.outputs[good] ?? 0) > 0),
-  )
-  if (makers.some((id) => countPlanned(s, id) > 0)) return false
-  return makers.some((id) => tryPlace(s, id))
+  for (const good of blightGoods(s)) {
+    const makers = STARTING_BLUEPRINTS.filter((id) =>
+      BUILDINGS[id]?.recipes.some((r) => (r.outputs[good] ?? 0) > 0),
+    )
+    if (makers.some((id) => countPlanned(s, id) > 0)) continue
+    if (makers.some((id) => tryPlace(s, id))) return true
+  }
+  return false
 }
 
 /** Hostility at which the bot sets a firekeeper to burn offerings, and stops. */
@@ -929,7 +978,9 @@ function tendWard(s: RunState): void {
   if (!hearth) return
   const herbs = s.stock.herb ?? 0
   const staffed = hearth.workers.length > 0
-  const ward = tacticsFor(s).ward?.(s) ?? { start: WARD_START, stop: WARD_STOP, minPopulation: 12 }
+  const base = tacticsFor(s).ward?.(s) ?? { start: WARD_START, stop: WARD_STOP, minPopulation: 12 }
+  // Before the forest's last stand, calm it sooner.
+  const ward = holdForEnvoy(s) ? { ...base, start: Math.min(base.start, ENVOY_WARD_START) } : base
   if (staffed && (s.hostility < ward.stop || herbs < 2)) {
     removeWorker(s, hearth.id)
     return
@@ -989,15 +1040,19 @@ export function explore(s: RunState): void {
   const pop = population(s)
   // A hungry settlement needs its hands at home, not in the woods.
   if (pop < 6 || s.starving) return
+  // With the envoy on the road every glade angers the forest before its last
+  // stand: finish the one in hand, start no other.
+  const holding = holdForEnvoy(s)
 
   // An open order for glades is worth clearing for first.
   const tactics = tacticsFor(s)
   const gladeOrder =
     s.orders.some((o) => orderGoal(o)?.kind === 'gladesCleared') || !!tactics.wantsGlades?.(s)
+  const lean = gladeLean(s)
   if (
     !gladeOrder &&
-    s.stats.gladesCleared >= GLADES_BEFORE_SPARING &&
-    s.hostility >= (tactics.spareAt?.(s) ?? SPARE_AT_HOSTILITY)
+    s.stats.gladesCleared >= GLADES_BEFORE_SPARING * lean.glades &&
+    s.hostility >= (tactics.spareAt?.(s) ?? SPARE_AT_HOSTILITY + lean.hostility)
   ) {
     for (const g of Object.values(s.glades)) {
       if (g.cleared || g.spared || !isReachable(s, g.id)) continue
@@ -1016,6 +1071,7 @@ export function explore(s: RunState): void {
     }
     return
   }
+  if (holding) return
 
   const border = Object.values(s.glades).filter((g) => !g.cleared && isReachable(s, g.id))
   let target =
@@ -1030,6 +1086,60 @@ export function explore(s: RunState): void {
   for (let i = 0; i < crew; i++) {
     if (addClearer(s, target.id) !== null) break
   }
+}
+
+// ---------------------------------------------------------------------------
+// The Envoy's approach and the land's reputation profile
+// ---------------------------------------------------------------------------
+
+/** Hostility at which the bot starts burning offerings while the envoy rides. */
+const ENVOY_WARD_START = 16
+
+/**
+ * The envoy is on the road and her Storm has not yet passed: a competent
+ * player stops expanding and braces — no new glades (each one angers the
+ * forest before its last stand), the forest calmed sooner, and wood stacked
+ * for a hearth that must not go cold (braziers come from `warmSprawl`, which
+ * plans for the last stand's smaller ring).
+ */
+function holdForEnvoy(s: RunState): boolean {
+  return envoyRiding(s)
+}
+
+/**
+ * Wood to keep in hand while the envoy rides: the final Storm's fuel for the
+ * hearth and every brazier with a third to spare, so the hearth never goes
+ * cold (which would end the run). Nothing otherwise.
+ */
+function envoyWoodFloor(s: RunState): number {
+  if (!holdForEnvoy(s)) return 0
+  const mods = computeModifiers(s)
+  const storm = s.season.season === 'storm'
+  const seconds = storm ? Math.max(0, s.season.length - s.season.elapsed) : s.season.length
+  const perSecond = stormFuelPerSecond(s, HEARTH_FUEL_PER_SECOND, mods.hearthFuel, mods.hearthFuel * mods.brazierFuel)
+  return storm ? perSecond * seconds * 1.2 : perSecond * 110 * 1.35
+}
+
+/**
+ * How the land's profile bends the bot's clearing: where reclaimed land pays
+ * more, it clears more glades before it weighs sparing, and tolerates more
+ * hostility (`glades` scales the glade count, `hostility` adds to the
+ * threshold).
+ */
+function gladeLean(s: RunState): { glades: number; hostility: number } {
+  const m = reputationMultiplier(s, 'glades')
+  if (m >= 1.5) return { glades: 1 + (m - 1) * 0.6, hostility: 8 }
+  return { glades: 1, hostility: 0 }
+}
+
+/** Caravan trade pays reputation here (Amber Springs, a trade town). */
+function tradePays(s: RunState): boolean {
+  return reputationMultiplier(s, 'trade') > 0
+}
+
+/** Population at which the bot raises a Trading Post: sooner where trade pays. */
+function tradingPostAt(s: RunState): number {
+  return tradePays(s) ? 7 : 10
 }
 
 /** Amber the bot keeps back for a threat's price before it trades. */
@@ -1084,7 +1194,12 @@ function trade(s: RunState, ledger: AmberLedger): void {
   const crowded = storageUsed(s) > s.storageCap * 0.85
   for (const r of RESOURCE_LIST) {
     if (r.category === 'currency' || EDIBLE.includes(r.id)) continue
-    const keep = r.id === caravan.wants ? stockTarget(s, r.id) : crowded ? stockTarget(s, r.id) * 1.5 : Infinity
+    const keep =
+      r.id === caravan.wants || tradePays(s)
+        ? stockTarget(s, r.id)
+        : crowded
+          ? stockTarget(s, r.id) * 1.5
+          : Infinity
     let guard = 0
     while ((s.stock[r.id] ?? 0) - TRADE_LOT >= keep && guard++ < 10) {
       booked(s, ledger, 'sales', () => sellResource(s, r.id))
@@ -1441,6 +1556,7 @@ export interface ReputationSources {
   glades: number
   events: number
   resolve: number
+  trade: number
 }
 
 /** Plays one run to its conclusion (or `maxMinutes` of game time). */
@@ -1454,7 +1570,6 @@ export function playRun(
   botStyle.set(s, options)
   let sinceDecision = Infinity
   const maxSeconds = maxMinutes * 60
-  const sources: ReputationSources = { orders: 0, decrees: 0, glades: 0, events: 0, resolve: 0 }
   let wardSeconds = 0
   let stallImpatience = 0
   let frozen = 0
@@ -1476,11 +1591,18 @@ export function playRun(
   /** `[clock, reputation]` every few seconds, for the shape of the climb. */
   const repCurve: [number, number][] = [[0, 0]]
 
+  const approachLow = { population: 1, resolve: Infinity, cold: 0, halfStalled: 0, allStalled: 0 }
+  const streak = { half: 0, all: 0 }
+  const longNights = { forecast: 0, struck: 0 }
+  const longNightIds = new Set<string>()
+  /** Reputation by source the moment the envoy set out (the meter's filling). */
+  let beforeEnvoy: ReputationProfile | null = null
   while (s.phase === 'playing' && s.clock < maxSeconds) {
-    const beforeChoices = s.reputation
+    if (s.envoy && !beforeEnvoy) beforeEnvoy = { ...(s.reputationBy ?? {}) }
+    if (envoyRiding(s)) noteApproach(s, approachLow, streak)
+    noteLongNights(s, longNightIds, longNights)
     const impBeforeChoices = impatienceNow()
     booked(s, amber, 'events', () => answerChoices(s))
-    sources.events += s.reputation - beforeChoices
     impatienceBy.events += impatienceNow() - impBeforeChoices
     if (s.phase !== 'playing') break
 
@@ -1506,8 +1628,6 @@ export function playRun(
     const parts = impatienceParts(s, computeModifiers(s))
     stallImpatience += parts.stalling * STEP
 
-    const openOrders = s.orders.map((o) => o.defId)
-    const gladesBefore = s.stats.gladesCleared
     const liveDecree = s.decree?.defId
     const decreesBefore = s.feats?.decreesMet ?? 0
     const impBefore = impatienceNow()
@@ -1531,18 +1651,7 @@ export function playRun(
       impatienceBy.events += impatienceNow() - impBefore - parts.total * STEP - losses
     }
     if (liveDecree && !s.decree && (s.feats?.decreesMet ?? 0) === decreesBefore) decreesMissed++
-    if (liveDecree && (s.feats?.decreesMet ?? 0) > decreesBefore) {
-      sources.decrees += decreeReputation(s, DECREES[liveDecree])
-    }
     sinceDecision += STEP
-    const stillOpen = new Set(s.orders.map((o) => o.defId))
-    for (const id of openOrders) {
-      if (stillOpen.has(id)) continue
-      sources.orders += orderReputation(s, { defId: id, writ: id.startsWith('writ_') })
-    }
-    sources.glades +=
-      Math.floor(s.stats.gladesCleared / GLADES_PER_REPUTATION) -
-      Math.floor(gladesBefore / GLADES_PER_REPUTATION)
     if (firstRepMinute === Infinity && s.reputation >= 1) firstRepMinute = s.clock / 60
     if (s.clock - repCurve[repCurve.length - 1][0] >= 5) repCurve.push([s.clock, s.reputation])
   }
@@ -1552,16 +1661,17 @@ export function playRun(
   amber.visits = s.caravan.visits
   const lateFrom = [...repCurve].reverse().find(([t]) => t <= s.clock - 180)?.[1] ?? 0
   const lateShare = Math.max(0, s.reputation - lateFrom) / finalRep
-  // Resolve is whatever the discrete sources do not explain.
-  sources.resolve = Math.max(
-    0,
-    s.reputation +
-      s.reputationProgress -
-      sources.orders -
-      sources.decrees -
-      sources.glades -
-      sources.events,
-  )
+  // The engine tallies every grant by source; the report counts what filled
+  // the meter (up to the envoy setting out), with Glory reported apart.
+  const by = beforeEnvoy ?? s.reputationBy ?? {}
+  const sources: ReputationSources = {
+    orders: by.orders ?? 0,
+    decrees: by.decrees ?? 0,
+    glades: by.glades ?? 0,
+    events: by.events ?? 0,
+    resolve: by.resolve ?? 0,
+    trade: by.trade ?? 0,
+  }
 
   return {
     phase: s.phase,
@@ -1615,7 +1725,51 @@ export function playRun(
     petition: s.petition ? (s.petition.outcome ?? 'live') : 'none',
     retreated: !!s.retreated,
     plans: s.architectPlans ?? 0,
+    approach: approachResult(s),
+    envoyMinute: s.envoy ? s.envoy.setOutAt / 60 : Infinity,
+    glory: s.envoy?.glory ?? 0,
+    approachLow,
+    longNights,
   }
+}
+
+/** Counts each Long Night forecast, and each that fell, once (see `BotReport.longNights`). */
+function noteLongNights(s: RunState, seen: Set<string>, tally: BotReport['longNights']): void {
+  for (const c of s.conditions) {
+    if (c.name !== 'The Long Night' || seen.has(c.id)) continue
+    seen.add(c.id)
+    if (c.breaksWithStorm) tally.forecast++
+    else tally.struck++
+  }
+}
+
+/** Keeps the approach's low-water marks (see `BotReport.approachLow`). */
+function noteApproach(s: RunState, low: BotReport['approachLow'], streak: { half: number; all: number }): void {
+  const e = s.envoy
+  if (!e) return
+  const share = stalledShare(s)
+  streak.half = share >= 0.5 ? streak.half + STEP : 0
+  streak.all = share >= 0.999 ? streak.all + STEP : 0
+  low.halfStalled = Math.max(low.halfStalled, streak.half)
+  low.allStalled = Math.max(low.allStalled, streak.all)
+  low.population = Math.min(low.population, population(s) / Math.max(1, e.population))
+  for (const sp of s.speciesPool) {
+    if (Object.values(s.villagers).some((v) => v.species === sp)) {
+      low.resolve = Math.min(low.resolve, s.resolve[sp] - RESOLVE_LEAVE_THRESHOLD)
+    }
+  }
+  low.cold = e.coldSeconds
+}
+
+/** How the run's Envoy's approach went, for the harness. */
+function approachResult(s: RunState): BotReport['approach'] {
+  const e = s.envoy
+  if (!e) return 'none'
+  if (e.outcome === 'arrived') return 'held'
+  // Whether it came apart before or during the forest's last stand.
+  if (e.outcome === 'collapsed') return `collapsed:${e.collapse ?? '?'}${e.finalStorm ? '' : ':before-storm'}`
+  if (s.phase === 'lost') return 'abandoned'
+  return 'unfinished'
 }
 
 /**
@@ -1628,6 +1782,9 @@ export function playRun(
 function lossCause(s: RunState, by: ImpatienceSources): string {
   if (s.phase !== 'lost') return '-'
   if (s.retreated) return 'retreat'
+  // Lost while the envoy rode: the settlement collapsed before she arrived.
+  if (s.envoy?.outcome === 'collapsed') return `approach-${s.envoy.collapse}`
+  if (s.envoy) return 'approach-abandoned'
   if (population(s) === 0) return 'abandoned'
   const named: [string, number][] = [
     ['deadline', by.deadline],
