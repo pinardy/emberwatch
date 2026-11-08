@@ -21,6 +21,7 @@ import type {
   ThreatSpec,
 } from '../game/types'
 import { formatDuration } from '../game/engine/forecast'
+import { formatReputation, reputationFor } from '../game/engine/reputation'
 import { describeTimedGoal } from '../game/engine/goals'
 import { IconText } from './IconText'
 import { describeStrike, describeWhileActive, outcomeWords } from './threatText'
@@ -95,7 +96,10 @@ export function ChoiceModal() {
                     {option.gain && <Effect label="Gain" bag={option.gain} tone="good" />}
                     {option.reputation ? (
                       <span className="is-good">
-                        <Icon id="reputation" label="reputation" /> +{option.reputation}
+                        <Icon id="reputation" label="reputation" /> +
+                        {formatReputation(
+                          option.reputation > 0 ? reputationFor(run, 'events', option.reputation) : option.reputation,
+                        )}
                       </span>
                     ) : null}
                     {option.impatience ? (

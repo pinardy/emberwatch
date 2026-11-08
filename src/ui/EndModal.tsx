@@ -4,6 +4,7 @@ import { useGameStore, useHudRun } from '../game/store'
 import { Overlay } from './ChoiceModal'
 import { CommissionEnd } from './Commissions'
 import { EndExtras } from './EndExtras'
+import { EnvoyEnd } from './EnvoyStatus'
 import { RunModifierList } from './RunModifierList'
 import { RunTimelineChart } from './RunTimeline'
 import { Icon } from './Icon'
@@ -37,10 +38,14 @@ export function EndModal() {
             <h2>{won ? 'The settlement holds' : retreated ? 'Retreated to the Citadel' : 'The settlement is lost'}</h2>
             <small>
               {won
-                ? 'The Queen is satisfied. Your name goes in the ledger.'
+                ? run.envoy
+                  ? "The Queen's envoy found the settlement standing. Your name goes in the ledger."
+                  : 'The Queen is satisfied. Your name goes in the ledger.'
                 : retreated
                   ? "You led the settlers home before the Queen's patience ran out. The run counts as lost; what it earned goes home."
-                  : "The Queen's patience ran out before the forest did."}
+                  : run.envoy
+                    ? "The Queen was satisfied, but the settlement fell before her envoy arrived."
+                    : "The Queen's patience ran out before the forest did."}
             </small>
           </div>
         </header>
@@ -56,6 +61,7 @@ export function EndModal() {
               </section>
             )}
 
+            <EnvoyEnd run={run} />
             <CommissionEnd run={run} breakdown={breakdown} />
             <LeversEnd run={run} />
 

@@ -1,3 +1,4 @@
+import { envoyArrivesNextTick } from '../../test/envoy'
 import { describe, expect, it } from 'vitest'
 import { BLUEPRINT_POOL, BUILDINGS, BUILDING_LIST, STARTING_BLUEPRINTS } from '../content/buildings'
 import { CHARTERS } from '../content/charters'
@@ -512,11 +513,16 @@ describe('orders', () => {
 })
 
 describe('win and loss', () => {
-  it('wins at maximum reputation', () => {
+  it('maximum reputation sends the envoy; the run is won when she arrives', () => {
     const state = newRun()
     state.reputation = state.maxReputation
     tick(state, 0.125)
+    expect(state.phase).toBe('playing')
+    expect(state.envoy).toBeDefined()
+    envoyArrivesNextTick(state)
+    tick(state, 0.125)
     expect(state.phase).toBe('won')
+    expect(state.envoy?.outcome).toBe('arrived')
   })
 
   it('loses when impatience fills', () => {
