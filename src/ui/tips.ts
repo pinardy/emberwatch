@@ -22,6 +22,8 @@ import {
   secondsSinceReputation,
   villagersBeyond,
 } from '../game/engine/society'
+import { refinedNeedOf, refinedUnlocked } from '../game/engine/refinedNeeds'
+import { SPECIES } from '../game/content/species'
 import type { RunState } from '../game/types'
 
 /**
@@ -78,6 +80,17 @@ function anySpared(run: RunState): boolean {
 }
 
 const pct = (share: number) => `${Math.round(share * 100)}%`
+
+/** "Humans: spiced ale, Beavers: blueprint folios": the run's refined needs. */
+function refinedList(run: RunState): string {
+  return run.speciesPool
+    .map((sp) => {
+      const def = refinedNeedOf(sp)
+      return def ? `${SPECIES[sp].name}: ${def.name}` : ''
+    })
+    .filter(Boolean)
+    .join(', ')
+}
 
 export const TIPS: Tip[] = [
   {
@@ -223,6 +236,13 @@ export const TIPS: Tip[] = [
     title: 'Rising expectations',
     text: `From Year 2 settlers take comfort for granted: a served species loses ${RESOLVE_EXPECTATION_PER_YEAR} resolve a year, and more past ${RESOLVE_EXPECTATION_CROWD_FROM} villagers. Keep adding services and food variety — People → Why? shows the cost.`,
     when: (run) => run.season.year >= 2 && population(run) > 0 && expectations(run) > 0,
+  },
+  {
+    id: 'refined-needs',
+    title: 'Finer tastes',
+    text: (run) =>
+      `Each people now hopes for a finer form of one need (${refinedList(run)}). Met, it adds resolve and eases rising expectations; missing it costs nothing. See People.`,
+    when: (run) => population(run) > 0 && refinedUnlocked(run),
   },
   {
     id: 'glade-truce',

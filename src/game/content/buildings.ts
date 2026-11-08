@@ -539,6 +539,8 @@ const defs: BuildingDef[] = [
     workerSlots: 2,
     recipes: [
       { id: 'scroll', inputs: { plantFiber: 2, resin: 1 }, outputs: { scroll: 3 }, seconds: 20 },
+      // The beavers' refined Education (see species.ts).
+      { id: 'folio', inputs: { scroll: 1, plank: 1 }, outputs: { folio: 2 }, seconds: 22 },
     ],
     adjacency: [{ nearId: 'herbalistsCamp', percent: 15 }],
     description: 'Copies out scrolls for the Guild House. Works faster beside an Herbalists’ Camp.',
