@@ -8,9 +8,11 @@ import { judgeCommission } from '../../content/commissions'
 import { SPECIES } from '../../content/species'
 import { EDIBLE } from '../../content/resources'
 import type {
+  BiomeId,
   BuildingInstance,
   ConditionSpec,
   GladeEventOptionDef,
+  LayoutId,
   Order,
   PendingChoice,
   ReputationProfile,
@@ -98,6 +100,7 @@ import {
   roadNetwork,
 } from '../roads'
 import { tick } from '../tick'
+import { keepsLocalRecipe, salvageCamp, tuneTerrainRecipes, warmGroundHome } from './terrain'
 import {
   AGREEMENT_PRICE,
   buyOffer,
@@ -189,6 +192,9 @@ export interface BotReport extends RefinedReport {
   upgrades: number
   /** Map modifiers the seed drew (or the test forced). */
   modifiers: string
+  /** The map's layout and biome (`content/layouts.ts`). */
+  layout: LayoutId
+  biome: BiomeId
   /** The run's Citadel commission was met (false without one). */
   commissionMet: boolean
   /** Its terms as they stood at the end ('' without one). */
@@ -477,6 +483,8 @@ export function build(s: RunState, economyOnly = false): void {
   // 4. The material chain that pays for those venues.
   if (slotPressure(s) > 1.25) return
   if (countPlanned(s, 'stonecuttersCamp') < 1 && tryPlace(s, 'stonecuttersCamp')) return
+  // The ruins' salvage: bricks before any brickyard.
+  if (salvageCamp(s)) return
   if (countPlanned(s, 'herbalistsCamp') < 2 && tryPlace(s, 'herbalistsCamp')) return
   if (countPlanned(s, 'lumberMill') < 1 && tryPlace(s, 'lumberMill')) return
   if (countPlanned(s, 'clayPit') < 1 && tryPlace(s, 'clayPit')) return
@@ -502,6 +510,8 @@ function buildHousing(s: RunState): boolean {
   for (const defId of ['cabin', 'shelter']) {
     if (tryPlace(s, defId, (pos) => isWarmAt(s, pos))) return true
   }
+  // The Cinderwood's ash stays warm: a home there before one in the cold.
+  if (warmGroundHome(s)) return true
   if (tryUpgrade(s, ['cabin', 'shelter'])) return true
   return tryPlace(s, 'cabin') || tryPlace(s, 'shelter')
 }
@@ -781,7 +791,7 @@ function tuneRecipes(s: RunState): void {
    */
   if (wantsResin(s) && resinConsumerPlanned(s)) {
     const camps = Object.values(s.buildings).filter(
-      (b) => b.defId === 'woodcuttersCamp' && b.built,
+      (b) => b.defId === 'woodcuttersCamp' && b.built && !keepsLocalRecipe(s, b),
     )
     if (camps.length > 1 && !camps.some((b) => b.activeRecipeId === 'resin')) {
       setRecipe(s, camps[0].id, 'resin')
@@ -795,8 +805,9 @@ function tuneRecipes(s: RunState): void {
    * them (harpies want both of theirs from fiber).
    */
   if (wantsFiber(s)) {
+    // A camp on fireweed already gives both (`bot/terrain.ts`).
     const camps = Object.values(s.buildings).filter(
-      (b) => b.defId === 'herbalistsCamp' && b.built,
+      (b) => b.defId === 'herbalistsCamp' && b.built && !keepsLocalRecipe(s, b),
     )
     const wantsHerb = [...wanted.values()].some((set) => set.has('tea') || set.has('incense'))
     camps.forEach((camp, index) => {
@@ -1551,6 +1562,9 @@ export interface PlayOptions {
   modifiers?: string[]
   /** Found the run on this Citadel commission. */
   commission?: string
+  /** Pin the map's layout or biome instead of the seed's (the terrain sweep). */
+  layout?: LayoutId
+  biome?: BiomeId
   /**
    * Plays like someone who under-builds warmth: homes go up beside the camps
    * wherever they stand, shelters are never raised into insulated lodges, and
@@ -1578,8 +1592,8 @@ export function playRun(
   species: SpeciesId[],
   options: PlayOptions = {},
 ): BotReport {
-  const { economyOnly = false, maxMinutes = 45, modifiers, commission } = options
-  const s = createRun({ seed, species, modifiers, commission })
+  const { economyOnly = false, maxMinutes = 45, modifiers, commission, layout, biome } = options
+  const s = createRun({ seed, species, modifiers, commission, layout, biome })
   botStyle.set(s, options)
   let sinceDecision = Infinity
   const maxSeconds = maxMinutes * 60
@@ -1634,6 +1648,7 @@ export function playRun(
       layRoads(s)
       explore(s)
       tuneRecipes(s)
+      tuneTerrainRecipes(s)
       tendWard(s)
       staff(s)
     }
@@ -1715,6 +1730,8 @@ export function playRun(
     frozen,
     upgrades: Object.values(s.buildings).reduce((sum, b) => sum + tierOf(b), 0),
     modifiers: s.runModifiers.join(','),
+    layout: s.world.layout ?? 'rings',
+    biome: s.world.biome ?? 'woodland',
     commissionMet: judgeCommission(s)?.met ?? false,
     commissionTerms: describeCommission(s),
     openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),

@@ -159,7 +159,24 @@ export function plateShape(district: District, r: number): PlateShape {
 
 /** What an obstacle is, and what the player can do about it. */
 export function obstacleTitle(kind: Obstacle['kind']): string {
-  return kind === 'mire'
-    ? 'Mire — sodden, sucking bog. It can never be drained or cleared: place buildings and roads around it.'
-    : 'Crag — bare bedrock. It can never be cleared: place buildings and roads around it.'
+  return OBSTACLE_TITLE[kind]
+}
+
+const OBSTACLE_TITLE: Record<Obstacle['kind'], string> = {
+  mire: 'Mire — sodden, sucking bog. It can never be drained or cleared: place buildings and roads around it.',
+  crag: 'Crag — bare bedrock. It can never be cleared: place buildings and roads around it.',
+  water: 'River — deep, fast water. Glades across it are reached only by a ford, and roads cross only there.',
+  cliff: 'Cliff edge — the ridge falls away here. Glades below are reached only by a pass, and roads cross only there.',
+}
+
+/** What a barrier is and where it can be crossed, for its hover title. */
+export const BARRIER_TITLE: Record<'river' | 'cliff', { line: string; crossing: string }> = {
+  river: {
+    line: OBSTACLE_TITLE.water,
+    crossing: 'Ford — shallow water over gravel: the one way across the river here, for crews and roads alike.',
+  },
+  cliff: {
+    line: OBSTACLE_TITLE.cliff,
+    crossing: 'Pass — a path down the cliff: the one way between the ridge and the lowland here.',
+  },
 }

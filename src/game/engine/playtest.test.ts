@@ -13,6 +13,7 @@ import {
   summariseAmber,
   winShare,
 } from './bot/harness'
+import { summariseTerrain } from './bot/terrainReport'
 
 /**
  * End-to-end balance harness: the bot in `bot/play.ts` plays whole runs and
@@ -45,6 +46,7 @@ describe('balance harness', () => {
     lines.push(summarise('economy-only', econ))
     lines.push(summariseAmber('amber, all trios', competent))
     lines.push(summariseAmber('amber, economy-only', econ))
+    lines.push(summariseTerrain('ground, all trios', competent))
     console.log(lines.join('\n'))
 
     // A roguelite that can stalemate is broken: every run must reach a verdict,

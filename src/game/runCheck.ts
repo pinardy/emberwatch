@@ -7,6 +7,7 @@ import { ORDERS } from './content/orders'
 import { RESOURCES } from './content/resources'
 import { SPECIES } from './content/species'
 import { TERRAIN } from './content/terrain'
+import { BIOMES, LAYOUTS } from './content/layouts'
 
 /*
  * The shape check every stored run passes before the game sees it: an
@@ -33,6 +34,26 @@ function strings(value: unknown): value is string[] {
 }
 function known(table: object, id: unknown): boolean {
   return typeof id === 'string' && Object.hasOwn(table, id)
+}
+
+/** A layout, biome or barrier list a screen could not draw; null when fine or absent. */
+function worldPlanProblem(world: Rec): string | null {
+  if (world.layout !== undefined && !known(LAYOUTS, world.layout)) return 'layout'
+  if (world.biome !== undefined && !known(BIOMES, world.biome)) return 'biome'
+  const barriers = world.barriers
+  if (barriers === undefined) return null
+  const ok =
+    Array.isArray(barriers) &&
+    barriers.every(
+      (b) =>
+        isRec(b) &&
+        (b.kind === 'river' || b.kind === 'cliff') &&
+        Array.isArray(b.segments) &&
+        b.segments.every((seg) => Array.isArray(seg) && seg.length === 2 && seg.every(isVec)) &&
+        Array.isArray(b.crossings) &&
+        b.crossings.every(isVec),
+    )
+  return ok ? null : 'barriers'
 }
 
 /** Every value of a record passes `check`; the first failure's name or null. */
@@ -120,6 +141,8 @@ export function runProblem(run: unknown): string | null {
   if (!isRec(run.world) || !finite(run.world.width) || !finite(run.world.height)) {
     return 'its world is damaged'
   }
+  // Layout, biome and barriers are optional: saves from before them have none.
+  if (worldPlanProblem(run.world)) return 'its world is damaged'
   const checks: [string, unknown, (e: Rec) => boolean][] = [
     [
       'glades',

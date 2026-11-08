@@ -173,8 +173,16 @@ const defs: BuildingDef[] = [
         seconds: 18,
         requiresDeposit: 'trees',
       },
+      {
+        // The Cinderwood's standing dead timber: dry and quick, until it is gone.
+        id: 'deadwood',
+        inputs: {},
+        outputs: { wood: 4 },
+        seconds: 12,
+        requiresDeposit: 'deadfall',
+      },
     ],
-    description: 'Fells trees in range for wood, or taps them slowly for resin.',
+    description: 'Fells trees in range for wood, or taps them slowly for resin. In the Cinderwood it also saws up charred deadfall: quicker wood, until it runs out.',
   },
   {
     id: 'stonecuttersCamp',
@@ -194,8 +202,16 @@ const defs: BuildingDef[] = [
         seconds: 16,
         requiresDeposit: 'stoneVein',
       },
+      {
+        // The ruins field's tumbled stonework: dressed stone and old bricks.
+        id: 'salvage',
+        inputs: {},
+        outputs: { stone: 2, brick: 1 },
+        seconds: 16,
+        requiresDeposit: 'ruins',
+      },
     ],
-    description: 'Quarries stone veins in range.',
+    description: 'Quarries stone veins in range, or salvages stone and old bricks from tumbled ruins.',
   },
   {
     id: 'clayPit',
@@ -264,8 +280,16 @@ const defs: BuildingDef[] = [
         seconds: 15,
         requiresDeposit: 'vegetation',
       },
+      {
+        // The Cinderwood's fireweed: leaves for herbs and fluff for fibre at once.
+        id: 'fireweed',
+        inputs: {},
+        outputs: { herb: 2, plantFiber: 2 },
+        seconds: 16,
+        requiresDeposit: 'fireweed',
+      },
     ],
-    description: 'Harvests undergrowth for herbs or plant fibre.',
+    description: 'Harvests undergrowth for herbs or plant fibre — or fireweed in the Cinderwood, for both at once.',
   },
   {
     id: 'foragersCamp',

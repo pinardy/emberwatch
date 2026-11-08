@@ -130,6 +130,8 @@ export function mapgenHooksFor(ids: readonly string[]): MapgenHooks {
     hooks.themeWeights = mergeScale(hooks.themeWeights, h.themeWeights)
     hooks.depositScale = mergeScale(hooks.depositScale, h.depositScale)
     hooks.rewardScale = mergeScale(hooks.rewardScale, h.rewardScale)
+    hooks.layoutWeights = mergeScale(hooks.layoutWeights, h.layoutWeights)
+    hooks.biomeWeights = mergeScale(hooks.biomeWeights, h.biomeWeights)
     if (h.smallGladeOdds !== undefined) {
       hooks.smallGladeOdds = (hooks.smallGladeOdds ?? 1) * h.smallGladeOdds
     }

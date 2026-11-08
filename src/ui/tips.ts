@@ -27,6 +27,7 @@ import {
 import { refinedNeedOf, refinedUnlocked } from '../game/engine/refinedNeeds'
 import { SPECIES } from '../game/content/species'
 import type { RunState } from '../game/types'
+import { TERRAIN_TIPS } from './terrainTips'
 
 /**
  * The coach's tips, as data. Each fires once, the first time its situation
@@ -285,6 +286,8 @@ export const TIPS: Tip[] = [
     when: (run) => run.stats.gladesCleared >= 3 && !anySpared(run),
     doneWhen: anySpared,
   },
+  // The map's layouts and biomes (`terrainTips.ts`).
+  ...TERRAIN_TIPS,
 ]
 
 /** The tip with this id, if any. */

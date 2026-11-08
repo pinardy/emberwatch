@@ -20,6 +20,7 @@ import {
 import { panDirectionOf } from './usePanKeys'
 import {
   BuildGhost2D,
+  BarrierLayer2D,
   DepositLayer2D,
   GladeLayer2D,
   GladePlateLayer2D,
@@ -412,6 +413,8 @@ const MapScene2D = memo(function MapScene2D({ run }: { run: RunState }) {
                 {/* The forest beyond the world's edge. */}
                 <rect x={box.x} y={box.y} width={box.w} height={box.h} fill="#0a0e11" />
                 <GladeLayer2D run={run} />
+                {/* A river or the ridge's cliffs, with their crossings. */}
+                <BarrierLayer2D run={run} />
                 {/* The season's wash darkens the ground only: roads, features
                     and buildings stay crisp above it. */}
                 <WeatherGround2D x={-w / 2} y={-h / 2} width={w} height={h} />

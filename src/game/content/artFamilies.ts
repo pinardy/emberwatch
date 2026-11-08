@@ -110,6 +110,18 @@ export const GLADE_EVENT_MOTIF: Partial<Record<string, BaseIconId>> = {
   drownedBellTower: 'bell',
   fenWitch: 'witch',
   sealedTreasury: 'coins',
+  // The Cinderwood's own
+  smoulderingHearth: 'cinder',
+  charredRoost: 'feather',
+  emberSprites: 'star',
+  ashenPilgrims: 'walker',
+  glassedClearing: 'gem',
+  wardenOfCinders: 'monolith',
+  heartOfTheBurn: 'mountain',
+  // The ruins field's own
+  collapsedGatehouse: 'castle',
+  kingsCistern: 'drop',
+  archiveOfTheHoldfast: 'books',
 }
 
 /** A glade event: its motif in a ring of its glade kind's colour. */
@@ -126,6 +138,8 @@ export const THREAT_MOTIF: Partial<Record<string, BaseIconId>> = {
   'The Waking Titan': 'mountain',
   'The Restless Dead': 'forbidden',
   'The Drowned Choir': 'bell',
+  'The Ash-Crows': 'feather',
+  'The Waking Ash': 'grave',
   // Storm blights (content/stormBlights.ts)
   'The Storm Stalker': 'lightning',
 }
@@ -150,6 +164,12 @@ export const PACT_MOTIF: Partial<Record<string, BaseIconId>> = {
   'The Old Forge': 'forge',
   'The Storm Bell': 'bell',
   "Witch's Ground-Lore": 'witch',
+  'Old Embers': 'cinder',
+  'Kept Sprites': 'star',
+  'Vigil of the Ash': 'walker',
+  'The Cinder Warden': 'shield',
+  'The Burn-Heart Vents': 'forge',
+  "The King's Water": 'drop',
 }
 
 /** Lingering conditions, by name. */
@@ -164,6 +184,7 @@ export const CONDITION_MOTIF: Partial<Record<string, BaseIconId>> = {
   'Broken Seals': 'envelope',
   "The Witch's Curse": 'witch',
   'The Royal Audit': 'ledger',
+  'The Restless Burn': 'mountain',
   // Storm blights: the forecasts, then the damage some leave for the Storm
   'Gathering Clouds': 'rain',
   'Leaking Roofs': 'drop',

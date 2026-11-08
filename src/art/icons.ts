@@ -592,6 +592,40 @@ const MAP_ICONS = {
     F('ink', circle(15, 17.6, 0.6), 0.5),
     F('ink', circle(12, 19.4, 0.6), 0.5),
   ),
+  // ---- the Cinderwood's and the ruins field's deposits
+  /** Charred deadfall: a fallen black log and a snag, embers in the cracks. */
+  deadfall: art(
+    f('slate', 'M6.5 14V5.2L8.4 3.6L10.2 5.4V14Z'),
+    l('ink', 'M8.3 6.5V12.5', 1, 0.5),
+    f('slate', rect(2.5, 13.2, 15.5, 5.6, 2.8)),
+    f('bark', ellipse(18.2, 16, 2.4, 2.8)),
+    l('ink', ellipse(18.2, 16, 1, 1.2), 1),
+    l('ink', 'M5.5 15.4H9.5M11.5 17H15', 1.1, 0.6),
+    F('ember', circle(10.5, 15.4, 0.9)),
+    F('flame', circle(13.6, 15.2, 0.65)),
+    F('ember', circle(7.2, 17.2, 0.6)),
+  ),
+  /** Fireweed: magenta spires over grey ash. */
+  fireweed: art(
+    F('slate', ellipse(12, 20.4, 9.5, 1.8), 0.8),
+    bar('moss', 'M7.5 20V9.5M12 20V5.5M16.5 20V10', 1),
+    f('forbid', ellipse(7.5, 9, 1.8, 3.4)),
+    f('forbid', ellipse(12, 5.2, 2, 3.6)),
+    f('forbid', ellipse(16.5, 9.6, 1.8, 3.2)),
+    F('rose', ellipse(11.5, 4.4, 0.7, 1.6)),
+    F('rose', ellipse(7, 8.2, 0.6, 1.4)),
+    leafShape(12, 14, 4.5, -30, 'leaf'),
+    leafShape(7.5, 15, 4, -150, 'leaf'),
+  ),
+  /** Tumbled stonework: a broken column beside a ruined arch. */
+  ruins: art(
+    f('slate', rect(2, 18, 20, 3, 1)),
+    f('stone', 'M4.5 18V7.4L6.6 5.6L8.4 7.6L9.2 6.6V18Z'),
+    l('slate', 'M6.2 8.5V17M7.8 9V17', 1, 0.7),
+    f('cream', 'M11 18V8.5H21V18H19V13.8C19 12.3 17.7 11 16 11S13 12.3 13 13.8V18Z'),
+    l('stone', 'M11 11.5H13.3M18.7 11.5H21M15 8.5V10.9', 1, 0.8),
+    f('stone', rect(14.2, 15.8, 3, 2.2, 0.5)),
+  ),
   // ---- glade kinds
   dangerous: art(
     f('warn', 'M12 2.8L22 19.8H2Z', 1.5),
@@ -623,6 +657,27 @@ const MAP_ICONS = {
     f('stone', 'M9.5 20.5L10.5 12.5L13.5 8.5L16.5 11L17.5 16L20 20.5Z'),
     l('ink', 'M13.5 3.5L12.5 9L9.5 12.5M17.5 16L14.5 15L13 20.5M4 13.5L6.5 16.5', 1.1, 0.55),
     l('cream', 'M10 6.5L13.3 4.4M14 9.4L16.2 11.4', 1.1, 0.75),
+  ),
+  /** Cinder flats: an ash bank, embers glowing through it, a curl of smoke. */
+  cinder: art(
+    l('cloud', 'M12.5 11C11 9.6 13.8 8.2 12.4 6.6S13.8 3.8 12.6 2.6', 1.2, 0.6),
+    f('slate', 'M2 19.5C3.6 14.6 7.6 12.4 12 12.4S20.4 14.6 22 19.5Z'),
+    F('ink', 'M5 19.5C6.2 16.6 8.8 15.2 12 15.2S17.8 16.6 19 19.5Z', 0.35),
+    F('ember', circle(8.6, 17, 1.1)),
+    F('flame', circle(13.8, 16, 0.85)),
+    F('ember', circle(16.8, 18, 0.75)),
+    F('flame', circle(10.8, 18.6, 0.6)),
+  ),
+  /** A cliff edge: the ridge's escarpment, a ledge over a drop. */
+  cliff: art(
+    f('slate', 'M2 21.5V12L6 9L9.5 10.5L13 7L17 9L22 6.5V21.5Z'),
+    f('stone', 'M2 12L6 9L9.5 10.5L13 7L17 9L22 6.5V9.5L17 12L13 10L9.5 13.5L6 12L2 15Z'),
+    l('ink', 'M5 15.5L5.6 20M10 16L9.4 21M15 14.5L15.8 19.5M19.5 13L19 18', 1.1, 0.55),
+  ),
+  /** Running water: the river barrier's own mark. */
+  river: art(
+    f('water', 'M2 8.5C5 6.5 8 6.5 11 8.5S17 10.5 22 8.5V15.5C19 17.5 16 17.5 13 15.5S7 13.5 2 15.5Z'),
+    l('cloud', 'M4.5 11.5C6.5 10.5 8.5 10.5 10.5 11.5M13.5 13C15.5 12 17.5 12 19.5 13', 1.2, 0.8),
   ),
   marsh: art(
     f('water', ellipse(12, 18, 9.5, 3)),
