@@ -26,6 +26,8 @@ import {
   lastStandBlights,
   threatPace,
 } from './climax'
+import { sootheQueen } from './actions'
+import { petitionOpen } from './levers'
 import { createRun } from './createRun'
 import { collectWarnings } from './diagnostics'
 import { addVillager } from './newcomers'
@@ -107,6 +109,11 @@ describe('the envoy sets out', () => {
     s.impatience = s.maxImpatience
     tick(s, 0.125)
     expect(s.phase).toBe('playing')
+    // Nothing to buy back: soothing and the Grand Petition are closed.
+    s.stock.amber = 500
+    expect(sootheQueen(s)).toMatch(/satisfied/)
+    expect(s.stock.amber).toBe(500)
+    expect(petitionOpen(s)).toBe(false)
   })
 
   it('banks anything earned past the maximum as Glory, tallied by source', () => {
