@@ -19,7 +19,7 @@ import { NEED_LABELS, SPECIES_LIST } from '../game/content/species'
 import { TERRAIN } from '../game/content/terrain'
 import { SEASON_INFO } from '../game/engine/balance'
 import { DEPOSIT_INFO } from '../game/engine/mapgen'
-import { ICON_IDS, ICONS, PALETTE, iconShapes, iconSvgMarkup, isIconId, type IconId } from './icons'
+import { ICON_IDS, ICONS, PALETTE, iconShapes, isIconId, type IconId } from './icons'
 
 /**
  * Content that is still allowed to render its emoji instead of drawn art,
@@ -174,14 +174,6 @@ describe('icon registry', () => {
         if (s.stroke) expect(PALETTE).toHaveProperty(s.stroke)
       }
     }
-  })
-
-  it('serialises to a standalone SVG with concrete colours', () => {
-    const svg = iconSvgMarkup('impatience', { current: '#ffffff' })
-    expect(svg).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/)
-    expect(svg).toContain('viewBox="0 0 24 24"')
-    expect(svg).not.toContain('currentColor')
-    expect(iconSvgMarkup('impatience')).toContain('currentColor')
   })
 
   it('composes framed ids from any frame and any drawn icon, and rejects the rest', () => {

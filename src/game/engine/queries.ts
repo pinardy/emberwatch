@@ -23,7 +23,6 @@ import {
   recipesOf,
   storageOf,
   warmthRadiusOf,
-  workerSlotsOf,
 } from './upgrades'
 import type {
   BuildingInstance,
@@ -429,14 +428,3 @@ export function availableRecipes(b: BuildingInstance) {
   )
 }
 
-export function workerCapacity(s: RunState): { used: number; total: number } {
-  let used = 0
-  let total = 0
-  for (const b of Object.values(s.buildings)) {
-    const def = BUILDINGS[b.defId]
-    if (!def || !b.built) continue
-    total += workerSlotsOf(b)
-    used += b.workers.length
-  }
-  return { used, total }
-}
