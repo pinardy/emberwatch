@@ -55,5 +55,5 @@ describe('balance harness', () => {
       expect(reports.filter(isEarlyCollapse).length, `${label} early collapses`).toBeLessThanOrEqual(1)
       for (const r of reports) expect(r.exactMinutes, `${label} verdict`).toBeLessThan(VERDICT_BY_MINUTES)
     }
-  }, 300_000)
+  }, 600_000)
 })

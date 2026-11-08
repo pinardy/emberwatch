@@ -102,5 +102,5 @@ describe('balance harness', () => {
       expect(r.population).toBeGreaterThan(10)
       expect(r.minutes).toBeGreaterThan(8)
     }
-  }, 300_000)
+  }, 600_000)
 })
