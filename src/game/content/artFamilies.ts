@@ -171,6 +171,9 @@ export const CONDITION_MOTIF: Partial<Record<string, BaseIconId>> = {
   'Storm Fever': 'sleepy',
   'Black Frost': 'snowflake',
   'Killing Frost': 'snowflake',
+  'The Long Night': 'lantern',
+  // The forest's last stand while the Queen's envoy rides
+  "The Forest's Dread": 'trees',
 }
 
 /** A lingering condition: its motif on a plum octagon. */

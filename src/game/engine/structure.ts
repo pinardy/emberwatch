@@ -36,7 +36,8 @@ import { DECLINE_CHOICE, takeOrderChoice } from './orders'
 import { grantProduced, spend } from './queries'
 import { applyOutcome } from './outcomes'
 import { makeRng, type Rng } from './rng'
-import { addImpatience, addReputation } from './society'
+import { addImpatience } from './society'
+import { formatReputation, gainReputation, reputationFor } from './reputation'
 import { recordEvent } from './timeline'
 
 /**
@@ -75,7 +76,11 @@ export function decreeGoal(decree: RoyalDecree): OrderGoal | undefined {
 
 /** Reputation meeting a decree pays, after any run-long bonus to decrees. */
 export function decreeReputation(s: RunState, def: DecreeDef): number {
-  return Math.max(0, def.reputationReward + computeModifiers(s).decreeReputation)
+  return reputationFor(
+    s,
+    'decrees',
+    Math.max(0, def.reputationReward + computeModifiers(s).decreeReputation),
+  )
 }
 
 /**
@@ -92,7 +97,7 @@ export function decreeStreakBonus(streak: number): number {
 /** "+2 reputation", "the Queen's patience returns (−1 impatience)". */
 function decreePayText(def: DecreeDef, reputation: number): string {
   const parts: string[] = []
-  if (reputation > 0) parts.push(`+${reputation} reputation`)
+  if (reputation > 0) parts.push(`+${formatReputation(reputation)} reputation`)
   if (def.impatienceRelief) parts.push(`−${def.impatienceRelief} impatience`)
   return parts.join(', ') || 'The Queen is satisfied'
 }
@@ -119,7 +124,7 @@ export function stepDecree(s: RunState, dt: number): void {
     decree.complete = true
     s.stats.ordersCompleted++
     const reputation = decreeReputation(s, def)
-    addReputation(s, reputation)
+    gainReputation(s, reputation, 'decrees')
     if (def.impatienceRelief) addImpatience(s, -def.impatienceRelief)
     if (def.reward) {
       grantProduced(s, def.reward)

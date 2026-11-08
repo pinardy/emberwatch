@@ -18,8 +18,11 @@ import {
   CARAVAN_OFFERS,
   CARAVAN_STAY,
   CARAVAN_WANT_BONUS,
+  REPUTATION_PER_CARAVAN,
+  REPUTATION_PER_TRADE_AMBER,
   TRADE_LOT,
 } from './balance'
+import { gainReputation, reputationFor } from './reputation'
 import { cornerstonePool } from './citadel'
 import { relevantBlueprints } from './serviceChains'
 import { pushLog } from './runLog'
@@ -148,6 +151,8 @@ export function stepCaravan(s: RunState, dt: number, mods: Modifiers = computeMo
     s.caravan.here = true
     s.caravan.timer = caravanStay(s)
     s.caravan.visits++
+    // Where the Queen values trade (Amber Springs), a caravan calling is news.
+    gainReputation(s, reputationFor(s, 'trade', REPUTATION_PER_CARAVAN), 'trade')
     rollOffers(s)
     addProvisions(s)
     rollRare(s)
@@ -278,6 +283,7 @@ export function sellResource(s: RunState, resource: ResourceId): string | null {
   const paid = sellPrice(s, resource, TRADE_LOT)
   spend(s.stock, { [resource]: TRADE_LOT })
   grant(s.stock, { amber: paid })
+  gainReputation(s, reputationFor(s, 'trade', paid * REPUTATION_PER_TRADE_AMBER), 'trade')
   pushLog(
     s,
     `Sold ${TRADE_LOT} × ${RESOURCES[resource]?.name} for ${paid} amber.`,
