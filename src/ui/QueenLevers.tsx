@@ -118,6 +118,7 @@ const COURT_STATE_WORDS: Record<CourtState, string> = {
   short: 'Needs amber',
   later: 'Not yet',
   used: 'Used',
+  closed: 'Closed',
 }
 
 const COURT_ART: Record<CourtLever['id'], { id: 'dove' | 'seal' | 'guildHouse'; emoji: string }> = {

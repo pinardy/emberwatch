@@ -29,6 +29,8 @@ import { useDismiss } from './useGameLoop'
 import { HEARTH_KEY, inspectHearth } from './MapAids'
 import { signed } from './threatText'
 import { SaveStatusChip } from './SaveStatusChip'
+import { EnvoyMeter, GloryNote } from './EnvoyStatus'
+import { envoyRiding } from '../game/engine/climax'
 
 interface Float {
   id: number
@@ -124,6 +126,7 @@ export function TopBar() {
   const hearthCaution =
     !hearthDanger && hearth.stormShortfall > 0 && run.season.season !== 'drizzle'
   const impatienceCritical =
+    !envoyRiding(run) &&
     run.impatience + run.impatienceProgress >= run.maxImpatience * IMPATIENCE_CRITICAL_SHARE
 
   const alerts = statusAlerts({
@@ -269,9 +272,17 @@ export function TopBar() {
           max={run.maxReputation}
           fraction={run.reputationProgress}
           tone="good"
-          hint="Win at maximum reputation. Earned from high resolve and completed orders."
+          hint={
+            run.envoy
+              ? "Reputation is full: the Queen's envoy is on her way. Anything more earned is Glory."
+              : "At maximum reputation the Queen's envoy sets out; hold until she arrives to win. Earned from high resolve, orders, decrees, glades and events."
+          }
           floats={repFloats}
+          note={envoyRiding(run) ? <GloryNote run={run} /> : undefined}
         />
+        {envoyRiding(run) ? (
+          <EnvoyMeter run={run} mods={frame?.mods ?? computeModifiers(run)} />
+        ) : (
         <Meter
           label="Impatience"
           short="Impat."
@@ -298,6 +309,7 @@ export function TopBar() {
             )
           }
         />
+        )}
         <Meter
           label="Hostility"
           short="Host."

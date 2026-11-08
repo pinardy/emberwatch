@@ -130,6 +130,7 @@
   border-color: currentColor;
 }
 
-.court-state.is-used {
+.court-state.is-used,
+.court-state.is-closed {
   color: var(--muted);
 }

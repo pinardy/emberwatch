@@ -40,14 +40,16 @@ const MARKED: Record<string, MarkerKind> = {
   cornerstone: 'boon',
   charter: 'boon',
   decreeMissed: 'missed',
+  envoy: 'envoy',
 }
-type MarkerKind = 'lost' | 'threat' | 'boon' | 'missed'
+type MarkerKind = 'lost' | 'threat' | 'boon' | 'missed' | 'envoy'
 
 const MARKER_LABEL: Record<MarkerKind, string> = {
   lost: 'Villager lost',
   threat: 'Threat unleashed',
   boon: 'Cornerstone or charter',
   missed: 'Decree missed',
+  envoy: 'Envoy set out',
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +84,8 @@ export function eventLabel(e: TimelineEvent): string {
       return `Decree met: ${e.d}`
     case 'decreeMissed':
       return `Decree missed: ${e.d}`
+    case 'envoy':
+      return "The Queen's envoy set out"
   }
 }
 
@@ -167,6 +171,14 @@ function Marker({ kind, x, y }: { kind: MarkerKind; x: number; y: number }) {
       return <circle className="tl-mark is-boon" cx={x} cy={y} r={4.5} />
     case 'missed':
       return <rect className="tl-mark is-missed" x={x - 4} y={y - 4} width={8} height={8} rx={1} />
+    case 'envoy':
+      // A pennant: the envoy's flag.
+      return (
+        <path
+          className="tl-mark is-envoy"
+          d={`M${x - 3} ${y + 6}V${y - 6}L${x + 5} ${y - 3}L${x - 3} ${y}`}
+        />
+      )
   }
 }
 

@@ -28,6 +28,14 @@ import { computeStorageCap, population, totalHousing } from './queries'
 import { checkCharter, stepConditions, stepDecree } from './structure'
 import { stepCaravan } from './trade'
 import { stepPetition } from './levers'
+import {
+  envoyArrivesWithStormEnd,
+  envoyRiding,
+  envoyStormBreaks,
+  forecastFinalBlight,
+  stepEnvoy,
+  threatPace,
+} from './climax'
 import { stepErrands } from './errands'
 import { displayName } from './upgrades'
 import { recordEvent, stepTimeline } from './timeline'
@@ -84,7 +92,8 @@ function tickPlaying(s: RunState, dt: number): void {
     if (b) pushLog(s, `Upgrade complete: the ${displayName(b)} stands ready.`, 'good')
   }
   stepClearing(s, dt, mods)
-  stepThreats(s, dt)
+  // The forest's last stand: threats strike faster through the final Storm.
+  stepThreats(s, dt * threatPace(s))
   stepConditions(s, dt)
   stepCaravan(s, dt, mods)
 
@@ -106,7 +115,8 @@ function tickPlaying(s: RunState, dt: number): void {
   stepReputation(s, dt, mods, breakdowns)
   // Reputation from choices made between ticks, and from resolve just now.
   noteReputation(s)
-  stepImpatience(s, dt, mods)
+  // While the envoy rides the Queen is satisfied: her patience stops moving.
+  if (!envoyRiding(s)) stepImpatience(s, dt, mods)
   // The Grand Petition's vow is judged on the same reputation.
   stepPetition(s)
 
@@ -128,6 +138,7 @@ function tickPlaying(s: RunState, dt: number): void {
   stepErrands(s, dt)
   checkMilestones(s)
   checkCharter(s)
+  stepEnvoy(s, dt)
   checkEndConditions(s)
   if (s.phase !== 'playing') closeOpenChoices(s)
   stepTimeline(s)
@@ -146,6 +157,9 @@ export function closeOpenChoices(s: RunState): void {
 function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
   s.season.elapsed += dt
   if (s.season.elapsed < s.season.length) return
+  // The envoy rides in as her Storm ends: the run is decided in that Storm's
+  // year, and no new season begins.
+  if (s.season.season === 'storm' && envoyArrivesWithStormEnd(s)) return
 
   s.season.elapsed -= s.season.length
   const index = SEASON_ORDER.indexOf(s.season.season)
@@ -164,6 +178,8 @@ function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
     )
     // Whatever the forest promised at Clearance arrives with the rain.
     breakStormBlights(s)
+    // With the envoy on the road, this is the forest's last stand.
+    envoyStormBreaks(s)
   } else if (next === 'drizzle') {
     recordEvent(s, 'year', String(s.season.year))
     pushLog(s, `Year ${s.season.year} begins. The storm has passed.`, 'good')
@@ -180,22 +196,24 @@ function advanceSeason(s: RunState, dt: number, mods: Modifiers): void {
     if (next === 'clearance') {
       // The forest's mood sets the coming Storm's blight, said (as a
       // lingering condition) while there is still a Clearance to prepare in.
-      forecastStormBlight(s)
+      // With the envoy on the road, one is guaranteed.
+      if (!forecastFinalBlight(s)) forecastStormBlight(s)
     }
   }
 }
 
 function checkEndConditions(s: RunState): void {
-  if (s.reputation >= s.maxReputation) {
+  // Reputation at the maximum sends the envoy (`climax.ts`); the run is won
+  // when she arrives, and lost if the settlement collapses first.
+  if (s.envoy?.outcome === 'arrived') {
     s.phase = 'won'
-    pushLog(
-      s,
-      `The settlement is secure. The Queen recalls you to the Citadel with honours.`,
-      'good',
-    )
     return
   }
-  if (s.impatience >= s.maxImpatience) {
+  if (s.envoy?.outcome === 'collapsed') {
+    s.phase = 'lost'
+    return
+  }
+  if (!envoyRiding(s) && s.impatience >= s.maxImpatience) {
     s.phase = 'lost'
     pushLog(s, `The Queen's patience is spent. The settlement is abandoned.`, 'bad')
     return

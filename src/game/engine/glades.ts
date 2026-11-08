@@ -11,6 +11,7 @@ import { refreshDepositCaches } from './production'
 import { canAfford, edibleTotal, grantProduced, spend } from './queries'
 import { pushLog } from './runLog'
 import { addImpatience, addReputation, loseVillager, pickVictim, unassign } from './society'
+import { formatReputation, gainReputation, reputationFor } from './reputation'
 import { unleashThreat } from './threats'
 import { recordEvent } from './timeline'
 import { clearMultiplier } from './traits'
@@ -76,8 +77,13 @@ export function stepClearing(s: RunState, dt: number, mods: Modifiers): void {
      * other than waiting for resolve to tick over.
      */
     if (s.stats.gladesCleared % GLADES_PER_REPUTATION === 0) {
-      addReputation(s, 1)
-      pushLog(s, `The Citadel notes your reclaimed land. +1 reputation.`, 'good')
+      const reputation = reputationFor(s, 'glades', 1)
+      gainReputation(s, reputation, 'glades')
+      pushLog(
+        s,
+        `The Citadel notes your reclaimed land. +${formatReputation(reputation)} ${s.envoy ? 'glory' : 'reputation'}.`,
+        'good',
+      )
     }
 
     if (glade.eventId) {

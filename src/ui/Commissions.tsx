@@ -13,6 +13,7 @@ import { type RewardBreakdown } from '../game/engine/meta'
 import { metaUpgradeArt } from '../game/content/artFamilies'
 import type { MetaState, RunState } from '../game/types'
 import { Icon } from './Icon'
+import { ReputationProfileLine } from './EnvoyStatus'
 
 /**
  * Citadel commissions in the UI: the pick on the setup screen, the card in
@@ -108,6 +109,7 @@ export function CommissionPicker({
             <CommissionTitle def={def} />
             <small className="commission-patron">{def.patron}</small>
             <small>{def.twist}</small>
+            <ReputationProfileLine profile={def.reputation} />
             <Objective def={def} />
             <em>+{def.bonusPercent}% supplies if met</em>
           </button>
@@ -129,6 +131,7 @@ export function CommissionCard({ run }: { run: RunState }) {
         <span className="order-reward">+{def.bonusPercent}% supplies</span>
       </div>
       <small>{def.twist}</small>
+      <ReputationProfileLine profile={def.reputation} />
       <TermList terms={verdict.terms} />
     </div>
   )
@@ -172,6 +175,7 @@ export function CommissionBoard({ meta }: { meta: MetaState }) {
             <CommissionTitle def={def} />
             <small className="commission-patron">{def.patron}</small>
             <small>{def.twist}</small>
+            <ReputationProfileLine profile={def.reputation} />
             <Objective def={def} />
             <em>
               {status === 'locked' && upgrade ? (

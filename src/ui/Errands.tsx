@@ -118,7 +118,9 @@ export function ErrandList({ run }: { run: RunState }) {
       ))}
       {errands.length === 0 && (
         <p className="muted" data-testid="errands-none">
-          None open. They turn up once reputation has stood still for {Math.round(ERRAND_PACING.stallAfter)} seconds.
+          {run.envoy
+            ? 'None while the envoy rides: reputation is full.'
+            : `None open. They turn up once reputation has stood still for ${Math.round(ERRAND_PACING.stallAfter)} seconds.`}
         </p>
       )}
     </section>

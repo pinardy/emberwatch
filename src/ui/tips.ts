@@ -17,7 +17,9 @@ import { pendingBlight } from '../game/engine/blights'
 import { openErrands } from '../game/engine/errands'
 import { isFounding } from '../game/engine/founding'
 import { architectOffers, architectPrice, petitionOpen, retreatOffered } from '../game/engine/levers'
-import { HEARTH_STORM_END_REACH, idleVillagers, population } from '../game/engine/queries'
+import { idleVillagers, population, stormEndReach } from '../game/engine/queries'
+import { envoyRiding } from '../game/engine/climax'
+import { describeProfile, runReputationProfile } from '../game/engine/reputation'
 import {
   coldVillagers,
   expectations,
@@ -72,7 +74,9 @@ function hasActed(run: RunState): boolean {
 /** Villagers who sleep cold now, or will by the Storm's end (warned from Clearance). */
 function coldComing(run: RunState): boolean {
   if (run.season.season === 'storm') return coldVillagers(run) > 0
-  return run.season.season === 'clearance' && villagersBeyond(run, HEARTH_STORM_END_REACH) > 0
+  // The edge the coming Storm leaves warm: further in for the envoy's last
+  // stand or a forecast Long Night.
+  return run.season.season === 'clearance' && villagersBeyond(run, stormEndReach(run)) > 0
 }
 
 function anySpared(run: RunState): boolean {
@@ -80,6 +84,11 @@ function anySpared(run: RunState): boolean {
 }
 
 const pct = (share: number) => `${Math.round(share * 100)}%`
+
+/** The Long Night is forecast for the coming Storm, or has fallen. */
+function longNight(run: RunState): boolean {
+  return (run.conditions ?? []).some((c) => c.name === 'The Long Night')
+}
 
 export const TIPS: Tip[] = [
   {
@@ -166,6 +175,23 @@ export const TIPS: Tip[] = [
     urgent: true,
   },
   {
+    id: 'long-night',
+    title: 'The Long Night',
+    text: 'This Storm the hearth’s warm ring pulls in to half its reach. Homes past it freeze unless a brazier stands among them — a few braziers by the outer homes (or cutting the wood to turn it aside) is the answer.',
+    when: longNight,
+    urgent: true,
+  },
+  {
+    id: 'envoy',
+    title: 'The envoy is on her way',
+    text: (run) =>
+      `The Queen is satisfied: impatience no longer matters. Her envoy arrives as ${
+        run.season.season === 'storm' ? 'this' : 'the next'
+      } Storm ends, the forest’s last stand. Stock wood, light braziers by outer homes, keep everyone fed — collapse first and the run is lost.`,
+    when: envoyRiding,
+    urgent: true,
+  },
+  {
     id: 'first-caravan',
     title: 'A caravan is in town',
     text: 'It leaves soon. Check the Trade tab — it pays double for one good this visit, its stock rotates every caravan, and from the second visit it carries a rare blueprint or cornerstone.',
@@ -238,6 +264,14 @@ export const TIPS: Tip[] = [
     title: "The Queen's court",
     text: 'From Year 2 the Orders panel lists her three levers on your patience: soothing her with amber, the once-a-run Grand Petition and the Retreat to the Citadel. Each says when it opens — learn them before you need them.',
     when: (run) => run.season.year >= PETITION_FROM_YEAR && run.phase === 'playing' && run.pendingChoices.length === 0,
+  },
+  {
+    id: 'land-profile',
+    title: 'What the Queen values here',
+    text: (run) =>
+      `This land and commission change what earns her favour: ${describeProfile(runReputationProfile(run)).join(', ')}. Lean into it — the Orders panel lists the land.`,
+    when: (run) =>
+      !isFounding(run) && run.clock > 0 && describeProfile(runReputationProfile(run)).length > 0,
   },
   {
     id: 'glade-truce',

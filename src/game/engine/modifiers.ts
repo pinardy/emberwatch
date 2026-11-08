@@ -201,6 +201,10 @@ function foldEffect(m: Modifiers, e: CornerstoneEffect): void {
     case 'adjacencyBoost':
       m.adjacencyBoost = Math.max(0, m.adjacencyBoost * (1 + e.percent / 100))
       break
+    case 'hearthReach':
+      // Read straight from the run's conditions by `stormReachFloor` (queries),
+      // which the warmth checks call far more often than once a tick.
+      break
   }
 }
 

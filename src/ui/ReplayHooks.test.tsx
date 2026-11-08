@@ -1,3 +1,4 @@
+import { envoyArrivesNextTick } from '../test/envoy'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../App'
@@ -84,7 +85,7 @@ describe('the daily expedition', () => {
     act(() => {
       run.pendingChoices = []
       run.clock = 19 * 60
-      run.reputation = run.maxReputation
+      envoyArrivesNextTick(run)
       useGameStore.getState().setSpeed(1)
       useGameStore.getState().advance(0.5)
     })

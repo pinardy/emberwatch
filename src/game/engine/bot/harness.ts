@@ -75,7 +75,7 @@ export function summarise(label: string, reports: BotReport[]): string {
   return (
     `${label.padEnd(20)} won ${wins.length}/${reports.length} lost ${losses.length} stall ${stalls.length} early-collapse ${reports.filter(isEarlyCollapse).length}` +
     ` · avg win ${mean(wins.map((r) => r.exactMinutes)).toFixed(1)}min · longest ${Math.max(...reports.map((r) => r.exactMinutes)).toFixed(1)}min` +
-    ` · rep in wins: orders ${src('orders')} decrees ${src('decrees')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')} errands ${src('errands')}` +
+    ` · rep in wins: orders ${src('orders')} decrees ${src('decrees')} glades ${src('glades')} events ${src('events')} resolve ${src('resolve')} trade ${src('trade')} errands ${src('errands')} (glory ${mean(wins.map((r) => r.glory)).toFixed(1)})` +
     ` · upgrades/run ${mean(reports.map((r) => r.upgrades)).toFixed(1)}` +
     ` · roads/run ${mean(reports.map((r) => r.roads)).toFixed(1)} linked ${mean(reports.map((r) => r.roadLinked)).toFixed(1)}` +
     ` · first rep ${median(reports.map((r) => r.firstRepMinute)).toFixed(1)}min (median)` +
@@ -92,7 +92,27 @@ export function summarise(label: string, reports: BotReport[]): string {
     ` · unmet needs at end ${median(wins.map((r) => r.unmetCount)).toFixed(1)} in wins, ${median(losses.map((r) => r.unmetCount)).toFixed(1)} in losses (median)` +
     ` · plans/run ${mean(reports.map((r) => r.plans)).toFixed(2)}` +
     ` · petitions ${reports.filter((r) => r.petition !== 'none').length} (${petitionOutcomes(reports)})` +
-    ` · retreats ${reports.filter((r) => r.retreated).length} (median minute ${median(reports.filter((r) => r.retreated).map((r) => r.exactMinutes)).toFixed(1)})`
+    ` · retreats ${reports.filter((r) => r.retreated).length} (median minute ${median(reports.filter((r) => r.retreated).map((r) => r.exactMinutes)).toFixed(1)})` +
+    `\n${''.padEnd(20)} ${summariseApproach(reports)}`
+  )
+}
+
+/**
+ * The Envoy's approach over a set of runs: how often it was entered and held,
+ * what ended the ones that were not, when the envoy set out, and the years
+ * the wins landed in.
+ */
+export function summariseApproach(reports: BotReport[]): string {
+  const entered = reports.filter((r) => r.approach !== 'none')
+  const held = entered.filter((r) => r.approach === 'held')
+  const failed = entered.filter((r) => r.approach !== 'held')
+  const wins = reports.filter((r) => r.phase === 'won')
+  return (
+    `envoy: entered ${entered.length}/${reports.length} held ${held.length}` +
+    ` · approach losses ${histogram(failed.map((r) => r.approach))}` +
+    ` · set out minute ${median(entered.map((r) => r.envoyMinute)).toFixed(1)} (median)` +
+    ` · wait ${median(held.map((r) => r.exactMinutes - r.envoyMinute)).toFixed(1)}min (median)` +
+    ` · wins by year ${histogram(wins.map((r) => `Y${r.years}`).sort())}`
   )
 }
 
@@ -112,18 +132,25 @@ export function longestFlat(curve: number[]): { minutes: number; from: number } 
   return best
 }
 
+/** A run's reputation-by-minute curve up to the minute the envoy set out (all of it if she never did). */
+export function climbOf(r: Pick<BotReport, 'curve' | 'envoyMinute'>): number[] {
+  return Number.isFinite(r.envoyMinute) ? r.curve.slice(0, Math.floor(r.envoyMinute)) : r.curve
+}
+
 /** Minutes of flat reputation that count as a plateau. */
 export const PLATEAU_MINUTES = 5
 
 /**
  * Reputation plateaus in wins, and what errands did about them: wins with a
- * stretch of `PLATEAU_MINUTES` or more without a point, the median longest
+ * stretch of `PLATEAU_MINUTES` or more without a point before the envoy set
+ * out, the median longest
  * stretch and where those plateaus begin, and errands offered, met and the
  * reputation they paid per run.
  */
 export function summarisePlateaus(label: string, reports: BotReport[]): string {
   const wins = reports.filter((r) => r.phase === 'won')
-  const flats = wins.map((r) => longestFlat(r.curve))
+  // Once the envoy sets out the meter is full and flat by design: count up to then.
+  const flats = wins.map((r) => longestFlat(climbOf(r)))
   const plateaus = flats.filter((f) => f.minutes >= PLATEAU_MINUTES)
   const errands = (pick: (r: BotReport) => number) => mean(reports.map(pick)).toFixed(2)
   return (

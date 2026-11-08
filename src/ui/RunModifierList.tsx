@@ -1,6 +1,15 @@
 import { runModifierDefs } from '../game/engine/runModifiers'
 import { runModifierArt } from '../game/content/art'
 import { Icon } from './Icon'
+import { ReputationProfileLine } from './EnvoyStatus'
+import { describeProfile } from '../game/engine/reputation'
+import type { ReputationProfile } from '../game/types'
+
+/** A compact chip's tooltip: the description, then what the Queen values here. */
+function profileTitle(description: string, profile: ReputationProfile | undefined): string {
+  const parts = describeProfile(profile ?? {})
+  return parts.length ? `${description} Here the Queen values: ${parts.join(' · ')}.` : description
+}
 
 const TONE_LABEL = { boon: 'Boon', bane: 'Bane', mixed: 'Trade-off' } as const
 
@@ -22,7 +31,11 @@ export function RunModifierList({
     return (
       <ul className="land-inline" aria-label="Lay of the land">
         {defs.map((def) => (
-          <li key={def.id} className={`land-tag tone-${def.tone}`} title={def.description}>
+          <li
+            key={def.id}
+            className={`land-tag tone-${def.tone}`}
+            title={profileTitle(def.description, def.reputation)}
+          >
             <span aria-hidden>
               <Icon id={runModifierArt(def)} emoji={def.icon} />
             </span>{' '}
@@ -42,6 +55,7 @@ export function RunModifierList({
           <div>
             <strong>{def.name}</strong> <em className="land-tone">{TONE_LABEL[def.tone]}</em>
             <small>{def.description}</small>
+            <ReputationProfileLine profile={def.reputation} />
           </div>
         </div>
       ))}

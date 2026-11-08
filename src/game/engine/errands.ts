@@ -9,6 +9,7 @@ import { productionRate } from './forecast'
 import { hasLiveDeposit } from './production'
 import { canAfford, grant, idleVillagers, population, spend, totalHousing } from './queries'
 import { makeRng } from './rng'
+import { gainReputation } from './reputation'
 import { pushLog } from './runLog'
 import { secondsSinceReputation } from './society'
 import { sellResource } from './trade'
@@ -27,8 +28,11 @@ import { isUpgrading, workerSlotsOf } from './upgrades'
  * stagnation count (`secondsSinceReputation`) has run past her grace, and
  * only now and then otherwise. Early in a stall they pay a little amber;
  * once it has run long, the first few pay a fraction of a reputation point
- * (never toward the last points of the meter). They draw from their own RNG
- * stream, so drawing one never moves the run's RNG cursor.
+ * (never toward the last points of the meter), granted through
+ * `gainReputation` as their own source. None are offered while the Queen's
+ * envoy rides, and any open one is set aside without cost when she sets out.
+ * They draw from their own RNG stream, so drawing one never moves the run's
+ * RNG cursor.
  */
 
 /** Salt for the errands' own RNG stream (apart from the run's cursor). */
@@ -377,20 +381,10 @@ function orphaned(s: RunState, e: Errand): boolean {
   return false
 }
 
-/** Adds fractional reputation, carrying whole points into the meter. */
-function addReputationProgress(s: RunState, amount: number): void {
-  s.reputationProgress += amount
-  while (s.reputationProgress >= 1 && s.reputation < s.maxReputation) {
-    s.reputationProgress -= 1
-    s.reputation += 1
-  }
-  if (s.reputation >= s.maxReputation) s.reputationProgress = 0
-}
-
 function pay(s: RunState, e: Errand): void {
   const b = book(s)
   if (e.reward.reputation) {
-    addReputationProgress(s, e.reward.reputation)
+    gainReputation(s, e.reward.reputation, 'errands')
     b.reputation += e.reward.reputation
   }
   if (e.reward.amber) {
@@ -410,6 +404,15 @@ function close(s: RunState, id: string): void {
 /** Measures every open errand, pays the ones met, lapses the expired, and offers the next. */
 export function stepErrands(s: RunState, dt: number): void {
   if (s.phase !== 'playing') return
+  // Reputation is full and the envoy rides: errands are done for the run.
+  if (s.envoy) {
+    if (openErrands(s).length > 0) {
+      book(s).lapsed += openErrands(s).length
+      s.errands = []
+      pushLog(s, 'The envoy is on her way: the open errands are set aside. No harm done.', 'info')
+    }
+    return
+  }
   for (const e of [...openErrands(s)]) {
     e.progress = measure(s, e, dt)
     if (e.progress >= 1) {
@@ -434,6 +437,7 @@ export function stepErrands(s: RunState, dt: number): void {
 /** Why an errand's button cannot be pressed now, or null. Errands met by play have no button. */
 export function errandBlocked(s: RunState, e: Errand): string | null {
   if (s.phase !== 'playing') return 'The run is over.'
+  if (s.envoy) return 'The envoy is on her way: errands are done.'
   const goal = e.goal
   if (goal.kind === 'deliver') {
     const have = Math.floor(s.stock[goal.resource] ?? 0)

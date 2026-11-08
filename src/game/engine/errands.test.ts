@@ -19,6 +19,8 @@ import {
   whereFromHearth,
 } from './errands'
 import { grandPetition, queensCourt } from './levers'
+import { SOOTHE_ENVOY_REFUSAL, sootheQueen } from './actions'
+import { sendEnvoy } from './reputation'
 import { gladeAt } from './mapgen'
 import { secondsSinceReputation, stagnationImpatienceRate } from './society'
 import { tick } from './tick'
@@ -360,6 +362,68 @@ describe('meeting, paying and lapsing', () => {
       expect(openErrands(s).length).toBeLessThanOrEqual(2)
     }
     expect(s.errandBook?.offered ?? 0).toBeGreaterThan(0)
+  })
+})
+
+describe('errands and the envoy', () => {
+  it('errand reputation goes through gainReputation as its own source', () => {
+    const s = newRun()
+    const e = give(s, 'haulToClearers', { kind: 'deliver', resource: 'wood', amount: 10 })
+    s.stock.wood = 30
+    const before = s.reputationBy?.errands ?? 0
+    expect(runErrand(s, e.id)).toBeNull()
+    expect(s.reputationBy?.errands).toBeCloseTo(before + 0.35)
+  })
+
+  it('an errand that fills the meter sends the envoy', () => {
+    const s = newRun()
+    s.reputation = s.maxReputation - 1
+    s.reputationProgress = 0.9
+    const e = give(s, 'haulToClearers', { kind: 'deliver', resource: 'wood', amount: 10 })
+    s.stock.wood = 30
+    runErrand(s, e.id)
+    expect(s.reputation).toBe(s.maxReputation)
+    expect(s.envoy).toBeTruthy()
+  })
+
+  it('none are offered while the envoy rides, and open ones are set aside at no cost', () => {
+    const s = newRun()
+    const mill = emptyMill(s)
+    give(s, 'staffWorkplace', { kind: 'staff', buildingId: mill, seconds: 30 })
+    s.reputation = s.maxReputation
+    sendEnvoy(s)
+    const before = { imp: s.impatience, impP: s.impatienceProgress, glory: s.envoy!.glory }
+    stalled(s, ERRAND_PACING.secondAfter + 5)
+    stepErrands(s, 0.25)
+    expect(openErrands(s)).toHaveLength(0)
+    expect(s.errandBook?.lapsed).toBe(1)
+    expect([s.impatience, s.impatienceProgress, s.envoy!.glory]).toEqual([before.imp, before.impP, before.glory])
+    for (let i = 0; i < 200; i++) {
+      s.clock += 1
+      stepErrands(s, 1)
+    }
+    expect(openErrands(s)).toHaveLength(0)
+    expect(s.errandBook?.offered ?? 0).toBe(0)
+    // A hand-over is refused too.
+    const e = give(s, 'haulToClearers', { kind: 'deliver', resource: 'wood', amount: 10 })
+    s.stock.wood = 50
+    expect(errandBlocked(s, e)).toBe('The envoy is on her way: errands are done.')
+  })
+
+  it("the Queen's court closes soothing, the petition and the retreat while she rides", () => {
+    const s = newRun()
+    s.season.year = 3
+    s.clock = 2 * YEAR_SECONDS + 10
+    s.impatience = s.maxImpatience - 2
+    s.stock.amber = 1000
+    s.reputation = s.maxReputation
+    sendEnvoy(s)
+    const court = queensCourt(s)
+    expect(court.map((l) => l.state)).toEqual(['closed', 'closed', 'closed'])
+    expect(court[0].note).toBe(SOOTHE_ENVOY_REFUSAL)
+    expect(sootheQueen(s)).toBe(court[0].note)
+    expect(court[1].note).toContain('envoy is on her way')
+    expect(grandPetition(s)).not.toBeNull()
   })
 })
 

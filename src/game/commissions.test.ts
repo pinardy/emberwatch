@@ -229,9 +229,9 @@ describe('commissions: judging the objective', () => {
 
     const storm = run('stormWatch')
     expect(judgeCommission(ended(storm, 'won'))!.met).toBe(true)
-    storm.hostility = 21
-    expect(judgeCommission(ended(storm, 'won'))!.terms[2]).toMatchObject({ state: 'failed', detail: '21/20' })
-    storm.hostility = 20
+    storm.hostility = 26
+    expect(judgeCommission(ended(storm, 'won'))!.terms[2]).toMatchObject({ state: 'failed', detail: '26/25' })
+    storm.hostility = 25
     expect(judgeCommission(ended(storm, 'won'))!.met).toBe(true)
     storm.feats = { ...storm.feats!, hearthWentCold: true }
     expect(judgeCommission(storm)!.terms[1].state).toBe('failed')
@@ -258,6 +258,8 @@ describe('commissions: judging the objective', () => {
 
     const works = run('royalWorks')
     works.feats = { ...works.feats!, decreesMet: 3 }
+    expect(termStatus(COMMISSIONS.royalWorks.terms[0], works).state).toBe('open')
+    works.feats = { ...works.feats!, decreesMet: 4 }
     expect(termStatus(COMMISSIONS.royalWorks.terms[0], works).state).toBe('met')
 
     const fav = run('queensFavourite')
@@ -271,10 +273,10 @@ describe('commissions: judging the objective', () => {
 
     const frontier = run('holdFrontier')
     const forest = COMMISSIONS.holdFrontier.terms[1]
-    frontier.hostility = 36
-    expect(termStatus(forest, frontier)).toMatchObject({ state: 'open', detail: '36/35' })
+    frontier.hostility = 41
+    expect(termStatus(forest, frontier)).toMatchObject({ state: 'open', detail: '41/40' })
     expect(termStatus(forest, ended(frontier, 'won')).state).toBe('failed')
-    frontier.hostility = 35
+    frontier.hostility = 40
     expect(termStatus(forest, ended(frontier, 'won')).state).toBe('met')
   })
 })

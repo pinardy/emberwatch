@@ -30,8 +30,9 @@ export function OrdersPanel() {
   const pacts = run.ongoing.filter((effect) => !landIds.has(effect.id))
   // Why the petition button is off, said in words (not only by greying it).
   const amber = Math.floor(run.stock.amber ?? 0)
-  const sootheBlocked =
-    run.impatience < 1
+  const sootheBlocked = run.envoy
+    ? 'The Queen is satisfied: her envoy is on her way, and impatience no longer matters.'
+    : run.impatience < 1
       ? 'Her patience is whole: there is no impatience to soothe.'
       : amber < sootheCost(run)
         ? `Needs ${sootheCost(run)} amber; you have ${amber}.`

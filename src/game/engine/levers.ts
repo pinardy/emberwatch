@@ -17,7 +17,7 @@ import {
 } from './balance'
 import { chainPieceFor, relevantBlueprints, serviceDemand } from './serviceChains'
 import { spend } from './queries'
-import { sootheCost } from './actions'
+import { SOOTHE_ENVOY_REFUSAL, sootheCost } from './actions'
 import { pushLog } from './runLog'
 import { addImpatience } from './society'
 
@@ -119,7 +119,8 @@ export function petitionThreshold(s: RunState): number {
  * shortfalls worth showing.
  */
 export function petitionBlocked(s: RunState): 'used' | 'early' | 'amber' | null {
-  if (s.petition || s.phase !== 'playing') return 'used'
+  // While the envoy rides the Queen's patience no longer matters: nothing to petition.
+  if (s.petition || s.phase !== 'playing' || s.envoy) return 'used'
   if (s.season.year < PETITION_FROM_YEAR) return 'early'
   if (s.impatience + s.impatienceProgress < petitionThreshold(s)) return 'early'
   if ((s.stock.amber ?? 0) < PETITION_AMBER) return 'amber'
@@ -213,8 +214,11 @@ export function retreatToCitadel(s: RunState): string | null {
 // The Queen's court: the three levers on her patience, in one summary
 // ---------------------------------------------------------------------------
 
-/** Open now; open but short of amber; not yet (or not now); spent for the run. */
-export type CourtState = 'open' | 'short' | 'later' | 'used'
+/**
+ * Open now; open but short of amber; not yet (or not now); spent for the
+ * run; closed while the envoy rides (impatience no longer matters).
+ */
+export type CourtState = 'open' | 'short' | 'later' | 'used' | 'closed'
 
 export interface CourtLever {
   id: 'soothe' | 'petition' | 'retreat'
@@ -287,6 +291,19 @@ export function queensCourt(s: RunState): CourtLever[] {
     retreat.note = `Not while victory is within ${RETREAT_REPUTATION_SHORT} points.`
   } else {
     retreat.note = `Offered if impatience reaches ${line} (now ${now}) with ${RETREAT_REPUTATION_SHORT}+ reputation still to earn: the run ends, and pays what it has earned.`
+  }
+
+  // The envoy rides: reputation is full and her patience stands still, so the
+  // levers on it are closed, and the run is held rather than given up.
+  if (s.envoy) {
+    soothe.state = 'closed'
+    soothe.note = SOOTHE_ENVOY_REFUSAL
+    if (!p) {
+      petition.state = 'closed'
+      petition.note = 'The Queen is satisfied: her envoy is on her way, and there is nothing to petition.'
+    }
+    retreat.state = 'closed'
+    retreat.note = 'Not while the envoy rides: hold the settlement until she arrives.'
   }
 
   return [soothe, petition, retreat]

@@ -255,9 +255,42 @@ function migrateRunUnchecked(raw: unknown): RunState | null {
     delete run.petition
   }
   if (typeof run.retreated !== 'boolean') delete run.retreated
+  migrateClimax(run)
   // Saves from before errands have none open; damaged ones are dropped.
   migrateErrands(run)
   return run
+}
+
+/**
+ * Saves from before the Envoy's approach: no reputation tally and no envoy
+ * (a mangled envoy or tally reads as none). Under the old rules a run won the
+ * moment reputation was full, so an old save still playing at the maximum —
+ * one saved between a choice that filled the meter and the next tick — ends
+ * as the win it already was, rather than starting a last stand its player
+ * never signed up for. A newer save at the maximum always carries its envoy.
+ */
+function migrateClimax(run: RunState): void {
+  const by = run.reputationBy as unknown
+  if (by !== undefined && (typeof by !== 'object' || by === null || Array.isArray(by))) {
+    delete run.reputationBy
+  }
+  const e = run.envoy as Partial<RunState['envoy']> | undefined
+  if (
+    e !== undefined &&
+    (typeof e !== 'object' ||
+      e === null ||
+      ![e.setOutAt, e.year, e.population, e.coldSeconds, e.unrestSeconds, e.glory].every(
+        (n) => typeof n === 'number' && Number.isFinite(n),
+      ) ||
+      typeof e.finalStorm !== 'boolean')
+  ) {
+    delete run.envoy
+  }
+  if (run.phase === 'playing' && !run.envoy && run.reputation >= run.maxReputation) {
+    run.phase = 'won'
+    run.pendingChoices = []
+    run.orderOffers = []
+  }
 }
 
 /** Writes (or with null, clears) the autosave slot's run. */
