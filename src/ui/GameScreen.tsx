@@ -11,6 +11,7 @@ import {
 import { BuildPanel } from './BuildPanel'
 import { ChoiceModal } from './ChoiceModal'
 import { ConditionsBar } from './ConditionsBar'
+import { ErrandChip } from './Errands'
 import { EventToasts, useLogUnread } from './EventToasts'
 import { FoundingPanel } from './FoundingPanel'
 import { Inspector } from './Inspector'
@@ -130,6 +131,7 @@ export function GameScreen() {
               <Inspector />
             </div>
             <div className="bottom-stack">
+              <ErrandChip />
               <ConditionsBar />
               <ThreatBar />
             </div>
