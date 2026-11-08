@@ -7,7 +7,9 @@ import {
   villagerName,
 } from '../content/species'
 import type {
+  BiomeId,
   BuildingInstance,
+  LayoutId,
   MetaState,
   OngoingEffect,
   ResourceBag,
@@ -38,6 +40,7 @@ import { pushLog } from './runLog'
 import { computeModifiers, seasonLengthFor } from './modifiers'
 import { yearLengthFor } from './forecast'
 import { makeRng } from './rng'
+import { drawTerrainPlan, isUnusualPlan, layoutOf, biomeOf } from './terrainPlan'
 import { computeStorageCap } from './queries'
 import { applyCommission, commissionLand } from './citadel'
 import { defaultFeats } from '../content/achievements'
@@ -78,6 +81,12 @@ export interface NewRunOptions {
    * on offer; unknown ids found a run without one.
    */
   commission?: string
+  /**
+   * Pin the map's layout or biome (ids in `content/layouts.ts`); by default
+   * both are drawn from the seed and the land. Tests and the harness pin them.
+   */
+  layout?: LayoutId
+  biome?: BiomeId
 }
 
 /** A settlement never starts with fewer villagers than this, whatever the edict. */
@@ -92,6 +101,8 @@ export function createRun({
   land: landChoice,
   daily,
   commission,
+  layout,
+  biome,
 }: NewRunOptions): RunState {
   const rng = makeRng(seed, 0)
   // Citadel upgrades and the chosen edict, folded into plain numbers.
@@ -102,7 +113,10 @@ export function createRun({
   // the map before anything is placed on it.
   // A commission may promise a land of its own (the Deep Works' veins).
   const runModifiers = commissionLand(modifiers ?? landFor(seed, loadout, landChoice), commission)
-  const { world, glades, deposits, obstacles } = generateMap(rng, mapgenHooksFor(runModifiers))
+  const hooks = mapgenHooksFor(runModifiers)
+  // So do its layout and biome (their own stream too; the land can lean them).
+  const plan = drawTerrainPlan(seed, hooks, { layout, biome })
+  const { world, glades, deposits, obstacles } = generateMap(rng, hooks, plan)
 
   const available = meta
     ? [...new Set([...STARTING_SPECIES, ...meta.unlockedSpecies])]
@@ -300,6 +314,10 @@ export function createRun({
       `The lay of the land: ${land.map((d) => `${d.icon} ${d.name}`).join(', ')}.`,
       'info',
     )
+  }
+  if (isUnusualPlan(plan)) {
+    const ground = [layoutOf(world), biomeOf(world)].filter((d) => d.id !== 'rings' && d.id !== 'woodland')
+    pushLog(state, `The ground: ${ground.map((d) => `${d.icon} ${d.name}`).join(', ')}.`, 'info')
   }
   pushLog(
     state,

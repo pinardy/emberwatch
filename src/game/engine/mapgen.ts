@@ -23,7 +23,22 @@ export const DEPOSIT_RADIUS: Record<DepositId, number> = {
   vegetation: 0.55,
   game: 0.6,
   fertileSoil: 0.8,
+  deadfall: 0.7,
+  fireweed: 0.6,
+  ruins: 0.7,
 }
+
+/**
+ * Deposits that never run dry: farms and forests keep producing; mineral
+ * seams, deadfall and salvage are worked out.
+ */
+export const RENEWABLE_DEPOSITS: ReadonlySet<DepositId> = new Set<DepositId>([
+  'fertileSoil',
+  'trees',
+  'vegetation',
+  'game',
+  'fireweed',
+])
 
 /** Deep-forest gloom aside, these read best against the 3D lighting too. */
 export const TERRAIN_COLORS: Record<TerrainId, string> = {
@@ -32,9 +47,15 @@ export const TERRAIN_COLORS: Record<TerrainId, string> = {
   marsh: '#3c4a43',
   rock: '#4b4e52',
   fertile: '#5b6339',
+  // Ash over embers: a warm charcoal no other ground shares.
+  cinder: '#4a3c38',
 }
 
-export const DEPOSIT_INFO: Record<DepositId, { name: string; icon: string }> = {
+/**
+ * Names, and for the deposits only one biome or layout has, a note on where
+ * they are found and what works them (the Inspector shows it).
+ */
+export const DEPOSIT_INFO: Record<DepositId, { name: string; icon: string; note?: string }> = {
   trees: { name: 'Trees', icon: '🌲' },
   stoneVein: { name: 'Stone Vein', icon: '🪨' },
   clayPatch: { name: 'Clay Patch', icon: '🟤' },
@@ -42,6 +63,21 @@ export const DEPOSIT_INFO: Record<DepositId, { name: string; icon: string }> = {
   vegetation: { name: 'Undergrowth', icon: '🌿' },
   game: { name: 'Game Trails', icon: '🐗' },
   fertileSoil: { name: 'Fertile Soil', icon: '🌾' },
+  deadfall: {
+    name: 'Charred Deadfall',
+    icon: '🪵',
+    note: "Found only in the Cinderwood. A Woodcutters' Camp saws it up: 4 wood every 12 s, quicker than living trees, until it is gone.",
+  },
+  fireweed: {
+    name: 'Fireweed',
+    icon: '🌺',
+    note: "Found only in the Cinderwood. An Herbalists' Camp takes herbs and plant fibre from it at once, and it grows back.",
+  },
+  ruins: {
+    name: 'Tumbled Stonework',
+    icon: '🏚️',
+    note: "Found only in the Fallen Holdfast's ruins. A Stonecutters' Camp salvages stone and old bricks from it until it is picked clean.",
+  },
 }
 
 /** True when the point lies inside the playable rectangle (minus a margin). */

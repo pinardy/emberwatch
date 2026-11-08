@@ -1,7 +1,9 @@
 import type { BaseIconId, IconId } from '../../art/icons'
 import type {
+  BiomeId,
   DepositId,
   GladeKind,
+  LayoutId,
   ResourceId,
   Season,
   ServiceNeed,
@@ -129,6 +131,9 @@ export const DEPOSIT_ART: Record<DepositId, IconId> = {
   vegetation: 'vegetation',
   game: 'game',
   fertileSoil: 'fertileSoil',
+  deadfall: 'deadfall',
+  fireweed: 'fireweed',
+  ruins: 'ruins',
 }
 
 export const GLADE_ART: Record<GladeKind, IconId> = {
@@ -144,6 +149,20 @@ export const TERRAIN_ART: Record<TerrainId, IconId> = {
   rock: 'stoneVein',
   marsh: 'marsh',
   forest: 'trees',
+  cinder: 'cinder',
+}
+
+/** Map layouts and biomes (`content/layouts.ts`), on the setup screen and the Founding. */
+export const LAYOUT_ART: Record<LayoutId, IconId> = {
+  rings: 'settlement',
+  river: 'river',
+  ridge: 'cliff',
+  ruins: 'ruins',
+}
+
+export const BIOME_ART: Record<BiomeId, IconId> = {
+  woodland: 'trees',
+  cinderwood: 'cinder',
 }
 
 /** The Queen's Edicts by rung (1–7). */

@@ -409,7 +409,7 @@ function boar(x: number, z: number, s: number, rot: number): P[] {
 /** The physical shape of a resource deposit plus its kind-coloured ground ring. */
 export function depositParts(deposit: WorldDeposit): P[] {
   const { id, kind, radius } = deposit
-  const count = kind === 'trees' ? 4 : kind === 'vegetation' || kind === 'game' ? 3 : 2
+  const count = kind === 'trees' || kind === 'fireweed' ? 4 : kind === 'vegetation' || kind === 'game' || kind === 'deadfall' ? 3 : 2
   const items = scatter(id, count, radius)
   const out: P[] = []
   switch (kind) {
@@ -451,6 +451,29 @@ export function depositParts(deposit: WorldDeposit): P[] {
       out.push(part('mound', 'solid', '#4f4030', local(0, 0, 0, radius * 1.2, 0.04, radius * 1.2)))
       for (const p of items.slice(0, 2)) out.push(...boar(p.x, p.z, 0.85 + p.s * 0.35, p.rot * 2))
       break
+    case 'deadfall':
+      // Charred logs on the ash, a black snag standing, embers in the char.
+      for (const p of items) {
+        out.push(part('log', 'solid', '#2f2926', local(p.x, 0.07, p.z, 0.62 * p.s, 0.14, 0.14, p.rot)))
+        out.push(part('box', 'glow', '#ff6a1a', local(p.x, 0.12, p.z, 0.06, 0.03, 0.06, p.rot)))
+      }
+      out.push(part('cyl', 'solid', '#26211f', local(0.05, 0, -0.05, 0.11, 0.75, 0.11)))
+      break
+    case 'fireweed':
+      // Magenta spires over grey ash.
+      out.push(part('mound', 'solid', '#5c5552', local(0, 0, 0, radius * 1.2, 0.04, radius * 1.2)))
+      for (const p of items) {
+        out.push(part('cyl', 'solid', '#4f7a3c', local(p.x, 0, p.z, 0.04, 0.3 * p.s, 0.04)))
+        out.push(part('cone', 'solid', '#d4457f', local(p.x, 0.26 * p.s, p.z, 0.12 * p.s, 0.3 * p.s, 0.12 * p.s)))
+      }
+      break
+    case 'ruins':
+      // A toppled column and a stub of wall on an old flagstone floor.
+      out.push(part('box', 'solid', '#8f897c', local(0, 0, 0, radius * 1.5, 0.05, radius * 1.3, hash01(id, 9) * Math.PI)))
+      out.push(part('cyl', 'solid', '#c9bfa8', local(-0.18, 0, 0.1, 0.18, 0.55, 0.18)))
+      out.push(part('box', 'solid', '#b3a993', local(0.2, 0, -0.12, 0.42, 0.32, 0.14, hash01(id, 8) * Math.PI)))
+      out.push(part('log', 'solid', '#c9bfa8', local(0.05, 0.08, 0.32, 0.45, 0.16, 0.16, hash01(id, 7) * Math.PI)))
+      break
   }
   out.push({ geo: 'ring', mat: 'decal', color: color(DEPOSIT_TINT[kind]), matrix: local(0, 0.025, 0, radius, 1, radius) })
   return placeParts(out, deposit.pos.x, deposit.pos.y, 1)
@@ -459,6 +482,16 @@ export function depositParts(deposit: WorldDeposit): P[] {
 export function obstacleParts(obstacle: Obstacle): P[] {
   const { id, kind, radius } = obstacle
   const out: P[] = []
+  // A river is painted into the ground (`Ground.tsx`); nothing stands in it.
+  if (kind === 'water') return out
+  if (kind === 'cliff') {
+    // The ridge's edge: a broken line of dark boulders along the drop.
+    const s = 0.8 + hash01(id, 5) * 0.5
+    out.push(
+      part('rock', 'solid', hash01(id, 6) < 0.5 ? '#4a4540' : '#5a544d', local(0, 0.12 * s, 0, radius * 1.5 * s, 0.5 * s, radius * 1.3 * s, hash01(id, 7) * Math.PI)),
+    )
+    return placeParts(out, obstacle.pos.x, obstacle.pos.y, 1)
+  }
   if (kind === 'mire') {
     out.push(part('disc', 'solid', '#26332e', local(0, 0.03, 0, radius, 1, radius)))
     out.push(part('disc', 'glow', '#33463f', local(0.1, 0.035, -0.1, radius * 0.4, 1, radius * 0.25)))

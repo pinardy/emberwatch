@@ -7,7 +7,7 @@ import { ROAD_HALF_WIDTH } from '../game/engine/balance'
 import { warmthSources } from '../game/engine/queries'
 import { ROAD_TOOL } from '../game/engine/roads'
 import { useGameStore } from '../game/store'
-import type { GladeKind, RunState } from '../game/types'
+import type { GladeKind, RunState, TerrainId, Vec2 } from '../game/types'
 import type { GladeStake } from '../game/engine/glades'
 import { IconUse } from './Icon'
 import {
@@ -37,7 +37,7 @@ import {
   useWarmthRingVisible,
   type GladeAccess,
 } from './mapShared'
-import { obstacleTitle, plateShape } from './map2dArt'
+import { BARRIER_TITLE, obstacleTitle, plateShape } from './map2dArt'
 import { S, ViewBusContext, useGhost, useMapInteraction } from './map2dState'
 import { MAP_ICON } from './MapBuildings2D'
 import { REDUCED_MOTION } from './motion'
@@ -87,6 +87,25 @@ export const GladeLayer2D = memo(function GladeLayer2D({ run }: { run: RunState 
           />
         )
       })}
+      {/* A biome's ground wears its own texture over the fill (the
+          Cinderwood's ash and embers), clear when cleared, faint in the fog. */}
+      {glades.some((g) => TERRAIN_PATTERN[g.terrain]) && <TerrainPatterns />}
+      {glades.map((glade) => {
+        const pattern = TERRAIN_PATTERN[glade.terrain]
+        const look = gladeLook(glade)
+        if (!pattern || look === 'hidden') return null
+        return (
+          <polygon
+            key={`pattern-${glade.id}`}
+            points={points[glade.id]}
+            className={`terrain-pattern is-${glade.terrain}`}
+            data-terrain={glade.terrain}
+            fill={`url(#${pattern})`}
+            opacity={look === 'visible' ? 1 : 0.45}
+            pointerEvents="none"
+          />
+        )
+      })}
       {/* Kind borders on fogged glades: solid, dashed or dotted. */}
       {glades.map((glade) =>
         gladeLook(glade) === 'fogged' ? (
@@ -99,6 +118,72 @@ export const GladeLayer2D = memo(function GladeLayer2D({ run }: { run: RunState 
           />
         ) : null,
       )}
+    </g>
+  )
+})
+
+/** Terrain textures drawn over a glade's fill, by terrain. */
+const TERRAIN_PATTERN: Partial<Record<TerrainId, string>> = { cinder: 'terrain-cinder' }
+
+/**
+ * The Cinderwood's ash: pale ash drifts, dark cracks and ember flecks that
+ * no other ground has — it reads as burned at any zoom.
+ */
+function TerrainPatterns() {
+  return (
+    <defs>
+      <pattern id="terrain-cinder" patternUnits="userSpaceOnUse" width={64} height={64}>
+        <path d="M4 18 Q14 12 22 19 T40 16 M30 44 Q40 38 50 45 T62 42 M6 56 Q12 50 20 54" stroke="#8d7f78" strokeOpacity={0.35} strokeWidth={3} fill="none" strokeLinecap="round" />
+        <path d="M10 30 L18 34 L16 41 M44 8 L50 14 L58 12 M36 58 L42 52" stroke="#140d0b" strokeOpacity={0.7} strokeWidth={1.6} fill="none" strokeLinecap="round" />
+        <circle cx={17} cy={34} r={1.8} fill="#ff7a2e" />
+        <circle cx={50} cy={14} r={1.4} fill="#ffb24a" />
+        <circle cx={41} cy={52} r={1.6} fill="#ff6a1a" />
+        <circle cx={27} cy={8} r={1.1} fill="#ff9640" opacity={0.8} />
+        <circle cx={58} cy={33} r={1.2} fill="#ff7a2e" opacity={0.75} />
+      </pattern>
+    </defs>
+  )
+}
+
+/** River and cliff barriers, with their fords and passes (see `WorldInfo.barriers`). */
+export const BarrierLayer2D = memo(function BarrierLayer2D({ run }: { run: RunState }) {
+  const barriers = run.world.barriers ?? []
+  if (barriers.length === 0) return null
+  return (
+    <g className="barriers-2d">
+      {barriers.map((barrier, bi) => {
+        const title = BARRIER_TITLE[barrier.kind]
+        const line = (a: Vec2, b: Vec2, key: string, className: string) => (
+          <line
+            key={key}
+            x1={a.x * S}
+            y1={a.y * S}
+            x2={b.x * S}
+            y2={b.y * S}
+            className={className}
+            strokeLinecap="round"
+          />
+        )
+        return (
+          <g key={bi} className={`barrier-2d is-${barrier.kind}`} data-barrier={barrier.kind}>
+            <g className="barrier-line">
+              <title>{title.line}</title>
+              {barrier.segments.map(([a, b], i) => line(a, b, `bank-${i}`, 'barrier-bank'))}
+              {barrier.segments.map(([a, b], i) => line(a, b, `body-${i}`, 'barrier-body'))}
+              {barrier.segments.map(([a, b], i) => line(a, b, `sheen-${i}`, 'barrier-sheen'))}
+            </g>
+            {barrier.crossings.map((c, i) => (
+              <g key={`x-${i}`} className="barrier-crossing" data-crossing={barrier.kind}>
+                <title>{title.crossing}</title>
+                <circle cx={c.x * S} cy={c.y * S} r={0.7 * S} className="crossing-bed" />
+                {[-0.32, 0, 0.32].map((d) => (
+                  <circle key={d} cx={(c.x + d) * S} cy={(c.y - d * 0.4) * S} r={0.13 * S} className="crossing-stone" />
+                ))}
+              </g>
+            ))}
+          </g>
+        )
+      })}
     </g>
   )
 })
@@ -241,6 +326,8 @@ export const ObstacleLayer2D = memo(function ObstacleLayer2D({ run }: { run: Run
   return (
     <g className="obstacles-2d">
       {run.obstacles.map((o) => {
+        // A barrier's water and cliff edge are drawn whole by `BarrierLayer2D`.
+        if (o.kind === 'water' || o.kind === 'cliff') return null
         if (!run.glades[o.gladeId]?.cleared) return null
         const cx = o.pos.x * S
         const cy = o.pos.y * S

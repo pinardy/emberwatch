@@ -1180,6 +1180,324 @@ const defs: GladeEventDef[] = [
       { label: 'Leave it sealed', description: 'Some doors are the Crown’s to open.' },
     ],
   },
+
+  // ---- the Cinderwood's own (biome pool) ------------------------------------
+  // The burn scar remembers the settlement whose hearth went cold, and the
+  // fire that followed. Drawn only by the Cinderwood's glades.
+  {
+    id: 'smoulderingHearth',
+    name: 'The Smouldering Hearth',
+    icon: '🔥',
+    kind: 'dangerous',
+    pool: 'cinderwood',
+    description:
+      'The ring of a hearth older than yours, its stones still warm. Under the ash something glows that never quite went out.',
+    options: [
+      {
+        label: 'Rekindle it for the Queen',
+        description: 'Spend 15 wood and 4 incense to bank the old flame with the proper rites. Word of it reaches the throne.',
+        requires: { wood: 15, incense: 4 },
+        cost: { wood: 15, incense: 4 },
+        reputation: 1,
+        hostility: -4,
+      },
+      {
+        label: 'Carry the embers home',
+        description: 'Spend 10 wood on a banked pot of old fire: your hearth burns slower for good. The forest remembers what that fire did.',
+        requires: { wood: 10 },
+        cost: { wood: 10 },
+        hostility: 6,
+        ongoing: {
+          name: 'Old Embers',
+          icon: '🔥',
+          description: 'The hearth burns 15% less wood for the rest of the run.',
+          effects: [{ kind: 'hearthFuel', percent: -15 }],
+        },
+      },
+      { label: 'Let it sleep', description: 'Some fires should be left to their ash.' },
+    ],
+  },
+  {
+    id: 'charredRoost',
+    name: 'The Charred Roost',
+    icon: '🦅',
+    kind: 'dangerous',
+    pool: 'cinderwood',
+    description:
+      'Ash-crows by the hundred on a dead oak, picking at a burned-out caravan. They watch your clearing crew with very bright eyes.',
+    options: [
+      {
+        label: 'Scatter them with smoke',
+        description: 'Spend 8 herbs on a smudge fire and take the caravan clean.',
+        requires: { herb: 8 },
+        cost: { herb: 8 },
+        gain: { fabric: 8, tool: 1, amber: 20 },
+      },
+      {
+        label: 'Snatch what you can',
+        description: 'The crows follow the loot home.',
+        gain: { fabric: 6, amber: 30 },
+        threat: {
+          name: 'The Ash-Crows',
+          icon: '🦅',
+          description: 'Crows raid the stores for anything that shines or can be eaten.',
+          interval: 80,
+          appease: { meat: 10 },
+          strike: { stockLoss: { berry: 6, amber: 10 }, hostility: 2 },
+        },
+      },
+      { label: 'Leave them the dead', description: 'The crows were here first.', hostility: -3 },
+    ],
+  },
+  {
+    id: 'emberSprites',
+    name: 'Ember Sprites',
+    icon: '✨',
+    kind: 'dangerous',
+    pool: 'cinderwood',
+    description:
+      'Sparks that drift against the wind and gather where your people stand. They are curious, and they are very, very cold away from the ash.',
+    options: [
+      {
+        label: 'Coax them into the braziers',
+        description: 'Spend 6 resin to lure them in. Fire that feeds itself.',
+        requires: { resin: 6 },
+        cost: { resin: 6 },
+        ongoing: {
+          name: 'Kept Sprites',
+          icon: '✨',
+          description: 'Braziers burn 40% less wood for the rest of the run.',
+          effects: [{ kind: 'brazierFuel', percent: -40 }],
+        },
+      },
+      {
+        label: 'Bottle them for the caravans',
+        description: 'A curiosity the traders pay well for. The rest of the swarm grieves.',
+        gain: { amber: 40 },
+        hostility: 8,
+      },
+      { label: 'Walk on by', description: 'They lose interest by nightfall.' },
+    ],
+  },
+  {
+    id: 'ashenPilgrims',
+    name: 'Ashen Pilgrims',
+    icon: '🚶',
+    kind: 'dangerous',
+    pool: 'cinderwood',
+    description:
+      'Grey-robed walkers keeping vigil where the old settlement burned. They pray that no hearth is ever let die again, and they are hungry.',
+    options: [
+      {
+        label: 'Share your fire and bread',
+        description: 'Spend 14 food. Two of them stay to tend your hearth.',
+        foodCost: 14,
+        villagerGain: 2,
+      },
+      {
+        label: 'Ask for their blessing',
+        description: 'Give 6 food for their road. They bless every hearth they pass, yours first.',
+        foodCost: 6,
+        ongoing: {
+          name: 'Vigil of the Ash',
+          icon: '🚶',
+          description: '+1 resolve for every species for the rest of the run, −1 more in each Storm.',
+          effects: [
+            { kind: 'resolveFlat', species: 'all', amount: 1 },
+            { kind: 'stormResolve', amount: -1 },
+          ],
+        },
+      },
+      { label: 'Send them on their way', description: 'They go, singing.', hostility: 2 },
+    ],
+  },
+  {
+    id: 'glassedClearing',
+    name: 'The Glassed Clearing',
+    icon: '💎',
+    kind: 'dangerous',
+    pool: 'cinderwood',
+    description:
+      'Where the fire burned hottest the sand ran and set: a field of black glass, sharp as a sentence and worth a fortune to the right buyer.',
+    options: [
+      {
+        label: 'Cut it carefully',
+        description: 'Spend 2 tools on proper cutting. Clean panes and no blood.',
+        requires: { tool: 2 },
+        cost: { tool: 2 },
+        gain: { amber: 45, brick: 6 },
+      },
+      {
+        label: 'Break it up by hand',
+        description: 'Fast and careless: someone will bleed for it.',
+        gain: { amber: 35, stone: 12 },
+        villagerLoss: 1,
+      },
+      { label: 'Fence it off', description: 'Nobody needs to walk there.' },
+    ],
+  },
+  {
+    id: 'wardenOfCinders',
+    name: 'The Warden of Cinders',
+    icon: '🗿',
+    kind: 'forbidden',
+    pool: 'cinderwood',
+    description:
+      "A figure of fused ash and iron stands where the old settlement's gate was, still guarding it. It turns its head as your people pass.",
+    options: [
+      {
+        label: 'Swear it to your hearth',
+        description: 'Spend 6 copper bars on a new collar. It guards your border instead.',
+        requires: { copperBar: 6 },
+        cost: { copperBar: 6 },
+        reputation: 1,
+        ongoing: {
+          name: 'The Cinder Warden',
+          icon: '🗿',
+          description: 'Hostility rises 15% more slowly for the rest of the run.',
+          effects: [{ kind: 'hostilityRate', percent: -15 }],
+        },
+      },
+      {
+        label: 'Topple it for its iron',
+        description: 'A hoard of old metal. The forest remembers who woke it.',
+        gain: { copperBar: 8, part: 4, amber: 30 },
+        threat: {
+          name: 'The Waking Ash',
+          icon: '🗿',
+          description: 'The fallen warden rebuilds itself from the ash, a little more each Storm, and marches.',
+          interval: 95,
+          appease: { stone: 30, amber: 25 },
+          strike: { hostility: 4, impatience: 0.5 },
+        },
+      },
+      { label: 'Give it a wide berth', description: 'It watches you go.' },
+    ],
+  },
+  {
+    id: 'heartOfTheBurn',
+    name: 'The Heart of the Burn',
+    icon: '🌋',
+    kind: 'forbidden',
+    pool: 'cinderwood',
+    description:
+      'The fire started here. The ground is hot to the hand, the air shimmers, and something deep below breathes out in slow, long sighs.',
+    options: [
+      {
+        label: 'Build a vent-house over it',
+        description: 'Spend 12 bricks to harness the heat. Workshops nearby never go cold.',
+        requires: { brick: 12 },
+        cost: { brick: 12 },
+        ongoing: {
+          name: 'The Burn-Heart Vents',
+          icon: '🌋',
+          description: 'Smithing and cooking work 20% faster for the rest of the run.',
+          effects: [
+            { kind: 'productionSpeed', tag: 'smithing', percent: 20 },
+            { kind: 'productionSpeed', tag: 'cooking', percent: 20 },
+          ],
+        },
+      },
+      {
+        label: 'Dig for what the fire left',
+        description: 'Copper and old coin in the slag. The ground does not like being dug.',
+        gain: { copperOre: 20, amber: 50 },
+        condition: {
+          name: 'The Restless Burn',
+          icon: '🌋',
+          description: 'Hostility rises 25% faster until 2 more glades are cleared and the heat bleeds away.',
+          resolveBy: { kind: 'gladesCleared', amount: 2 },
+          whileActive: [{ kind: 'hostilityRate', percent: 25 }],
+        },
+      },
+      { label: 'Let it breathe', description: 'It has been breathing for a hundred years.' },
+    ],
+  },
+
+  // ---- the ruins field's own (layout pool) ----------------------------------
+  {
+    id: 'collapsedGatehouse',
+    name: 'The Collapsed Gatehouse',
+    icon: '🏰',
+    kind: 'dangerous',
+    pool: 'ruins',
+    description:
+      'The holdfast\'s gate, fallen across the road. Its arch-stones are cut true, and under them lies the gate-wardens\' strongbox.',
+    options: [
+      {
+        label: 'Shore it and salvage properly',
+        description: 'Spend 8 planks. Dressed stone and bricks, and the strongbox.',
+        requires: { plank: 8 },
+        cost: { plank: 8 },
+        gain: { stone: 20, brick: 8, amber: 20 },
+      },
+      {
+        label: 'Pull the strongbox out now',
+        description: 'The arch comes down behind your crew.',
+        gain: { amber: 30, brick: 4 },
+        villagerLoss: 1,
+      },
+      { label: 'Leave it standing', description: 'It held the road for centuries.' },
+    ],
+  },
+  {
+    id: 'kingsCistern',
+    name: "The King's Cistern",
+    icon: '⛲',
+    kind: 'dangerous',
+    pool: 'ruins',
+    description:
+      'A vaulted cistern under the old keep, still full of clean water. Carvings along the rim name a king the Queen would rather forget.',
+    options: [
+      {
+        label: 'Chisel out the old king',
+        description: 'Spend 10 stone and 3 scrolls on new carvings and a proper inscription in the Queen\'s name. She hears of it.',
+        requires: { stone: 10, scroll: 3 },
+        cost: { stone: 10, scroll: 3 },
+        reputation: 1,
+      },
+      {
+        label: 'Drink from the king\'s water',
+        description: 'Spend 6 planks on pipes: clean water for every kitchen. The Queen frowns at the carvings left standing.',
+        requires: { plank: 6 },
+        cost: { plank: 6 },
+        impatience: 1,
+        ongoing: {
+          name: "The King's Water",
+          icon: '⛲',
+          description: 'Villagers eat 8% less for the rest of the run.',
+          effects: [{ kind: 'foodUpkeep', percent: -8 }],
+        },
+      },
+      { label: 'Seal the vault', description: 'Water under stone keeps.' },
+    ],
+  },
+  {
+    id: 'archiveOfTheHoldfast',
+    name: 'Archive of the Holdfast',
+    icon: '📚',
+    kind: 'dangerous',
+    pool: 'ruins',
+    description:
+      "Shelves of the holdfast's ledgers, dry behind a fallen wall: harvests, levies, the names of the dead. A scholar's treasure, or good kindling.",
+    options: [
+      {
+        label: 'Copy them out',
+        description: 'Spend 6 scrolls. The old surveys show where the stone was quarried.',
+        requires: { scroll: 6 },
+        cost: { scroll: 6 },
+        reputation: 1,
+        gain: { stone: 15 },
+      },
+      {
+        label: 'Sell the ledgers',
+        description: 'Collectors pay well. Some of the names were somebody\'s grandparents.',
+        gain: { amber: 35 },
+        hostility: 4,
+      },
+      { label: 'Burn them for warmth', description: 'The ink smells of old winters.', gain: { wood: 12 } },
+    ],
+  },
 ]
 
 export const GLADE_EVENTS: Record<string, GladeEventDef> = Object.fromEntries(
@@ -1188,6 +1506,12 @@ export const GLADE_EVENTS: Record<string, GladeEventDef> = Object.fromEntries(
 
 export const GLADE_EVENT_LIST = defs
 
+/** The default pools: every event but a biome's or a layout's own. */
 export function eventsOfKind(kind: 'dangerous' | 'forbidden'): GladeEventDef[] {
-  return defs.filter((d) => d.kind === kind)
+  return defs.filter((d) => d.kind === kind && !d.pool)
+}
+
+/** A biome's or a layout's own events of one kind (see `GladeEventDef.pool`). */
+export function eventsOfPool(pool: string, kind: 'dangerous' | 'forbidden'): GladeEventDef[] {
+  return defs.filter((d) => d.kind === kind && d.pool === pool)
 }

@@ -2,8 +2,8 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { distToPolygonEdge, pointInPolygon } from '../../game/engine/geometry'
-import type { Glade, RunState, Vec2 } from '../../game/types'
+import { distToPolygonEdge, distToSegment, pointInPolygon } from '../../game/engine/geometry'
+import type { Barrier, Glade, RunState, TerrainId, Vec2 } from '../../game/types'
 import { GLADE_KIND_STYLE, SPARED_STYLE, gladeAccess, gladeFill, gladeLook, type GladeAccess } from '../mapShared'
 import { REDUCED_MOTION } from '../motion'
 import { gladeSurfaceKey, useRunKey } from './layerKeys'
@@ -104,9 +104,30 @@ interface GroundGrid {
   seam: Float32Array
   /** Per-vertex brightness jitter. */
   jitter: Float32Array
+  /** Fine noise in [0, 1) for a terrain's own texture (the Cinderwood's embers). */
+  fleck: Float32Array
+  /**
+   * A barrier painted into the ground: 0 none, else its kind's index in
+   * `BARRIER_PAINT` (+1), with `barrierEdge` 1 at its course and 0 at its
+   * banks — so a river or a cliff costs no draw call of its own.
+   */
+  barrier: Uint8Array
+  barrierEdge: Float32Array
 }
 
-function buildGrid(glades: Glade[], width: number, height: number): GroundGrid {
+/** How each barrier is painted into the ground grid. */
+const BARRIER_PAINT: { kind: Barrier['kind']; half: number; core: THREE.Color; bank: THREE.Color; crossing: THREE.Color }[] = [
+  { kind: 'river', half: 0.62, core: new THREE.Color('#2f6690'), bank: new THREE.Color('#3a3d2c'), crossing: new THREE.Color('#9a8458') },
+  { kind: 'cliff', half: 0.42, core: new THREE.Color('#25211e'), bank: new THREE.Color('#6f6862'), crossing: new THREE.Color('#7d6c4f') },
+]
+/** Ground within this of a crossing is its ford or pass, not the barrier. */
+const CROSSING_REACH = 0.85
+/** A biome terrain's ember flecks (cleared ground; dimmer under the fog). */
+const TERRAIN_FLECK: Partial<Record<TerrainId, { color: THREE.Color; above: number }>> = {
+  cinder: { color: new THREE.Color('#ff7a2e'), above: 0.86 },
+}
+
+function buildGrid(glades: Glade[], width: number, height: number, barriers: Barrier[] = []): GroundGrid {
   const cols = Math.ceil(width / STEP) + 1
   const rows = Math.ceil(height / STEP) + 1
   const geometry = new THREE.PlaneGeometry(width, height, cols - 1, rows - 1).rotateX(-Math.PI / 2)
@@ -116,6 +137,9 @@ function buildGrid(glades: Glade[], width: number, height: number): GroundGrid {
   const owner = new Int16Array(n)
   const seam = new Float32Array(n)
   const jitter = new Float32Array(n)
+  const fleck = new Float32Array(n)
+  const barrier = new Uint8Array(n)
+  const barrierEdge = new Float32Array(n)
   const p: Vec2 = { x: 0, y: 0 }
   for (let i = 0; i < n; i++) {
     p.x = pos.getX(i)
@@ -131,10 +155,22 @@ function buildGrid(glades: Glade[], width: number, height: number): GroundGrid {
     owner[i] = found
     seam[i] = found >= 0 ? Math.min(1, distToPolygonEdge(p, glades[found].polygon) / SEAM) : 0
     jitter[i] = (vnoise(p.x * 0.55, p.y * 0.55) - 0.5) * 0.16 + (vnoise(p.x * 2.1 + 9, p.y * 2.1) - 0.5) * 0.07
+    fleck[i] = vnoise(p.x * 3.7 + 21, p.y * 3.7 - 5)
+    for (const b of barriers) {
+      const paint = BARRIER_PAINT.findIndex((k) => k.kind === b.kind)
+      if (paint < 0) continue
+      const half = BARRIER_PAINT[paint].half
+      let d = Infinity
+      for (const [a, c] of b.segments) d = Math.min(d, distToSegment(p, a, c))
+      if (d > half * 1.35) continue
+      const crossing = b.crossings.some((c) => Math.hypot(c.x - p.x, c.y - p.y) < CROSSING_REACH)
+      barrier[i] = crossing ? 128 + paint + 1 : paint + 1
+      barrierEdge[i] = Math.max(0, 1 - d / (half * 1.35))
+    }
   }
   geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3))
   mapStats.geometriesCreated++
-  return { geometry, owner, seam, jitter }
+  return { geometry, owner, seam, jitter, fleck, barrier, barrierEdge }
 }
 
 /**
@@ -250,7 +286,10 @@ const SEAM_SHADE = 0.72
 export const GroundSurface = memo(function GroundSurface({ run }: { run: RunState }) {
   const key = useRunKey(gladeSurfaceKey)
   const glades = useMemo(() => Object.values(run.glades), [run])
-  const grid = useMemo(() => buildGrid(glades, run.world.width, run.world.height), [glades, run.world])
+  const grid = useMemo(
+    () => buildGrid(glades, run.world.width, run.world.height, run.world.barriers),
+    [glades, run.world],
+  )
   const hills = useStaticGeometry(() => hillsGeometry(run.world.width, run.world.height), [run.world])
   const material = useMemo(() => {
     const tex = groundTexture()
@@ -268,7 +307,9 @@ export const GroundSurface = memo(function GroundSurface({ run }: { run: RunStat
     const arr = colors.array as Float32Array
     const fills = glades.map((g) => new THREE.Color(gladeFill(g, '3d')))
     const cleared = glades.map((g) => gladeLook(g) === 'visible')
+    const flecks = glades.map((g) => (gladeLook(g) === 'hidden' ? undefined : TERRAIN_FLECK[g.terrain]))
     const outside = new THREE.Color('#151d1a')
+    const c = new THREE.Color()
     for (let i = 0; i < grid.owner.length; i++) {
       const g = grid.owner[i]
       const base = g >= 0 ? fills[g] : outside
@@ -276,9 +317,28 @@ export const GroundSurface = memo(function GroundSurface({ run }: { run: RunStat
       const seam = g >= 0 ? grid.seam[i] : 1
       const edge = cleared[g] ? SEAM_SHADE + (1 - SEAM_SHADE) * seam : 0.9 + 0.1 * seam
       const k = edge * (1 + grid.jitter[i] * (cleared[g] ? 1 : 0.5))
-      arr[i * 3] = base.r * k
-      arr[i * 3 + 1] = base.g * k
-      arr[i * 3 + 2] = base.b * k
+      c.setRGB(base.r * k, base.g * k, base.b * k)
+      // A biome's own texture: the Cinderwood's embers glint through the ash.
+      const fleck = g >= 0 ? flecks[g] : undefined
+      if (fleck && grid.fleck[i] > fleck.above) {
+        const t = Math.min(1, (grid.fleck[i] - fleck.above) / (1 - fleck.above) * 2.2) * (cleared[g] ? 0.9 : 0.35)
+        c.lerp(fleck.color, t)
+      }
+      // A river or cliff runs whatever the fog: it is the lie of the land.
+      const mark = grid.barrier[i]
+      if (mark) {
+        const paint = BARRIER_PAINT[(mark & 127) - 1]
+        const e = grid.barrierEdge[i]
+        if (mark & 128) c.lerp(paint.crossing, Math.min(1, e * 1.6))
+        else {
+          // Banks first, then the water (or the drop) itself.
+          c.lerp(paint.bank, Math.min(1, e * 3))
+          if (e > 0.35) c.lerp(paint.core, Math.min(1, (e - 0.35) * 4))
+        }
+      }
+      arr[i * 3] = c.r
+      arr[i * 3 + 1] = c.g
+      arr[i * 3 + 2] = c.b
     }
     colors.needsUpdate = true
   }, [grid, glades, key])

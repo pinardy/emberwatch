@@ -85,6 +85,11 @@ export function terrainEffectsFor(defId: string, terrain: TerrainId | undefined)
         return def.recipes.some((r) => (r.outputs[effect.resource] ?? 0) > 0)
       case 'buildSpeed':
         return true
+      case 'seasonWork':
+        // Workplaces only: a home or a store does no work to slow.
+        return def.workerSlots > 0
+      case 'warmHomes':
+        return (def.housing ?? 0) > 0
     }
   })
 }
@@ -95,10 +100,12 @@ function terrainMultiplier(
   terrain: TerrainId | undefined,
   kinds: TerrainEffect['kind'][],
   mods?: Modifiers,
+  season?: Season,
 ): number {
   let percent = 0
   for (const effect of terrainEffectsFor(defId, terrain)) {
-    if (!kinds.includes(effect.kind)) continue
+    if (!kinds.includes(effect.kind) || !('percent' in effect)) continue
+    if (effect.kind === 'seasonWork' && effect.season !== season) continue
     // Cornerstones can sharpen good ground or blunt bad ground.
     const scale = !mods ? 1 : effect.percent > 0 ? mods.terrainBoost : mods.terrainPenalty
     percent += effect.percent * scale
@@ -113,6 +120,19 @@ export function terrainWorkMultiplier(
   mods?: Modifiers,
 ): number {
   return terrainMultiplier(defId, terrain, ['workSpeed', 'yield'], mods)
+}
+
+/**
+ * The ground's seasonal pull on a workplace (the Cinderwood's ash turning to
+ * slurry in the Storm): 1 in any other season or on any other ground.
+ */
+export function terrainSeasonMultiplier(
+  defId: string,
+  terrain: TerrainId | undefined,
+  season: Season,
+  mods?: Modifiers,
+): number {
+  return terrainMultiplier(defId, terrain, ['seasonWork'], mods, season)
 }
 
 /** Construction-speed multiplier from the ground. */
@@ -152,6 +172,7 @@ export function workRate(s: RunState, b: BuildingInstance, mods: Modifiers): num
     adjacencyMultiplier(s, b, mods) *
     tierSpeedMultiplier(b) *
     terrainWorkMultiplier(b.defId, terrainOf(s, b), mods) *
+    terrainSeasonMultiplier(b.defId, terrainOf(s, b), s.season.season, mods) *
     // Exactly 1 without roads; a cached lookup with them.
     roadMultiplier(s, b)
   )

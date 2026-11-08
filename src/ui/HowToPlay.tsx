@@ -109,6 +109,19 @@ export function HowToPlay() {
           </li>
         </Part>
 
+        <Part title="The lie of the land">
+          <li>
+            Every map has a <strong>layout</strong>, named at setup: rings round the hearth, a{' '}
+            <strong>river vale</strong> crossed only at fords, a <strong>long ridge</strong> with
+            passes along its spine, or old <strong>ruins</strong> to salvage stone and bricks from.
+          </li>
+          <li>
+            Some maps hold <strong>the Cinderwood</strong>: homes on its ash stay warm in every
+            Storm, but farms barely grow and work slows in the Storm rain. Deadfall gives quick
+            wood, fireweed herbs and fibre.
+          </li>
+        </Part>
+
         <Part title="The Storm">
           <li>
             Each year ends in the Storm: farms stop, gathering halves and the hearth burns wood.

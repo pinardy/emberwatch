@@ -1,4 +1,5 @@
 import { BUILDINGS } from '../content/buildings'
+import { TERRAIN } from '../content/terrain'
 import { COMPLEX_FOOD, EDIBLE, RESOURCES } from '../content/resources'
 import { serviceCapacity } from './adjacency'
 import {
@@ -12,6 +13,7 @@ import {
   SECONDS_TO_LEAVE,
 } from './balance'
 import { dist } from './geometry'
+import { gladeAt } from './mapgen'
 import { memoByBuildings, memoByVillagers } from './runCache'
 import { despairRate } from './traits'
 import {
@@ -30,6 +32,7 @@ import type {
   RunState,
   ServiceNeed,
   SpeciesId,
+  TerrainId,
   Vec2,
   Villager,
 } from '../types'
@@ -178,13 +181,22 @@ export function warmthSources(s: RunState, hearthRadius = hearthWarmthRadius(s))
  * or insulated by an upgrade. Pass `sources` when checking many homes.
  */
 export function isWarmHome(s: RunState, b: BuildingInstance, sources?: WarmthSource[]): boolean {
-  if (isInsulated(b)) return true
+  if (isInsulated(b) || terrainWarmsHomes(s.glades[b.gladeId]?.terrain)) return true
   return (sources ?? warmthSources(s)).some((w) => dist(w.pos, b.pos) <= w.radius)
 }
 
-/** Whether a home at `pos` sits inside any live warmth source. */
+/**
+ * Whether homes on this ground stay warm through the Storm whatever the
+ * fires do (the Cinderwood's ash; see `TerrainEffect` 'warmHomes').
+ */
+export function terrainWarmsHomes(terrain: TerrainId | undefined): boolean {
+  return !!terrain && (TERRAIN[terrain]?.effects ?? []).some((e) => e.kind === 'warmHomes')
+}
+
+/** Whether a home at `pos` sits inside any live warmth source, or on warm ground. */
 export function isWarmAt(s: RunState, pos: Vec2, hearthRadius = hearthWarmthRadius(s)): boolean {
-  return warmthSources(s, hearthRadius).some((w) => dist(w.pos, pos) <= w.radius)
+  if (warmthSources(s, hearthRadius).some((w) => dist(w.pos, pos) <= w.radius)) return true
+  return terrainWarmsHomes(gladeAt(s.glades, pos)?.terrain)
 }
 
 /** Built homes standing within `radius` of `pos` (what a brazier would warm). */

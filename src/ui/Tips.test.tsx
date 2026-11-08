@@ -436,3 +436,45 @@ describe('tips coach in play', () => {
     expect(screen.queryByRole('status', { name: 'Tip' })).toBeNull()
   })
 })
+
+describe('the ground: layout and biome tips', () => {
+  /** A founded run on this layout and biome, with no land modifiers. */
+  function onGround(layout: 'rings' | 'river' | 'ridge' | 'ruins', biome: 'woodland' | 'cinderwood' = 'woodland'): RunState {
+    const s = createRun({ seed: 4711, species: ['human', 'beaver', 'lizard'], modifiers: [], layout, biome })
+    let guard = 0
+    while (s.pendingChoices.length > 0 && guard++ < 20) takeChoice(s, s.pendingChoices[0].options[0])
+    return s
+  }
+
+  it('the river and the ridge: once founded, on their own layout only', () => {
+    for (const [id, layout] of [['river-vale', 'river'], ['long-ridge', 'ridge']] as const) {
+      const founding = createRun({ seed: 4711, species: ['human', 'beaver', 'lizard'], modifiers: [], layout })
+      expect(tipById(id)!.when(founding), `${id} during the founding`).toBe(false)
+      expect(fires(onGround(layout), id), id).toBe(true)
+      expect(fires(onGround('rings'), id), `${id} on the rings`).toBe(false)
+    }
+    expect(tipCopy(tipById('river-vale')!.text, onGround('river'))).toMatch(/ford/)
+    expect(tipCopy(tipById('long-ridge')!.text, onGround('ridge'))).toMatch(/pass/)
+  })
+
+  it('the ruins: once tumbled stonework stands on cleared ground', () => {
+    const s = onGround('ruins')
+    for (const g of Object.values(s.glades)) if (g.kind !== 'settlement') g.cleared = false
+    const ruin = Object.values(s.deposits).find((d) => d.kind === 'ruins')!
+    expect(fires(s, 'ruins-field')).toBe(false)
+    s.glades[ruin.gladeId].cleared = true
+    expect(fires(s, 'ruins-field')).toBe(true)
+    expect(fires(onGround('rings'), 'ruins-field')).toBe(false)
+  })
+
+  it('the Cinderwood: once a glade of its warm ash is in view', () => {
+    const s = onGround('rings', 'cinderwood')
+    for (const g of Object.values(s.glades)) if (g.kind !== 'settlement') g.discovered = false
+    expect(fires(s, 'cinderwood')).toBe(false)
+    const ash = Object.values(s.glades).find((g) => g.terrain === 'cinder')!
+    ash.discovered = true
+    expect(fires(s, 'cinderwood')).toBe(true)
+    expect(tipCopy(tipById('cinderwood')!.text, s)).toMatch(/warm/)
+    expect(fires(onGround('rings', 'woodland'), 'cinderwood')).toBe(false)
+  })
+})

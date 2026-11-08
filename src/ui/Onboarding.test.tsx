@@ -300,6 +300,7 @@ describe('how to play', () => {
       'The race',
       'Needs and expectations',
       'Glades and the forest',
+      'The lie of the land',
       'The Storm',
       'Orders, decrees and commissions',
       'Trade and amber',
@@ -320,6 +321,8 @@ describe('how to play', () => {
       /the Founding/,
       /refined/,
       /Style achievements/,
+      /river vale/,
+      /Cinderwood/,
     ]) {
       expect(text).toMatch(idea)
     }
