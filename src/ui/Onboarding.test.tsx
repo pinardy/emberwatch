@@ -3,9 +3,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { SPECIES } from '../game/content/species'
 import { assignWorker, findPlacement } from '../game/engine/actions'
+import { loadSettings } from '../game/persistence'
 import { useGameStore } from '../game/store'
+import { showFoundedRun } from '../test/foundedRun'
 import type { RunState, SpeciesId } from '../game/types'
 import { useFirstStepsStatus } from './FirstSteps'
+import { GameScreen } from './GameScreen'
 import { useSeenTips } from './TipsCoach'
 
 /**
@@ -36,6 +39,12 @@ function startRun() {
   fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
 }
 
+/** A founded run on the game screen, for what follows the founding. */
+function foundedOnScreen() {
+  showFoundedRun()
+  render(<GameScreen />)
+}
+
 function takeOpeningDraft() {
   let guard = 0
   while (currentRun().pendingChoices.length > 0 && guard++ < 10) {
@@ -61,6 +70,8 @@ beforeEach(() => {
   useFirstStepsStatus.setState({ status: 'open' })
   useSeenTips.setState({ seen: [] })
   useGameStore.setState({
+    // What the app's boot reads from the (cleared) storage.
+    settings: loadSettings(),
     screen: 'menu',
     run: null,
     speed: 0,
@@ -93,8 +104,7 @@ describe('first steps checklist', () => {
   })
 
   it('takes the player to each step and ticks it off from the run', () => {
-    startRun()
-    takeOpeningDraft()
+    foundedOnScreen()
     const card = () => screen.getByRole('region', { name: /First steps/i })
 
     act(() => useGameStore.getState().setPanel(null))
@@ -136,8 +146,7 @@ describe('first steps checklist', () => {
   })
 
   it('can be dismissed for good', () => {
-    startRun()
-    takeOpeningDraft()
+    foundedOnScreen()
     fireEvent.click(screen.getByRole('button', { name: /Dismiss first steps/i }))
     expect(screen.queryByRole('region', { name: /First steps/i })).toBeNull()
     expect(localStorage.getItem('emberwatch.firstSteps.v1')).toBe('dismissed')
@@ -145,8 +154,7 @@ describe('first steps checklist', () => {
 
   it('without the checklist, the welcome names the real meters and goes once the player acts', () => {
     useFirstStepsStatus.setState({ status: 'dismissed' })
-    startRun()
-    takeOpeningDraft()
+    foundedOnScreen()
     const tip = screen.getByRole('status', { name: 'Tip' })
     expect(within(tip).getByText(/Reputation meter/)).toBeTruthy()
     expect(within(tip).getByText(/Impatience fills/)).toBeTruthy()
@@ -236,8 +244,7 @@ describe('the founding holds the clock', () => {
 
 describe('blueprint draft', () => {
   it('says what a card does for services, but not which species want it', () => {
-    startRun()
-    takeOpeningDraft()
+    foundedOnScreen()
     act(() => {
       currentRun().pendingChoices.push({ kind: 'blueprint', options: ['tavern', 'brewery'] })
       bump()
@@ -268,8 +275,7 @@ describe('blueprint draft', () => {
   })
 
   it('a milestone draft can offer a cornerstone beside the blueprints', () => {
-    startRun()
-    takeOpeningDraft()
+    foundedOnScreen()
     act(() => {
       currentRun().pendingChoices.push({
         kind: 'blueprint',

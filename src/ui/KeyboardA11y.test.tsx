@@ -1,6 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
 import { canPlaceBuilding, findPlacement, placeBuilding } from '../game/engine/actions'
 import { createRun } from '../game/engine/createRun'
@@ -16,6 +15,7 @@ import {
 } from './keyboardPlacement'
 import { BuildingList, mapSummaryText } from './MapAids'
 import { buildingViews } from './map3d/layerKeys'
+import { GameScreen } from './GameScreen'
 
 /**
  * Playing without a pointer: placing a blueprint with the arrow keys and
@@ -108,7 +108,7 @@ describe('keyboard placement helpers', () => {
 
 describe('keyboard placement on the map', () => {
   it('arrows move the ghost, Enter places, Esc cancels, and each verdict is announced', () => {
-    render(<App />)
+    render(<GameScreen />)
     const card = clickBuildCard('Shelter')
     expect(useGameStore.getState().buildMode).toBe('shelter')
 
@@ -154,7 +154,7 @@ describe('keyboard placement on the map', () => {
   })
 
   it('"Place at the nearest valid spot" places in one press', () => {
-    render(<App />)
+    render(<GameScreen />)
     clickBuildCard('Shelter')
     const count = Object.keys(run().buildings).length
     fireEvent.click(screen.getByRole('button', { name: 'Place at the nearest valid spot' }))
@@ -165,7 +165,7 @@ describe('keyboard placement on the map', () => {
   })
 
   it('leaves the arrows to a list that uses them', () => {
-    render(<App />)
+    render(<GameScreen />)
     clickBuildCard('Shelter')
     const list = screen.getByRole('navigation', { name: 'Buildings' })
     const button = within(list).getAllByRole('button')[0]
@@ -211,7 +211,7 @@ describe('building list', () => {
   })
 
   it('on the 2D map: a glade list and a building list, and picking moves focus to the Inspector', () => {
-    render(<App />)
+    render(<GameScreen />)
     expect(screen.getByRole('navigation', { name: 'Glades' })).toBeTruthy()
     const list = screen.getByRole('navigation', { name: 'Buildings' })
     const first = within(list).getAllByRole('button')[0]
@@ -223,7 +223,7 @@ describe('building list', () => {
   })
 
   it('the Hearth button (and F) opens the hearth in the Inspector', () => {
-    render(<App />)
+    render(<GameScreen />)
     fireEvent.click(screen.getByRole('button', { name: 'Hearth' }))
     expect(useGameStore.getState().selectedBuilding).toBe(hearthOf(run()).id)
     expect(document.activeElement?.className).toContain('inspector-title')
@@ -240,14 +240,14 @@ describe('building list', () => {
     expect(text).toMatch(/\d+ glades? in reach\./)
     expect(text).toMatch(/workers\./)
     expect(text).toMatch(/No threats\.|threats? loose/)
-    render(<App />)
+    render(<GameScreen />)
     expect(screen.getByText(text).getAttribute('role')).toBe('status')
   })
 })
 
 describe('Space and the live log', () => {
   it('Space pauses from the map but is left to a focused control', () => {
-    render(<App />)
+    render(<GameScreen />)
     // Nothing focused: Space toggles the clock.
     act(() => key(document.body, ' '))
     expect(useGameStore.getState().speed).toBe(1)
@@ -266,7 +266,7 @@ describe('Space and the live log', () => {
   })
 
   it('keeps the news log mounted while it is empty, so new toasts are announced', () => {
-    render(<App />)
+    render(<GameScreen />)
     const log = screen.getByRole('log', { name: 'Settlement news' })
     expect(log.children).toHaveLength(0)
     expect(log.getAttribute('aria-live')).toBe('polite')
