@@ -3,6 +3,7 @@ import {
   DECREE_DECLINE_IMPATIENCE,
   PETITION_AMBER,
   PETITION_BROKEN_IMPATIENCE,
+  PETITION_FROM_YEAR,
   PETITION_RELIEF,
   PETITION_VOW_REPUTATION,
   PETITION_VOW_SECONDS,
@@ -13,6 +14,7 @@ import {
   SPARED_GLADE_RECLAIM_HOSTILITY,
 } from '../game/engine/balance'
 import { pendingBlight } from '../game/engine/blights'
+import { openErrands } from '../game/engine/errands'
 import { isFounding } from '../game/engine/founding'
 import { architectOffers, architectPrice, petitionOpen, retreatOffered } from '../game/engine/levers'
 import { HEARTH_STORM_END_REACH, idleVillagers, population } from '../game/engine/queries'
@@ -212,6 +214,13 @@ export const TIPS: Tip[] = [
     doneWhen: (run) => (run.orderOffers ?? []).length === 0,
   },
   {
+    id: 'errand',
+    title: 'An errand',
+    text: 'While reputation stands still the settlement turns up small jobs — on the chip above the threats and in the Orders panel. Do one for a little reputation or amber; leave it and it lapses, no harm done.',
+    when: (run) => openErrands(run).length > 0,
+    doneWhen: (run) => (run.errandBook?.met ?? 0) > 0,
+  },
+  {
     id: 'stagnation',
     title: 'The Queen notices a stall',
     text: 'A minute after your last reputation point her impatience starts climbing faster, and faster the longer it stands still. Any new point resets it: meet an order or a decree, clear a glade, lift resolve over the line.',
@@ -223,6 +232,12 @@ export const TIPS: Tip[] = [
     title: 'Rising expectations',
     text: `From Year 2 settlers take comfort for granted: a served species loses ${RESOLVE_EXPECTATION_PER_YEAR} resolve a year, and more past ${RESOLVE_EXPECTATION_CROWD_FROM} villagers. Keep adding services and food variety — People → Why? shows the cost.`,
     when: (run) => run.season.year >= 2 && population(run) > 0 && expectations(run) > 0,
+  },
+  {
+    id: 'queens-court',
+    title: "The Queen's court",
+    text: 'From Year 2 the Orders panel lists her three levers on your patience: soothing her with amber, the once-a-run Grand Petition and the Retreat to the Citadel. Each says when it opens — learn them before you need them.',
+    when: (run) => run.season.year >= PETITION_FROM_YEAR && run.phase === 'playing' && run.pendingChoices.length === 0,
   },
   {
     id: 'glade-truce',

@@ -3,18 +3,28 @@ import { supplyReward } from '../game/engine/meta'
 import {
   PETITION_AMBER,
   PETITION_BROKEN_IMPATIENCE,
+  PETITION_FROM_YEAR,
   PETITION_RELIEF,
   PETITION_VOW_REPUTATION,
   PETITION_VOW_SECONDS,
   PETITION_WITHIN,
 } from '../game/engine/balance'
 import { formatDuration } from '../game/engine/forecast'
-import { petitionBlocked, petitionOpen, petitionVowLeft, retreatOffered } from '../game/engine/levers'
+import {
+  petitionBlocked,
+  petitionOpen,
+  petitionVowLeft,
+  queensCourt,
+  retreatOffered,
+  type CourtLever,
+  type CourtState,
+} from '../game/engine/levers'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { Bar } from './Bar'
 import { Icon } from './Icon'
 import './levers.css'
+import './errands.css'
 import { againWord, useConfirm } from './useConfirm'
 
 /**
@@ -30,7 +40,7 @@ export function GrandPetitionCard({ run }: { run: RunState }) {
     const start = p.target - PETITION_VOW_REPUTATION
     const done = Math.max(0, Math.min(PETITION_VOW_REPUTATION, run.reputation - start))
     return (
-      <div className={`order-card petition-card is-${p.outcome ?? 'live'}`} data-testid="grand-petition">
+      <div id="grand-petition" className={`order-card petition-card is-${p.outcome ?? 'live'}`} data-testid="grand-petition">
         <strong>
           <Icon id="dove" emoji="🕊️" /> Grand Petition —{' '}
           {p.outcome === 'kept' ? 'vow kept' : p.outcome === 'broken' ? 'vow broken' : 'your vow'}
@@ -49,7 +59,7 @@ export function GrandPetitionCard({ run }: { run: RunState }) {
   }
   if (!petitionOpen(run)) {
     return (
-      <p className="panel-hint" data-testid="grand-petition-later">
+      <p id="grand-petition" className="panel-hint" data-testid="grand-petition-later" tabIndex={-1}>
         Once a run, when her patience is within {PETITION_WITHIN} of running out (from Year 2), the Queen will hear a
         Grand Petition.
       </p>
@@ -57,7 +67,7 @@ export function GrandPetitionCard({ run }: { run: RunState }) {
   }
   const short = petitionBlocked(run) === 'amber'
   return (
-    <div className="order-card petition-card" data-testid="grand-petition">
+    <div id="grand-petition" className="order-card petition-card" data-testid="grand-petition">
       <strong>
         <Icon id="dove" emoji="🕊️" /> The Grand Petition
       </strong>
@@ -84,7 +94,7 @@ export function RetreatCard({ run }: { run: RunState }) {
   if (!retreatOffered(run)) return null
   const supplies = supplyReward({ ...run, phase: 'lost' })
   return (
-    <div className="order-card retreat-card" data-testid="retreat">
+    <div id="retreat" className="order-card retreat-card" data-testid="retreat">
       <strong>
         <Icon id="guildHouse" emoji="🏛️" /> Retreat to the Citadel
       </strong>
@@ -99,6 +109,73 @@ export function RetreatCard({ run }: { run: RunState }) {
       >
         {confirm.armed ? `${againWord()} to retreat — the run ends` : 'Retreat to the Citadel'}
       </button>
+    </div>
+  )
+}
+
+const COURT_STATE_WORDS: Record<CourtState, string> = {
+  open: 'Open',
+  short: 'Needs amber',
+  later: 'Not yet',
+  used: 'Used',
+}
+
+const COURT_ART: Record<CourtLever['id'], { id: 'dove' | 'seal' | 'guildHouse'; emoji: string }> = {
+  soothe: { id: 'dove', emoji: '🕊️' },
+  petition: { id: 'seal', emoji: '📜' },
+  retreat: { id: 'guildHouse', emoji: '🏛️' },
+}
+
+/** The control each court lever summarises (in the "Petition the Queen" section below). */
+const COURT_TARGET: Record<CourtLever['id'], string> = {
+  soothe: 'soothe-button',
+  petition: 'grand-petition',
+  retreat: 'retreat',
+}
+
+/** Brings a lever's control into view and focuses it (or its section when it is not shown). */
+function showLever(id: CourtLever['id']): void {
+  const target = document.getElementById(COURT_TARGET[id]) ?? document.getElementById('queen-levers')
+  if (!target) return
+  target.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+  const control = target.matches('button') ? target : target.querySelector<HTMLElement>('button')
+  ;(control ?? target).focus({ preventScroll: true })
+}
+
+/**
+ * "The Queen's court", in the Orders panel from Year 2: one entry naming the
+ * three levers on her patience — Soothe the Queen, the Grand Petition, the
+ * Retreat to the Citadel — with each one's state now and when (or why not) it
+ * opens, so they are known before the run is desperate. Each row leads to
+ * its control below; nothing here duplicates them.
+ */
+export function QueensCourt({ run }: { run: RunState }) {
+  if (run.season.year < PETITION_FROM_YEAR || run.phase !== 'playing') return null
+  const levers = queensCourt(run)
+  const open = levers.filter((l) => l.state === 'open').length
+  return (
+    <div className="order-card court-card" data-testid="queens-court" role="group" aria-label="The Queen's court">
+      <div className="row-between">
+        <strong>
+          <Icon id="castle" emoji="🏰" /> The Queen's court
+        </strong>
+        <span className="order-reward">{open === 0 ? 'none open' : `${open} open`}</span>
+      </div>
+      <small className="muted">Three levers on her patience. Learn them before you need them.</small>
+      <ul className="court-levers">
+        {levers.map((lever) => (
+          <li key={lever.id} className="court-lever" data-testid={`court-${lever.id}`}>
+            <span className="court-lever-name">
+              <Icon id={COURT_ART[lever.id].id} emoji={COURT_ART[lever.id].emoji} />
+              <button type="button" className="link-button" onClick={() => showLever(lever.id)}>
+                {lever.name}
+              </button>
+            </span>
+            <span className={`court-state is-${lever.state}`}>{COURT_STATE_WORDS[lever.state]}</span>
+            <small>{lever.note}</small>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

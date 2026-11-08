@@ -1,0 +1,135 @@
+/* ==========================================================================
+   Errands (Orders panel cards and the HUD chip) and the Queen's court
+   summary in the Orders panel.
+   ========================================================================== */
+
+.errand-card strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.errand-card.is-urgent {
+  border-color: var(--bad);
+}
+
+.errand-meta {
+  display: block;
+  margin-top: 2px;
+}
+
+.errand-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+}
+
+.errand-actions .wide-button {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.errand-actions .link-button {
+  min-height: 32px;
+}
+
+/* The chip: a quieter sibling of the decree card — green-brown, one line of
+   words, and it never grows past the decree. */
+.condition-card.is-errand {
+  background: rgba(26, 36, 24, 0.95);
+  border-color: #6d8a58;
+  /* A grid item: without this its one-line title would widen the whole stack. */
+  min-width: 0;
+}
+
+.condition-card.is-errand .condition-text strong {
+  min-width: 0;
+}
+
+.condition-card.is-errand .condition-clock {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.condition-card.is-errand.is-urgent {
+  border-color: var(--bad);
+}
+
+.condition-card.is-errand .condition-text small {
+  color: #c6d4b4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.errand-chip-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- The Queen's court -------------------------------------------------- */
+
+.court-card strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.court-levers {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.court-lever {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 0.8125rem;
+}
+
+.court-lever-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.court-lever small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.court-state {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.court-state.is-open {
+  color: var(--good);
+  border-color: currentColor;
+}
+
+.court-state.is-short {
+  color: var(--gold);
+  border-color: currentColor;
+}
+
+.court-state.is-used {
+  color: var(--muted);
+}
