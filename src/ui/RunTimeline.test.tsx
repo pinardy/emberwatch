@@ -1,3 +1,4 @@
+import { envoyArrivesNextTick } from '../test/envoy'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRun } from '../game/engine/createRun'
@@ -25,7 +26,7 @@ function playedRun(seconds: number, phase: 'won' | 'lost'): RunState {
     }
     tick(s, 0.125)
   }
-  if (phase === 'won') s.reputation = s.maxReputation
+  if (phase === 'won') envoyArrivesNextTick(s)
   else s.impatience = s.maxImpatience
   tick(s, 0.125)
   return s
