@@ -28,6 +28,7 @@ import { computeStorageCap, population, totalHousing } from './queries'
 import { checkCharter, stepConditions, stepDecree } from './structure'
 import { stepCaravan } from './trade'
 import { stepPetition } from './levers'
+import { stepErrands } from './errands'
 import { displayName } from './upgrades'
 import { recordEvent, stepTimeline } from './timeline'
 import {
@@ -124,6 +125,7 @@ function tickPlaying(s: RunState, dt: number): void {
 
   stepDecree(s, dt)
   stepOrders(s)
+  stepErrands(s, dt)
   checkMilestones(s)
   checkCharter(s)
   checkEndConditions(s)

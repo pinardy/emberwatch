@@ -510,6 +510,76 @@ export type OrderGoal =
    */
   | { kind: 'producedCategory'; category: ResourceCategory; amount: number }
 
+/**
+ * What an errand asks, as drawn for this settlement (see `content/errands.ts`
+ * for the templates and `engine/errands.ts` for how each is measured).
+ */
+export type ErrandGoal =
+  /** Hand goods over from the stockpile — a press of the errand's button. */
+  | { kind: 'deliver'; resource: ResourceId; amount: number }
+  /** Sell a lot of a good to the caravan — a press of the errand's button. */
+  | { kind: 'sell'; resource: ResourceId }
+  /** A counting goal measured from when the errand was drawn (`goals.ts`). */
+  | { kind: 'count'; goal: OrderGoal }
+  /** A level goal held for `seconds` in all while the errand is open. */
+  | { kind: 'hold'; goal: OrderGoal; seconds: number }
+  /** One building kept staffed for `seconds` in all. */
+  | { kind: 'staff'; buildingId: string; seconds: number }
+  /** At least `idle` villagers left free to build while a site is open, for `seconds` in all. */
+  | { kind: 'builders'; idle: number; seconds: number }
+  /** One glade cleared. */
+  | { kind: 'clear'; gladeId: string }
+
+/** What meeting an errand pays: a little reputation progress, or amber. */
+export interface ErrandReward {
+  /** Fractional reputation, added to the meter's progress. */
+  reputation?: number
+  amber?: number
+}
+
+/** A small, optional, short-lived task (see `engine/errands.ts`). */
+export interface Errand {
+  id: string
+  /** Template id in `ERRANDS`. */
+  defId: string
+  /** Its words as drawn: "Carry 10 Wood to the Thornmere clearers". */
+  title: string
+  goal: ErrandGoal
+  /** Goal count when drawn, for counting goals. */
+  baseline?: number
+  /** Seconds the goal has held so far, for hold, staff and builders goals. */
+  held?: number
+  /** 0..1 */
+  progress: number
+  timeLeft: number
+  timeLimit: number
+  reward: ErrandReward
+  /** The glade or building it is about, for the camera. */
+  gladeId?: string
+  buildingId?: string
+}
+
+/** Errand bookkeeping for a run: pacing, its own RNG stream, and tallies. */
+export interface ErrandBook {
+  /** Game clock before which no new errand is offered. */
+  next: number
+  /** Game clock of the last errand offered (0 before the first). */
+  lastOffer: number
+  /** Cursor into the errands' own RNG stream, apart from the run's. */
+  cursor: number
+  counter: number
+  /** Template drawn last: never drawn twice running. */
+  last?: string
+  /** The stall (its start on the clock) that has had its reputation errands, and how many. */
+  stall?: { at: number; paid: number }
+  offered: number
+  met: number
+  lapsed: number
+  /** Reputation and amber paid by errands met. */
+  reputation: number
+  amber: number
+}
+
 export interface OrderDef {
   id: string
   name: string
@@ -1164,6 +1234,13 @@ export interface RunState {
    * empty until one is taken. Absent on older saves (migrated on load).
    */
   orderOffers: PendingChoice[]
+  /**
+   * Errands open now: small optional tasks that never stop the clock and
+   * lapse without penalty. Absent on older saves (none open).
+   */
+  errands?: Errand[]
+  /** Errand pacing and tallies; absent on older saves and new runs until the first errand. */
+  errandBook?: ErrandBook
 
   /** Newest first, capped. */
   log: LogEntry[]

@@ -1,6 +1,7 @@
 import { defaultAutoPause, migrateAutoPause, type AutoPauseSettings } from './autoPause'
 import { defaultFeats } from './content/achievements'
 import { defaultMeta, emptyCitadelPerks, migrateMeta } from './engine/meta'
+import { migrateErrands } from './engine/errands'
 import { migrateOrders } from './engine/orders'
 import { migrateFounding } from './engine/founding'
 import { defaultDecreeState } from './engine/structure'
@@ -254,6 +255,8 @@ function migrateRunUnchecked(raw: unknown): RunState | null {
     delete run.petition
   }
   if (typeof run.retreated !== 'boolean') delete run.retreated
+  // Saves from before errands have none open; damaged ones are dropped.
+  migrateErrands(run)
   return run
 }
 
