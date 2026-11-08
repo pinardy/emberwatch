@@ -100,6 +100,14 @@ import { DECLINE_CHOICE, orderDeclineBlocked, orderGoal, orderReputation, takeOr
 import { categoryRate, decreeGoal, decreeReputation } from '../structure'
 import { baseServiceCapacity, isInsulated, isUpgrading, tierOf, workerSlotsOf } from '../upgrades'
 import { commissionAllowsSpend, describeCommission, tacticsFor, type BotKit } from './commissions'
+import {
+  pursueRefinedNeeds,
+  refinedRecipeFor,
+  refinedReport,
+  tuneRefinedRecipes,
+  type RefinedKit,
+  type RefinedReport,
+} from './refined'
 
 /**
  * End-to-end balance harness bot.
@@ -131,7 +139,7 @@ const SERVICE_CHAIN: Record<
   brawling: { service: 'arena', producer: 'weaver', recipe: 'gear' },
 }
 
-export interface BotReport {
+export interface BotReport extends RefinedReport {
   phase: RunState['phase']
   years: number
   reputation: number
@@ -351,6 +359,8 @@ const noRoom = new WeakMap<RunState, Set<string>>()
 
 /** The bot's own moves, lent to the commission tactics (`playtestCommissions.ts`). */
 const COMMISSION_KIT: BotKit = { tryPlace, buildHousing, servesDecree }
+/** …and to the refined-needs play (`bot/refined.ts`). */
+const REFINED_KIT: RefinedKit = { tryPlace, tryUpgrade, slotPressure }
 
 /** Needs demanded by the species actually living here. */
 function neededServices(s: RunState): ServiceNeed[] {
@@ -423,6 +433,8 @@ export function build(s: RunState, economyOnly = false): void {
    *    below and comes back to it later.
    */
   if (!economyOnly && slotPressure(s) < 1.6 && buildServices(s)) return
+  // Second-tier needs, once the settlement grows into them.
+  if (!economyOnly && pursueRefinedNeeds(s, REFINED_KIT)) return
 
   // Comfort is resolve for everyone and costs no worker: once the venues are
   // seen to, raise shelters into lodges with the planks left over.
@@ -765,10 +777,11 @@ function tuneRecipes(s: RunState): void {
     // Round-robin so each needed good has somewhere to come from.
     const list = [...recipes]
     instances.forEach((building, index) => {
-      const target = list[index % list.length]
+      const target = refinedRecipeFor(s, building) ?? list[index % list.length]
       if (building.activeRecipeId !== target) setRecipe(s, building.id, target)
     })
   }
+  tuneRefinedRecipes(s, new Set(wanted.keys()), setRecipe)
 }
 
 /**
@@ -1615,6 +1628,7 @@ export function playRun(
     petition: s.petition ? (s.petition.outcome ?? 'live') : 'none',
     retreated: !!s.retreated,
     plans: s.architectPlans ?? 0,
+    ...refinedReport(s),
   }
 }
 
