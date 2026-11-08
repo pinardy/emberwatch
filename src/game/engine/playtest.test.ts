@@ -81,6 +81,14 @@ describe('balance harness', () => {
     expect(Math.max(...shares) - Math.min(...shares)).toBeLessThanOrEqual(0.25)
 
     const wins = competent.filter((x) => x.phase === 'won')
+    // Every win comes through the Envoy's approach, and the approach is a real
+    // test without being a coin flip: most settlements that fill their
+    // reputation hold for her, and some do not.
+    for (const r of wins) expect(r.approach).toBe('held')
+    const entered = competent.filter((r) => r.approach !== 'none')
+    const held = entered.filter((r) => r.approach === 'held').length
+    expect(held / entered.length).toBeGreaterThanOrEqual(0.7)
+    expect(held).toBeLessThan(entered.length)
     // Reputation must come mostly from what the player did, not from idling.
     expect(mean(wins.map((r) => r.sources.resolve))).toBeLessThan(10)
 
