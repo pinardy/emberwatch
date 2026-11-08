@@ -16,7 +16,8 @@ import { TerrainPlanLine, planOf } from './TerrainPlan'
 import { RaceSparkline } from './RaceSparkline'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
-import { GrandPetitionCard, RetreatCard } from './QueenLevers'
+import { GrandPetitionCard, QueensCourt, RetreatCard } from './QueenLevers'
+import { ErrandList } from './Errands'
 import { cornerstoneArt, ongoingArt } from '../game/content/artFamilies'
 
 export function OrdersPanel() {
@@ -79,9 +80,12 @@ export function OrdersPanel() {
         {run.orders.length === 0 && (run.orderOffers ?? []).length === 0 && (
           <p className="muted">No orders outstanding.</p>
         )}
+        <QueensCourt run={run} />
       </section>
 
-      <section className="build-group">
+      <ErrandList run={run} />
+
+      <section className="build-group" id="queen-levers">
         <h3>Petition the Queen</h3>
         <p className="panel-hint">
           A gift of amber buys back a point of her patience. The price climbs with
@@ -89,6 +93,7 @@ export function OrdersPanel() {
         </p>
         <button
           type="button"
+          id="soothe-button"
           className="wide-button"
           disabled={sootheBlocked !== null}
           title={sootheBlocked ?? undefined}

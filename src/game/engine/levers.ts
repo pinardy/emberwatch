@@ -17,6 +17,7 @@ import {
 } from './balance'
 import { chainPieceFor, relevantBlueprints, serviceDemand } from './serviceChains'
 import { spend } from './queries'
+import { SOOTHE_ENVOY_REFUSAL, sootheCost } from './actions'
 import { pushLog } from './runLog'
 import { addImpatience } from './society'
 
@@ -207,4 +208,103 @@ export function retreatToCitadel(s: RunState): string | null {
   s.orderOffers = []
   pushLog(s, `🏰 You lead the settlers home to the Citadel. The settlement is given back to the forest.`, 'info')
   return null
+}
+
+// ---------------------------------------------------------------------------
+// The Queen's court: the three levers on her patience, in one summary
+// ---------------------------------------------------------------------------
+
+/**
+ * Open now; open but short of amber; not yet (or not now); spent for the
+ * run; closed while the envoy rides (impatience no longer matters).
+ */
+export type CourtState = 'open' | 'short' | 'later' | 'used' | 'closed'
+
+export interface CourtLever {
+  id: 'soothe' | 'petition' | 'retreat'
+  name: string
+  state: CourtState
+  /** What it does and why it is (or is not) open, in a line. */
+  note: string
+}
+
+/** Whole points of impatience, as the meter shows them. */
+const impatienceNow = (s: RunState) => Math.floor(s.impatience + s.impatienceProgress)
+
+/**
+ * The Queen's court, as the Orders panel summarises it from Year 2: Soothe
+ * the Queen, the Grand Petition and the Retreat to the Citadel, each with
+ * its state now and when (or why not) it opens — so a player meets all three
+ * before the run is desperate. The controls themselves stay where they are.
+ */
+export function queensCourt(s: RunState): CourtLever[] {
+  const amber = Math.floor(s.stock.amber ?? 0)
+  const now = impatienceNow(s)
+
+  const cost = sootheCost(s)
+  const soothe: CourtLever = { id: 'soothe', name: 'Soothe the Queen', state: 'open', note: '' }
+  if (s.impatience < 1) {
+    soothe.state = 'later'
+    soothe.note = 'Her patience is whole: nothing to soothe yet.'
+  } else if (amber < cost) {
+    soothe.state = 'short'
+    soothe.note = `${cost} amber buys back a point of patience — you have ${amber}.`
+  } else {
+    soothe.note = `${cost} amber buys back a point of patience; dearer each time.`
+  }
+
+  const terms = `${PETITION_AMBER} amber for −${PETITION_RELIEF} impatience, on a vow of ${PETITION_VOW_REPUTATION} reputation in ${PETITION_VOW_SECONDS / 60} minutes`
+  const petition: CourtLever = { id: 'petition', name: 'The Grand Petition', state: 'open', note: '' }
+  const p = s.petition
+  const blocked = petitionBlocked(s)
+  if (p) {
+    petition.state = 'used'
+    petition.note =
+      p.outcome === 'kept'
+        ? 'Made — the vow was kept.'
+        : p.outcome === 'broken'
+          ? 'Made — the vow was broken.'
+          : `Made — your vow: ${Math.max(0, s.reputation - (p.target - PETITION_VOW_REPUTATION))}/${PETITION_VOW_REPUTATION} reputation, ${Math.ceil(petitionVowLeft(s) / 60)} min left.`
+  } else if (blocked === null) {
+    petition.note = `Open once a run: ${terms}.`
+  } else if (blocked === 'amber') {
+    petition.state = 'short'
+    petition.note = `Open, but needs ${PETITION_AMBER} amber — you have ${amber}.`
+  } else if (blocked === 'used') {
+    petition.state = 'used'
+    petition.note = 'Not while the run is over.'
+  } else if (s.season.year < PETITION_FROM_YEAR) {
+    petition.state = 'later'
+    petition.note = `From Year ${PETITION_FROM_YEAR}: ${terms}.`
+  } else {
+    petition.state = 'later'
+    petition.note = `Opens when impatience reaches ${Math.ceil(petitionThreshold(s))} (now ${now}): ${terms}.`
+  }
+
+  const short = s.maxReputation - s.reputation
+  const line = Math.ceil(s.maxImpatience * RETREAT_IMPATIENCE_SHARE)
+  const retreat: CourtLever = { id: 'retreat', name: 'Retreat to the Citadel', state: 'later', note: '' }
+  if (retreatOffered(s)) {
+    retreat.state = 'open'
+    retreat.note = 'Offered: end the run now as a loss and send home what it has earned.'
+  } else if (short < RETREAT_REPUTATION_SHORT) {
+    retreat.note = `Not while victory is within ${RETREAT_REPUTATION_SHORT} points.`
+  } else {
+    retreat.note = `Offered if impatience reaches ${line} (now ${now}) with ${RETREAT_REPUTATION_SHORT}+ reputation still to earn: the run ends, and pays what it has earned.`
+  }
+
+  // The envoy rides: reputation is full and her patience stands still, so the
+  // levers on it are closed, and the run is held rather than given up.
+  if (s.envoy) {
+    soothe.state = 'closed'
+    soothe.note = SOOTHE_ENVOY_REFUSAL
+    if (!p) {
+      petition.state = 'closed'
+      petition.note = 'The Queen is satisfied: her envoy is on her way, and there is nothing to petition.'
+    }
+    retreat.state = 'closed'
+    retreat.note = 'Not while the envoy rides: hold the settlement until she arrives.'
+  }
+
+  return [soothe, petition, retreat]
 }

@@ -26,6 +26,7 @@ import {
 } from './engine/actions'
 import { ROAD_MIN_LENGTH, type GameSpeed } from './engine/balance'
 import { appeaseThreat } from './engine/threats'
+import { dismissErrand, runErrand } from './engine/errands'
 import { redrawToward, rerollChoice, takeChoice } from './engine/drafts'
 import { resolveGladeEvent } from './engine/glades'
 import { buyArchitectPlans, grandPetition, retreatToCitadel } from './engine/levers'
@@ -292,6 +293,10 @@ interface GameStore {
   petition: () => void
   /** Ends a lost run now with a Retreat to the Citadel. */
   retreat: () => void
+  /** Does an open errand's hand-over or sale. */
+  runErrand: (errandId: string) => void
+  /** Lets an open errand go, without penalty. */
+  dismissErrand: (errandId: string) => void
   recallAll: () => void
   dismissNotice: () => void
   buyUpgrade: (id: string) => void
@@ -800,6 +805,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (!error) get().saveNow()
       return error
     }),
+  runErrand: (errandId) => runCommand(set, get, (run) => runErrand(run, errandId)),
+  dismissErrand: (errandId) => runCommand(set, get, (run) => dismissErrand(run, errandId)),
   recallAll: () =>
     runCommand(set, get, (run) => {
       recallEveryone(run)

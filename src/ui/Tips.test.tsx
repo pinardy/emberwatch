@@ -90,6 +90,8 @@ describe('tip list', () => {
       'architect',
       'grand-petition',
       'retreat',
+      'errand',
+      'queens-court',
       'envoy',
       'long-night',
       'land-profile',
@@ -299,6 +301,36 @@ describe('tip triggers', () => {
     expect(fires(s, 'order-offer')).toBe(true)
     s.orderOffers = []
     expect(tipById('order-offer')!.doneWhen!(s)).toBe(true)
+  })
+
+  it('an errand: while one is open, done once one is met', () => {
+    const s = newRun()
+    expect(fires(s, 'errand')).toBe(false)
+    s.errands = [
+      {
+        id: 'e1',
+        defId: 'staffWorkplace',
+        title: 'Staff the Lumber Mill north of the hearth',
+        goal: { kind: 'staff', buildingId: 'hearth', seconds: 30 },
+        progress: 0,
+        timeLeft: 60,
+        timeLimit: 60,
+        reward: { reputation: 0.3 },
+      },
+    ]
+    expect(fires(s, 'errand')).toBe(true)
+    s.errandBook = { next: 0, lastOffer: 0, cursor: 0, counter: 1, offered: 1, met: 1, lapsed: 0, reputation: 0.3, amber: 0 }
+    expect(tipById('errand')!.doneWhen!(s)).toBe(true)
+  })
+
+  it("the Queen's court: from Year 2, when no dialog is open", () => {
+    const s = newRun()
+    expect(fires(s, 'queens-court')).toBe(false)
+    s.season.year = 2
+    expect(fires(s, 'queens-court')).toBe(true)
+    expect(tipCopy(tipById('queens-court')!.text, s)).toContain('Orders panel')
+    offerDecrees(s)
+    expect(fires(s, 'queens-court')).toBe(false)
   })
 
   it('a seen tip never fires again', () => {
