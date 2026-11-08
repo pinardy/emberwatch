@@ -9,7 +9,12 @@ import {
   speciesCounts,
   villagerList,
 } from '../game/engine/queries'
-import { resolveBreakdowns } from '../game/engine/society'
+import { resolveBreakdowns, type ResolveBreakdown } from '../game/engine/society'
+import {
+  REFINED_FROM_POPULATION,
+  REFINED_FROM_YEAR,
+  type RefinedStatus,
+} from '../game/engine/refinedNeeds'
 import { workerMultiplier } from '../game/engine/traits'
 import { useFrameDerived } from '../game/frameDerived'
 import { useGameStore, useHudRun } from '../game/store'
@@ -21,6 +26,7 @@ import { IconText } from './IconText'
 import { signed } from './threatText'
 import { NEED_ART } from '../game/content/art'
 import { VILLAGER_TRAIT_ART } from '../game/content/artFamilies'
+import './needs.css'
 
 /** Where the player diagnoses "why is resolve dropping?". */
 export function VillagerPanel() {
@@ -111,6 +117,7 @@ export function VillagerPanel() {
                     </span>
                   )
                 })}
+                {b.refinedStatus && <RefinedChip status={b.refinedStatus} bonus={b.refined} />}
               </div>
 
               <details className="breakdown">
@@ -129,10 +136,15 @@ export function VillagerPanel() {
                     label={`Expectations (Year ${run.season.year}, ${pop} villagers)`}
                     value={b.expectations}
                   />
+                  <Term
+                    label={`Refined need: ${b.refinedStatus?.def.name ?? ''}`}
+                    value={b.refined}
+                  />
                   <Term label="Cornerstones" value={b.cornerstone} />
                   <Term label="Cold homes in the Storm" value={b.chill} />
                   <Term label="Penalties" value={b.penalties - b.chill} />
                 </ul>
+                <RefinedLine b={b} />
               </details>
             </div>
           )
@@ -290,6 +302,92 @@ function openSlotsFor(run: RunState, v: Villager) {
       ]
     })
     .sort((a, b) => b.mult - a.mult || a.label.localeCompare(b.label))
+}
+
+/** "from Year 3 or 20 villagers": when refined needs wake. */
+const REFINED_WHEN = `from Year ${REFINED_FROM_YEAR} or ${REFINED_FROM_POPULATION} villagers`
+
+type RefinedState = 'dormant' | 'waiting' | 'met' | 'partial' | 'unmet'
+
+function refinedState(status: RefinedStatus): RefinedState {
+  if (!status.unlocked) return 'dormant'
+  // On hand, but it pays only once every base need of the species is met.
+  if (status.ratio > 0 && !status.basicsMet) return 'waiting'
+  return status.met ? 'met' : status.ratio > 0 ? 'partial' : 'unmet'
+}
+
+const REFINED_MARK: Record<RefinedState, string> = {
+  dormant: '·',
+  waiting: '◐',
+  met: '✓',
+  partial: '◐',
+  unmet: '✗',
+}
+
+const REFINED_SR: Record<RefinedState, string> = {
+  dormant: `, not wanted yet (${REFINED_WHEN})`,
+  waiting: ', on hand but waiting for every base need to be met',
+  met: ' met',
+  partial: ' partly met',
+  unmet: ' unmet',
+}
+
+/**
+ * A species' refined need, beside the base need it refines: met, partly
+ * met, missing (never a penalty) or not wanted yet.
+ */
+function RefinedChip({ status, bonus }: { status: RefinedStatus; bonus: number }) {
+  const state = refinedState(status)
+  const worth =
+    state === 'dormant'
+      ? `Wanted ${REFINED_WHEN}.`
+      : state === 'waiting'
+        ? 'It pays once every base need of this species is met. Missing it costs nothing.'
+        : `Covering ${status.capacity} of ${status.required} villagers: ${signed(bonus, (v) => v.toFixed(1))} resolve. Missing it costs nothing.`
+  return (
+    <span
+      className={`need need-refined is-${state === 'waiting' ? 'partial' : state}`}
+      title={`Refined ${NEED_LABELS[status.def.need].name}: ${status.def.hint} ${worth}`}
+    >
+      <b className="need-state" aria-hidden>
+        {REFINED_MARK[state]}
+      </b>
+      <span aria-hidden>{status.def.icon}</span> refined: {status.def.name}
+      <span className="sr-only">{REFINED_SR[state]}</span>
+      {state !== 'dormant' && (
+        <em>
+          {status.capacity}/{status.required}
+        </em>
+      )}
+    </span>
+  )
+}
+
+/** "Luxury ✓ · refined: spiced ale ✗", and how to meet it. */
+function RefinedLine({ b }: { b: ResolveBreakdown }) {
+  const status = b.refinedStatus
+  if (!status) return null
+  const base = NEED_LABELS[status.def.need].name
+  const baseMark = b.needDetail[status.def.need] ? '✓' : (b.needRatio[status.def.need] ?? 0) > 0 ? '◐' : '✗'
+  const state = refinedState(status)
+  return (
+    <p className="refined-line">
+      <strong>
+        {base} {baseMark} · refined: {status.def.name}{' '}
+        {state === 'dormant'
+          ? '(not yet wanted)'
+          : state === 'waiting'
+            ? '◐ (waits on the base needs)'
+            : REFINED_MARK[state]}
+      </strong>
+      <small>
+        {status.def.hint}{' '}
+        {state === 'dormant'
+          ? `Wanted ${REFINED_WHEN}.`
+          : 'Once every base need is met, it adds resolve and eases rising expectations; missing it costs nothing.'}
+      </small>
+    </p>
+  )
 }
 
 function Term({ label, value }: { label: string; value: number }) {

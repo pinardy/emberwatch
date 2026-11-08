@@ -1,5 +1,7 @@
 import type { AchievementState, MetaHistoryEntry, RunFeats, RunState, SpeciesId } from '../types'
 import { BUILDINGS } from './buildings'
+import { judgeCommission } from './commissions'
+import { ACHIEVEMENT_UNLOCKS, type AchievementUnlock } from './meta'
 
 /**
  * Local achievements: data, like cornerstones. Each is judged once, when a
@@ -11,17 +13,24 @@ import { BUILDINGS } from './buildings'
  *  - `progress` — earned across runs: a running total (`sum`), a best value
  *    (`max`), or a set of distinct keys (`distinct`) that must reach `target`.
  *
- * A few pay a modest Citadel reward or a cosmetic title.
+ * A few pay a modest Citadel reward or a cosmetic title. The style
+ * achievements reward how a run was won rather than how far it got, and each
+ * opens something in the Citadel (`ACHIEVEMENT_UNLOCKS` in content/meta.ts).
  *
- * This module never imports `meta.ts` (which imports it).
+ * This module never imports `engine/meta.ts` (which imports it).
  */
 
-export type AchievementTier = 'early' | 'mid' | 'late'
+export type AchievementTier = 'early' | 'mid' | 'late' | 'style'
 
 export const ACHIEVEMENT_TIERS: { id: AchievementTier; name: string; blurb: string }[] = [
   { id: 'early', name: 'First steps', blurb: 'Things every viceroy does in the first few runs.' },
   { id: 'mid', name: 'Proven viceroy', blurb: 'Harder terms, cleaner wins, wider travels.' },
   { id: 'late', name: 'Legend of the Citadel', blurb: 'The top of the ladder.' },
+  {
+    id: 'style',
+    name: 'Styles of rule',
+    blurb: 'Not how far, but how: each opens a cornerstone, an upgrade or a commission in the Citadel.',
+  },
 ]
 
 /** What a banked run is judged with beyond the run itself. */
@@ -46,6 +55,11 @@ export interface AchievementReward {
   supplies?: number
   /** A cosmetic title the player may wear. */
   title?: string
+}
+
+/** What an achievement opens in the Citadel, if anything (`ACHIEVEMENT_UNLOCKS`). */
+export function achievementUnlockOf(id: string): AchievementUnlock | undefined {
+  return ACHIEVEMENT_UNLOCKS[id]
 }
 
 export interface AchievementDef {
@@ -345,6 +359,70 @@ const defs: AchievementDef[] = [
       },
     },
     reward: { title: 'of Many Peoples' },
+  },
+
+  // ---- style: how the run was won (each opens something in the Citadel) ----
+  {
+    id: 'lightFootprint',
+    name: 'Light Footprint',
+    icon: '🪶',
+    tier: 'style',
+    description: 'Win having cleared no more than 8 glades.',
+    when: (r) => won(r) && r.stats.gladesCleared <= 8,
+  },
+  {
+    id: 'ownCounsel',
+    name: 'Own Counsel',
+    icon: '📐',
+    tier: 'style',
+    description: "Win without ever buying plans from the Queen's Architect.",
+    when: (r) => won(r) && (r.architectPlans ?? 0) === 0,
+  },
+  {
+    id: 'vowKept',
+    name: 'True to Your Word',
+    icon: '💍',
+    tier: 'style',
+    description: "Keep the vow of a Grand Petition: the reputation promised, in time.",
+    when: (r) => r.petition?.outcome === 'kept',
+  },
+  {
+    id: 'refinedTastes',
+    name: 'Refined Tastes',
+    icon: '🍹',
+    tier: 'style',
+    description: "Win having met every species' refined need at the same time.",
+    when: (r) => won(r) && featsOf(r).refinedAll === true,
+  },
+  {
+    id: 'warmWinters',
+    name: 'Warm Winters',
+    icon: '❄️',
+    tier: 'style',
+    description:
+      "Win after two Storms or more with no brazier standing and no villager ever sleeping in a cold home: everyone inside the hearth's warmth.",
+    when: (r) =>
+      won(r) &&
+      r.season.year >= 3 &&
+      !featsOf(r).sleptCold &&
+      (featsOf(r).frostLosses ?? 0) === 0 &&
+      !Object.values(r.buildings).some((b) => BUILDINGS[b.defId]?.warmth),
+  },
+  {
+    id: 'termsHonoured',
+    name: 'Terms Honoured',
+    icon: '📜',
+    tier: 'style',
+    description: 'Win on a Citadel commission with its objective met.',
+    when: (r) => won(r) && judgeCommission(r)?.met === true,
+  },
+  {
+    id: 'beforeThirdStorm',
+    name: 'Before the Third Storm',
+    icon: '🌅',
+    tier: 'style',
+    description: 'Win in Year 3 or earlier: the Envoy arrives before the year is out.',
+    when: (r) => won(r) && r.season.year <= 3,
   },
 ]
 

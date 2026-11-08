@@ -14,6 +14,11 @@ import {
   type AchievementContext,
 } from './content/achievements'
 import { BUILDINGS, BUILDING_LIST } from './content/buildings'
+import { COMMISSIONS } from './content/commissions'
+import { CORNERSTONES } from './content/cornerstones'
+import { ACHIEVEMENT_UNLOCKS, META_UPGRADES } from './content/meta'
+import { addVillager } from './engine/newcomers'
+import { stepFrost } from './engine/society'
 import { META_VERSION, bankRun, defaultMeta, migrateMeta, supplyReward } from './engine/meta'
 import { appeaseThreat } from './engine/threats'
 import { createRun } from './engine/createRun'
@@ -82,13 +87,16 @@ function addBuilding(run: RunState, defId: string, patch: Partial<BuildingInstan
 }
 
 describe('achievement content', () => {
-  it('has 20–25 achievements across early, mid and late play, with unique ids', () => {
-    expect(ACHIEVEMENT_LIST.length).toBeGreaterThanOrEqual(20)
-    expect(ACHIEVEMENT_LIST.length).toBeLessThanOrEqual(25)
+  it('has 26–34 achievements across early, mid and late play and 6–8 styles, with unique ids', () => {
+    expect(ACHIEVEMENT_LIST.length).toBeGreaterThanOrEqual(26)
+    expect(ACHIEVEMENT_LIST.length).toBeLessThanOrEqual(34)
     expect(new Set(ACHIEVEMENT_LIST.map((d) => d.id)).size).toBe(ACHIEVEMENT_LIST.length)
     for (const tier of ['early', 'mid', 'late'] as const) {
       expect(ACHIEVEMENT_LIST.filter((d) => d.tier === tier).length).toBeGreaterThanOrEqual(5)
     }
+    const styles = ACHIEVEMENT_LIST.filter((d) => d.tier === 'style').length
+    expect(styles).toBeGreaterThanOrEqual(6)
+    expect(styles).toBeLessThanOrEqual(8)
     for (const def of ACHIEVEMENT_LIST) {
       // Exactly one way to be earned.
       expect(!!def.when !== !!def.progress, def.id).toBe(true)
@@ -496,5 +504,125 @@ describe('in-run feats', () => {
     const strip = (s: RunState) => ({ ...s, feats: undefined })
     expect(strip(a)).toEqual(strip(b))
     expect(BUILDINGS.ancientHearth).toBeDefined()
+  })
+})
+
+describe('style achievements', () => {
+  const styles = ACHIEVEMENT_LIST.filter((d) => d.tier === 'style')
+
+  it('each is a single-run predicate that opens one real thing in the Citadel', () => {
+    for (const def of styles) {
+      expect(def.when, def.id).toBeDefined()
+      const unlock = ACHIEVEMENT_UNLOCKS[def.id]
+      expect(unlock, def.id).toBeDefined()
+      const kinds = [unlock.cornerstone, unlock.upgrade, unlock.commission].filter(Boolean)
+      expect(kinds, def.id).toHaveLength(1)
+      if (unlock.cornerstone) expect(CORNERSTONES[unlock.cornerstone]?.citadelLocked, def.id).toBe(true)
+      // An upgrade opened early is one that has prerequisites to waive.
+      if (unlock.upgrade) expect(META_UPGRADES[unlock.upgrade]?.requires?.length, def.id).toBeGreaterThan(0)
+      if (unlock.commission) expect(COMMISSIONS[unlock.commission]?.unlockedBy, def.id).toBeDefined()
+    }
+    // Every unlock belongs to a style achievement.
+    expect(Object.keys(ACHIEVEMENT_UNLOCKS).sort()).toEqual(styles.map((d) => d.id).sort())
+  })
+
+  it('Light Footprint: a win with at most 8 glades cleared', () => {
+    expect(check('lightFootprint', withStats(won(), { gladesCleared: 8 }))).toBe(true)
+    expect(check('lightFootprint', withStats(won(), { gladesCleared: 9 }))).toBe(false)
+    expect(check('lightFootprint', withStats(lost(), { gladesCleared: 2 }))).toBe(false)
+  })
+
+  it("Own Counsel: a win without the Architect's plans (older saves count as none)", () => {
+    expect(check('ownCounsel', won())).toBe(true)
+    expect(check('ownCounsel', won({ architectPlans: 0 }))).toBe(true)
+    expect(check('ownCounsel', won({ architectPlans: 1 }))).toBe(false)
+    expect(check('ownCounsel', lost())).toBe(false)
+  })
+
+  it("True to Your Word: a Grand Petition's vow kept, won or lost", () => {
+    const vow = (outcome?: 'kept' | 'broken') => ({ at: 600, deadline: 900, target: 12, outcome })
+    expect(check('vowKept', lost({ petition: vow('kept') }))).toBe(true)
+    expect(check('vowKept', won({ petition: vow('kept') }))).toBe(true)
+    expect(check('vowKept', won({ petition: vow('broken') }))).toBe(false)
+    expect(check('vowKept', won({ petition: vow() }))).toBe(false)
+    expect(check('vowKept', won())).toBe(false)
+  })
+
+  it("Refined Tastes: a win with every species' refined need met at once", () => {
+    expect(check('refinedTastes', won({ feats: { ...defaultFeats(), refinedAll: true } }))).toBe(true)
+    expect(
+      check('refinedTastes', won({ feats: { ...defaultFeats(), refinedMet: ['human', 'beaver'] } })),
+    ).toBe(false)
+    expect(check('refinedTastes', lost({ feats: { ...defaultFeats(), refinedAll: true } }))).toBe(false)
+  })
+
+  it('Warm Winters: a win past two Storms with no brazier and nobody ever sleeping cold', () => {
+    const y3 = (feats: Partial<RunState['feats']> = {}) => {
+      const r = won({ feats: { ...defaultFeats(), ...feats } })
+      r.season.year = 3
+      return r
+    }
+    expect(check('warmWinters', y3())).toBe(true)
+    expect(check('warmWinters', y3({ sleptCold: true }))).toBe(false)
+    expect(check('warmWinters', y3({ frostLosses: 1 }))).toBe(false)
+    // Warmth from braziers is not the style: everyone stays inside the hearth's reach.
+    const lit = y3()
+    addBuilding(lit, 'brazier')
+    expect(check('warmWinters', lit)).toBe(false)
+    const y2 = y3()
+    y2.season.year = 2
+    expect(check('warmWinters', y2)).toBe(false)
+  })
+
+  it('Terms Honoured: a win on a commission with its objective met', () => {
+    const run = createRun({ seed: 77, species: [...TRIO], modifiers: [], commission: 'openGates' })
+    const term = COMMISSIONS.openGates.terms[0]
+    const target = term.kind === 'goal' && term.goal.kind === 'population' ? term.goal.amount : 0
+    expect(target).toBeGreaterThan(0)
+    while (Object.keys(run.villagers).length < target) addVillager(run)
+    run.phase = 'won'
+    expect(check('termsHonoured', run)).toBe(true)
+    // Short of its objective, or without a commission at all, it is not earned.
+    const short = createRun({ seed: 77, species: [...TRIO], modifiers: [], commission: 'openGates' })
+    short.phase = 'won'
+    expect(check('termsHonoured', short)).toBe(false)
+    expect(check('termsHonoured', won())).toBe(false)
+  })
+
+  it('Before the Third Storm: a win in Year 3 or earlier', () => {
+    const at = (year: number) => {
+      const r = won()
+      r.season.year = year
+      return r
+    }
+    expect(check('beforeThirdStorm', at(2))).toBe(true)
+    expect(check('beforeThirdStorm', at(3))).toBe(true)
+    expect(check('beforeThirdStorm', at(4))).toBe(false)
+  })
+
+  it('the cold is noted as it happens: anyone sleeping cold, and each life it takes', () => {
+    const s = baseRun({ pendingChoices: [] })
+    expect(s.feats?.sleptCold).toBeFalsy()
+    s.season.season = 'storm'
+    // Everyone housed far from the hearth's warmth, in uninsulated shelters.
+    for (const b of Object.values(s.buildings)) if (b.defId !== 'ancientHearth') delete s.buildings[b.id]
+    addBuilding(s, 'shelter', { pos: { x: 30, y: 30 } })
+    addBuilding(s, 'shelter', { pos: { x: 31, y: 30 } })
+    addBuilding(s, 'shelter', { pos: { x: 30, y: 31 } })
+    // More mouths than the hearth's own warm beds.
+    while (Object.keys(s.villagers).length < 25) addVillager(s)
+    const lost = stepFrost(s, 600)
+    expect(s.feats?.sleptCold).toBe(true)
+    expect(lost.length).toBeGreaterThan(0)
+    expect(s.feats?.frostLosses).toBe(1)
+  })
+
+  it('an old achievement save keeps every earned entry and simply gains the new ones unearned', () => {
+    const old = { unlocked: { firstWin: 5, cartographer: 9 }, progress: { forestTamer: 30 } }
+    const migrated = migrateAchievementState(structuredClone(old))
+    expect(migrated).toEqual(old)
+    const next = evaluateAchievements(migrated, withStats(won(), { gladesCleared: 7 }), CTX, 11)
+    expect(next.state.unlocked.firstWin).toBe(5)
+    expect(next.state.unlocked.lightFootprint).toBe(11)
   })
 })

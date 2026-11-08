@@ -40,6 +40,10 @@ const defs: ResourceDef[] = [
   { id: 'scroll', name: 'Scrolls', category: 'serviceGood', icon: '📜', value: 11 },
   { id: 'tea', name: 'Tea', category: 'serviceGood', icon: '🍵', value: 10 },
   { id: 'trainingGear', name: 'Training Gear', category: 'serviceGood', icon: '🥊', value: 11 },
+  // The humans' refined Luxury (see `species.ts`), brewed at a Copper Still.
+  { id: 'spicedAle', name: 'Spiced Ale', category: 'serviceGood', icon: '🍹', value: 13 },
+  // The beavers' refined Education, bound at a Scribe's Office.
+  { id: 'folio', name: 'Blueprint Folios', category: 'serviceGood', icon: '📘', value: 13 },
 
   // ---- currency ------------------------------------------------------------
   { id: 'amber', name: 'Amber', category: 'currency', icon: '🟨', value: 1 },

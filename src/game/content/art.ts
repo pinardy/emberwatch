@@ -52,6 +52,8 @@ export const RESOURCE_ART: Record<ResourceId, IconId> = {
   scroll: 'scroll',
   tea: 'tea',
   trainingGear: 'trainingGear',
+  spicedAle: 'spicedAle',
+  folio: 'folio',
   amber: 'amber',
 }
 

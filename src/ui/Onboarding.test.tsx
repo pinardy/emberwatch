@@ -318,6 +318,8 @@ describe('how to play', () => {
       /commission/,
       /amber/,
       /the Founding/,
+      /refined/,
+      /Style achievements/,
     ]) {
       expect(text).toMatch(idea)
     }

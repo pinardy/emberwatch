@@ -85,6 +85,7 @@ describe('tip list', () => {
       'order-offer',
       'stagnation',
       'expectations',
+      'refined-needs',
       'glade-truce',
       'architect',
       'grand-petition',
@@ -150,6 +151,20 @@ describe('tip triggers', () => {
     expect(fires(s, 'expectations')).toBe(false)
     s.season.year = 2
     expect(fires(s, 'expectations')).toBe(true)
+  })
+
+  it('refined needs: once the settlement wants them (Year 3 or 20 villagers), naming each', () => {
+    const s = newRun()
+    s.season.year = 2
+    expect(fires(s, 'refined-needs')).toBe(false)
+    s.season.year = 3
+    expect(fires(s, 'refined-needs')).toBe(true)
+    const text = tipCopy(tipById('refined-needs')!.text, s)
+    expect(text).toContain('Humans: spiced ale')
+    expect(text).toContain('Beavers: blueprint folios')
+    const crowd = newRun()
+    while (Object.keys(crowd.villagers).length < 20) addVillager(crowd)
+    expect(fires(crowd, 'refined-needs')).toBe(true)
   })
 
   it('glade truces: after three glades reclaimed, and done once one is spared', () => {
