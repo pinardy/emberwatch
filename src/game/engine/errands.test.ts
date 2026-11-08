@@ -320,7 +320,7 @@ describe('meeting, paying and lapsing', () => {
     expect(openErrands(s)).toHaveLength(0)
   })
 
-  it('reputation only once the stall runs long, a few errands a stall, and not for the last points', () => {
+  it('reputation only once the stall runs long, a set number of errands a stall, and not for the last points', () => {
     const s = newRun()
     s.reputation = 5
     const rep = { reputation: 0.35 }

@@ -9,6 +9,8 @@ import { useGameStore } from '../game/store'
 import type { AchievementState } from '../game/types'
 import './replay.css'
 import { achievementArt } from '../game/content/artFamilies'
+import { ACHIEVEMENT_UNLOCKS } from '../game/content/meta'
+import { unlockText } from './citadelUnlocks'
 import { Bar } from './Bar'
 import { Icon } from './Icon'
 import { IconText } from './IconText'
@@ -17,6 +19,8 @@ function rewardText(def: AchievementDef): string | null {
   const parts: string[] = []
   if (def.reward?.supplies) parts.push(`📦 +${def.reward.supplies} supplies`)
   if (def.reward?.title) parts.push(`🎗️ Title: “${def.reward.title}”`)
+  const unlock = ACHIEVEMENT_UNLOCKS[def.id]
+  if (unlock) parts.push(`🏛️ Citadel: ${unlockText(unlock)}`)
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
@@ -88,7 +92,7 @@ export function AchievementsScreen() {
         </header>
         <p className="muted">
           Judged when a run is banked, won or lost. A few send supplies to the Citadel or grant a
-          title to wear; the rest are for the ledger.
+          title to wear, and each style of rule opens something in the Citadel for good.
         </p>
 
         <label className="title-picker">

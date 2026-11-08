@@ -26,6 +26,8 @@ import {
   secondsSinceReputation,
   villagersBeyond,
 } from '../game/engine/society'
+import { refinedNeedOf, refinedUnlocked } from '../game/engine/refinedNeeds'
+import { SPECIES } from '../game/content/species'
 import type { RunState } from '../game/types'
 
 /**
@@ -84,6 +86,17 @@ function anySpared(run: RunState): boolean {
 }
 
 const pct = (share: number) => `${Math.round(share * 100)}%`
+
+/** "Humans: spiced ale, Beavers: blueprint folios": the run's refined needs. */
+function refinedList(run: RunState): string {
+  return run.speciesPool
+    .map((sp) => {
+      const def = refinedNeedOf(sp)
+      return def ? `${SPECIES[sp].name}: ${def.name}` : ''
+    })
+    .filter(Boolean)
+    .join(', ')
+}
 
 /** The Long Night is forecast for the coming Storm, or has fallen. */
 function longNight(run: RunState): boolean {
@@ -264,6 +277,13 @@ export const TIPS: Tip[] = [
     title: "The Queen's court",
     text: 'From Year 2 the Orders panel lists her three levers on your patience: soothing her with amber, the once-a-run Grand Petition and the Retreat to the Citadel. Each says when it opens — learn them before you need them.',
     when: (run) => run.season.year >= PETITION_FROM_YEAR && run.phase === 'playing' && run.pendingChoices.length === 0,
+  },
+  {
+    id: 'refined-needs',
+    title: 'Finer tastes',
+    text: (run) =>
+      `Each people now hopes for a finer form of one need (${refinedList(run)}). Met, it adds resolve and eases rising expectations; missing it costs nothing. See People.`,
+    when: (run) => population(run) > 0 && refinedUnlocked(run),
   },
   {
     id: 'land-profile',

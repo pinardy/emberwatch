@@ -17,6 +17,13 @@ const defs: SpeciesDef[] = [
       effects: [{ kind: 'slowDespair', percent: 50 }],
     },
     blurb: 'Steady farmhands. They want a shrine to pray at and something nice to drink.',
+    refined: {
+      need: 'luxury',
+      name: 'spiced ale',
+      icon: '🍹',
+      good: 'spicedAle',
+      hint: 'A Tavern with spiced ale in stock, brewed from ale and herbs at a Brewery raised to a Copper Still.',
+    },
   },
   {
     id: 'beaver',
@@ -33,6 +40,13 @@ const defs: SpeciesDef[] = [
       effects: [{ kind: 'buildRate', percent: 40 }],
     },
     blurb: 'Master carpenters, and insufferably particular about their comforts.',
+    refined: {
+      need: 'education',
+      name: 'blueprint folios',
+      icon: '📘',
+      good: 'folio',
+      hint: "A Guild House with blueprint folios in stock, bound from scrolls and planks at a Scribe's Office.",
+    },
   },
   {
     id: 'lizard',
@@ -63,6 +77,13 @@ const defs: SpeciesDef[] = [
       ],
     },
     blurb: 'Hunters and smiths. Give them something to punch and someone to patch them up.',
+    refined: {
+      need: 'brawling',
+      name: 'a feast after the bout',
+      icon: '🥩',
+      good: 'jerky',
+      hint: 'A Clan Arena with jerky in stock, smoked at a Smokehouse.',
+    },
   },
   {
     id: 'harpy',
@@ -93,6 +114,13 @@ const defs: SpeciesDef[] = [
       ],
     },
     blurb: 'Scholars of the old world. Prone to complaining, excellent at reading.',
+    refined: {
+      need: 'rest',
+      name: 'scented baths',
+      icon: '🪔',
+      good: 'incense',
+      hint: 'A Bath House with incense in stock to burn, rolled at an Apothecary Workshop.',
+    },
   },
   {
     id: 'fox',
@@ -109,6 +137,13 @@ const defs: SpeciesDef[] = [
       effects: [{ kind: 'mealSize', percent: -35 }],
     },
     blurb: 'Foragers and cooks who would rather be napping.',
+    refined: {
+      need: 'rest',
+      name: 'porridge suppers',
+      icon: '🥣',
+      good: 'porridge',
+      hint: 'A Bath House with porridge in stock, cooked from roots and grain at a Cookhouse.',
+    },
   },
 ]
 

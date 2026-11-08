@@ -48,6 +48,8 @@ export type ResourceId =
   | 'scroll'
   | 'tea'
   | 'trainingGear'
+  | 'spicedAle'
+  | 'folio'
   // currency
   | 'amber'
 
@@ -106,6 +108,28 @@ export interface SpeciesDef {
   /** The species' rule-bending quirk — what makes drafting them a decision. */
   trait: SpeciesTrait
   blurb: string
+  /**
+   * The second tier of one of `needs`: a better good or an upgraded venue that
+   * this species comes to want once the settlement has grown (see
+   * `engine/refinedNeeds.ts`). Meeting it adds resolve; missing it costs none.
+   */
+  refined?: RefinedNeedDef
+}
+
+/** One species' refined need: what refines which base need. */
+export interface RefinedNeedDef {
+  /** The base need this refines; it is served by that need's venues. */
+  need: ServiceNeed
+  /** Short player-facing name, e.g. "spiced ale". */
+  name: string
+  /** Emoji fallback for the chip. */
+  icon: string
+  /** A venue must stand at this upgrade tier or higher (absent: any). */
+  venueTier?: number
+  /** A good the venue must have in stock, burned while it serves. */
+  good?: ResourceId
+  /** How to meet it, for the People panel. */
+  hint: string
 }
 
 /**
@@ -1400,6 +1424,16 @@ export interface RunFeats {
   decreesMet: number
   /** Threats paid off. */
   threatsAppeased: number
+  /** Villagers the Storm's cold took (absent on older saves: none). */
+  frostLosses?: number
+  /** Someone slept in a cold home during a Storm at least once. */
+  sleptCold?: boolean
+  /** Clock second the settlement first wanted refined needs (absent: not yet). */
+  refinedFrom?: number
+  /** Species whose refined need was fully met at some point. */
+  refinedMet?: SpeciesId[]
+  /** Every species in the settlement had its refined need met at once. */
+  refinedAll?: boolean
 }
 
 export interface MetaHistoryEntry {

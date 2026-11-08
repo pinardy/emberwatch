@@ -171,7 +171,7 @@ export const ERRAND_PACING = {
    * point); the rest of that stall's errands pay amber instead, so errands
    * nudge a stalled settlement over the line rather than farm the meter.
    */
-  reputationPerStall: 2,
+  reputationPerStall: 1,
   /** A stall this long before an errand pays reputation; earlier ones pay amber. */
   reputationAfter: 120,
   /** Errands pay reputation only while at least this many points short of victory. */

@@ -6,6 +6,7 @@ import {
   RESOLVE_EXPECTATION_CROWD_FROM,
   SPARED_GLADE_RECLAIM_HOSTILITY,
 } from '../game/engine/balance'
+import { REFINED_FROM_POPULATION, REFINED_FROM_YEAR } from '../game/engine/refinedNeeds'
 
 /**
  * The menu's "How to play": the current game in short headed sections, each
@@ -67,6 +68,10 @@ export function HowToPlay() {
             From Year 2, <strong>the Queen’s court</strong> in the Orders panel lists all three
             levers — soothing her with amber, the petition and the retreat — and when each opens.
           </li>
+          <li>
+            <strong>Style achievements</strong> reward how you win — few glades, no Architect, a
+            kept vow — and each opens a cornerstone, an upgrade or a commission in the Citadel.
+          </li>
         </Part>
 
         <Part title="Needs and expectations">
@@ -82,6 +87,12 @@ export function HowToPlay() {
             From Year 2 settlers <strong>expect more</strong>: a served species loses resolve each
             year, and faster past {RESOLVE_EXPECTATION_CROWD_FROM} villagers. Keep adding. A
             species below zero starts to leave.
+          </li>
+          <li>
+            From Year {REFINED_FROM_YEAR} (or {REFINED_FROM_POPULATION} villagers) each species also
+            hopes for a <strong>refined</strong> form of one need: spiced ale, scented baths, blueprint
+            folios. Meeting it adds resolve and eases those expectations; missing it costs
+            nothing.
           </li>
         </Part>
 

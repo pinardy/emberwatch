@@ -196,7 +196,11 @@ export const BUILDING_UPGRADES: Record<string, BuildingUpgrade[]> = {
       name: 'Copper Still',
       cost: { plank: 4, brick: 4 },
       buildSeconds: 18,
-      effects: { extraOutputs: { aleGrain: { ale: 1 }, aleBerry: { ale: 1 } } },
+      effects: {
+        extraOutputs: { aleGrain: { ale: 1 }, aleBerry: { ale: 1 } },
+        // Ale steeped with herbs: the humans' refined Luxury (see species.ts).
+        recipes: [{ id: 'spicedAle', inputs: { ale: 2, herb: 1 }, outputs: { spicedAle: 2 }, seconds: 20 }],
+      },
     },
     {
       name: 'Brewhouse',

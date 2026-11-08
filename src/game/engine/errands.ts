@@ -27,7 +27,7 @@ import { isUpgrading, workerSlotsOf } from './upgrades'
  * Orders panel and on a small HUD chip. They turn up mostly once the Queen's
  * stagnation count (`secondsSinceReputation`) has run past her grace, and
  * only now and then otherwise. Early in a stall they pay a little amber;
- * once it has run long, the first few pay a fraction of a reputation point
+ * once it has run long, the first one pays a fraction of a reputation point
  * (never toward the last points of the meter), granted through
  * `gainReputation` as their own source. None are offered while the Queen's
  * envoy rides, and any open one is set aside without cost when she sets out.

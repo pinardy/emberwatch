@@ -59,6 +59,13 @@ import {
   warmHousing,
 } from './queries'
 import { despairRate, ignoresColdHearth, mealMultiplier, needFloor } from './traits'
+import { feats } from './feats'
+import {
+  type RefinedStatus,
+  refinedResolve,
+  refinedStatus,
+  stepRefinedNeeds,
+} from './refinedNeeds'
 import { recordEvent } from './timeline'
 import { gainReputation, reputationFor } from './reputation'
 
@@ -196,6 +203,10 @@ export interface ResolveBreakdown {
   hostility: number
   /** Rising expectations: the year and the settlement's size (≤ 0). */
   expectations: number
+  /** The refined need's bonus (≥ 0; see `engine/refinedNeeds.ts`). */
+  refined: number
+  /** Where this species' refined need stands (null for a species without one). */
+  refinedStatus: RefinedStatus | null
   penalties: number
   /** The Storm's chill on homes beyond every fire, inside `penalties` (≤ 0). */
   chill: number
@@ -280,6 +291,11 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
     // in proportion to the needs met, so a well-served settlement must keep
     // improving while a struggling one is not kicked when it is down.
     const expectationsTerm = -owed * needsMet
+    // The finer form of one need: a bonus on top, and part of the
+    // expectations given back. Missing it costs nothing.
+    const refined = refinedStatus(s, sp, pop)
+    if (refined) refined.basicsMet = needsMet >= 1
+    const refinedTerm = refinedResolve(refined, owed)
     const varietyTerm = variety * RESOLVE_PER_FOOD_VARIETY
     const hostilityTerm = -hostilityResolvePenalty(s.hostility)
     const cornerstoneTerm = resolveBonusFor(mods, sp) + (storm ? mods.stormResolve : 0)
@@ -295,6 +311,7 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
       varietyTerm +
       hostilityTerm +
       expectationsTerm +
+      refinedTerm +
       cornerstoneTerm +
       penalties
 
@@ -307,6 +324,8 @@ export function resolveBreakdowns(s: RunState, mods: Modifiers): ResolveBreakdow
       variety: varietyTerm,
       hostility: hostilityTerm,
       expectations: expectationsTerm,
+      refined: refinedTerm,
+      refinedStatus: refined,
       penalties,
       chill: chillTerm,
       cornerstone: cornerstoneTerm,
@@ -381,6 +400,7 @@ export function stepFrost(s: RunState, dt: number): string[] {
   }
   const cold = coldVillagers(s)
   if (cold <= 0) return []
+  feats(s).sleptCold = true
   s.frostExposure = (s.frostExposure ?? 0) + cold * dt
   if (s.frostExposure < FROST_EXPOSURE_PER_LOSS) return []
   s.frostExposure -= FROST_EXPOSURE_PER_LOSS
@@ -390,6 +410,7 @@ export function stepFrost(s: RunState, dt: number): string[] {
   const victim = rng.pick(pool)
   s.rngCursor = rng.cursor()
   loseVillager(s, victim, 'lost')
+  feats(s).frostLosses = (feats(s).frostLosses ?? 0) + 1
   addImpatience(s, IMPATIENCE_PER_VILLAGER_LOST)
   return [
     `${victim.name} the ${speciesSingular(victim.species)} died of the cold in an unheated home. Raise a brazier or insulate the homes beyond the hearth's reach.`,
@@ -416,6 +437,11 @@ export function stepResolve(
     const step = Math.sign(delta) * Math.min(Math.abs(delta), RESOLVE_DRIFT * dt)
     s.resolve[b.species] = current + step
   }
+  stepRefinedNeeds(
+    s,
+    dt,
+    breakdowns.map((b) => ({ species: b.species, refined: b.refinedStatus })),
+  )
   return breakdowns
 }
 
