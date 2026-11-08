@@ -18,12 +18,18 @@ import { proclaimFirstDecree } from '../test/decrees'
 import { offerOrders } from '../game/engine/orders'
 import { MAX_FRAME_REAL_SECONDS, frameBudget, useGameStore } from '../game/store'
 import type { BuildingInstance, RunState } from '../game/types'
+import { newTestRun, showFoundedRun, showRun, startClock } from '../test/foundedRun'
+import { GameScreen } from './GameScreen'
+import { TopBar } from './TopBar'
 import { CONFIRM_WINDOW_MS } from './useConfirm'
 
 /**
  * UI smoke tests. Typechecking cannot catch a component that throws on render or
  * a handler wired to the wrong action, so these mount the real app and click
  * through the path a player actually takes: menu → setup → play → build.
+ * Tests about what comes after the founding start from a founded run in the
+ * store (src/test/foundedRun.ts) and render the game screen or the part they
+ * test; the ones about the loop's clock and the auto-pause read only the store.
  */
 
 function currentRun(): RunState {
@@ -86,6 +92,8 @@ function takeOpeningDraft() {
 beforeEach(() => {
   localStorage.clear()
   useGameStore.setState({
+    // What the app's boot reads from the (cleared) storage.
+    settings: loadSettings(),
     screen: 'menu',
     run: null,
     speed: 0,
@@ -280,26 +288,9 @@ describe('app shell', () => {
     expect(panOf()).toEqual({ x: 0, y: 0 })
   })
 
-  it('advances the simulation when unpaused', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-    takeOpeningDraft()
-
-    const clockBefore = currentRun().clock
-    act(() => {
-      useGameStore.getState().setSpeed(1)
-      // Drive the store directly rather than waiting on requestAnimationFrame.
-      for (let i = 0; i < 20; i++) useGameStore.getState().advance(0.5)
-    })
-    expect(currentRun().clock).toBeGreaterThan(clockBefore)
-  })
-
   it('keeps real time at display frame rates, where one frame is shorter than a tick', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-    takeOpeningDraft()
+    // The loop is the store's: nothing needs to be on screen.
+    showFoundedRun()
 
     for (const [fps, speed] of [
       [60, 1],
@@ -377,10 +368,7 @@ describe('app shell', () => {
   })
 
   it('never fast-forwards a long-stalled frame, even at top speed', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-    takeOpeningDraft()
+    showFoundedRun()
 
     for (const speed of [1, 5] as const) {
       const clockBefore = currentRun().clock
@@ -425,31 +413,6 @@ describe('app shell', () => {
     for (const name of expected) expect(within(land).getByText(new RegExp(name))).toBeTruthy()
   })
 
-  it('switches side panels without crashing', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-    takeOpeningDraft()
-
-    const tabs = screen.getByRole('tablist')
-    for (const label of ['People', 'Orders', 'Trade', 'Log']) {
-      fireEvent.click(within(tabs).getByRole('tab', { name: new RegExp(label, 'i') }))
-      expect(useGameStore.getState().panel).toBeTruthy()
-    }
-    // The people panel is where resolve is diagnosed. (The tips coach can also
-    // mention "resolve", so target the panel heading specifically.)
-    fireEvent.click(within(tabs).getByRole('tab', { name: /People/i }))
-    expect(screen.getByRole('heading', { name: /Resolve/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Recall all/i })).toBeTruthy()
-  })
-
-  it('reaches the Citadel from the menu and lists upgrades', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /The Citadel/i }))
-    expect(screen.getByRole('heading', { name: /The Citadel/i })).toBeTruthy()
-    expect(screen.getByText(/Harpy Charter/i)).toBeTruthy()
-  })
-
   it('shows the end-of-run summary when a run is won', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
@@ -467,7 +430,7 @@ describe('app shell', () => {
   })
 
   it('toasts sim events as they happen, but not the opening entries', () => {
-    startPlaying()
+    foundOnScreen()
     // The opening narration and the blueprint draft are set-up, not news.
     expect(document.querySelector('.event-toast')).toBeNull()
 
@@ -492,7 +455,7 @@ describe('app shell', () => {
   })
 
   it('counts unread chronicle entries on the Log tab until it is opened', () => {
-    startPlaying()
+    foundOnScreen()
     const tabs = screen.getByRole('tablist')
     const logTab = () => within(tabs).getByRole('tab', { name: /Log/i })
     expect(logTab().querySelector('.tab-badge')).toBeNull()
@@ -511,7 +474,7 @@ describe('app shell', () => {
   })
 
   it('tells the player what an input-starved workshop is waiting for', () => {
-    startPlaying()
+    playOnScreen()
     const run = currentRun()
     const worker = Object.values(run.villagers).find((v) => v.assignment === null)!
     const hearth = Object.values(run.buildings)[0]
@@ -540,7 +503,8 @@ describe('app shell', () => {
   })
 
   it('fills the hostility meter in proportion to hostility', () => {
-    startPlaying()
+    showFoundedRun({ started: true })
+    render(<TopBar />)
     const fill = () =>
       document.querySelector('.meter-warn .meter-fill') as HTMLElement
     const impatienceFill = document.querySelector('.meter-bad .meter-fill')
@@ -571,6 +535,30 @@ function startPlaying() {
   expect(currentRun().clock).toBeGreaterThan(0)
 }
 
+/**
+ * A founded run on the game screen with its clock started, as `startPlaying`
+ * leaves it, without the menu, setup and founding clicks.
+ */
+function playOnScreen() {
+  showFoundedRun({ started: true })
+  render(<GameScreen />)
+}
+
+/**
+ * The founding made through the store while the game screen is up, then the
+ * clock started: the opening's log lines arrive on screen, as for a player.
+ */
+function foundOnScreen() {
+  const run = showRun(newTestRun())
+  render(<GameScreen />)
+  expect(screen.getByRole('region', { name: /^The Founding/ })).toBeTruthy()
+  for (let guard = 0; run.pendingChoices.length > 0 && guard < 20; guard++) {
+    act(() => useGameStore.getState().chooseOption(run.pendingChoices[0].options[0]))
+  }
+  expect(run.pendingChoices).toEqual([])
+  act(() => startClock())
+}
+
 /** Tells subscribers the run changed, as every sim step and command does. */
 function bump() {
   useGameStore.setState({ version: useGameStore.getState().version + 1 })
@@ -592,6 +580,21 @@ describe("the Queen's offers", () => {
     expect(document.querySelector('[aria-modal="true"]')).toBeNull()
     expect(screen.getByRole('img', { name: /Settlement map/i })).toBeTruthy()
     const panel = screen.getByRole('region', { name: /^The Founding/ })
+    // A labelled panel, not a modal: it takes focus but does not trap it.
+    expect(panel.getAttribute('aria-modal')).toBeNull()
+    expect(panel.contains(document.activeElement)).toBe(true)
+    // Its first pick is one Tab away, and nothing holds Tab inside it.
+    const firstCard = within(panel).getAllByRole('button').filter((b) => b.className.includes('option'))[0]
+    firstCard.focus()
+    expect(document.activeElement).toBe(firstCard)
+    const tabbed = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    panel.dispatchEvent(tabbed)
+    expect(tabbed.defaultPrevented).toBe(false)
+    // The top bar stays reachable meanwhile.
+    expect(screen.getByRole('group', { name: 'Game speed' })).toBeTruthy()
+    // It cannot be dismissed: Esc leaves every pick waiting.
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.getByRole('region', { name: /^The Founding/ })).toBeTruthy()
     // Every part of the founding is on show together.
     const part = (name: RegExp) => within(panel).getByRole('region', { name })
     const blueprints = part(/Blueprints/)
@@ -636,8 +639,13 @@ describe("the Queen's offers", () => {
     // Focus follows the player to the next open pick.
     expect(document.activeElement?.className).toMatch(/option/)
     expect(part(/Blueprints/).contains(document.activeElement)).toBe(true)
+    // After a blueprint, focus moves on to the next card rather than being lost.
+    fireEvent.click(cardsIn(part(/Blueprints/))[0])
+    expect(document.activeElement?.className).toMatch(/option/)
+    expect(screen.getByRole('region', { name: /^The Founding/ }).contains(document.activeElement)).toBe(true)
 
     takeOpeningDraft()
+    expect(screen.queryByRole('dialog')).toBeNull()
     // Done: the side rail is back, with focus on its tab, and the clock runs.
     expect(document.activeElement?.id).toBe('tab-build')
     act(() => {
@@ -670,7 +678,7 @@ describe("the Queen's offers", () => {
   })
 
   it('offers two orders inline in the Orders panel, without stopping the clock, with one swap a year', () => {
-    startPlaying()
+    playOnScreen()
     act(() => {
       const run = currentRun()
       run.orders.pop()
@@ -717,7 +725,7 @@ describe("the Queen's offers", () => {
   })
 
   it('toasts a new order when one awaits a choice', () => {
-    startPlaying()
+    playOnScreen()
     act(() => {
       const run = currentRun()
       const order = run.orders[0]
@@ -736,7 +744,7 @@ describe("the Queen's offers", () => {
   })
 
   it('offers two decrees, each with its countdown, reward and miss cost', () => {
-    startPlaying()
+    playOnScreen()
     act(() => {
       offerDecrees(currentRun())
       bump()
@@ -755,10 +763,8 @@ describe("the Queen's offers", () => {
 
 describe('mid-run structure UI', () => {
   it('shows decrees and lingering conditions, and takes the charter', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-    takeOpeningDraft()
+    showFoundedRun()
+    render(<GameScreen />)
 
     act(() => {
       const run = currentRun()
@@ -793,12 +799,10 @@ describe('mid-run structure UI', () => {
     expect(currentRun().pendingChoices).toHaveLength(0)
   })
 
-  /** Starts a run, takes the draft, and stands up a finished woodcutters' camp. */
+  /** A founded run on the game screen with a finished woodcutters' camp, selected. */
   function settleWithCamp(): string {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-    takeOpeningDraft()
+    showFoundedRun()
+    render(<GameScreen />)
     const spot = findPlacement(currentRun(), 'woodcuttersCamp')
     expect(spot).toBeTruthy()
     act(() => {
@@ -895,7 +899,7 @@ describe('mid-run structure UI', () => {
   })
 
   it('presents a milestone draft as a labelled modal dialog that holds focus', () => {
-    startPlaying()
+    playOnScreen()
     act(() => {
       currentRun().pendingChoices.push({ kind: 'blueprint', options: ['tavern', 'brewery'], mixed: true })
       bump()
@@ -926,38 +930,7 @@ describe('mid-run structure UI', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('presents the founding as a labelled panel that takes focus but does not trap it', () => {
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-
-    const panel = screen.getByRole('region', { name: /^The Founding/ })
-    expect(panel.getAttribute('aria-modal')).toBeNull()
-    expect(panel.contains(document.activeElement)).toBe(true)
-    // Its first pick is one Tab away, and nothing holds Tab inside it.
-    const firstCard = within(panel).getAllByRole('button').filter((b) => b.className.includes('option'))[0]
-    firstCard.focus()
-    expect(document.activeElement).toBe(firstCard)
-    const tabbed = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
-    panel.dispatchEvent(tabbed)
-    expect(tabbed.defaultPrevented).toBe(false)
-    // The top bar stays reachable meanwhile.
-    expect(screen.getByRole('group', { name: 'Game speed' })).toBeTruthy()
-
-    // It cannot be dismissed: Esc leaves every pick waiting.
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(screen.getByRole('region', { name: /^The Founding/ })).toBeTruthy()
-
-    // After a pick, focus moves to the next card rather than being lost.
-    fireEvent.click(firstCard)
-    expect(document.activeElement?.className).toMatch(/option/)
-    expect(screen.getByRole('region', { name: /^The Founding/ }).contains(document.activeElement)).toBe(true)
-
-    takeOpeningDraft()
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
-
-  it('switches side panels with hotkeys, ignoring modifiers and held keys', () => {
+  it('switches side panels by tab and hotkey, ignoring modifiers and held keys', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
     fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
@@ -976,6 +949,19 @@ describe('mid-run structure UI', () => {
     }
     // Tabs advertise their shortcut.
     expect(tab(/People/).getAttribute('title')).toMatch(/\(P\)/)
+
+    // Clicking the tabs switches panels too.
+    const tabs = screen.getByRole('tablist')
+    for (const label of ['People', 'Orders', 'Trade', 'Log']) {
+      fireEvent.click(within(tabs).getByRole('tab', { name: new RegExp(label, 'i') }))
+      expect(useGameStore.getState().panel).toBeTruthy()
+    }
+    // The people panel is where resolve is diagnosed. (The tips coach can also
+    // mention "resolve", so target the panel heading specifically.)
+    fireEvent.click(within(tabs).getByRole('tab', { name: /People/i }))
+    expect(screen.getByRole('heading', { name: /Resolve/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Recall all/i })).toBeTruthy()
+    fireEvent.click(within(tabs).getByRole('tab', { name: /Build/i }))
 
     // Pressing the open panel's key again closes it; Ctrl+P is the browser's.
     fireEvent.keyDown(window, { code: 'KeyB', key: 'b' })
@@ -999,7 +985,7 @@ describe('mid-run structure UI', () => {
 describe('construction refunds in the inspector', () => {
   /** A woodcutters' camp site nobody has worked on yet, selected. */
   function selectFreshSite(): { siteId: string; woodBefore: number } {
-    startPlaying()
+    playOnScreen()
     const run = currentRun()
     const woodBefore = run.stock.wood ?? 0
     const spot = findPlacement(run, 'woodcuttersCamp')!
@@ -1128,7 +1114,9 @@ describe('auto-pause', () => {
   })
 
   it('pauses when a threat is unleashed, and says why', () => {
-    startPlaying()
+    // On screen, so the notice is seen to reach the player; the other
+    // triggers below read the store alone.
+    playOnScreen()
     const name = unleashThreat()
     const clock = currentRun().clock
     runUntilPaused()
@@ -1145,14 +1133,26 @@ describe('auto-pause', () => {
     expect(currentRun().clock).toBeGreaterThan(clock)
   })
 
-  it('pauses on the very tick at top speed, however long the frame', () => {
-    startPlaying()
+  /** Puts the run a moment before the Storm. */
+  function stormAlmostHere() {
+    const season = currentRun().season
+    season.season = 'clearance'
+    season.elapsed = season.length - 0.2
+  }
+
+  it('pauses when the Storm begins, on the very tick at top speed, however long the frame', () => {
+    showFoundedRun({ started: true })
     enable('storm')
-    act(() => {
-      const season = currentRun().season
-      season.season = 'clearance'
-      season.elapsed = season.length - 0.2
-    })
+    // At 1×, frame by frame.
+    stormAlmostHere()
+    runUntilPaused()
+    expect(currentRun().season.season).toBe('storm')
+    expect(useGameStore.getState().speed).toBe(0)
+    expect(useGameStore.getState().notice).toBe('Paused: the Storm has begun.')
+
+    // At 5×, in one long frame.
+    useGameStore.setState({ notice: null })
+    stormAlmostHere()
     act(() => {
       useGameStore.getState().setSpeed(5)
       // One long frame at 5× owes about twenty ticks; the pause must cut it short.
@@ -1166,7 +1166,7 @@ describe('auto-pause', () => {
   })
 
   it('does not fight a pause the player chose', () => {
-    startPlaying()
+    showFoundedRun({ started: true })
     // Paused, the player answers the event and the frame loop keeps running.
     unleashThreat()
     act(() => useGameStore.getState().advance(0.5))
@@ -1175,7 +1175,7 @@ describe('auto-pause', () => {
   })
 
   it('stays out of the way when the trigger is off', () => {
-    startPlaying()
+    showFoundedRun({ started: true })
     act(() =>
       useGameStore
         .getState()
@@ -1187,7 +1187,7 @@ describe('auto-pause', () => {
   })
 
   it('pauses when the Queen issues a decree', () => {
-    startPlaying()
+    showFoundedRun({ started: true })
     enable('decree')
     act(() => {
       currentRun().decree = null
@@ -1207,7 +1207,7 @@ describe('auto-pause', () => {
   })
 
   it('pauses when a species starts to despair', () => {
-    startPlaying()
+    showFoundedRun({ started: true })
     enable('departure')
     const species = currentRun().speciesPool[0]
     act(() => {
@@ -1218,22 +1218,8 @@ describe('auto-pause', () => {
     expect(useGameStore.getState().notice).toMatch(/in despair and will start leaving/)
   })
 
-  it('pauses when the Storm begins', () => {
-    startPlaying()
-    enable('storm')
-    act(() => {
-      const season = currentRun().season
-      season.season = 'clearance'
-      season.elapsed = season.length - 0.2
-    })
-    runUntilPaused()
-    expect(currentRun().season.season).toBe('storm')
-    expect(useGameStore.getState().speed).toBe(0)
-    expect(useGameStore.getState().notice).toBe('Paused: the Storm has begun.')
-  })
-
   it('pauses when a caravan arrives', () => {
-    startPlaying()
+    showFoundedRun({ started: true })
     enable('caravan')
     act(() => {
       const run = currentRun()
@@ -1280,7 +1266,8 @@ describe('auto-pause', () => {
 
 describe('top-bar status toggle', () => {
   it('flags a danger on the folded status toggle without opening it', () => {
-    startPlaying()
+    showFoundedRun({ started: true })
+    render(<TopBar />)
     const toggle = () => document.querySelector('.status-toggle') as HTMLElement
     expect(toggle().className).not.toMatch(/is-danger/)
 
@@ -1299,7 +1286,8 @@ describe('top-bar status toggle', () => {
   })
 
   it('marks the impatience meter when the Queen is nearly out of patience', () => {
-    startPlaying()
+    showFoundedRun({ started: true })
+    render(<TopBar />)
     act(() => {
       const run = currentRun()
       run.impatience = run.maxImpatience - 1

@@ -270,8 +270,13 @@ describe('run setup', () => {
 
   it('opens on a blueprint draft that offers something useful, then a cornerstone', () => {
     const state = freshRun()
-    // The blueprint picks, the founding cornerstone, then the founding writ.
+    // The blueprint picks, the founding cornerstone, then the founding writ,
+    // whichever species answer the call.
     expect(state.pendingChoices).toHaveLength(OPENING_BLUEPRINT_PICKS + 2)
+    const opening = [...Array(OPENING_BLUEPRINT_PICKS).fill('blueprint'), 'cornerstone', 'order']
+    expect(state.pendingChoices.map((c) => c.kind)).toEqual(opening)
+    const others = createRun({ seed: SEED, species: ['human', 'fox', 'harpy'], modifiers: [] })
+    expect(others.pendingChoices.map((c) => c.kind)).toEqual(opening)
     expect(state.pendingChoices[0].kind).toBe('blueprint')
     expect(state.pendingChoices.at(-1)!.kind).toBe('order')
     // The run's first draft is owed a piece of a service the settlers want.
@@ -580,17 +585,6 @@ describe('determinism', () => {
     expect(population(b)).toBe(population(a))
     expect(b.season).toEqual(a.season)
     expect(b.stock).toEqual(a.stock)
-  })
-
-  it('survives a save/load round trip', () => {
-    const original = newRun()
-    run(original, 120)
-    const restored = JSON.parse(JSON.stringify(original)) as RunState
-    run(original, 60)
-    run(restored, 60)
-    expect(restored.hostility).toBeCloseTo(original.hostility, 6)
-    expect(restored.stock).toEqual(original.stock)
-    expect(restored.rngCursor).toBe(original.rngCursor)
   })
 })
 

@@ -22,8 +22,6 @@ import {
   f,
   l,
   leafShape,
-  matrixAttr,
-  toneColor,
   xf,
   type IconArt,
   type Shape,
@@ -731,24 +729,5 @@ export function iconShapes(id: IconId): readonly Shape[] {
     composed.set(id, hit)
   }
   return hit
-}
-
-/**
- * The icon as a standalone SVG document string — for contact sheets, the
- * 2D map's `<symbol>`s, or anywhere a string is wanted. `current` resolves
- * the `currentColor` tone when the SVG will not live inside styled text.
- */
-export function iconSvgMarkup(id: IconId, opts: { size?: number; current?: string } = {}): string {
-  const size = opts.size ?? 24
-  const body = iconShapes(id)
-    .map((s) => {
-      const attrs = [`d="${s.d}"`, `fill="${s.fill ? toneColor(s.fill, opts.current) : 'none'}"`]
-      if (s.stroke) attrs.push(`stroke="${toneColor(s.stroke, opts.current)}"`, `stroke-width="${s.w ?? 1.3}"`)
-      if (s.o !== undefined) attrs.push(`opacity="${s.o}"`)
-      if (s.m) attrs.push(`transform="${matrixAttr(s.m)}"`)
-      return `<path ${attrs.join(' ')}/>`
-    })
-    .join('')
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`
 }
 

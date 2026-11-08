@@ -2,7 +2,10 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@t
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { findPlacement, isReachable } from '../game/engine/actions'
+import { loadSettings } from '../game/persistence'
 import { HUD_INTERVAL_MS, useGameStore } from '../game/store'
+import { showFoundedRun } from '../test/foundedRun'
+import { GameScreen } from './GameScreen'
 import type { RunState } from '../game/types'
 import { gladeEdgeGeometry, mapStats, useStaticGeometry } from './map3d/staticGeometry'
 import { districtOf, SPARED_STYLE, useHudValue, useMapOverlays } from './mapShared'
@@ -25,22 +28,21 @@ function currentRun(): RunState {
   return run
 }
 
+/**
+ * A founded run on the game screen. The founding itself (and the map beside
+ * it) is tested through the whole app below and in App.test.tsx.
+ */
 function startGame() {
-  render(<App />)
-  fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-  fireEvent.click(screen.getByRole('button', { name: /Set out with/i }))
-  let guard = 0
-  while (currentRun().pendingChoices.length > 0 && guard++ < 10) {
-    const option = screen.getAllByRole('button').find((b) => b.className.includes('option'))
-    if (!option) break
-    fireEvent.click(option)
-  }
+  showFoundedRun()
+  render(<GameScreen />)
 }
 
 beforeEach(() => {
   localStorage.clear()
   useMapOverlays.setState({ showWarmth: false })
   useGameStore.setState({
+    // What the app's boot reads from the (cleared) storage.
+    settings: loadSettings(),
     screen: 'menu',
     run: null,
     speed: 0,
