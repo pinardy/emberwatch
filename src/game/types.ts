@@ -662,6 +662,26 @@ export type CornerstoneEffect =
   | { kind: 'terrainPenalty'; percent: number }
   /** Strength of adjacency work-speed bonuses (percent; positive = stronger). */
   | { kind: 'adjacencyBoost'; percent: number }
+  /**
+   * How far the hearth's warm reach pulls in through the Storm (percent of
+   * the usual end-of-Storm reach; negative = it shrinks further). A Storm
+   * blight's lasting damage (the Long Night).
+   */
+  | { kind: 'hearthReach'; percent: number }
+
+// ---------------------------------------------------------------------------
+// Reputation profiles: what the Queen values on this land / commission
+// ---------------------------------------------------------------------------
+
+/** Where a point of reputation came from. */
+export type ReputationSource = 'orders' | 'decrees' | 'glades' | 'events' | 'resolve' | 'trade'
+
+/**
+ * Multipliers on what each source pays (absent = ×1). `trade` is the
+ * exception: caravan trade pays no reputation at all unless a profile names
+ * it, and then pays its base rate (`REPUTATION_PER_TRADE_AMBER`) × the value.
+ */
+export type ReputationProfile = Partial<Record<ReputationSource, number>>
 
 // ---------------------------------------------------------------------------
 // Run modifiers ("forest mysteries")
@@ -706,6 +726,8 @@ export interface RunModifierDef {
   excludes?: string[]
   /** Only drawn once a Citadel upgrade admits it to the pool. */
   citadelLocked?: boolean
+  /** What the Queen values here: multipliers on each reputation source. */
+  reputation?: ReputationProfile
 }
 
 export interface GladeEventOptionDef {
@@ -938,6 +960,41 @@ export interface CaravanState {
 
 export type RunPhase = 'playing' | 'won' | 'lost'
 
+/** How a settlement fell apart while the Queen's envoy was on the road. */
+export type EnvoyCollapse = 'population' | 'hearth' | 'unrest'
+
+/**
+ * The Envoy's approach: reputation reached the maximum and the Queen's envoy
+ * set out. She arrives as the next Storm ends; until then the Queen's
+ * impatience no longer matters, but the forest makes its last stand and the
+ * run is lost if the settlement collapses. See `engine/climax.ts`.
+ */
+export interface EnvoyState {
+  /** Game clock when she set out. */
+  setOutAt: number
+  /** The year she set out in. */
+  year: number
+  /** Villagers when she set out; the collapse floor is a share of it. */
+  population: number
+  /**
+   * The Storm she arrives at the end of has broken: the forest's last stand.
+   * Set as the next Storm to break after she set out breaks.
+   */
+  finalStorm: boolean
+  /** The last stand's blight has been forecast (or one already stood for it). */
+  lastStandForecast?: boolean
+  /** Seconds the hearth has stood cold since she set out. */
+  coldSeconds: number
+  /** Seconds in a row most villagers have sat below their reputation threshold. */
+  unrestSeconds: number
+  /** Reputation earned past the maximum since she set out: the run's Glory. */
+  glory: number
+  /** How the approach ended, once it has. */
+  outcome?: 'arrived' | 'collapsed'
+  /** Why the settlement collapsed, when it did. */
+  collapse?: EnvoyCollapse
+}
+
 export interface PendingChoice {
   kind: 'cornerstone' | 'blueprint' | 'gladeEvent' | 'charter' | 'order' | 'decree'
   /**
@@ -1021,6 +1078,7 @@ export type TimelineEventKind =
   | 'charter' // detail = charter name
   | 'decreeMet' // detail = decree name
   | 'decreeMissed' // detail = decree name
+  | 'envoy' // reputation reached the maximum and the Queen's envoy set out
 
 export interface TimelineEvent {
   /** Clock seconds. */
@@ -1084,6 +1142,16 @@ export interface RunState {
   maxReputation: number
   /** Fractional accumulator so reputation ticks smoothly. */
   reputationProgress: number
+  /**
+   * Reputation earned so far by source, after the land's and commission's
+   * profile (Glory included). Absent on older saves (nothing tallied yet).
+   */
+  reputationBy?: ReputationProfile
+  /**
+   * The Envoy's approach, once reputation has reached the maximum. Absent
+   * until then, and on older saves.
+   */
+  envoy?: EnvoyState
   /** 0..maxImpatience */
   impatience: number
   maxImpatience: number
@@ -1310,6 +1378,8 @@ export interface MetaHistoryEntry {
   daily?: string
   /** The commission the run was sent out on, and whether it was met. */
   commission?: { id: string; met: boolean }
+  /** Reputation earned past the maximum while the envoy rode (absent = none). */
+  glory?: number
 }
 
 /** The best finished attempt at one day's daily expedition. */

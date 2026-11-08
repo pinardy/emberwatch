@@ -1,5 +1,6 @@
 import { SPECIES } from '../content/species'
 import type {
+  EnvoyCollapse,
   RunState,
   RunTimeline,
   SpeciesId,
@@ -190,6 +191,13 @@ export function inStorm(storms: [number, number][], t: number): boolean {
 // ---------------------------------------------------------------------------
 
 const LOSS_KINDS: TimelineEventKind[] = ['left', 'lost']
+
+/** How a collapse during the Envoy's approach reads in the summary. */
+const ENVOY_COLLAPSE_CLAUSE: Record<EnvoyCollapse, string> = {
+  population: 'too many villagers were lost to hold the settlement',
+  hearth: 'the hearth stood cold too long',
+  unrest: 'most of the settlement fell into unrest',
+}
 /** How far before a turning point to look for what caused it. */
 const CAUSE_WINDOW = 180
 
@@ -242,6 +250,15 @@ export function describeOutcome(run: RunState): string {
   const won = run.phase === 'won'
   const samples = tl?.samples ?? []
   const endYear = run.season.year
+  if (!won && run.envoy) {
+    const why = run.envoy.collapse
+      ? ENVOY_COLLAPSE_CLAUSE[run.envoy.collapse]
+      : 'the last villager left'
+    const setOut = run.envoy.setOutAt
+    const lost = (tl?.events ?? []).filter((e) => LOSS_KINDS.includes(e.k) && e.t >= setOut).length
+    const losses = lost > 0 ? ` after ${plural(lost, 'a villager', 'villagers')} ${lost === 1 ? 'was' : 'were'} lost` : ''
+    return `Reputation filled in Year ${run.envoy.year} and the Queen's envoy set out, but in Year ${endYear} ${why}${losses} before she arrived.`
+  }
   if (!tl || samples.length < 2) {
     return won
       ? `The settlement was secured in Year ${endYear}.`
@@ -273,8 +290,14 @@ export function describeOutcome(run: RunState): string {
       turn > 0
         ? `Reputation pulled ahead of the Queen's impatience in Year ${turnYear}`
         : `Reputation led the Queen's impatience all run`
+    if (run.envoy) {
+      const lost = tl.events.filter((e) => LOSS_KINDS.includes(e.k) && e.t >= run.envoy!.setOutAt).length
+      const cost = lost > 0 ? `, losing ${plural(lost, 'a villager', 'villagers')}` : ''
+      return `${opening}, filled it in Year ${run.envoy.year} with her patience ${patience}% spent, and held through the forest's last stand${cost} until her envoy arrived in Year ${endYear}${boost}.`
+    }
     return `${opening} and secured the settlement in Year ${endYear}${boost}. Her patience was ${patience}% spent.`
   }
+
 
   const emptied = run.impatience < run.maxImpatience && Object.keys(run.villagers).length === 0
   const repAt = (t: number) => {

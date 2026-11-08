@@ -685,3 +685,83 @@ export const PETITION_KEPT_RELIEF = 1
  */
 export const RETREAT_IMPATIENCE_SHARE = 0.7
 export const RETREAT_REPUTATION_SHORT = 6
+
+// ---------------------------------------------------------------------------
+// The climax: the Envoy's approach (see `climax.ts`), reputation profiles per
+// land and commission (see `reputation.ts`) and the Long Night blight
+// ---------------------------------------------------------------------------
+
+/**
+ * The final Storm pulls the hearth's warm reach in further than an ordinary
+ * one, scaled by the forest's hostility as it breaks: this share of the reach
+ * at the end of the Storm, less `ENVOY_REACH_PER_HOSTILITY` for every point of
+ * hostility, never below `ENVOY_REACH_FLOOR_MIN` (hostility 30 → 0.56, 50 → 0.5).
+ */
+export const ENVOY_REACH_FLOOR_BASE = 0.65
+export const ENVOY_REACH_PER_HOSTILITY = 0.003
+export const ENVOY_REACH_FLOOR_MIN = 0.4
+/** Hostility the forest gains as the final Storm breaks, on top of `HOSTILITY_PER_STORM`. */
+export const ENVOY_STORM_HOSTILITY = 6
+/** Threats strike this many times faster through the final Storm. */
+export const ENVOY_THREAT_PACE = 1.5
+/**
+ * The final Storm always carries a blight (whatever the year or hostility),
+ * drawn from the bands hostility has unlocked (the lowest band at least), and
+ * turning it aside takes this many times the usual goods.
+ */
+export const ENVOY_BLIGHT_PREP_SCALE = 1.5
+/**
+ * The forest's dread in the last stand: every species loses this much resolve
+ * per point of hostility as the final Storm breaks (at least
+ * `ENVOY_DREAD_MIN`) until it passes — lifted early by gathering this many
+ * herbs to burn as offerings.
+ */
+export const ENVOY_DREAD_PER_HOSTILITY = 0.12
+export const ENVOY_DREAD_MIN = 2
+export const ENVOY_DREAD_OFFERING_HERBS = 40
+/**
+ * Collapse while the envoy rides: the run is lost if the population falls
+ * below this share of what it was when she set out (and never fewer than
+ * `ENVOY_POPULATION_MIN`)…
+ */
+export const ENVOY_POPULATION_FLOOR_SHARE = 0.75
+export const ENVOY_POPULATION_MIN = 4
+/** …if the hearth stands cold this many seconds in all… */
+export const ENVOY_COLD_HEARTH_SECONDS = 30
+/**
+ * …or if more than this share of the villagers are discontented — their
+ * species' resolve at least `ENVOY_UNREST_MARGIN` below the threshold where it
+ * earns reputation — for this many seconds straight (unrest).
+ */
+export const ENVOY_UNREST_SHARE = 0.5
+export const ENVOY_UNREST_MARGIN = 4
+export const ENVOY_UNREST_SECONDS = 90
+
+/**
+ * Reputation per amber of caravan sales on a land or commission whose profile
+ * pays for trade (×1), and per caravan that calls — trade earns no reputation
+ * anywhere else.
+ */
+export const REPUTATION_PER_TRADE_AMBER = 0.012
+export const REPUTATION_PER_CARAVAN = 0.35
+
+/**
+ * The Long Night (a Storm blight): unprepared, the hearth's warm reach at the
+ * end of that Storm is this much smaller (percent) — half the usual radius
+ * where an ordinary Storm leaves 70%.
+ */
+export const LONG_NIGHT_REACH_PERCENT = -30
+/** Braziers lit during the Long Night that lift it. */
+export const LONG_NIGHT_BRAZIERS = 2
+/**
+ * Past the Queen's deadline she will not wait for a Storm: the envoy arrives
+ * by this game-clock second at the latest (38 minutes), so every run still
+ * reaches its verdict in time.
+ */
+export const ENVOY_LATEST_ARRIVAL_SECONDS = 38 * 60
+/**
+ * The last stand brings one blight, and one more for every this much
+ * hostility as Clearance begins (or the Storm breaks), up to the most.
+ */
+export const ENVOY_HOSTILITY_PER_EXTRA_BLIGHT = 25
+export const ENVOY_MAX_BLIGHTS = 3

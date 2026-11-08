@@ -294,6 +294,7 @@ function migrateHistoryEntry(raw: unknown): MetaHistoryEntry | null {
   if (c && typeof c === 'object' && typeof c.id === 'string' && COMMISSIONS[c.id]) {
     entry.commission = { id: c.id, met: c.met === true }
   }
+  if (typeof e.glory === 'number' && e.glory > 0 && Number.isFinite(e.glory)) entry.glory = e.glory
   return entry
 }
 
@@ -438,6 +439,8 @@ export function bankRun(meta: MetaState, run: RunState, now = Date.now()): MetaS
     modifiers: [...(run.runModifiers ?? [])],
   }
   if (run.daily) entry.daily = run.daily
+  // Reputation earned past the maximum while the envoy rode.
+  if ((run.envoy?.glory ?? 0) > 0) entry.glory = Math.round(run.envoy!.glory * 10) / 10
   if (breakdown.commission) {
     entry.commission = { id: breakdown.commission.id, met: breakdown.commission.met }
   }

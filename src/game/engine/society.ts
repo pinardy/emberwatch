@@ -67,6 +67,7 @@ import {
   stepRefinedNeeds,
 } from './refinedNeeds'
 import { recordEvent } from './timeline'
+import { gainReputation, reputationFor } from './reputation'
 
 /**
  * Villagers eat once every `SECONDS_PER_MEAL`. Cooked food covers two meals,
@@ -466,12 +467,10 @@ export function stepReputation(
     const served = REPUTATION_UNSERVED_SHARE + (1 - REPUTATION_UNSERVED_SHARE) * b.builtMet
     gain += share * over * served * REPUTATION_PER_RESOLVE_POINT * dt * mods.reputationRate
   }
-  s.reputationProgress += gain
-  while (s.reputationProgress >= 1 && s.reputation < s.maxReputation) {
-    s.reputationProgress -= 1
-    s.reputation += 1
-  }
-  if (s.reputation >= s.maxReputation) s.reputationProgress = 0
+  // The land's profile (Pilgrim Road pays more for contentment); once the
+  // meter is full, it is Glory.
+  gain = reputationFor(s, 'resolve', gain)
+  gainReputation(s, gain, 'resolve')
   return gain
 }
 
@@ -615,6 +614,8 @@ export function secondsPastDeadline(s: RunState): number {
  * (7 and a half, less 2, is 5 and a half), and the meter never drops below 0.
  */
 export function addImpatience(s: RunState, amount: number): void {
+  // While the envoy rides the Queen is satisfied: her patience stands still.
+  if (s.envoy && !s.envoy.outcome) return
   // Whole points only: a fraction in them (an older save, a hand edit) moves
   // into the progress, so the meter can never step past its ceiling.
   const whole = Math.floor(s.impatience)
@@ -638,8 +639,13 @@ export function addImpatience(s: RunState, amount: number): void {
   }
 }
 
+/**
+ * Grants `amount` reputation from glade events and conditions, worth what this
+ * run's profile says. Every other source grants through `gainReputation`
+ * directly (see `reputation.ts`).
+ */
 export function addReputation(s: RunState, amount: number): void {
-  s.reputation = Math.min(s.maxReputation, s.reputation + amount)
+  gainReputation(s, amount > 0 ? reputationFor(s, 'events', amount) : amount, 'events')
 }
 
 /**

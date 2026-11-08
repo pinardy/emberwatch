@@ -551,6 +551,8 @@ export function sootheCost(s: RunState): number {
 
 /** Buys back a point of the Queen's patience. */
 export function sootheQueen(s: RunState): ActionError {
+  // While the envoy rides her impatience stands still: amber would be wasted.
+  if (s.envoy) return 'The Queen is satisfied: impatience no longer matters.'
   if (s.impatience < 1) return 'The Queen is not impatient.'
   const cost = sootheCost(s)
   if ((s.stock.amber ?? 0) < cost) return 'Not enough amber.'

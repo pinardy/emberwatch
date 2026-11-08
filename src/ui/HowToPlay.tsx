@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import {
   DECREE_DECLINE_IMPATIENCE,
+  ENVOY_COLD_HEARTH_SECONDS,
   HEARTH_STORM_REACH_FLOOR,
   RESOLVE_EXPECTATION_CROWD_FROM,
   SPARED_GLADE_RECLAIM_HOSTILITY,
@@ -23,6 +24,16 @@ export function HowToPlay() {
             and she recalls you. By Year 5 her deadline has passed and impatience climbs fast.
           </li>
           <li>
+            Full reputation sends <strong>the Queen’s envoy</strong>: she arrives as the next Storm
+            ends. Impatience no longer matters, but in that Storm the forest makes its{' '}
+            <strong>last stand</strong> — certain blights, a dread, a smaller warm ring.
+          </li>
+          <li>
+            Hold until she arrives: the run is lost if a quarter of the villagers are lost, the
+            hearth stands cold {ENVOY_COLD_HEARTH_SECONDS} s, or most villagers stay discontented.
+            Reputation earned meanwhile is Glory.
+          </li>
+          <li>
             Every run opens on <strong>the Founding</strong>: blueprint drafts, a cornerstone and a
             first writ, picked in any order while the clock waits.
           </li>
@@ -33,6 +44,11 @@ export function HowToPlay() {
             Reputation comes from orders, decrees, glade events, reclaimed land, and species whose
             resolve sits above their threshold — in full only when buildings you raised serve
             their needs.
+          </li>
+          <li>
+            Some lands and commissions change <strong>what the Queen values</strong> — reclaimed
+            land ×2 on the Wild Frontier, contentment on the Pilgrim Road, caravan trade at Amber
+            Springs. The land’s card and the Founding say so.
           </li>
           <li>
             Impatience grows with the calendar, each villager who leaves and high hostility — and
@@ -102,6 +118,10 @@ export function HowToPlay() {
           <li>
             From Year 2 the forest forecasts a <strong>blight</strong> each Clearance. Make the
             goods it names before the Storm breaks and it is turned aside.
+          </li>
+          <li>
+            <strong>The Long Night</strong> pulls the warm ring in to half for a Storm: stack the
+            wood to turn it aside, or light braziers among the outer homes.
           </li>
         </Part>
 

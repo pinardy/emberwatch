@@ -1,4 +1,5 @@
 import type { ConditionOutcome, ResourceId } from '../types'
+import { LONG_NIGHT_BRAZIERS, LONG_NIGHT_REACH_PERCENT } from '../engine/balance'
 
 /**
  * Storm blights: how the forest's hostility reaches the settlement.
@@ -119,6 +120,26 @@ const defs: StormBlightDef[] = [
         interval: 60,
         appease: { plank: 15 },
         strike: { stockLoss: { berry: 8, root: 8, meat: 8 }, hostility: 2 },
+      },
+    },
+  },
+  {
+    id: 'longNight',
+    name: 'The Long Night',
+    icon: '🌑',
+    minHostility: 18,
+    weight: 3,
+    warning:
+      "The longest night of the year falls with the Storm: the hearth's warm ring will pull in to half its reach, not 70%, and homes beyond every fire will freeze.",
+    prep: { resource: 'wood', amount: 70 },
+    strike: {
+      condition: {
+        name: 'The Long Night',
+        icon: '🌑',
+        description: `The dark presses on the hearth: its warm ring pulls in to half its reach until the Storm passes, or until ${LONG_NIGHT_BRAZIERS} more braziers are lit against it.`,
+        resolveBy: { kind: 'buildingId', buildingId: 'brazier', amount: LONG_NIGHT_BRAZIERS },
+        whileActive: [{ kind: 'hearthReach', percent: LONG_NIGHT_REACH_PERCENT }],
+        passesWithStorm: true,
       },
     },
   },

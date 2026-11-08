@@ -4,7 +4,8 @@ import { IMPATIENCE_PER_VILLAGER_LOST } from './balance'
 import { goalCount, goalProgress } from './goals'
 import { grantProduced, spend } from './queries'
 import { pushLog } from './runLog'
-import { addImpatience, addReputation, loseVillager } from './society'
+import { addImpatience, loseVillager } from './society'
+import { formatReputation, gainReputation, reputationFor } from './reputation'
 import { unleashThreat } from './threats'
 
 /**
@@ -34,8 +35,9 @@ export function applyOutcome(s: RunState, outcome: ConditionOutcome | undefined)
   if (!outcome) return []
   const parts: string[] = []
   if (outcome.reputation) {
-    addReputation(s, outcome.reputation)
-    parts.push(`reputation +${outcome.reputation}`)
+    const worth = outcome.reputation > 0 ? reputationFor(s, 'events', outcome.reputation) : outcome.reputation
+    gainReputation(s, worth, 'events')
+    parts.push(`reputation ${worth > 0 ? '+' : ''}${formatReputation(worth)}`)
   }
   if (outcome.hostility) {
     s.hostility = Math.max(0, s.hostility + outcome.hostility)

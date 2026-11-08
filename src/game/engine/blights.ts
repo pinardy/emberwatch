@@ -53,9 +53,9 @@ export function forecastStormBlight(s: RunState): StormBlightDef | null {
 }
 
 /** Puts `def`'s forecast on the conditions bar, counting down to the Storm. */
-export function announceBlight(s: RunState, def: StormBlightDef): ActiveCondition {
+export function announceBlight(s: RunState, def: StormBlightDef, prepScale = 1): ActiveCondition {
   const { resource } = def.prep
-  const amount = blightPrepAmount(s, def)
+  const amount = Math.round(blightPrepAmount(s, def) * prepScale)
   const condition = addCondition(
     s,
     {

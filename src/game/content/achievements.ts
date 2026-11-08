@@ -421,7 +421,7 @@ const defs: AchievementDef[] = [
     name: 'Before the Third Storm',
     icon: '🌅',
     tier: 'style',
-    description: 'Win in Year 3 or earlier.',
+    description: 'Win in Year 3 or earlier: the Envoy arrives before the year is out.',
     when: (r) => won(r) && r.season.year <= 3,
   },
 ]

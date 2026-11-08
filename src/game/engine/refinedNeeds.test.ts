@@ -19,6 +19,9 @@ import {
   refinedUnlocked,
 } from './refinedNeeds'
 import { expectations, resolveBreakdowns, stepResolve } from './society'
+import { discontentShare } from './climax'
+import { SPECIES } from '../content/species'
+import { ENVOY_UNREST_MARGIN } from './balance'
 import { recipesAt } from './upgrades'
 
 /** A settlement of humans, beavers and lizards, fed and housed, nothing built. */
@@ -260,5 +263,33 @@ describe('refined needs: the step', () => {
     expect(s.stock.spicedAle).toBe(10)
     expect(s.feats?.refinedFrom).toBeUndefined()
     expect(s.feats?.refinedMet).toBeUndefined()
+  })
+})
+
+describe('refined needs and the envoy', () => {
+  it("lift resolve the way the unrest check reads it: a met refined need can carry a species out of discontent", () => {
+    const make = (spiced: boolean) => {
+      const s = settlement()
+      s.season.year = 5
+      serveAll(s)
+      if (spiced) s.stock.spicedAle = 20
+      // Every species just inside discontent.
+      for (const sp of s.speciesPool) s.resolve[sp] = SPECIES[sp].resolveTarget - ENVOY_UNREST_MARGIN - 0.5
+      return s
+    }
+    const plain = make(false)
+    const refined = make(true)
+    expect(discontentShare(plain)).toBe(discontentShare(refined))
+    const without = humans(plain)
+    const withIt = humans(refined)
+    expect(withIt.target - without.target).toBeCloseTo(withIt.refined)
+    expect(withIt.refined).toBeGreaterThan(RESOLVE_REFINED_NEED)
+    // Drift for a while: the humans with spiced ale climb further from discontent.
+    for (let i = 0; i < 20; i++) {
+      stepResolve(plain, 1, computeModifiers(plain))
+      stepResolve(refined, 1, computeModifiers(refined))
+    }
+    expect(refined.resolve.human).toBeGreaterThan(plain.resolve.human)
+    expect(discontentShare(refined)).toBeLessThanOrEqual(discontentShare(plain))
   })
 })

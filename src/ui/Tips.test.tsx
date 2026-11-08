@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import App from '../App'
 import { BUILDINGS } from '../game/content/buildings'
 import { COMMISSIONS } from '../game/content/commissions'
-import { STORM_BLIGHT_LIST } from '../game/content/stormBlights'
+import { STORM_BLIGHTS, STORM_BLIGHT_LIST } from '../game/content/stormBlights'
+import { gainReputation } from '../game/engine/reputation'
 import { isReachable, spareGlade } from '../game/engine/actions'
 import { IMPATIENCE_STAGNATION_GRACE, PETITION_WITHIN, YEAR_SECONDS } from '../game/engine/balance'
 import { architectPrice, buyArchitectPlans, grandPetition } from '../game/engine/levers'
@@ -89,6 +90,9 @@ describe('tip list', () => {
       'architect',
       'grand-petition',
       'retreat',
+      'envoy',
+      'long-night',
+      'land-profile',
     ]) {
       expect(tipById(id), id).toBeTruthy()
     }
@@ -186,6 +190,40 @@ describe('tip triggers', () => {
     expect(tipCopy(tipById('storm-blight')!.title, s)).toContain(def.name)
     // Urgent: a timed prep may interrupt the First steps checklist.
     expect(fires(s, 'storm-blight', true)).toBe(true)
+  })
+
+  it('the envoy: while she rides, urgent, naming this Storm or the next', () => {
+    const s = newRun()
+    expect(fires(s, 'envoy')).toBe(false)
+    s.reputation = s.maxReputation - 1
+    gainReputation(s, 1, 'orders')
+    expect(fires(s, 'envoy')).toBe(true)
+    expect(fires(s, 'envoy', true)).toBe(true)
+    expect(tipCopy(tipById('envoy')!.text, s)).toMatch(/the next Storm ends/)
+    s.season.season = 'storm'
+    expect(tipCopy(tipById('envoy')!.text, s)).toMatch(/this Storm ends/)
+    s.envoy!.outcome = 'arrived'
+    expect(fires(s, 'envoy')).toBe(false)
+  })
+
+  it('the Long Night: while it is forecast or has fallen', () => {
+    const s = newRun()
+    expect(fires(s, 'long-night')).toBe(false)
+    announceBlight(s, STORM_BLIGHTS.longNight)
+    expect(fires(s, 'long-night')).toBe(true)
+    expect(fires(s, 'long-night', true)).toBe(true)
+  })
+
+  it('the land’s reputation profile: once the clock runs, on a land that has one', () => {
+    const plain = newRun()
+    plain.clock = 5
+    expect(fires(plain, 'land-profile')).toBe(false)
+    const s = createRun({ seed: 4711, species: ['human', 'beaver', 'lizard'], modifiers: ['wildFrontier'] })
+    expect(fires(s, 'land-profile')).toBe(false) // still founding
+    while (s.pendingChoices.length > 0) takeChoice(s, s.pendingChoices[0].options[0])
+    s.clock = 5
+    expect(fires(s, 'land-profile')).toBe(true)
+    expect(tipCopy(tipById('land-profile')!.text, s)).toMatch(/reclaimed land ×2/)
   })
 
   it('frost: from Clearance, when the Storm’s shrinking reach will leave someone cold', () => {

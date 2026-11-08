@@ -1,3 +1,4 @@
+import { envoyArrivesNextTick } from '../../test/envoy'
 import { afterEach, describe, expect, it } from 'vitest'
 import { GLADE_EVENTS } from '../content/gladeEvents'
 import { loadRun } from '../persistence'
@@ -73,8 +74,8 @@ describe('run timeline sampling', () => {
   it('takes a final sample on the tick that decides the run', () => {
     const state = newRun()
     run(state, 5)
+    envoyArrivesNextTick(state)
     const before = state.timeline.samples.length
-    state.reputation = state.maxReputation
     tick(state, 0.125)
     expect(state.phase).toBe('won')
     expect(state.timeline.samples).toHaveLength(before + 1)

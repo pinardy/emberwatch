@@ -118,7 +118,8 @@ export function petitionThreshold(s: RunState): number {
  * shortfalls worth showing.
  */
 export function petitionBlocked(s: RunState): 'used' | 'early' | 'amber' | null {
-  if (s.petition || s.phase !== 'playing') return 'used'
+  // While the envoy rides the Queen's patience no longer matters: nothing to petition.
+  if (s.petition || s.phase !== 'playing' || s.envoy) return 'used'
   if (s.season.year < PETITION_FROM_YEAR) return 'early'
   if (s.impatience + s.impatienceProgress < petitionThreshold(s)) return 'early'
   if ((s.stock.amber ?? 0) < PETITION_AMBER) return 'amber'

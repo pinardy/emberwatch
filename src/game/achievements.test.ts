@@ -576,7 +576,10 @@ describe('style achievements', () => {
 
   it('Terms Honoured: a win on a commission with its objective met', () => {
     const run = createRun({ seed: 77, species: [...TRIO], modifiers: [], commission: 'openGates' })
-    while (Object.keys(run.villagers).length < 21) addVillager(run)
+    const term = COMMISSIONS.openGates.terms[0]
+    const target = term.kind === 'goal' && term.goal.kind === 'population' ? term.goal.amount : 0
+    expect(target).toBeGreaterThan(0)
+    while (Object.keys(run.villagers).length < target) addVillager(run)
     run.phase = 'won'
     expect(check('termsHonoured', run)).toBe(true)
     // Short of its objective, or without a commission at all, it is not earned.

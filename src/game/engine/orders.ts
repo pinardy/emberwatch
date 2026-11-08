@@ -17,7 +17,8 @@ import { productionRate } from './forecast'
 import { computeModifiers } from './modifiers'
 import { averageResolve, grantProduced, spend, totalHousing } from './queries'
 import { makeRng, type Rng } from './rng'
-import { addImpatience, addReputation } from './society'
+import { addImpatience } from './society'
+import { formatReputation, gainReputation, reputationFor } from './reputation'
 
 /**
  * The Queen's orders: three standing goals, each paying reputation when met.
@@ -71,7 +72,10 @@ export function describeOrder(order: Order): string {
  */
 export function orderReputation(s: RunState, order: Pick<Order, 'defId' | 'writ'>): number {
   const base = ORDERS[order.defId]?.reputationReward ?? 0
-  return order.writ ? base : Math.max(0, base + computeModifiers(s).orderReputation)
+  // The land's profile scales the order's worth (the writ is the Crown's own).
+  return order.writ
+    ? base
+    : reputationFor(s, 'orders', Math.max(0, base + computeModifiers(s).orderReputation))
 }
 
 // ---------------------------------------------------------------------------
@@ -460,13 +464,13 @@ export function stepOrders(s: RunState): void {
     s.stats.ordersCompleted++
     if (def.consume && goal.kind === 'stock') spend(s.stock, { [goal.resource]: goal.amount })
     const reputation = orderReputation(s, order)
-    addReputation(s, reputation)
+    gainReputation(s, reputation, 'orders')
     if (def.reward) {
       grantProduced(s, def.reward)
     }
     pushLog(
       s,
-      `${order.writ ? '📜 Founding writ fulfilled' : 'Order complete'} — ${describeOrder(order)}. +${reputation} reputation.`,
+      `${order.writ ? '📜 Founding writ fulfilled' : 'Order complete'} — ${describeOrder(order)}. +${formatReputation(reputation)} ${s.envoy ? 'glory' : 'reputation'}.`,
       'good',
     )
   }
