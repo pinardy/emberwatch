@@ -41,7 +41,7 @@ const layoutDefs: LayoutDef[] = [
     split: { kind: 'line', far: 5 },
     barrier: 'river',
     crossings: { count: 2, fromHearth: false },
-    bankWeights: { fertile: 2, marsh: 1.5 },
+    bankWeights: { marsh: 2 },
   },
   {
     id: 'ridge',

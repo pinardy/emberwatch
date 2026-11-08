@@ -1195,9 +1195,9 @@ const defs: GladeEventDef[] = [
     options: [
       {
         label: 'Rekindle it for the Queen',
-        description: 'Spend 20 wood to bank the old flame. Word of it reaches the throne.',
-        requires: { wood: 20 },
-        cost: { wood: 20 },
+        description: 'Spend 15 wood and 4 incense to bank the old flame with the proper rites. Word of it reaches the throne.',
+        requires: { wood: 15, incense: 4 },
+        cost: { wood: 15, incense: 4 },
         reputation: 1,
         hostility: -4,
       },
@@ -1293,7 +1293,6 @@ const defs: GladeEventDef[] = [
         description: 'Spend 14 food. Two of them stay to tend your hearth.',
         foodCost: 14,
         villagerGain: 2,
-        reputation: 1,
       },
       {
         label: 'Ask for their blessing',
@@ -1452,9 +1451,9 @@ const defs: GladeEventDef[] = [
     options: [
       {
         label: 'Chisel out the old king',
-        description: 'Spend 10 stone on new carvings in the Queen\'s name. She hears of it.',
-        requires: { stone: 10 },
-        cost: { stone: 10 },
+        description: 'Spend 10 stone and 3 scrolls on new carvings and a proper inscription in the Queen\'s name. She hears of it.',
+        requires: { stone: 10, scroll: 3 },
+        cost: { stone: 10, scroll: 3 },
         reputation: 1,
       },
       {

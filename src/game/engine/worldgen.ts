@@ -298,7 +298,7 @@ export function generateMap(rng: Rng, hooks: MapgenHooks = {}, plan: TerrainPlan
 /** How a barrier's course is dotted with unbuildable ground. */
 const BARRIER_STYLE: Record<Barrier['kind'], { obstacle: Obstacle['kind']; radius: number; spacing: number }> = {
   river: { obstacle: 'water', radius: 0.55, spacing: 0.6 },
-  cliff: { obstacle: 'cliff', radius: 0.42, spacing: 0.55 },
+  cliff: { obstacle: 'cliff', radius: 0.25, spacing: 0.4 },
 }
 
 /** Width of the open stretch at a crossing's middle (a ford, a pass). */
