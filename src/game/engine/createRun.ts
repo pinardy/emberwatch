@@ -95,7 +95,7 @@ export function createRun({
 }: NewRunOptions): RunState {
   const rng = makeRng(seed, 0)
   // Citadel upgrades and the chosen edict, folded into plain numbers.
-  const loadout = citadelLoadout(meta?.upgrades ?? [])
+  const loadout = citadelLoadout(meta?.upgrades ?? [], meta?.achievements)
   const edictLevel = clampEdict(edict)
   const edictMods = edictModifiers(edictLevel)
   // The land's character comes from the seed (its own RNG stream), and shapes

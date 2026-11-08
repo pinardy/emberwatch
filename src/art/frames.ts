@@ -131,6 +131,8 @@ export const FRAMES = {
   'medal-early': medal('bronze'),
   'medal-mid': medal('cloud'),
   'medal-late': medal('gold'),
+  // Style achievements: a leaf-green rim, apart from the ladder of metals.
+  'medal-style': medal('leaf'),
   mono: { back: [], place: fit(1), recolour: (s) => mono(s) },
 } satisfies Record<string, Frame>
 

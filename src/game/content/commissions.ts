@@ -8,6 +8,7 @@ import type {
   RunState,
 } from '../types'
 import { hashInt, makeRng } from '../engine/rng'
+import { achievementUnlocks } from './meta'
 import { describeGoal, evaluateGoal } from '../engine/goals'
 
 /**
@@ -246,9 +247,25 @@ export const COMMISSION_LIST = defs
 /** Commissions on offer before each run (fewer while fewer are open). */
 export const COMMISSION_OFFER_SIZE = 3
 
-/** Commissions the Citadel's upgrades have put on the board, in list order. */
-export function unlockedCommissions(upgrades: readonly string[]): CommissionDef[] {
-  return defs.filter((d) => !d.unlockedBy || upgrades.includes(d.unlockedBy))
+/**
+ * Commissions the Citadel's upgrades have put on the board, in list order —
+ * plus any in `opened`, put there early by a style achievement.
+ */
+export function unlockedCommissions(
+  upgrades: readonly string[],
+  opened: readonly string[] = [],
+): CommissionDef[] {
+  return defs.filter(
+    (d) => !d.unlockedBy || upgrades.includes(d.unlockedBy) || opened.includes(d.id),
+  )
+}
+
+/** The board for a Citadel: its upgrades and the commissions its achievements opened. */
+export function boardFor(
+  meta: Pick<MetaState, 'upgrades'> & Partial<Pick<MetaState, 'achievements'>>,
+): CommissionDef[] {
+  const opened = achievementUnlocks(meta.achievements?.unlocked).commissions
+  return unlockedCommissions(meta.upgrades, opened)
 }
 
 /** Commissions an upgrade puts on the board, for its card in the tree. */
@@ -267,9 +284,10 @@ const OFFER_STREAM = 0x636f6d6d
  * always offer the same three.
  */
 export function commissionOffer(
-  meta: Pick<MetaState, 'upgrades' | 'runsWon' | 'runsLost' | 'history'>,
+  meta: Pick<MetaState, 'upgrades' | 'runsWon' | 'runsLost' | 'history'> &
+    Partial<Pick<MetaState, 'achievements'>>,
 ): string[] {
-  const pool = unlockedCommissions(meta.upgrades)
+  const pool = boardFor(meta)
   if (pool.length <= COMMISSION_OFFER_SIZE) return pool.map((d) => d.id)
   const taken = new Set(meta.history.map((e) => e.commission?.id).filter(Boolean))
   const round = Math.max(0, meta.runsWon) + Math.max(0, meta.runsLost)

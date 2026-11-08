@@ -455,6 +455,55 @@ const defs: CornerstoneDef[] = [
       { kind: 'stormResolve', amount: 2 },
     ],
   },
+
+  // ---- Achievement-locked ----------------------------------------------------
+  // Citadel-locked like the four above, but admitted by a style achievement
+  // (see `ACHIEVEMENT_UNLOCKS` in content/meta.ts) rather than an upgrade.
+  {
+    id: 'tendedGrounds',
+    name: 'Tended Grounds',
+    icon: '🍃',
+    rarity: 'rare',
+    citadelLocked: true,
+    description: 'Every workshop and camp works 10% faster, and the forest grows angry 10% slower.',
+    effects: [
+      { kind: 'productionSpeed', tag: 'all', percent: 10 },
+      { kind: 'hostilityRate', percent: -10 },
+    ],
+  },
+  {
+    id: 'connoisseurs',
+    name: "Connoisseurs' Circle",
+    icon: '🍷',
+    rarity: 'epic',
+    citadelLocked: true,
+    description: 'Every species gains +2 resolve, and newcomers arrive 10% sooner.',
+    effects: [
+      { kind: 'resolveFlat', species: 'all', amount: 2 },
+      { kind: 'newcomerRate', percent: -10 },
+    ],
+  },
+  {
+    id: 'hearthkeepers',
+    name: 'Hearthkeepers',
+    icon: '🧣',
+    rarity: 'rare',
+    citadelLocked: true,
+    description: 'The hearth and every brazier burn 20% less wood.',
+    effects: [{ kind: 'hearthFuel', percent: -20 }],
+  },
+  {
+    id: 'forcedMarch',
+    name: 'Forced March',
+    icon: '🥾',
+    rarity: 'rare',
+    citadelLocked: true,
+    description: 'Construction is 15% faster and glades are cleared 15% faster.',
+    effects: [
+      { kind: 'buildSpeed', percent: 15 },
+      { kind: 'clearSpeed', percent: 15 },
+    ],
+  },
 ]
 
 export const CORNERSTONES: Record<string, CornerstoneDef> = Object.fromEntries(

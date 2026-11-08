@@ -1,0 +1,80 @@
+/* Second-tier needs in the People panel, and the Citadel's achievement unlocks. */
+
+.need.need-refined {
+  border-style: dashed;
+}
+
+.need.need-refined.is-met {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--gold) 60%, #47694c);
+  color: #f1e3b8;
+}
+
+.need.need-refined.is-dormant {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.refined-line {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+}
+
+.refined-line small {
+  color: var(--muted);
+}
+
+.citadel-unlocks {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.citadel-unlocks li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.citadel-unlocks li > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.citadel-unlocks li small {
+  color: var(--muted);
+}
+
+.citadel-unlocks li.is-earned {
+  border-color: color-mix(in srgb, var(--gold) 55%, var(--line));
+  background: var(--panel-2);
+}
+
+.citadel-unlocks li.is-earned .unlock-text {
+  color: var(--good);
+}
+
+.citadel-unlocks li.is-locked .option-icon {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.upgrade-card .upgrade-early {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.upgrade-card .upgrade-early.is-open {
+  color: var(--good);
+}

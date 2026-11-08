@@ -208,6 +208,21 @@ const RESOURCE_ICONS = {
   ),
 
   ale: MUG,
+  // The ale mug, with a sprig of herbs steeped in it.
+  spicedAle: art(
+    MUG,
+    leafShape(15.5, 6.5, 6, -60, 'leaf'),
+    leafShape(15.5, 6.5, 5, -15, 'moss'),
+    F('ember', circle(9.5, 14.5, 1)),
+  ),
+  // A bound folio of plans: a blue cover, a compass rose and ribbon.
+  folio: art(
+    f('blue', rect(5, 3.5, 14, 17, 1.6)),
+    f('cream', rect(17, 4.5, 2.5, 15, 0.6), 1),
+    l('cream', 'M8 8.5H15M8 11H13', 1.2, 0.8),
+    l('gold', 'M11.5 13V18.5M8.8 15.7H14.2', 1.3),
+    F('red', 'M14 3.5H16.2V8L15.1 7L14 8Z'),
+  ),
   incense: art(
     l('cloud', 'M9.5 7.5C8.5 6 10.5 5 9.5 3M14.5 6.5C13.5 5 15.5 4 14.5 2', 1.2, 0.85),
     bar('bark', 'M9.5 17L9.5 9M14.5 17L14.5 8', 1.2),

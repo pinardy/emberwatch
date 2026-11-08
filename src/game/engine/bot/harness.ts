@@ -1,5 +1,6 @@
 import type { SpeciesId } from '../../types'
 import type { BotReport, ReputationSources } from './play'
+import { refinedSummary } from './refined'
 
 /*
  * The balance harness's seeds, trios, env knobs and report lines, shared by
@@ -93,7 +94,8 @@ export function summarise(label: string, reports: BotReport[]): string {
     ` · plans/run ${mean(reports.map((r) => r.plans)).toFixed(2)}` +
     ` · petitions ${reports.filter((r) => r.petition !== 'none').length} (${petitionOutcomes(reports)})` +
     ` · retreats ${reports.filter((r) => r.retreated).length} (median minute ${median(reports.filter((r) => r.retreated).map((r) => r.exactMinutes)).toFixed(1)})` +
-    `\n${''.padEnd(20)} ${summariseApproach(reports)}`
+    `\n${''.padEnd(20)} ${summariseApproach(reports)}` +
+    `\n${''.padEnd(20)} needs: ${refinedSummary(reports)}`
   )
 }
 

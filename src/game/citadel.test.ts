@@ -7,15 +7,20 @@ import {
   MAX_EDICT,
   META_UPGRADES,
   META_UPGRADE_LIST,
+  ACHIEVEMENT_UNLOCKS,
+  achievementUnlocks,
 } from './content/meta'
+import { boardFor, commissionOffer } from './content/commissions'
 import {
   META_VERSION,
   bankRun,
   citadelLoadout,
   defaultMeta,
   migrateMeta,
+  missingPrerequisites,
   purchaseUpgrade,
   supplyBreakdown,
+  upgradeStatus,
   supplyReward,
 } from './engine/meta'
 import { BUILDINGS } from './content/buildings'
@@ -113,11 +118,16 @@ describe('citadel content', () => {
     for (const id of all.perks.eventOptions) expect(CITADEL_EVENT_OPTIONS[id], id).toBeDefined()
   })
 
-  it('every Citadel-locked cornerstone can be unlocked by some upgrade', () => {
+  it('every Citadel-locked cornerstone can be unlocked by some upgrade or style achievement', () => {
     const unlockable = citadelLoadout(META_UPGRADE_LIST.map((d) => d.id)).perks.cornerstones
+    const byAchievement = achievementUnlocks(
+      Object.fromEntries(Object.keys(ACHIEVEMENT_UNLOCKS).map((id) => [id, 1])),
+    ).cornerstones
     for (const def of CORNERSTONE_LIST.filter((c) => c.citadelLocked)) {
-      expect(unlockable).toContain(def.id)
+      expect([...unlockable, ...byAchievement]).toContain(def.id)
     }
+    // No cornerstone is opened both ways: each unlock is the only road to it.
+    for (const id of byAchievement) expect(unlockable).not.toContain(id)
   })
 })
 
@@ -500,5 +510,61 @@ describe('supply rewards', () => {
     expect(bankRun({ ...meta, edictUnlocked: MAX_EDICT }, wonRun(MAX_EDICT)).edictUnlocked).toBe(
       MAX_EDICT,
     )
+  })
+})
+
+describe('Citadel unlocks from style achievements', () => {
+  const earned = (...ids: string[]) => ({
+    unlocked: Object.fromEntries(ids.map((id) => [id, 1])),
+    progress: {},
+  })
+
+  it('admits an achievement cornerstone to the drafts of every later run', () => {
+    expect(cornerstonePool(run()).some((c) => c.id === 'tendedGrounds')).toBe(false)
+    const meta: MetaState = { ...defaultMeta(), achievements: earned('lightFootprint') }
+    const s = createRun({ seed: SEED, species: [...SPECIES], modifiers: [], meta })
+    const pool = cornerstonePool(s).map((c) => c.id)
+    expect(pool).toContain('tendedGrounds')
+    expect(pool).not.toContain('connoisseurs')
+    expect(citadelLoadout([], earned('refinedTastes', 'warmWinters')).perks.cornerstones).toEqual([
+      'connoisseurs',
+      'hearthkeepers',
+    ])
+  })
+
+  it('opens an upgrade early: its prerequisites are waived, its price is not', () => {
+    const base: MetaState = { ...defaultMeta(), citadelSupplies: 50 }
+    expect(missingPrerequisites(base, 'masonsArchive').length).toBeGreaterThan(0)
+    expect(upgradeStatus(base, 'masonsArchive')).toBe('locked')
+    const opened: MetaState = { ...base, achievements: earned('ownCounsel') }
+    expect(missingPrerequisites(opened, 'masonsArchive')).toEqual([])
+    expect(upgradeStatus(opened, 'masonsArchive')).toBe('available')
+    const bought = purchaseUpgrade(opened, 'masonsArchive')
+    expect(bought.error).toBeNull()
+    expect(bought.meta!.citadelSupplies).toBe(50 - META_UPGRADES.masonsArchive.cost)
+    expect(upgradeStatus({ ...opened, citadelSupplies: 1 }, 'masonsArchive')).toBe('poor')
+    // Only the upgrade it names.
+    expect(upgradeStatus(opened, 'royalArchive')).toBe('locked')
+  })
+
+  it('puts a commission on the board early, and it is offered at once', () => {
+    const base = defaultMeta()
+    expect(boardFor(base).map((d) => d.id)).not.toContain('royalWorks')
+    const opened: MetaState = { ...base, achievements: earned('termsHonoured') }
+    expect(boardFor(opened).map((d) => d.id)).toContain('royalWorks')
+    expect(commissionOffer(opened)).toContain('royalWorks')
+  })
+
+  it('follows the achievements, so an old save keeps (and a migrated one gains) its unlocks', () => {
+    const saved = { ...defaultMeta(), achievements: earned('vowKept', 'firstWin') }
+    const meta = migrateMeta(structuredClone(saved))
+    expect(meta.achievements.unlocked.vowKept).toBe(1)
+    expect(missingPrerequisites(meta, 'queensEar')).toEqual([])
+    // A pre-achievement save simply has none of them yet.
+    expect(achievementUnlocks(migrateMeta({ version: 2 }).achievements.unlocked)).toEqual({
+      cornerstones: [],
+      upgrades: [],
+      commissions: [],
+    })
   })
 })

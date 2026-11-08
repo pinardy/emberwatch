@@ -3,12 +3,13 @@ import {
   COMMISSION_LIST,
   commissionOffer,
   describeTerm,
+  boardFor,
   judgeCommission,
-  unlockedCommissions,
   type CommissionDef,
   type TermStatus,
 } from '../game/content/commissions'
-import { META_UPGRADES } from '../game/content/meta'
+import { ACHIEVEMENT_UNLOCKS, META_UPGRADES } from '../game/content/meta'
+import { ACHIEVEMENTS } from '../game/content/achievements'
 import { type RewardBreakdown } from '../game/engine/meta'
 import { metaUpgradeArt } from '../game/content/artFamilies'
 import type { MetaState, RunState } from '../game/types'
@@ -164,11 +165,13 @@ export function CommissionEnd({ run, breakdown }: { run: RunState; breakdown: Re
  */
 export function CommissionBoard({ meta }: { meta: MetaState }) {
   const offer = commissionOffer(meta)
-  const open = new Set(unlockedCommissions(meta.upgrades).map((d) => d.id))
+  const open = new Set(boardFor(meta).map((d) => d.id))
   return (
     <div className="commission-grid is-board">
       {COMMISSION_LIST.map((def) => {
         const upgrade = def.unlockedBy ? META_UPGRADES[def.unlockedBy] : undefined
+        const feat = Object.entries(ACHIEVEMENT_UNLOCKS).find(([, u]) => u.commission === def.id)
+        const early = feat ? ACHIEVEMENTS[feat[0]] : undefined
         const status = offer.includes(def.id) ? 'offered' : open.has(def.id) ? 'open' : 'locked'
         return (
           <div key={def.id} className={`commission-card is-${status}`}>
@@ -182,6 +185,7 @@ export function CommissionBoard({ meta }: { meta: MetaState }) {
                 <>
                   <Icon id="lock" emoji="🔒" /> Opened by{' '}
                   <Icon id={metaUpgradeArt(upgrade)} emoji={upgrade.icon} /> {upgrade.name}
+                  {early && ` — or early, by earning ${early.icon} ${early.name}`}
                 </>
               ) : status === 'offered' ? (
                 `On offer next run · +${def.bonusPercent}% supplies`

@@ -8,6 +8,8 @@ import './replay.css'
 import { IconText } from './IconText'
 import { achievementArt } from '../game/content/artFamilies'
 import { Icon } from './Icon'
+import { ACHIEVEMENT_UNLOCKS } from '../game/content/meta'
+import { unlockText } from './citadelUnlocks'
 
 /**
  * The end screen's extras: achievements this run earns and, for a daily
@@ -37,6 +39,9 @@ export function EndExtras({ run }: { run: RunState }) {
                     +{a.reward.supplies} <Icon id="warehouse" emoji="📦" />
                   </em> : null}
                 {a.reward?.title ? <em className="is-good"> Title: “{a.reward.title}”</em> : null}
+                {ACHIEVEMENT_UNLOCKS[a.id] ? (
+                  <em className="is-good"> Citadel: {unlockText(ACHIEVEMENT_UNLOCKS[a.id])}</em>
+                ) : null}
               </li>
             ))}
           </ul>
