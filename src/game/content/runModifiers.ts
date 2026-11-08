@@ -29,8 +29,6 @@ const defs: RunModifierDef[] = [
     mapgen: {
       depositScale: { stoneVein: 1.5, orePatch: 2 },
       themeWeights: { rock: 1.5 },
-      // High stony country: a ridge is likelier.
-      layoutWeights: { ridge: 2 },
     },
   },
   {
