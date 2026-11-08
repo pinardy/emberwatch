@@ -65,6 +65,10 @@ export function HowToPlay() {
             ends it at once and sends home what it has earned.
           </li>
           <li>
+            From Year 2, <strong>the Queen’s court</strong> in the Orders panel lists all three
+            levers — soothing her with amber, the petition and the retreat — and when each opens.
+          </li>
+          <li>
             <strong>Style achievements</strong> reward how you win — few glades, no Architect, a
             kept vow — and each opens a cornerstone, an upgrade or a commission in the Citadel.
           </li>
@@ -134,6 +138,11 @@ export function HowToPlay() {
             The herald brings two timed <strong>decrees</strong>: meet one for a reward and a
             streak, miss it and her patience frays — or beg off both for +
             {DECREE_DECLINE_IMPATIENCE} impatience.
+          </li>
+          <li>
+            While reputation stands still, small <strong>errands</strong> turn up (a chip on the
+            map, a card in Orders): carry goods, staff a workplace, sell to the caravan. Each pays
+            a little reputation or amber; ignore one and it lapses, no harm done.
           </li>
           <li>
             A <strong>commission</strong>, chosen before the run, adds an objective judged at the

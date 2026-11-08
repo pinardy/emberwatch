@@ -36,6 +36,7 @@ import {
   stepEnvoy,
   threatPace,
 } from './climax'
+import { stepErrands } from './errands'
 import { displayName } from './upgrades'
 import { recordEvent, stepTimeline } from './timeline'
 import {
@@ -134,6 +135,7 @@ function tickPlaying(s: RunState, dt: number): void {
 
   stepDecree(s, dt)
   stepOrders(s)
+  stepErrands(s, dt)
   checkMilestones(s)
   checkCharter(s)
   stepEnvoy(s, dt)

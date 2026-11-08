@@ -25,6 +25,7 @@ export const REPUTATION_SOURCES: ReputationSource[] = [
   'events',
   'resolve',
   'trade',
+  'errands',
 ]
 
 /** How a source reads on a card: "cleared glades ×2". */
@@ -35,6 +36,7 @@ export const REPUTATION_SOURCE_LABEL: Record<ReputationSource, string> = {
   events: 'glade events',
   resolve: 'contented villagers',
   trade: 'caravan trade',
+  errands: 'errands',
 }
 
 /** The profile of a land, a commission, or several stacked: multipliers multiply. */
