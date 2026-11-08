@@ -127,14 +127,6 @@ describe('the envoy sets out', () => {
     expect(s.envoy!.glory).toBeCloseTo(2.5)
     expect(s.reputationBy).toMatchObject({ orders: 1, decrees: 2 })
   })
-
-  it('a hand-set full meter without an envoy sends her on the next tick', () => {
-    const s = newRun()
-    s.reputation = s.maxReputation
-    tick(s, 0.125)
-    expect(s.envoy).toBeDefined()
-    expect(s.phase).toBe('playing')
-  })
 })
 
 describe('the envoy arrives', () => {

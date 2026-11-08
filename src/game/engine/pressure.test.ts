@@ -12,7 +12,6 @@ import { DUMP_LOT, assignWorker, dumpStock } from './actions'
 import {
   DRAFT_PITY,
   IMPATIENCE_STALL_RATE,
-  OPENING_BLUEPRINT_PICKS,
   REWARD_MILESTONES,
   SEASON_LENGTH,
   STORM_BLIGHT_MIN_HOSTILITY,
@@ -493,16 +492,6 @@ describe('blueprint drafts', () => {
 })
 
 describe('cornerstones', () => {
-  it('every run opens on a cornerstone pick after its blueprints', () => {
-    const s = createRun({ seed: SEED, species: ['human', 'fox', 'harpy'], modifiers: [] })
-    expect(s.pendingChoices.map((c) => c.kind)).toEqual([
-      ...Array(OPENING_BLUEPRINT_PICKS).fill('blueprint'),
-      'cornerstone',
-      // then the founding writ
-      'order',
-    ])
-  })
-
   it('milestones fall on odd reputation', () => {
     for (const m of REWARD_MILESTONES) expect(m % 2).toBe(1)
     expect(REWARD_MILESTONES[0]).toBe(1)

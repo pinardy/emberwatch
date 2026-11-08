@@ -511,6 +511,7 @@ describe('run modifiers across saves and the ledger', () => {
     simulate(original, 120)
     simulate(restored, 120)
     expect(restored.season).toEqual(original.season)
+    expect(restored.hostility).toBeCloseTo(original.hostility, 6)
     expect(restored.stock).toEqual(original.stock)
     expect(restored.rngCursor).toBe(original.rngCursor)
     expect(computeModifiers(restored)).toEqual(computeModifiers(original))
