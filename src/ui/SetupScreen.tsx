@@ -78,7 +78,10 @@ export function SetupScreen() {
 
   // The land's modifiers follow from the seed (and the Citadel's land
   // upgrades, if any), so a typed seed previews them.
-  const powers = useMemo(() => citadelLoadout(meta.upgrades), [meta.upgrades])
+  const powers = useMemo(
+    () => citadelLoadout(meta.upgrades, meta.achievements),
+    [meta.upgrades, meta.achievements],
+  )
   const [landChoice, setLandChoice] = useState<LandChoice>({})
   const previewSeed = seedText.trim() ? parseSeed(seedText) : null
   const land = useMemo(

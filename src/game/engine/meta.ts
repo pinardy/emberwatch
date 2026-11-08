@@ -6,8 +6,16 @@ import {
 } from '../content/achievements'
 import { COMMISSIONS, judgeCommission } from '../content/commissions'
 import { emptyDailyLedger, isDateKey, migrateDailyLedger } from '../content/daily'
-import { EDICTS, EDICT_REWARD_STEP, MAX_EDICT, META_UPGRADES, META_UPGRADE_LIST } from '../content/meta'
+import {
+  EDICTS,
+  EDICT_REWARD_STEP,
+  MAX_EDICT,
+  META_UPGRADES,
+  META_UPGRADE_LIST,
+  achievementUnlocks,
+} from '../content/meta'
 import type {
+  AchievementState,
   CitadelPerks,
   CornerstoneEffect,
   MetaHistoryEntry,
@@ -30,11 +38,20 @@ import type {
 
 export type UpgradeStatus = 'owned' | 'available' | 'poor' | 'locked'
 
-/** Prerequisites of `id` the player does not own yet. */
+/**
+ * Prerequisites of `id` the player does not own yet. None for an upgrade a
+ * style achievement has opened early (`ACHIEVEMENT_UNLOCKS`).
+ */
 export function missingPrerequisites(meta: MetaState, id: string): string[] {
   const def = META_UPGRADES[id]
   if (!def) return []
+  if (openedEarly(meta, id)) return []
   return (def.requires ?? []).filter((req) => !meta.upgrades.includes(req))
+}
+
+/** True when an earned achievement waives `id`'s prerequisites. */
+export function openedEarly(meta: Pick<MetaState, 'achievements'>, id: string): boolean {
+  return achievementUnlocks(meta.achievements?.unlocked).upgrades.includes(id)
 }
 
 export function upgradeStatus(meta: MetaState, id: string): UpgradeStatus {
@@ -107,8 +124,15 @@ export function emptyCitadelPerks(): CitadelPerks {
   }
 }
 
-/** Sums the effects of every owned upgrade. Unknown ids are ignored. */
-export function citadelLoadout(upgrades: readonly string[]): CitadelLoadout {
+/**
+ * Sums the effects of every owned upgrade, plus the cornerstones earned
+ * achievements admit to the draft (`ACHIEVEMENT_UNLOCKS`). Unknown ids are
+ * ignored.
+ */
+export function citadelLoadout(
+  upgrades: readonly string[],
+  achievements?: Pick<AchievementState, 'unlocked'>,
+): CitadelLoadout {
   const out: CitadelLoadout = {
     startStock: {},
     startVillagers: 0,
@@ -154,6 +178,7 @@ export function citadelLoadout(upgrades: readonly string[]): CitadelLoadout {
     if (e.charterOptions) out.perks.charterOptions = (out.perks.charterOptions ?? 0) + e.charterOptions
     if (e.hearthStyle) out.perks.hearthStyle = e.hearthStyle
   }
+  addUnique(out.perks.cornerstones, achievementUnlocks(achievements?.unlocked).cornerstones)
   return out
 }
 

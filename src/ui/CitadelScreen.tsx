@@ -1,6 +1,7 @@
-import { META_BRANCHES, META_UPGRADES, META_UPGRADE_LIST } from '../game/content/meta'
-import { edictNumeral, missingPrerequisites, upgradeStatus } from '../game/engine/meta'
-import { COMMISSIONS, commissionsOpenedBy, unlockedCommissions, COMMISSION_LIST } from '../game/content/commissions'
+import { ACHIEVEMENT_UNLOCKS, META_BRANCHES, META_UPGRADES, META_UPGRADE_LIST } from '../game/content/meta'
+import { ACHIEVEMENTS } from '../game/content/achievements'
+import { edictNumeral, missingPrerequisites, openedEarly, upgradeStatus } from '../game/engine/meta'
+import { COMMISSIONS, commissionsOpenedBy, boardFor, COMMISSION_LIST } from '../game/content/commissions'
 import { SPECIES } from '../game/content/species'
 import { runModifierDefs } from '../game/engine/runModifiers'
 import { useGameStore } from '../game/store'
@@ -8,7 +9,9 @@ import { CommissionBoard } from './Commissions'
 import { EdictPicker } from './EdictPicker'
 import { Icon } from './Icon'
 import { runModifierArt } from '../game/content/art'
-import { metaBranchArt, metaUpgradeArt } from '../game/content/artFamilies'
+import { achievementArt, metaBranchArt, metaUpgradeArt } from '../game/content/artFamilies'
+import { citadelUnlockRows } from './citadelUnlocks'
+import './needs.css'
 
 /** Runs shown in the ledger; older ones stay in the save but off screen. */
 const LEDGER_ROWS = 10
@@ -48,7 +51,7 @@ export function CitadelScreen() {
             <Icon id="fog" emoji="🌫️" /> {meta.runsLost} lost
           </span>
           <span className="chip">
-            <Icon id="charter/seal" emoji="📜" /> {unlockedCommissions(meta.upgrades).length}/
+            <Icon id="charter/seal" emoji="📜" /> {boardFor(meta).length}/
             {COMMISSION_LIST.length} commissions
           </span>
           <span className="chip">
@@ -72,6 +75,9 @@ export function CitadelScreen() {
                 const status = upgradeStatus(meta, def.id)
                 const missing = missingPrerequisites(meta, def.id)
                 const opens = commissionsOpenedBy(def.id)
+                const earlyBy = Object.entries(ACHIEVEMENT_UNLOCKS).find(([, u]) => u.upgrade === def.id)
+                const early = earlyBy ? ACHIEVEMENTS[earlyBy[0]] : undefined
+                const isEarly = openedEarly(meta, def.id)
                 const label =
                   status === 'owned' ? (
                     '✓ Unlocked'
@@ -100,6 +106,13 @@ export function CitadelScreen() {
                         Opens the commission <Icon id={c.art} emoji={c.icon} /> {c.name}
                       </small>
                     ))}
+                    {early && status !== 'owned' && (isEarly || def.requires) && (
+                      <small className={`upgrade-early ${isEarly ? 'is-open' : ''}`}>
+                        {isEarly ? 'Opened early by ' : 'Earn '}
+                        <Icon id={achievementArt(early)} emoji={early.icon} /> {early.name}
+                        {isEarly ? '' : ' to open it early'}
+                      </small>
+                    )}
                     {missing.length > 0 && (
                       // Icons, not names: each name already heads its own card.
                       <small
@@ -120,6 +133,8 @@ export function CitadelScreen() {
             </section>
           ))}
         </div>
+
+        <CitadelUnlocks unlocked={meta.achievements.unlocked} />
 
         <section className="setup-section" aria-label="Commissions">
           <h2>Commissions</h2>
@@ -232,5 +247,48 @@ export function CitadelScreen() {
         </footer>
       </div>
     </div>
+  )
+}
+
+/**
+ * What the style achievements open here: a cornerstone in every draft, an
+ * upgrade without its prerequisites, a commission on the board early.
+ */
+function CitadelUnlocks({ unlocked }: { unlocked: Readonly<Record<string, number>> }) {
+  const rows = citadelUnlockRows(unlocked)
+  const open = rows.filter((r) => r.earned).length
+  return (
+    <section className="setup-section" aria-label="Earned in the field">
+      <h2>
+        Earned in the field{' '}
+        <small className="muted">
+          {open}/{rows.length}
+        </small>
+      </h2>
+      <p className="muted">
+        Win your way and the Citadel takes note: each style achievement opens something here
+        for good.
+      </p>
+      <ul className="citadel-unlocks">
+        {rows.map((r) => {
+          const def = ACHIEVEMENTS[r.achievementId]
+          return (
+            <li key={r.achievementId} className={r.earned ? 'is-earned' : 'is-locked'}>
+              <span className="option-icon" aria-hidden>
+                {def ? <Icon id={achievementArt(def)} emoji={r.icon} /> : r.icon}
+              </span>
+              <div>
+                <strong>{r.name}</strong>
+                <small>{r.description}</small>
+                <small className="unlock-text">
+                  {r.earned ? '✓ ' : '🔒 '}
+                  {r.text}
+                </small>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }

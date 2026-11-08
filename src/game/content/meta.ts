@@ -375,6 +375,57 @@ export const META_UPGRADES: Record<string, MetaUpgradeDef> = Object.fromEntries(
 
 export const META_UPGRADE_LIST = defs
 
+// ---------------------------------------------------------------------------
+// What style achievements open in the Citadel
+// ---------------------------------------------------------------------------
+
+/**
+ * A style achievement's Citadel unlock: a Citadel-locked cornerstone admitted
+ * to every draft, an upgrade whose prerequisites are waived (it can be bought
+ * early), or a commission put on the board before the upgrade that opens it.
+ */
+export interface AchievementUnlock {
+  cornerstone?: string
+  upgrade?: string
+  commission?: string
+}
+
+/**
+ * Achievement id → what earning it opens. Data only, read by
+ * `achievementUnlocks` (the loadout, the upgrade rules, the commission board)
+ * and shown on the achievements screen and in the Citadel. Earned
+ * achievements are what saves hold, so these follow an old save's progress.
+ */
+export const ACHIEVEMENT_UNLOCKS: Record<string, AchievementUnlock> = {
+  lightFootprint: { cornerstone: 'tendedGrounds' },
+  ownCounsel: { upgrade: 'masonsArchive' },
+  vowKept: { upgrade: 'queensEar' },
+  refinedTastes: { cornerstone: 'connoisseurs' },
+  warmWinters: { cornerstone: 'hearthkeepers' },
+  termsHonoured: { commission: 'royalWorks' },
+  beforeThirdStorm: { cornerstone: 'forcedMarch' },
+}
+
+export interface AchievementOpenings {
+  cornerstones: string[]
+  upgrades: string[]
+  commissions: string[]
+}
+
+/** Everything the earned achievements in `unlocked` (id → when) open. */
+export function achievementUnlocks(
+  unlocked: Readonly<Record<string, number>> | undefined,
+): AchievementOpenings {
+  const out: AchievementOpenings = { cornerstones: [], upgrades: [], commissions: [] }
+  for (const [id, unlock] of Object.entries(ACHIEVEMENT_UNLOCKS)) {
+    if (unlocked?.[id] === undefined) continue
+    if (unlock.cornerstone) out.cornerstones.push(unlock.cornerstone)
+    if (unlock.upgrade) out.upgrades.push(unlock.upgrade)
+    if (unlock.commission) out.commissions.push(unlock.commission)
+  }
+  return out
+}
+
 /**
  * Glade-event options the Citadel can add to every event. They are appended
  * after an event's own options, so the indices of the originals never move and

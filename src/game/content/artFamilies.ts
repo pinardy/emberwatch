@@ -62,6 +62,10 @@ export const CORNERSTONE_MOTIF: Partial<Record<string, BaseIconId>> = {
   wayfarersLedger: 'ledger',
   royalMandate: 'writ',
   stormwardens: 'swirl',
+  tendedGrounds: 'oak',
+  connoisseurs: 'spicedAle',
+  hearthkeepers: 'snowflake',
+  forcedMarch: 'walker',
 }
 
 /** A cornerstone: its motif on a carved slab rimmed in its rarity's colour. */
@@ -269,10 +273,20 @@ export const ACHIEVEMENT_MOTIF: Partial<Record<string, BaseIconId>> = {
   masterworks: 'castle',
   lightningCharter: 'lightning',
   manyHands: 'people',
+  lightFootprint: 'feather',
+  ownCounsel: 'setSquare',
+  vowKept: 'ring',
+  refinedTastes: 'spicedAle',
+  warmWinters: 'snowflake',
+  termsHonoured: 'seal',
+  beforeThirdStorm: 'sunrise',
 }
 
 /** An achievement: its motif on a medal — bronze, silver or gold by tier. */
-export function achievementArt(def: { id: string; tier: 'early' | 'mid' | 'late' }): IconId | undefined {
+export function achievementArt(def: {
+  id: string
+  tier: 'early' | 'mid' | 'late' | 'style'
+}): IconId | undefined {
   const motif = ACHIEVEMENT_MOTIF[def.id]
   return motif && `medal-${def.tier}/${motif}`
 }
