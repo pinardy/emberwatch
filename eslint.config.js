@@ -40,6 +40,8 @@ export default defineConfig([
     'test-results/',
     'blob-report/',
     'coverage/',
+    // Agent worktrees: whole copies of the repo, linted in their own checkout.
+    '.claude/',
   ]),
 
   js.configs.recommended,

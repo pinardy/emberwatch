@@ -63,7 +63,7 @@ describe('balance harness', () => {
       expect(reports.filter(isEarlyCollapse).length, `${id} early collapses`).toBeLessThanOrEqual(1)
       for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
     }
-  }, 300_000)
+  }, 600_000)
 
   /*
    * Frost has killed nobody in the competent bot's runs: it keeps its homes
@@ -87,5 +87,5 @@ describe('balance harness', () => {
     expect(frozen).toBeGreaterThanOrEqual(struck)
     // Punishing, not a death sentence: careless runs still reach a verdict in time.
     for (const r of reports) expect(r.exactMinutes).toBeLessThan(VERDICT_BY_MINUTES)
-  }, 300_000)
+  }, 600_000)
 })

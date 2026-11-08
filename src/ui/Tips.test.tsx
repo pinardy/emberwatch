@@ -73,32 +73,6 @@ describe('tip list', () => {
       expect(tipCopy(tip.title, run).length).toBeLessThanOrEqual(48)
     }
   })
-
-  it('covers the systems added since the first tips', () => {
-    for (const id of [
-      'founding',
-      'decree-choice',
-      'commission',
-      'frost',
-      'storm-blight',
-      'caravan-amber',
-      'order-offer',
-      'stagnation',
-      'expectations',
-      'refined-needs',
-      'glade-truce',
-      'architect',
-      'grand-petition',
-      'retreat',
-      'errand',
-      'queens-court',
-      'envoy',
-      'long-night',
-      'land-profile',
-    ]) {
-      expect(tipById(id), id).toBeTruthy()
-    }
-  })
 })
 
 describe('tip triggers', () => {

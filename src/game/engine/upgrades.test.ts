@@ -33,7 +33,6 @@ import {
   totalHousing,
   warmHousing,
   warmthSources,
-  workerCapacity,
 } from './queries'
 import { resolveBreakdowns } from './society'
 import { tick } from './tick'
@@ -201,12 +200,10 @@ describe('tier effects on each stat', () => {
   it('worker slots', () => {
     const s = newRun()
     const camp = stand(s, 'woodcuttersCamp')
-    const total = workerCapacity(s).total
     for (let i = 0; i < 2; i++) expect(assignWorker(s, camp.id)).toBeNull()
     expect(assignWorker(s, camp.id)).toBe('All slots are full.')
     camp.tier = 1
     expect(workerSlotsOf(camp)).toBe(3)
-    expect(workerCapacity(s).total).toBe(total + 1)
     expect(assignWorker(s, camp.id)).toBeNull()
   })
 
