@@ -752,6 +752,8 @@ export interface OrderDef {
   consume?: boolean
   /** Drawn only from this year on (absent: from the start). */
   fromYear?: number
+  /** Drawn only once a service venue stands (absent: whenever it fits). */
+  afterService?: boolean
 }
 
 export interface Order {

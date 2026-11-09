@@ -136,7 +136,7 @@ describe('ground orders: content', () => {
     expect(describeGoal(ORDERS.cross_ford.goal)).toBe('Clear 2 glades across the river')
     expect(describeGoal(ORDERS.dangerous_glade_1.goal)).toBe('Clear a dangerous glade')
     expect(describeGoal(ORDERS.trades_10.goal)).toBe('Buy or sell 10 lots at the caravan')
-    expect(describeGoal(ORDERS.salvage_ruins_60.goal)).toBe('Take 60 goods from Tumbled Stonework')
+    expect(describeGoal(ORDERS.salvage_ruins_45.goal)).toBe('Take 45 goods from Tumbled Stonework')
     expect(describeGoal(ORDERS.refined_human.goal)).toBe("Meet the Humans' refined need (spiced ale) for 90 s")
     expect(describeGoal(ORDERS.camps_full.goal)).toBe('Keep 5 camps at full crew for 90 s')
   })
@@ -193,17 +193,17 @@ describe('ground orders: across a river or beyond the ridge', () => {
 describe('ground orders: deposits', () => {
   it('salvage is drawn only on the ruins with stonework in reach, deadfall only in the Cinderwood', () => {
     const rings = run(5, { layout: 'rings', biome: 'woodland' })
-    expect(orderEligible(ORDERS.salvage_ruins_60.goal, rings)).toBe(false)
-    expect(orderEligible(ORDERS.deadfall_80.goal, rings)).toBe(false)
+    expect(orderEligible(ORDERS.salvage_ruins_45.goal, rings)).toBe(false)
+    expect(orderEligible(ORDERS.deadfall_60.goal, rings)).toBe(false)
     expect(orderEligible(ORDERS.fireweed_64.goal, rings)).toBe(false)
     const ruins = run(5, { layout: 'ruins', biome: 'woodland' })
     const stonework = new Set(Object.values(ruins.deposits).filter((d) => d.kind === 'ruins').map((d) => d.gladeId))
     expect(stonework.size).toBeGreaterThan(0)
     clearToward(ruins, stonework)
-    expect(orderEligible(ORDERS.salvage_ruins_60.goal, ruins)).toBe(true)
+    expect(orderEligible(ORDERS.salvage_ruins_45.goal, ruins)).toBe(true)
     // Without a blueprint that salvages, never.
     ruins.unlockedBuildings = ruins.unlockedBuildings.filter((id) => id !== 'stonecuttersCamp')
-    expect(orderEligible(ORDERS.salvage_ruins_60.goal, ruins)).toBe(false)
+    expect(orderEligible(ORDERS.salvage_ruins_45.goal, ruins)).toBe(false)
   })
 
   it('counts goods a camp takes from the deposit from its draw', () => {
@@ -211,7 +211,7 @@ describe('ground orders: deposits', () => {
     const site = Object.values(s.deposits).find((d) => d.kind === 'ruins')!
     s.glades[site.gladeId].cleared = true
     tallyDepositYield(s, 'ruins', 9)
-    const order = live(s, 'salvage_ruins_60')
+    const order = live(s, 'salvage_ruins_45')
     expect(orderProgress(s, order)).toBe(0)
     // A real Stonecutters' Camp on the stonework, salvaging.
     const camp = place(s, 'stonecuttersCamp', 2, site.pos)
@@ -223,8 +223,9 @@ describe('ground orders: deposits', () => {
     expect(s.orderTallies!.depositYield!.ruins!).toBeGreaterThan(9)
     stepOrders(s, 0.25)
     expect(order.progress).toBeGreaterThan(0)
-    expect(orderStatus(s, order)).toMatch(/^\d+\/60$/)
-    tallyDepositYield(s, 'ruins', 60)
+    const amount = (ORDERS.salvage_ruins_45.goal as { amount: number }).amount
+    expect(orderStatus(s, order)).toMatch(new RegExp(`^\\d+/${amount}$`))
+    tallyDepositYield(s, 'ruins', amount)
     stepOrders(s, 0.25)
     expect(order.complete).toBe(true)
   })
@@ -253,25 +254,29 @@ describe('ground orders: dangerous glades and trades', () => {
     expect(orderEligible(ORDERS.dangerous_glade_1.goal, s)).toBe(false)
   })
 
-  it('an order with a later year is not drawn before it', () => {
+  it('an order with a later year is not drawn before it, nor before a service hall stands', () => {
     const s = run(3)
-    const danger = new Set(
-      Object.values(s.glades).filter((g) => g.kind === 'dangerous' || g.kind === 'forbidden').map((g) => g.id),
-    )
-    clearToward(s, danger)
-    expect(ORDERS.dangerous_glade_1.fromYear).toBe(2)
-    expect(orderEligible(ORDERS.dangerous_glade_1.goal, s)).toBe(true)
+    const id = 'workshops_full'
+    for (const b of Object.values(s.buildings)) if (BUILDING_LIST.find((d) => d.id === b.defId)?.category !== 'hearth') delete s.buildings[b.id]
+    for (const v of Object.values(s.villagers)) v.assignment = null
+    for (const [i, defId] of ['lumberMill', 'brickyard', 'cookhouse'].entries()) place(s, defId, 0, { x: i * 2 - 2, y: 3 })
+    expect(ORDERS[id].fromYear).toBe(2)
+    expect(ORDERS[id].afterService).toBe(true)
+    expect(orderEligible(ORDERS[id].goal, s)).toBe(true)
     // Every other order already seen: the pool is this one or nothing.
-    s.ordersSeen = ORDER_LIST.map((d) => d.id).filter((id) => id !== 'dangerous_glade_1')
+    s.ordersSeen = ORDER_LIST.map((d) => d.id).filter((x) => x !== id)
     const offered = () => {
       s.orderOffers = []
       offerOrders(s)
       return s.orderOffers[0].orders!.map((o) => o.defId)
     }
-    s.season = { ...s.season, year: 1 }
-    expect(offered()).not.toContain('dangerous_glade_1')
     s.season = { ...s.season, year: 2 }
-    expect(offered()).toContain('dangerous_glade_1')
+    expect(offered(), 'no service hall').not.toContain(id)
+    place(s, 'tavern', 0, { x: 2, y: -2 })
+    s.season = { ...s.season, year: 1 }
+    expect(offered(), 'Year 1').not.toContain(id)
+    s.season = { ...s.season, year: 2 }
+    expect(offered()).toContain(id)
   })
 
   it('a trade order waits for caravans and counts every lot sold or bought', () => {
@@ -383,6 +388,15 @@ describe('ground orders: held goals', () => {
     s.storageCap = 99999
     for (const r of RESOURCE_LIST) s.stock[r.id] = 200
     expect(orderEligible(goal, s), 'nobody served it yet: out of reach').toBe(false)
+    // A Copper Still standing with spiced ale in stock puts it within reach…
+    const still = place(s, 'brewery', 0, { x: 3, y: 3 })
+    still.tier = 1
+    expect(orderEligible(goal, s), 'made and stocked').toBe(true)
+    // …but not while the stock is all but gone.
+    s.stock.spicedAle = 2
+    expect(orderEligible(goal, s), 'made, not stocked').toBe(false)
+    s.stock.spicedAle = 200
+    delete s.buildings[still.id]
     expect(orderEligible(ORDERS.refined_fox.goal, s), 'no foxes').toBe(false)
     // One staffed tavern with spiced ale in stock, for a settlement it reaches under half of.
     place(s, 'tavern', 1)

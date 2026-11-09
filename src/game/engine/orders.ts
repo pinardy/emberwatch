@@ -18,6 +18,7 @@ import {
   ORDER_SLOTS,
   REFINED_ORDER_HOLD_RATIO,
   REFINED_ORDER_MIN_RATIO,
+  REFINED_ORDER_MIN_STOCK,
 } from './balance'
 import { pushLog } from './runLog'
 import { productionRate } from './forecast'
@@ -356,8 +357,8 @@ function depositRoom(s: RunState, kind: DepositId): number {
 
 /**
  * A species of this settlement wants its refined need, the finer good is
- * within reach (it already reaches some of them, or is being made), and the
- * settlement has
+ * within reach (it already reaches some of them, or is made and stocked),
+ * and the settlement has
  * a whole chain to meet it: a venue for the need and the venue's own goods,
  * and the finer good itself.
  */
@@ -367,11 +368,13 @@ function refinedChain(s: RunState, species: SpeciesId): boolean {
   if (!status || status.def.venueTier) return false
   const { def } = status
   // Within reach: the finer good already reaches some of them, or a
-  // workshop standing now makes it.
-  const making = !!def.good && Object.values(s.buildings).some(
-    (b) => b.built && recipesOf(b).some((r) => (r.outputs[def.good!] ?? 0) > 0),
-  )
-  if (status.ratio < REFINED_ORDER_MIN_RATIO && !making) return false
+  // workshop standing now makes it and some is in stock (a good made but
+  // eaten as fast is not within reach).
+  const stocked =
+    !!def.good &&
+    (s.stock[def.good] ?? 0) >= REFINED_ORDER_MIN_STOCK &&
+    Object.values(s.buildings).some((b) => b.built && recipesOf(b).some((r) => (r.outputs[def.good!] ?? 0) > 0))
+  if (status.ratio < REFINED_ORDER_MIN_RATIO && !stocked) return false
   if (def.good && !hasProductionChain(s, def.good, new Set(), true)) return false
   return s.unlockedBuildings.some((id) => {
     const venue = BUILDINGS[id]
@@ -520,10 +523,16 @@ function drawCandidate(s: RunState, rng: Rng, taken: Taken): Order | null {
       !taken.defIds.has(d.id) &&
       !s.ordersSeen.includes(d.id) &&
       (d.fromYear ?? 1) <= s.season.year &&
+      (!d.afterService || serviceStanding(s)) &&
       orderEligible(d.goal, s),
   )
   if (pool.length > 0) return newOrder(s, rng.pick(pool))
   return countingOrder(s, rng, taken)
+}
+
+/** True once a service venue stands built in the settlement. */
+function serviceStanding(s: RunState): boolean {
+  return Object.values(s.buildings).some((b) => b.built && !!BUILDINGS[b.defId]?.service)
 }
 
 /** Up to `count` distinct candidates. */
