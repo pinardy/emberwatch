@@ -18,6 +18,7 @@ import { Icon } from './Icon'
 import { IconText } from './IconText'
 import { GrandPetitionCard, QueensCourt, RetreatCard } from './QueenLevers'
 import { ErrandList } from './Errands'
+import { PanelIntro } from './PanelIntro'
 import { cornerstoneArt, ongoingArt } from '../game/content/artFamilies'
 
 export function OrdersPanel() {
@@ -45,12 +46,14 @@ export function OrdersPanel() {
           <h3>The Queen's orders</h3>
           <RaceSparkline run={run} />
         </div>
-        <p className="panel-hint">
+        <PanelIntro id="orders">
           Completing an order grants reputation immediately; the Queen then offers two
-          more to choose from here, and the slot waits empty until you pick. {run.orderDeclineYear === run.season.year
-            ? 'You have already asked her for different orders this year.'
-            : 'Once a year you may ask her for a different pair.'}
-        </p>
+          more to choose from here, and the slot waits empty until you pick. Once a year
+          you may ask her for a different pair.
+        </PanelIntro>
+        {run.orderDeclineYear === run.season.year && (
+          <p className="panel-hint">You have already asked her for different orders this year.</p>
+        )}
         <CommissionCard run={run} />
         {(run.orderOffers ?? []).map((offer, index) => (
           <OrderOffer key={offer.orders?.[0]?.id ?? index} run={run} offer={offer} index={index} />

@@ -9,6 +9,7 @@ import type { BuildingCategory, ResourceBag } from '../game/types'
 import { Icon } from './Icon'
 import { PartnerIcon } from './PartnerIcon'
 import { RoadCard } from './RoadTool'
+import { PanelIntro } from './PanelIntro'
 
 const ORDER: BuildingCategory[] = [
   'housing',
@@ -30,10 +31,10 @@ export function BuildPanel() {
 
   return (
     <div className="panel-body">
-      <p className="panel-hint">
+      <PanelIntro id="build">
         Idle villagers build automatically — the more you leave unassigned, the faster
         construction goes.
-      </p>
+      </PanelIntro>
       {ORDER.map((category) => {
         const items = unlocked.filter((d) => d.category === category)
         if (items.length === 0) return null
