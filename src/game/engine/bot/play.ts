@@ -101,6 +101,7 @@ import {
 } from '../roads'
 import { tick } from '../tick'
 import { keepsLocalRecipe, salvageCamp, tuneTerrainRecipes, warmGroundHome } from './terrain'
+import { orderGladeTarget, orderKindPromise, orderWantsCrew, pursueOrders, wantsOrderGlades, type OrderKit } from './orders'
 import { openErrands, runErrand } from '../errands'
 import {
   AGREEMENT_PRICE,
@@ -202,6 +203,10 @@ export interface BotReport extends RefinedReport {
   commissionTerms: string
   /** Orders still open at the end, with progress — stuck ones explain slow runs. */
   openOrders: string
+  /** Order def ids offered in a choice, taken into a slot this run, and met. */
+  ordersOffered: string[]
+  ordersDrawn: string[]
+  ordersMet: string[]
   /** Road stretches laid, and workplaces joined to a hub by road at the end. */
   roads: number
   roadLinked: number
@@ -402,6 +407,7 @@ const noRoom = new WeakMap<RunState, Set<string>>()
 
 /** The bot's own moves, lent to the commission tactics (`playtestCommissions.ts`). */
 const COMMISSION_KIT: BotKit = { tryPlace, buildHousing, servesDecree }
+const ORDER_KIT: OrderKit = { builderReserve, warmSprawl, stockTarget }
 /** …and to the refined-needs play (`bot/refined.ts`). */
 const REFINED_KIT: RefinedKit = { tryPlace, tryUpgrade, slotPressure }
 
@@ -872,7 +878,7 @@ function saturated(s: RunState, b: BuildingInstance): boolean {
   if (outputs.length === 0) return false
   // Output an open order or the live decree is counting is never surplus,
   // nor goods a forecast blight wants made.
-  if (servesDecree(s, b) || servesOrder(s, b)) return false
+  if (servesDecree(s, b) || servesOrder(s, b) || orderWantsCrew(s, b)) return false
   if (outputs.some((id) => blightGoods(s).includes(id))) return false
   if (EDIBLE.some((id) => outputs.includes(id))) {
     return foodStock(s) >= stockTarget(s, outputs[0])
@@ -935,6 +941,8 @@ export function staff(s: RunState): void {
     if (def.category === 'service') return 5
     // A live decree's producers come next: the deadline is real.
     if (servesDecree(s, b)) return 4.5
+    // An open order wants this crew (a deposit's goods, a refined venue).
+    if (orderWantsCrew(s, b)) return 3.5
     if (serviceProducers.has(b.defId)) return 4
     if (def.tags.includes('cooking')) return 3
     if (MATERIAL_CHAIN.has(b.defId)) return 3
@@ -1074,7 +1082,9 @@ export function explore(s: RunState): void {
   // An open order for glades is worth clearing for first.
   const tactics = tacticsFor(s)
   const gladeOrder =
-    s.orders.some((o) => orderGoal(o)?.kind === 'gladesCleared') || !!tactics.wantsGlades?.(s)
+    s.orders.some((o) => orderGoal(o)?.kind === 'gladesCleared') ||
+    !!tactics.wantsGlades?.(s) ||
+    wantsOrderGlades(s)
   const lean = gladeLean(s)
   if (
     !gladeOrder &&
@@ -1103,6 +1113,7 @@ export function explore(s: RunState): void {
   const border = Object.values(s.glades).filter((g) => !g.cleared && isReachable(s, g.id))
   let target =
     tactics.preferGlade?.(s, border) ??
+    orderGladeTarget(s, border) ??
     border.filter((g) => !g.spared).sort((a, b) => a.clearWork - b.clearWork)[0]
   if (!target && gladeOrder) {
     // The order is worth more than the truce: break it on the cheapest glade.
@@ -1551,6 +1562,8 @@ function orderPromise(s: RunState, order: Order): number {
       score += 0.2
       break
     default:
+      // The orders on the run's own ground and systems (`bot/orders.ts`).
+      score += orderKindPromise(s, order)
       break
   }
   return score
@@ -1658,6 +1671,9 @@ export function playRun(
   }
   const impatienceNow = () => s.impatience + s.impatienceProgress
   let firstRepMinute = Infinity
+  const ordersMet: string[] = []
+  /** Every candidate the Queen put in an order offer, by instance id. */
+  const ordersOffered = new Map<string, string>()
   let decreesMissed = 0
   const amber: AmberLedger = { earned: 0, earnedBy: {}, spent: {}, end: 0, caravans: false, visits: 0 }
   botLedger.set(s, amber)
@@ -1691,6 +1707,7 @@ export function playRun(
       pullLevers(s, amber)
       if (s.phase !== 'playing') break
       build(s, economyOnly)
+      pursueOrders(s, ORDER_KIT)
       layRoads(s)
       explore(s)
       tuneRecipes(s)
@@ -1709,7 +1726,10 @@ export function playRun(
     const lostBefore = s.stats.villagersLost
     const ticked = s.pendingChoices.length === 0
     const frostBefore = s.frostExposure ?? 0
+    const liveOrders = s.orders.map((o) => o)
     booked(s, amber, 'tick', () => tick(s, STEP))
+    for (const o of liveOrders) if (o.complete) ordersMet.push(o.defId)
+    for (const offer of s.orderOffers ?? []) for (const o of offer.orders ?? []) ordersOffered.set(o.id, o.defId)
     if (s.season.season === 'storm' && (s.frostExposure ?? 0) < frostBefore) frozen++
     if (s.season.season === 'storm') {
       const c = coldVillagers(s)
@@ -1783,6 +1803,9 @@ export function playRun(
     commissionMet: judgeCommission(s)?.met ?? false,
     commissionTerms: describeCommission(s),
     openOrders: s.orders.map((o) => `${o.defId}@${Math.round(o.progress * 100)}%`).join(','),
+    ordersOffered: [...ordersOffered.values()],
+    ordersDrawn: [...s.ordersSeen],
+    ordersMet,
     roads: s.roads?.length ?? 0,
     roadLinked: Object.values(s.buildings).filter((b) => roadLinkOf(s, b).percent > 0).length,
     firstRepMinute,

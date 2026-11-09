@@ -31,6 +31,7 @@ import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { memoByBuildings } from './runCache'
 import { recordEvent } from './timeline'
+import { tallyTrade } from './tallies'
 
 /**
  * Caravans. Once a Trading Post stands, one arrives on a cycle with a rotating
@@ -189,6 +190,7 @@ export function buyOffer(s: RunState, index: number): string | null {
   spend(s.stock, { amber: price })
   grant(s.stock, { [offer.resource]: offer.amount }, s.storageCap, storageUsed(s))
   offer.sold = true
+  tallyTrade(s)
   pushLog(s, `Bought ${offer.amount} × ${RESOURCES[offer.resource]?.name} for ${price} amber.`, 'info')
   return null
 }
@@ -283,6 +285,7 @@ export function sellResource(s: RunState, resource: ResourceId): string | null {
   const paid = sellPrice(s, resource, TRADE_LOT)
   spend(s.stock, { [resource]: TRADE_LOT })
   grant(s.stock, { amber: paid })
+  tallyTrade(s)
   gainReputation(s, reputationFor(s, 'trade', paid * REPUTATION_PER_TRADE_AMBER), 'trade')
   pushLog(
     s,

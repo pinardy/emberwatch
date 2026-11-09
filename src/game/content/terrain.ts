@@ -63,8 +63,8 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
       'Ash over old embers. Homes here stay warm through every Storm, but nothing planted takes, and Storm rain turns the ash to slurry around every workplace.',
     effects: [
       { kind: 'warmHomes' },
-      { kind: 'workSpeed', tag: 'farming', percent: -50 },
-      { kind: 'seasonWork', season: 'storm', percent: -25 },
+      { kind: 'workSpeed', tag: 'farming', percent: -40 },
+      { kind: 'seasonWork', season: 'storm', percent: -15 },
     ],
   },
 }

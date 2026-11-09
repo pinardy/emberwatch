@@ -3,14 +3,14 @@ import { ORDERS } from '../game/content/orders'
 import { RESOURCES } from '../game/content/resources'
 import { sootheCost } from '../game/engine/actions'
 import { SEASON_INFO } from '../game/engine/balance'
-import { describeOrder, orderReputation } from '../game/engine/orders'
+import { describeOrder, orderReputation, orderStatus } from '../game/engine/orders'
 import { modifierOngoingId } from '../game/engine/runModifiers'
 import { useGameStore, useHudRun } from '../game/store'
 import { Bar } from './Bar'
 import { DecreeCard } from './DecreeCard'
 import { CommissionCard } from './Commissions'
 import { COMMISSION_ONGOING_ID } from '../game/engine/citadel'
-import { OrderOffer, orderTag } from './QueenChoice'
+import { OrderNote, OrderOffer, orderTag } from './QueenChoice'
 import { RunModifierList } from './RunModifierList'
 import { TerrainPlanLine, planOf } from './TerrainPlan'
 import { RaceSparkline } from './RaceSparkline'
@@ -63,6 +63,8 @@ export function OrdersPanel() {
           const def = ORDERS[order.defId]
           if (!def) return null
           const tag = orderTag(order)
+          const status = orderStatus(run, order)
+          const pct = Math.floor(order.progress * 100)
           return (
             <div className={`order-card ${order.writ ? 'is-writ' : ''}`} key={order.id}>
               <div className="row-between">
@@ -75,8 +77,9 @@ export function OrdersPanel() {
                 </span>
               </div>
               <small>{describeOrder(order)}</small>
+              <OrderNote order={order} />
               <Bar value={order.progress} />
-              <small className="muted">{Math.floor(order.progress * 100)}%</small>
+              <small className="muted">{status ? `${status} · ${pct}%` : `${pct}%`}</small>
             </div>
           )
         })}
