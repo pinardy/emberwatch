@@ -7,6 +7,10 @@ import {
   PETITION_RELIEF,
   PETITION_VOW_REPUTATION,
   PETITION_VOW_SECONDS,
+  ENVOY_UNREST_MARGIN,
+  ENVOY_UNREST_SECONDS,
+  FINAL_CHARGE_RESOLVE_RATE,
+  FINAL_CHARGE_WITHIN,
   HEARTH_STORM_REACH_FLOOR,
   IMPATIENCE_STAGNATION_GRACE,
   RESOLVE_EXPECTATION_CROWD_FROM,
@@ -17,7 +21,13 @@ import { pendingBlight } from '../game/engine/blights'
 import { openErrands } from '../game/engine/errands'
 import { isHeldOrder } from '../game/engine/orders'
 import { isFounding } from '../game/engine/founding'
-import { architectOffers, architectPrice, petitionOpen, retreatOffered } from '../game/engine/levers'
+import {
+  architectOffers,
+  architectPrice,
+  finalChargeActive,
+  petitionOpen,
+  retreatOffered,
+} from '../game/engine/levers'
 import { idleVillagers, population, stormEndReach } from '../game/engine/queries'
 import { envoyRiding } from '../game/engine/climax'
 import { describeProfile, runReputationProfile } from '../game/engine/reputation'
@@ -202,9 +212,9 @@ export const TIPS: Tip[] = [
     id: 'envoy',
     title: 'The envoy is on her way',
     text: (run) =>
-      `The Queen is satisfied: impatience no longer matters. Her envoy arrives as ${
+      `Her envoy arrives as ${
         run.season.season === 'storm' ? 'this' : 'the next'
-      } Storm ends, the forest’s last stand. Stock wood, light braziers by outer homes, keep everyone fed — collapse first and the run is lost.`,
+      } Storm ends. Its blights and the forest’s dread cut resolve: if most villagers sink ${ENVOY_UNREST_MARGIN}+ below their threshold for ${ENVOY_UNREST_SECONDS} s, the run is lost. The 🐎 warning names who would fall and the fix.`,
     when: envoyRiding,
     urgent: true,
   },
@@ -236,7 +246,7 @@ export const TIPS: Tip[] = [
   {
     id: 'grand-petition',
     title: 'The Grand Petition',
-    text: `Once a run, near the end of her patience: ${PETITION_AMBER} amber buys −${PETITION_RELIEF} impatience on a vow of ${PETITION_VOW_REPUTATION} reputation in ${PETITION_VOW_SECONDS / 60} minutes. Break it and she adds +${PETITION_BROKEN_IMPATIENCE}. It is in the Orders panel.`,
+    text: `Once a run, near the end of her patience: ${PETITION_AMBER} amber buys −${PETITION_RELIEF} impatience on a vow of up to ${PETITION_VOW_REPUTATION} reputation in ${PETITION_VOW_SECONDS / 60} minutes, sized to your recent pace. Break it and she adds +${PETITION_BROKEN_IMPATIENCE}. It is in the Orders panel.`,
     when: petitionOpen,
     doneWhen: (run) => !!run.petition,
     urgent: true,
@@ -257,9 +267,15 @@ export const TIPS: Tip[] = [
     doneWhen: (run) => (run.orderOffers ?? []).length === 0,
   },
   {
+    id: 'final-charge',
+    title: "The Queen's final charge",
+    text: `Within ${FINAL_CHARGE_WITHIN} points and stalled, the Queen is watching: contented villagers earn reputation ${FINAL_CHARGE_RESOLVE_RATE}× as fast until her envoy sets out. Species below their threshold earn nothing — lift them first.`,
+    when: finalChargeActive,
+  },
+  {
     id: 'errand',
     title: 'An errand',
-    text: 'While reputation stands still the settlement turns up small jobs — on the chip above the threats and in the Orders panel. Do one for a little reputation or amber; leave it and it lapses, no harm done.',
+    text: 'While reputation stands still the settlement turns up small jobs — on the chip above the threats and in the Orders panel. Do one for reputation or amber — the longer the stall, the more it pays; leave it and it lapses, no harm done.',
     when: (run) => openErrands(run).length > 0,
     doneWhen: (run) => (run.errandBook?.met ?? 0) > 0,
   },

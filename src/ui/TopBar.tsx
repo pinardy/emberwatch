@@ -29,7 +29,8 @@ import { useDismiss } from './useGameLoop'
 import { HEARTH_KEY, inspectHearth } from './MapAids'
 import { signed } from './threatText'
 import { SaveStatusChip } from './SaveStatusChip'
-import { EnvoyMeter, GloryNote } from './EnvoyStatus'
+import { EnvoyMeter, FinalChargeNote, GloryNote } from './EnvoyStatus'
+import { finalChargeActive } from '../game/engine/levers'
 import { envoyRiding } from '../game/engine/climax'
 import { useNarrowScreen } from './useNarrowScreen'
 
@@ -286,7 +287,13 @@ export function TopBar() {
               : "At maximum reputation the Queen's envoy sets out; hold until she arrives to win. Earned from high resolve, orders, decrees, glades and events."
           }
           floats={repFloats}
-          note={envoyRiding(run) ? <GloryNote run={run} /> : undefined}
+          note={
+            envoyRiding(run) ? (
+              <GloryNote run={run} />
+            ) : finalChargeActive(run) ? (
+              <FinalChargeNote />
+            ) : undefined
+          }
         />
         {envoyRiding(run) ? (
           <EnvoyMeter run={run} mods={frame?.mods ?? computeModifiers(run)} />

@@ -24,6 +24,7 @@ import { sendEnvoy } from './reputation'
 import { gladeAt } from './mapgen'
 import { secondsSinceReputation, stagnationImpatienceRate } from './society'
 import { tick } from './tick'
+import { assignWorker, findPlacement, placeBuilding } from './actions'
 
 /**
  * Errands: small optional tasks offered while reputation stands still —
@@ -167,18 +168,15 @@ describe('when errands turn up', () => {
     expect(new Set(openErrands(s).map((e) => e.defId)).size).toBe(2)
   })
 
-  it('never while a choice is waiting: a dialog, or an order slot to fill', () => {
+  it('never while a dialog waits; an order offer in the panel (the clock runs) does not hold them back', () => {
     const s = newRun()
     emptyMill(s)
     stalled(s, ERRAND_PACING.stallAfter + 5)
-    s.orderOffers = [{ kind: 'order', options: ['x'], orders: [] }]
-    stepErrands(s, 0.25)
-    expect(openErrands(s)).toHaveLength(0)
-    s.orderOffers = []
     s.pendingChoices = [{ kind: 'cornerstone', options: ['x'] }]
     stepErrands(s, 0.25)
     expect(openErrands(s)).toHaveLength(0)
     s.pendingChoices = []
+    s.orderOffers = [{ kind: 'order', options: ['x'], orders: [] }]
     stepErrands(s, 0.25)
     expect(openErrands(s)).toHaveLength(1)
   })
@@ -340,6 +338,55 @@ describe('meeting, paying and lapsing', () => {
     expect(errandReward(s, rep).reputation).toBeUndefined()
   })
 
+  it('pays more the longer the flat stretch has run, up to three times over', () => {
+    const s = newRun()
+    s.reputation = 5
+    const rep = { reputation: 0.3 }
+    const at = (seconds: number) => {
+      stalled(s, seconds, s.clock + 1000)
+      return errandReward(s, rep).reputation
+    }
+    expect(at(ERRAND_PACING.reputationAfter + 1)).toBeCloseTo(0.3)
+    expect(at(ERRAND_PACING.reputationAfter + ERRAND_PACING.stallBonusEvery + 1)).toBeCloseTo(0.6)
+    expect(at(ERRAND_PACING.reputationAfter + 2 * ERRAND_PACING.stallBonusEvery + 1)).toBeCloseTo(0.9)
+    // Capped: a stall of ten minutes pays no more than three times over.
+    expect(at(600)).toBeCloseTo(0.9)
+    // Still a set number a stall, then amber.
+    for (let i = 1; i < ERRAND_PACING.reputationPerStall; i++) expect(errandReward(s, rep).reputation).toBeCloseTo(0.9)
+    expect(errandReward(s, rep).reputation).toBeUndefined()
+  })
+
+  it('the woodpile errand asks for a mark a half-minute of surplus away, never in the Storm', () => {
+    const s = newRun()
+    stalled(s, ERRAND_PACING.stallAfter + 5)
+    s.stock.wood = 42
+    // A woodcutter at work: wood is coming in faster than the hearth burns it.
+    const camp = Object.values(s.buildings).find((b) => b.defId === 'woodcuttersCamp')
+    const withCamp = camp ?? null
+    if (!withCamp) {
+      expect(placeBuilding(s, 'woodcuttersCamp', findPlacement(s, 'woodcuttersCamp')!)).toBeNull()
+    }
+    const wc = Object.values(s.buildings).find((b) => b.defId === 'woodcuttersCamp')!
+    wc.built = true
+    assignWorker(s, wc.id)
+    assignWorker(s, wc.id)
+    const titles = new Set<string>()
+    for (let i = 0; i < 40; i++) {
+      const e = drawErrand(s)
+      if (e?.defId === 'keepHearth') {
+        titles.add(e.title)
+        const goal = e.goal.kind === 'hold' ? e.goal.goal : null
+        const mark = goal && goal.kind === 'stock' ? goal.amount : 0
+        // Within reach: no more than a half-minute of the surplus above the pile, rounded to 5.
+        expect(mark).toBeGreaterThan(42)
+        expect(mark).toBeLessThanOrEqual(Math.ceil((42 + 30 * 0.6) / 5) * 5)
+      }
+    }
+    expect([...titles][0]).toMatch(/^Stack the woodpile: keep \d+ Wood in store for a minute$/)
+    s.season = { ...s.season, season: 'storm' }
+    for (let i = 0; i < 40; i++) expect(drawErrand(s)?.defId).not.toBe('keepHearth')
+  })
+
   it('leaves the Queen’s stagnation count alone unless a whole point lands', () => {
     const s = newRun()
     s.reputationProgress = 0
@@ -493,7 +540,8 @@ describe("the Queen's court", () => {
     expect(grandPetition(s)).toBeNull()
     court = queensCourt(s)
     expect(court[1].state).toBe('used')
-    expect(court[1].note).toMatch(/^Made — your vow: 0\/3 reputation/)
+    // Reputation has stood still here, so the vow is the least.
+    expect(court[1].note).toMatch(/^Made — your vow: 0\/1 reputation/)
     // Close to victory the Retreat is not on the table.
     s.reputation = s.maxReputation - 2
     expect(queensCourt(s)[2].note).toContain('Not while victory is within')

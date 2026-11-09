@@ -27,12 +27,13 @@ import { stepProduction } from './production'
 import { computeStorageCap, population, totalHousing } from './queries'
 import { checkCharter, stepConditions, stepDecree } from './structure'
 import { stepCaravan } from './trade'
-import { stepPetition } from './levers'
+import { stepFinalCharge, stepPetition } from './levers'
 import {
   envoyArrivesWithStormEnd,
   envoyRiding,
   envoyStormBreaks,
   forecastFinalBlight,
+  quietCourt,
   stepEnvoy,
   threatPace,
 } from './climax'
@@ -68,6 +69,8 @@ const BRAZIER_COLD_LOG = 'A brazier has gone cold — the homes around it are fr
  */
 export function tick(s: RunState, dt: number): void {
   if (s.phase !== 'playing') return
+  // A decree or order offer left waiting as the envoy set out is set aside.
+  quietCourt(s)
   if (s.pendingChoices.length > 0) return
   // Settlement-wide derivations are remembered across ticks (see `withRunCache`).
   withRunCache(s, () => tickPlaying(s, dt))
@@ -119,6 +122,8 @@ function tickPlaying(s: RunState, dt: number): void {
   if (!envoyRiding(s)) stepImpatience(s, dt, mods)
   // The Grand Petition's vow is judged on the same reputation.
   stepPetition(s)
+  // Within reach of victory and stalled: the Queen's final charge.
+  stepFinalCharge(s)
 
   for (const message of stepDepartures(s, dt)) pushLog(s, message, 'bad')
   for (const message of stepFrost(s, dt)) pushLog(s, message, 'bad')
@@ -133,12 +138,13 @@ function tickPlaying(s: RunState, dt: number): void {
     )
   }
 
-  stepDecree(s, dt)
+  stepDecree(s, dt, mods)
   stepOrders(s, dt)
   stepErrands(s, dt)
   checkMilestones(s)
   checkCharter(s)
   stepEnvoy(s, dt)
+  quietCourt(s)
   checkEndConditions(s)
   if (s.phase !== 'playing') closeOpenChoices(s)
   stepTimeline(s)

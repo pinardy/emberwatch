@@ -108,14 +108,14 @@ describe('errands in the Orders panel', () => {
     expect(currentRun().impatience).toBe(impatience)
   })
 
-  it('a staffing errand shows how long it has held, with no button to press', () => {
+  it('a staffing errand shows how long it has held, and sends an idle villager with one press', () => {
     const run = newRun()
     run.errands = [
       {
         id: 'e2',
         defId: 'staffWorkplace',
         title: 'Staff the Lumber Mill north of the hearth',
-        goal: { kind: 'staff', buildingId: 'hearth', seconds: 30 },
+        goal: { kind: 'staff', buildingId: 'hearth', seconds: 20 },
         held: 12,
         progress: 0.4,
         timeLeft: 30,
@@ -126,9 +126,17 @@ describe('errands in the Orders panel', () => {
     show(run)
     render(<OrdersPanel />)
     const card = screen.getByTestId('errand')
-    expect(card.textContent).toContain('12/30s held')
+    expect(card.textContent).toContain('12/20s held')
     expect(card.textContent).toContain('+12 amber')
     expect(within(card).queryByRole('button', { name: /Hand over|Sell/ })).toBeNull()
+    expect(currentRun().buildings.hearth.workers).toHaveLength(0)
+    fireEvent.click(within(card).getByRole('button', { name: 'Send a worker' }))
+    // Someone is at the hearth now; the errand is met once they have held it.
+    expect(currentRun().buildings.hearth.workers).toHaveLength(1)
+    expect(currentRun().errands).toHaveLength(1)
+    // Staffed, the button says why there is nothing more to press.
+    expect(within(screen.getByTestId('errand')).getByRole('button', { name: 'Send a worker' })).toHaveProperty('disabled', true)
+    expect(screen.getByTestId('errand').textContent).toMatch(/Someone works there/)
   })
 })
 
