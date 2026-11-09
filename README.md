@@ -7,7 +7,7 @@ You are a viceroy sent into a rain-soaked forest. Raise a settlement, keep three
 ```bash
 npm install
 npm run dev        # play at the printed localhost URL
-npm test           # 1071 tests: simulation, roads, sound, forecasts, Citadel, harness smoke, UI
+npm test           # 1083 tests: simulation, roads, sound, forecasts, Citadel, harness smoke, UI
 npm run test:balance  # the full balance harness (a few minutes)
 npm run lint       # ESLint, including the engine purity rules
 npm run check      # typecheck + lint + npm test (what the pre-commit hook runs)
