@@ -1,7 +1,7 @@
 import { BUILDINGS } from '../content/buildings'
 import { NEED_LABELS, SPECIES, speciesSingular } from '../content/species'
-import { RESOURCES } from '../content/resources'
-import type { BuildingInstance, ResourceId, RunState, SpeciesId } from '../types'
+import { RESOURCES, resourceName } from '../content/resources'
+import type { ActiveCondition, BuildingInstance, ResourceId, RunState, SpeciesId } from '../types'
 import { DEPARTURE_GRACE, SECONDS_TO_LEAVE } from './balance'
 import {
   RUNWAY_WARNING_SECONDS,
@@ -17,6 +17,10 @@ import {
 } from './forecast'
 import { computeModifiers, type Modifiers } from './modifiers'
 import { isFoodCamp } from './onboarding'
+import { demolishRefund, findPlacement } from './actions'
+import { dist } from './geometry'
+import { hasLiveDeposit } from './production'
+import { displayName } from './upgrades'
 import {
   stormEndReach,
   activeRecipe,
@@ -24,13 +28,27 @@ import {
   idleVillagers,
   population,
   secondsUntilDeparture,
+  speciesCounts,
   totalHousing,
 } from './queries'
 import { coldVillagers, secondsUntilFrostLoss, villagersBeyond } from './society'
 import { despairRate } from './traits'
-import { petitionOpen, petitionVowLeft, retreatOffered } from './levers'
-import { envoyPopulationFloor, envoyRiding } from './climax'
-import { ENVOY_COLD_HEARTH_SECONDS, ENVOY_UNREST_SECONDS } from './balance'
+import { finalChargeActive, petitionOpen, petitionVowLeft, retreatOffered } from './levers'
+import {
+  envoyArrivesIn,
+  envoyPopulationFloor,
+  envoyRiding,
+  lastStandOutlook,
+  unrestCause,
+  type LastStandOutlook,
+} from './climax'
+import {
+  ENVOY_COLD_HEARTH_SECONDS,
+  ENVOY_DREAD_OFFERING_HERBS,
+  ENVOY_UNREST_SECONDS,
+  ENVOY_UNREST_SHARE,
+} from './balance'
+import { resolveBreakdowns, type ResolveBreakdown } from './society'
 
 /**
  * Things that are quietly going wrong.
@@ -90,7 +108,8 @@ export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warnin
     })
   }
 
-  out.push(...envoyWarnings(s))
+  const mods = inputs.mods ?? computeModifiers(s)
+  out.push(...envoyWarnings(s, mods))
 
   // The cold kills: say who is out in it and how long until it takes someone.
   const frozen = coldVillagers(s)
@@ -123,8 +142,6 @@ export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warnin
     })
   }
 
-  const mods = inputs.mods ?? computeModifiers(s)
-
   // Say so *before* the hearth goes out, while there is still time to chop.
   // The forecast counts every lit brazier, which shares the woodpile.
   if (!s.coldHearth) {
@@ -151,6 +168,9 @@ export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warnin
       })
     }
   }
+
+  const noCamp = woodcutterWarning(s)
+  if (noCamp) out.push(noCamp)
 
   const pop = population(s)
   if (!s.starving && pop > 0) {
@@ -284,7 +304,43 @@ export function collectWarnings(s: RunState, inputs: WarningInputs = {}): Warnin
     })
   }
 
+  // The final charge: who is earning nothing toward it.
+  if (finalChargeActive(s)) {
+    const below = s.speciesPool.filter(
+      (sp) => speciesCounts(s)[sp] > 0 && s.resolve[sp] < SPECIES[sp].resolveTarget,
+    )
+    if (below.length > 0) {
+      out.push({
+        id: 'final-charge',
+        severity: 'caution',
+        text: `👑 The Queen's final charge pays contented villagers double, but ${andList(below.map((sp) => SPECIES[sp].name))} ${below.length > 1 ? 'are' : 'is'} below the threshold and earn${below.length > 1 ? '' : 's'} nothing — raise their resolve.`,
+      })
+    }
+  }
+
+  // While the envoy rides, the rules of the approach stay on screen (last:
+  // every closer danger comes first).
+  const hold = envoyHoldRules(s, mods)
+  if (hold) out.push(hold)
+
   return out
+}
+
+/**
+ * The approach's rules with today's numbers, for every screen (the meter's
+ * tooltip is not there on a phone): how many villagers must remain, the
+ * hearth's cold seconds left, and how long unrest may last.
+ */
+function envoyHoldRules(s: RunState, mods: Modifiers): Warning | null {
+  if (!envoyRiding(s)) return null
+  const e = s.envoy
+  const arrives = envoyArrivesIn(s, mods)
+  const coldLeft = Math.max(0, ENVOY_COLD_HEARTH_SECONDS - e.coldSeconds)
+  return {
+    id: 'envoy-hold',
+    severity: 'caution',
+    text: `🐎 Hold until the envoy arrives${arrives !== null ? ` in ${formatDuration(arrives)}` : ''}: keep ${envoyPopulationFloor(e)}+ villagers (${population(s)} now), the hearth lit (${Math.ceil(coldLeft)} s of cold left in all), and most villagers out of unrest (${ENVOY_UNREST_SECONDS} s straight breaks it).`,
+  }
 }
 
 /**
@@ -358,6 +414,54 @@ function storageAdvice(s: RunState, blocked: BuildingInstance[]): string {
   return `${head} A Warehouse needs ${need}; until then, ${dump}.`
 }
 
+/**
+ * No Woodcutters' Camp, and no way to raise one: too little wood to pay for
+ * it, or no room for it by any trees the settlement holds. The hearth and
+ * every building need wood, so this ends a run quietly unless it is said —
+ * with the building to pull down for its wood (one by the trees first, which
+ * frees the ground too) and the glade to clear.
+ */
+function woodcutterWarning(s: RunState): Warning | null {
+  const def = BUILDINGS[CAMP]
+  if (!def || !s.unlockedBuildings.includes(CAMP)) return null
+  const camps = Object.values(s.buildings).filter((b) => b.defId === CAMP)
+  if (camps.some((b) => !b.built || hasLiveDeposit(s, b, 'trees') || hasLiveDeposit(s, b, 'deadfall'))) return null
+  const cost = def.cost.wood ?? 0
+  const wood = Math.floor(s.stock.wood ?? 0)
+  const broke = wood < cost
+  if (!broke && findPlacement(s, CAMP) !== null) return null
+
+  const reach = (def.gatherRadius ?? 3) + 0.7
+  const trees = Object.values(s.deposits).filter(
+    (d) => (d.kind === 'trees' || d.kind === 'deadfall') && s.glades[d.gladeId]?.cleared,
+  )
+  const byTrees = (b: BuildingInstance) => trees.some((d) => dist(b.pos, d.pos) <= reach + d.radius)
+  const refundWood = (b: BuildingInstance) => demolishRefund(b).wood ?? 0
+  const candidates = Object.values(s.buildings)
+    .filter((b) => b.defId !== 'ancientHearth' && b.defId !== CAMP)
+    .filter((b) => (broke ? refundWood(b) >= cost - wood : byTrees(b)))
+    .sort((a, b) => Number(byTrees(b)) - Number(byTrees(a)) || refundWood(b) - refundWood(a))
+  const target = candidates[0]
+  const glades = Object.values(s.glades).filter(
+    (g) => g.discovered && !g.cleared && !g.spared && g.neighbors.some((id) => s.glades[id]?.cleared),
+  )
+  const paying = glades.find((g) => (g.reward.wood ?? 0) > 0)
+  const wooded = glades.find((g) => Object.values(s.deposits).some((d) => d.gladeId === g.id && d.kind === 'trees'))
+  const glade = broke ? (paying ?? wooded) : (wooded ?? paying)
+  const fixes = [
+    target && `demolish the ${displayName(target)}${broke ? ' for its wood' : ' by the trees'}`,
+    glade ? `clear ${glade.name}${glade === paying ? ` (it pays ${glade.reward.wood} wood)` : ''}` : 'clear a forest glade',
+  ].filter(Boolean)
+  const head = broke
+    ? `🪓 No Woodcutters' Camp and no wood to build one (it takes ${cost}).`
+    : "🪓 No Woodcutters' Camp, and no room for one by any trees you hold."
+  return { id: 'no-woodcutter', severity: 'danger', text: `${head} ${capitalise(fixes.join(', or '))}.` }
+}
+
+const CAMP = 'woodcuttersCamp'
+
+const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+
 /** The most useful next move for a larder that will not last the Storm. */
 function foodAdvice(s: RunState): string {
   const camps = Object.values(s.buildings).filter((b) => isFoodCamp(b.defId))
@@ -373,7 +477,7 @@ function foodAdvice(s: RunState): string {
  * lose the run before she arrives: the hearth's cold seconds, unrest building,
  * and how many more villagers the settlement can lose.
  */
-function envoyWarnings(s: RunState): Warning[] {
+function envoyWarnings(s: RunState, mods: Modifiers): Warning[] {
   if (!envoyRiding(s)) return []
   const e = s.envoy
   const out: Warning[] = []
@@ -385,14 +489,13 @@ function envoyWarnings(s: RunState): Warning[] {
       text: `🐎 The hearth is cold: ${formatDuration(left)} more in all and the settlement breaks up before the envoy arrives.`,
     })
   }
+  const breakdowns = resolveBreakdowns(s, mods)
+  const outlook = lastStandOutlook(s, mods, breakdowns)
   if (e.unrestSeconds > 0) {
-    out.push({
-      id: 'envoy-unrest',
-      severity: 'danger',
-      text: `🐎 Most villagers are discontented, well below their reputation threshold: ${formatDuration(
-        Math.max(0, ENVOY_UNREST_SECONDS - e.unrestSeconds),
-      )} more of this unrest and the settlement breaks up before the envoy arrives.`,
-    })
+    out.push(unrestNow(s, mods, breakdowns, outlook))
+  } else if (outlook) {
+    const ahead = resolveOutlookWarning(s, breakdowns, outlook)
+    if (ahead) out.push(ahead)
   }
   const spare = population(s) - envoyPopulationFloor(e)
   if (spare <= 1) {
@@ -407,3 +510,154 @@ function envoyWarnings(s: RunState): Warning[] {
   }
   return out
 }
+
+/** "Lizards and Harpies", "Humans, Foxes and Harpies". */
+function andList(parts: string[]): string {
+  return parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+}
+
+/** "Gathering Clouds −8 and The Forest's Dread −3": what weighs, largest first. */
+function blowList(blows: { name: string; amount: number }[]): string {
+  return andList(blows.slice(0, 3).map((b) => `${b.name} −${Math.round(-b.amount)}`))
+}
+
+/** What lifts a struck blight (or the dread) now, in a clause: "12 Planks in store lift Leaking Roofs (you have 3)". */
+function liftClause(s: RunState, c: ActiveCondition): string | null {
+  const goal = c.resolveBy
+  if (goal.kind === 'stock') {
+    const have = Math.floor(s.stock[goal.resource] ?? 0)
+    return `${goal.amount} ${resourceName(goal.resource)} in store lift ${c.name} (you have ${have})`
+  }
+  if (goal.kind === 'produced') {
+    const left = Math.max(1, Math.ceil(goal.amount * (1 - c.progress)))
+    return `${left} more ${resourceName(goal.resource)} lift ${c.name}`
+  }
+  return null
+}
+
+/**
+ * The concrete ways out for the species in `falling`, best first: turn the
+ * worst resolve blight aside (before the Storm: the goods its forecast
+ * wants) or lift it (in the Storm), lift the dread with herbs, and the needs
+ * each falling species is missing.
+ */
+function resolveRemedies(
+  s: RunState,
+  falling: SpeciesId[],
+  breakdowns: ResolveBreakdown[],
+  outlook: LastStandOutlook | null,
+): string[] {
+  const out: string[] = []
+  const inStand = !!outlook?.inStand
+  for (const blow of outlook?.blows ?? []) {
+    if (out.length >= 2 || !blow.lift) continue
+    const c = blow.lift
+    if (!inStand && c.breaksWithStorm && c.resolveBy.kind === 'produced') {
+      const left = Math.max(1, Math.ceil(c.resolveBy.amount * (1 - c.progress)))
+      out.push(`make ${left} more ${resourceName(c.resolveBy.resource)} to turn ${c.name} aside (+${Math.round(-blow.amount)})`)
+    } else if (inStand) {
+      const lift = liftClause(s, c)
+      if (lift) out.push(`${lift} (+${Math.round(-blow.amount)})`)
+    }
+  }
+  if (outlook && !inStand) out.push(`${ENVOY_DREAD_OFFERING_HERBS} herbs gathered in the Storm lift the dread`)
+  const needs = falling
+    .map((sp) => {
+      const b = breakdowns.find((x) => x.species === sp)
+      if (!b) return null
+      const unmet = Object.entries(b.needRatio)
+        .filter(([, ratio]) => ratio < 1)
+        .sort((x, y) => x[1] - y[1])
+        .map(([need]) => NEED_LABELS[need]?.name ?? need)
+      return unmet.length > 0 ? `${SPECIES[sp].name} want ${andList(unmet.slice(0, 2))}` : null
+    })
+    .filter((x): x is string => !!x)
+  if (needs.length > 0) out.push(needs.join('; '))
+  else if (falling.length > 0) out.push('another food or comfortable homes raise everyone')
+  return out
+}
+
+/**
+ * Unrest has begun: who, under what, how long until the settlement breaks
+ * up — or that she arrives first — and the way out.
+ */
+function unrestNow(
+  s: RunState,
+  mods: Modifiers,
+  breakdowns: ResolveBreakdown[],
+  outlook: LastStandOutlook | null,
+): Warning {
+  const e = s.envoy!
+  const cause = unrestCause(s)
+  const counts = speciesCounts(s)
+  const n = cause.species.reduce((sum, sp) => sum + counts[sp], 0)
+  const left = Math.max(0, ENVOY_UNREST_SECONDS - e.unrestSeconds)
+  const arrives = envoyArrivesIn(s, mods) ?? Infinity
+  const who = `${andList(cause.species.map((sp) => SPECIES[sp].name)) || 'Most villagers'} (${n} of ${population(s)} villagers)`
+  const under = cause.blows.length > 0 ? ` under ${blowList(cause.blows)}` : ''
+  const fixes = resolveRemedies(s, cause.species, breakdowns, outlook)
+  const fix = fixes.length > 0 ? ` ${capitalise(fixes.join('; '))}.` : ''
+  if (arrives < left) {
+    return {
+      id: 'envoy-unrest',
+      severity: 'caution',
+      text: `🐎 ${who} are in unrest${under}, but the envoy arrives in ${formatDuration(arrives)}, before it can break the settlement (${formatDuration(left)} more). Hold on.${fix}`,
+    }
+  }
+  return {
+    id: 'envoy-unrest',
+    severity: 'danger',
+    text: `🐎 Unrest: ${who} are discontented${under}. ${formatDuration(left)} more of this and the settlement breaks up before the envoy arrives.${fix}`,
+  }
+}
+
+/**
+ * The last stand's resolve, from the moment she sets out: who would fall into
+ * unrest once the coming Storm's blights and the forest's dread land, how many
+ * of how many, and what to do about it. Before the blights are forecast, a
+ * warning that one resolve blight (Gathering Clouds, −8) would tip it.
+ */
+function resolveOutlookWarning(
+  s: RunState,
+  breakdowns: ResolveBreakdown[],
+  outlook: LastStandOutlook,
+): Warning | null {
+  const pop = outlook.population
+  if (pop <= 0) return null
+  const soon = outlook.inStand || (secondsUntilStorm(s) ?? Infinity) <= RUNWAY_WARNING_SECONDS
+  const tail = `${ENVOY_UNREST_SECONDS} s of it and the settlement breaks up.`
+  if (outlook.unrest) {
+    const falling = outlook.species.filter((x) => x.projected <= x.line)
+    const who = andList(falling.map((x) => SPECIES[x.species].name))
+    const short = Math.max(...falling.map((x) => Math.floor(x.line - x.projected) + 1))
+    const blows = outlook.blows.filter((b) => b.amount <= -0.5)
+    const fixes = resolveRemedies(s, falling.map((x) => x.species), breakdowns, outlook)
+    const counted = `${who} (${outlook.discontented} of ${pop} villagers)`
+    const text = outlook.inStand
+      ? `🐎 Resolve is sliding toward unrest${blows.length ? ` under ${blowList(blows)}` : ''}: ${counted} will be discontented, ${short} resolve short. ${tail}`
+      : `🐎 In the last stand${blows.length ? `, ${blowList(blows)}` : ''} would leave ${counted} in unrest, ${short} resolve short. ${tail}`
+    return {
+      id: 'envoy-resolve',
+      severity: soon ? 'danger' : 'caution',
+      text: `${text} ${capitalise(fixes.join('; '))}.`,
+    }
+  }
+  if (outlook.unforecast > 0) {
+    // One resolve blight more: would that tip it?
+    const tipped = outlook.species.filter((x) => x.projected - WORST_RESOLVE_BLIGHT <= x.line)
+    const n = tipped.reduce((sum, x) => sum + x.count, 0)
+    if (n / pop > ENVOY_UNREST_SHARE) {
+      const who = andList(tipped.map((x) => SPECIES[x.species].name))
+      const fixes = resolveRemedies(s, tipped.map((x) => x.species), breakdowns, null)
+      return {
+        id: 'envoy-resolve',
+        severity: 'caution',
+        text: `🐎 The forest names its last-stand blight${outlook.unforecast > 1 ? 's' : ''} at the Clearance. One that costs resolve (Gathering Clouds −${WORST_RESOLVE_BLIGHT}) would leave ${who} (${n} of ${pop} villagers) in unrest. ${capitalise(fixes.join('; ') || 'Raise their resolve now')}.`,
+      }
+    }
+  }
+  return null
+}
+
+/** The harshest resolve blight the last stand can bring (Gathering Clouds). */
+const WORST_RESOLVE_BLIGHT = 8

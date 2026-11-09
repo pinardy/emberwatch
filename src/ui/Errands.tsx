@@ -22,10 +22,11 @@ import './errands.css'
  * optional and lapse without penalty.
  */
 
-/** "Hand over 10 Wood", "Sell 5 Berries": the button of an errand met by a press. */
+/** "Hand over 10 Wood", "Sell 5 Berries", "Send a worker": an errand's button. */
 function actionLabel(e: Errand): string {
   if (e.goal.kind === 'deliver') return `Hand over ${e.goal.amount} ${resourceName(e.goal.resource)}`
   if (e.goal.kind === 'sell') return `Sell ${TRADE_LOT} ${resourceName(e.goal.resource)}`
+  if (e.goal.kind === 'staff') return 'Send a worker'
   return ''
 }
 
@@ -68,7 +69,7 @@ function ErrandCard({ run, errand }: { run: RunState; errand: Errand }) {
         </strong>
         <span className="order-reward">{describeErrandReward(errand.reward)}</span>
       </div>
-      {!action && <Bar value={errand.progress} />}
+      {(!action || errand.goal.kind === 'staff') && <Bar value={errand.progress} />}
       <small className="muted errand-meta">
         {words && <span>{words} · </span>}
         <span>⏱ {formatClock(errand.timeLeft)} left</span>

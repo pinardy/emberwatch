@@ -681,12 +681,31 @@ export const PETITION_FROM_YEAR = 2
 export const PETITION_AMBER = 120
 /** Impatience the Queen forgives when she grants it. */
 export const PETITION_RELIEF = 5
-/** The vow: this much reputation, earned within this many seconds… */
+/**
+ * The vow: up to this much reputation, earned within this many seconds… —
+ * sized to the pace of the last `PETITION_PACE_SECONDS` (what that pace would
+ * earn in the vow's time, rounded up), never less than `PETITION_VOW_MIN`.
+ * A stalled settlement vows what it can keep, not what it once managed.
+ */
 export const PETITION_VOW_REPUTATION = 3
+export const PETITION_VOW_MIN = 1
 export const PETITION_VOW_SECONDS = 360
+export const PETITION_PACE_SECONDS = 360
 /** …or her patience snaps back by this much more. A vow kept forgives a little more. */
 export const PETITION_BROKEN_IMPATIENCE = 6
 export const PETITION_KEPT_RELIEF = 1
+
+/**
+ * The Queen's final charge: once a settlement is within this many points of
+ * victory and reputation has then stood still for `FINAL_CHARGE_STALL`
+ * seconds, she turns her eye on it for the rest of the climb — contented
+ * villagers earn reputation `FINAL_CHARGE_RESOLVE_RATE` times as fast. A
+ * catch-up for a stalled finish that still has to be earned: species below
+ * their threshold earn nothing, charged or not.
+ */
+export const FINAL_CHARGE_WITHIN = 3
+export const FINAL_CHARGE_STALL = 90
+export const FINAL_CHARGE_RESOLVE_RATE = 2
 
 /**
  * The Retreat to the Citadel is offered once the Queen's impatience has

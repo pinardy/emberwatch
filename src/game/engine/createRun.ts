@@ -40,6 +40,7 @@ import { pushLog } from './runLog'
 import { computeModifiers, seasonLengthFor } from './modifiers'
 import { yearLengthFor } from './forecast'
 import { makeRng } from './rng'
+import { findCampPlot } from './campPlot'
 import { drawTerrainPlan, isUnusualPlan, layoutOf, biomeOf } from './terrainPlan'
 import { computeStorageCap } from './queries'
 import { applyCommission, commissionLand } from './citadel'
@@ -287,6 +288,11 @@ export function createRun({
   // year): follow the year this land actually has, so it still arrives as
   // Year 2 opens under Long Storms or an Early Frost.
   state.decreeTimer += yearLengthFor(1, landMods) - YEAR_SECONDS
+
+  // A spot by the hearth glade's trees is kept for the first Woodcutters'
+  // Camp, so a cramped start cannot build itself out of wood.
+  const plot = findCampPlot(state)
+  if (plot) state.campPlot = plot
 
   // --- opening orders -------------------------------------------------------
   // Two standing orders, drawn to fit; the third slot is the founding writ,

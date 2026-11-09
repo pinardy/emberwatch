@@ -1,6 +1,15 @@
 import { SPECIES } from '../content/species'
 import type { StormBlightDef } from '../content/stormBlights'
-import type { EnvoyCollapse, EnvoyState, RunState, Season } from '../types'
+import type {
+  ActiveCondition,
+  ConditionSpec,
+  EnvoyCollapse,
+  EnvoyState,
+  EnvoyUnrest,
+  RunState,
+  Season,
+  SpeciesId,
+} from '../types'
 import {
   ENVOY_BLIGHT_PREP_SCALE,
   ENVOY_COLD_HEARTH_SECONDS,
@@ -17,14 +26,18 @@ import {
   ENVOY_UNREST_MARGIN,
   ENVOY_UNREST_SECONDS,
   ENVOY_UNREST_SHARE,
+  HOSTILITY_PER_STORM,
+  RESOLVE_COLD_HOME,
   SEASON_ORDER,
+  hostilityResolvePenalty,
   STORM_BLIGHT_MIN_HOSTILITY,
 } from './balance'
 import { announceBlight, blightsAt } from './blights'
 import { MAX_HOSTILITY } from './hostility'
 import { seasonLengthFor, type Modifiers } from './modifiers'
 import { addCondition } from './outcomes'
-import { population, speciesCounts } from './queries'
+import { population, speciesCounts, stormEndReach } from './queries'
+import { resolveBreakdowns, villagersBeyond, type ResolveBreakdown } from './society'
 import { sendEnvoy } from './reputation'
 import { makeRng } from './rng'
 import { pushLog } from './runLog'
@@ -74,6 +87,125 @@ export function discontentShare(s: RunState): number {
     if (counts[sp] > 0 && s.resolve[sp] <= SPECIES[sp].resolveTarget - ENVOY_UNREST_MARGIN) low += counts[sp]
   }
   return low / pop
+}
+
+/**
+ * Something that will weigh on resolve in the last stand: a blight (forecast
+ * or struck), the forest's dread and surge, homes left in the cold. `lift` is
+ * the condition whose goal turns it aside or lifts it, when there is one.
+ */
+export interface ResolveBlow {
+  name: string
+  /** Resolve it costs (negative). */
+  amount: number
+  species: SpeciesId | 'all'
+  lift?: ActiveCondition
+}
+
+/** One species in the last stand: the resolve it is heading for, and the line it must stay above. */
+export interface LastStandSpecies {
+  species: SpeciesId
+  count: number
+  projected: number
+  /** At or below this it is discontented (`ENVOY_UNREST_MARGIN` under its threshold). */
+  line: number
+}
+
+/**
+ * The last stand's resolve, worked out from the moment the envoy sets out:
+ * where each species' resolve is heading once the coming Storm's blights,
+ * the forest's dread and surge and the shrunken warm ring land on top of
+ * today's needs — and so whether most of the settlement would fall into
+ * unrest, who, and what is doing it. Inside the last stand it is the resolve
+ * each species is drifting toward now, with the cold at the Storm's end.
+ */
+export interface LastStandOutlook {
+  species: LastStandSpecies[]
+  /** Largest first. */
+  blows: ResolveBlow[]
+  /** Villagers of species that would be discontented, of `population`. */
+  discontented: number
+  population: number
+  /** More than `ENVOY_UNREST_SHARE` would be discontented. */
+  unrest: boolean
+  /** The forest's blights are still to be forecast (at the coming Clearance): how many. */
+  unforecast: number
+  /** The last stand is under way. */
+  inStand: boolean
+}
+
+/**
+ * The last stand's outlook while the envoy rides and her Storm is the coming
+ * one (or this one); null otherwise — when she set out mid-Storm, the Storm
+ * she arrives at the end of is a year off, and today's needs say little.
+ */
+export function lastStandOutlook(
+  s: RunState,
+  mods: Modifiers,
+  breakdowns: ResolveBreakdown[] = resolveBreakdowns(s, mods),
+): LastStandOutlook | null {
+  if (!envoyRiding(s)) return null
+  const e = s.envoy
+  const storm = s.season.season === 'storm'
+  if (storm && !e.finalStorm) return null
+  const inStand = e.finalStorm && storm
+  const pop = population(s)
+  const blows: ResolveBlow[] = []
+  const flatBlows = (c: ActiveCondition, effects: ConditionSpec['whileActive']) => {
+    for (const fx of effects ?? []) {
+      if (fx.kind === 'resolveFlat' && fx.amount < 0) {
+        blows.push({ name: c.name, amount: fx.amount, species: fx.species, lift: c })
+      }
+    }
+  }
+  let surge = 0
+  if (inStand) {
+    for (const c of s.conditions) flatBlows(c, c.whileActive)
+  } else {
+    for (const c of s.conditions) if (c.breaksWithStorm) flatBlows(c, c.onFail?.condition?.whileActive)
+    // As the Storm breaks: its usual hostility, the last stand's surge, the dread.
+    const after = Math.min(MAX_HOSTILITY, s.hostility + HOSTILITY_PER_STORM + ENVOY_STORM_HOSTILITY)
+    blows.push({ name: DREAD_NAME, amount: -dreadAt(after), species: 'all' })
+    surge = hostilityResolvePenalty(after) - hostilityResolvePenalty(s.hostility)
+    if (surge >= 0.5) blows.push({ name: "the forest's surge", amount: -surge, species: 'all' })
+  }
+  // The warm ring is smallest at the Storm's end: homes beyond it then.
+  const cold = pop > 0 ? villagersBeyond(s, stormEndReach(s), pop) : 0
+  const chill = pop > 0 ? (RESOLVE_COLD_HOME * cold) / pop : 0
+  if (chill <= -0.5) blows.push({ name: 'homes beyond the fire', amount: chill, species: 'all' })
+  blows.sort((a, b) => a.amount - b.amount)
+
+  const counts = speciesCounts(s)
+  const species: LastStandSpecies[] = []
+  let discontented = 0
+  for (const b of breakdowns) {
+    const count = counts[b.species] ?? 0
+    if (count <= 0) continue
+    // Today's target without today's Storm, then the last stand on top of it.
+    let projected = b.target - b.chill + chill
+    if (!inStand) {
+      // A cornerstone's Storm resolve (Storm Lanterns) counts in the Storm.
+      projected += mods.stormResolve - surge
+      for (const blow of blows) {
+        if (blow.name === "the forest's surge" || blow.name === 'homes beyond the fire') continue
+        if (blow.species === 'all' || blow.species === b.species) projected += blow.amount
+      }
+    }
+    const line = b.threshold - ENVOY_UNREST_MARGIN
+    if (projected <= line) discontented += count
+    species.push({ species: b.species, count, projected, line })
+  }
+  const standing = s.conditions.filter((c) => c.breaksWithStorm).length
+  const unforecast = inStand || e.lastStandForecast ? 0 : Math.max(0, lastStandBlights(s.hostility) - standing)
+  return {
+    species,
+    blows,
+    discontented,
+    population: pop,
+    unrest: pop > 0 && discontented / pop > ENVOY_UNREST_SHARE,
+    unforecast,
+    inStand,
+  }
 }
 
 /** Unrest: more than `ENVOY_UNREST_SHARE` of the villagers are discontented. */
@@ -211,8 +343,54 @@ export function stepEnvoy(s: RunState, dt: number): void {
   if (collapse) {
     e.outcome = 'collapsed'
     e.collapse = collapse
+    if (collapse === 'unrest') e.unrest = unrestCause(s)
     pushLog(s, `${COLLAPSE_LOG[collapse]} The envoy will find nothing to confirm.`, 'bad')
   }
+}
+
+/**
+ * While the envoy rides the Queen is satisfied and her impatience stands
+ * still, so her court falls quiet: a decree on offer or running, and order
+ * offers waiting for a pick, are set aside without cost (a decree's penalty
+ * would mean nothing, and a modal in the last stand is noise). Orders in hand
+ * still count, and pay Glory. Called by the tick, before it would stop for a
+ * waiting choice and after the step that may have sent her.
+ */
+export function quietCourt(s: RunState): void {
+  if (!envoyRiding(s)) return
+  const choices = s.pendingChoices.filter((c) => c.kind !== 'decree' && c.kind !== 'order')
+  const offers = (s.orderOffers ?? []).length > 0
+  if (choices.length === s.pendingChoices.length && !offers && !s.decree) return
+  if (choices.length < s.pendingChoices.length) s.pendingChoices = choices
+  if (offers) s.orderOffers = []
+  const decree = !!s.decree
+  s.decree = null
+  pushLog(
+    s,
+    decree
+      ? "📯 The Queen's herald withdraws the decree: her envoy is on her way. No new decrees or orders until she arrives; orders in hand still pay, as Glory."
+      : '📯 The court falls quiet while the envoy rides: no new decrees or orders until she arrives. Orders in hand still pay, as Glory.',
+    'info',
+  )
+}
+
+/**
+ * Who is in unrest right now and what is weighing on them — the struck
+ * blights, the dread and anything else costing resolve — for the end screen.
+ */
+export function unrestCause(s: RunState): EnvoyUnrest {
+  const counts = speciesCounts(s)
+  const species = s.speciesPool.filter(
+    (sp) => counts[sp] > 0 && s.resolve[sp] <= SPECIES[sp].resolveTarget - ENVOY_UNREST_MARGIN,
+  )
+  const blows: EnvoyUnrest['blows'] = []
+  for (const c of s.conditions) {
+    for (const fx of c.whileActive ?? []) {
+      if (fx.kind === 'resolveFlat' && fx.amount < 0) blows.push({ name: c.name, amount: fx.amount })
+    }
+  }
+  blows.sort((a, b) => a.amount - b.amount)
+  return { species, blows }
 }
 
 /** What would end the approach as a loss right now, if anything. */

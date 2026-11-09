@@ -74,9 +74,9 @@ export const ERRAND_LIST: ErrandDef[] = [
   },
   {
     id: 'keepHearth',
-    icon: '🔥',
+    icon: '🪵',
     art: 'ancientHearth',
-    title: 'Keep the hearth above {n} {good} for a minute',
+    title: 'Stack the woodpile: keep {n} {good} in store for a minute',
     spec: { kind: 'hold', resource: 'wood', above: 20, seconds: 60 },
     seconds: 90,
     reward: { reputation: 0.3 },
@@ -87,7 +87,7 @@ export const ERRAND_LIST: ErrandDef[] = [
     icon: '🧑‍🏭',
     art: 'worker',
     title: 'Staff the {place}',
-    spec: { kind: 'staff', at: 'workplace', seconds: 30 },
+    spec: { kind: 'staff', at: 'workplace', seconds: 20 },
     seconds: 60,
     reward: { reputation: 0.3 },
     weight: 3,
@@ -96,8 +96,8 @@ export const ERRAND_LIST: ErrandDef[] = [
     id: 'firekeeper',
     icon: '🔥',
     art: 'lantern',
-    title: 'Keep a firekeeper at the hearth for half a minute',
-    spec: { kind: 'staff', at: 'hearth', seconds: 30 },
+    title: 'Keep a firekeeper at the hearth for 20 seconds',
+    spec: { kind: 'staff', at: 'hearth', seconds: 20 },
     seconds: 60,
     reward: { reputation: 0.25 },
     weight: 1,
@@ -171,11 +171,19 @@ export const ERRAND_PACING = {
    * point); the rest of that stall's errands pay amber instead, so errands
    * nudge a stalled settlement over the line rather than farm the meter.
    */
-  reputationPerStall: 1,
+  reputationPerStall: 2,
   /** A stall this long before an errand pays reputation; earlier ones pay amber. */
-  reputationAfter: 120,
+  reputationAfter: 90,
+  /**
+   * The longer the flat stretch, the more a reputation errand pays: its
+   * template's reward once more for every this many seconds past
+   * `reputationAfter`…
+   */
+  stallBonusEvery: 75,
+  /** …up to this many times over (×3 at most). */
+  stallBonusSteps: 2,
   /** Errands pay reputation only while at least this many points short of victory. */
-  reputationShortOf: 3,
+  reputationShortOf: 2,
   /** Amber an errand pays in place of each whole point of reputation. */
   amberPerPoint: 30,
 }

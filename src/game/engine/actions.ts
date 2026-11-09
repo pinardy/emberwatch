@@ -31,6 +31,7 @@ import {
   storageUsed,
 } from './queries'
 import { invalidateRoadNetwork } from './roads'
+import { campPlotBlocks } from './campPlot'
 import { addImpatience, unassign } from './society'
 import { clearMultiplier } from './traits'
 import {
@@ -81,6 +82,8 @@ export function canPlaceBuilding(s: RunState, defId: string, pos: Vec2): ActionE
       return 'Too close to another building.'
     }
   }
+  const kept = campPlotBlocks(s, defId, pos, radius)
+  if (kept) return kept
   if (def.unique && Object.values(s.buildings).some((b) => b.defId === defId)) {
     return `You may only have one ${def.name}.`
   }

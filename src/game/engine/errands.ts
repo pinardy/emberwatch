@@ -11,9 +11,10 @@ import { canAfford, grant, idleVillagers, population, spend, totalHousing } from
 import { makeRng } from './rng'
 import { gainReputation } from './reputation'
 import { pushLog } from './runLog'
-import { secondsSinceReputation } from './society'
+import { hearthFuelRate, secondsSinceReputation } from './society'
 import { sellResource } from './trade'
 import { isUpgrading, workerSlotsOf } from './upgrades'
+import { assignWorker } from './actions'
 
 /**
  * Errands: small, optional, short-lived tasks for the stretches when
@@ -156,10 +157,16 @@ function draftFor(s: RunState, def: ErrandDef, pick: <T>(items: T[]) => T): Draf
       }
     }
     case 'hold': {
+      // Not in the Storm: gathering halves and the hearth burns the pile down.
+      if (s.season.season === 'storm') return null
       const have = s.stock[spec.resource] ?? 0
-      const above = Math.max(spec.above, roundUp5(have + 10))
+      const mods = computeModifiers(s)
+      // What the stockpile gains a second after the hearth and braziers burn.
+      const net = productionRate(s, mods, spec.resource) - (spec.resource === 'wood' ? hearthFuelRate(s.season.season, mods) : 0)
+      if (net <= 0.05) return null
+      // A mark half a minute of that surplus away: reachable, then kept.
+      const above = Math.max(spec.above, roundUp5(have + net * 30))
       if (above > s.storageCap * 0.5) return null
-      if (productionRate(s, computeModifiers(s), spec.resource) <= 0.05) return null
       return {
         title: fill(def, { n: above, good: spec.resource }),
         goal: { kind: 'hold', goal: { kind: 'stock', resource: spec.resource, amount: above }, seconds: spec.seconds },
@@ -281,10 +288,24 @@ export function errandReward(s: RunState, reward: ErrandReward): ErrandReward {
   const long = secondsSinceReputation(s) >= ERRAND_PACING.reputationAfter
   if (long && paid < ERRAND_PACING.reputationPerStall && short >= ERRAND_PACING.reputationShortOf) {
     b.stall = { at, paid: paid + 1 }
-    return { ...reward }
+    const reputation = Math.round(reward.reputation * stallBonus(s) * 100) / 100
+    return { ...reward, reputation }
   }
   const amber = Math.round(reward.reputation * ERRAND_PACING.amberPerPoint) + (reward.amber ?? 0)
   return { amber }
+}
+
+/**
+ * How many times its template's reward a reputation errand drawn now pays:
+ * once when the stall first runs long, once more for every
+ * `stallBonusEvery` seconds after (×3 at most) — so an errand met deep in a
+ * flat stretch moves the meter, while the per-stall cap keeps errands a
+ * nudge rather than a strategy.
+ */
+export function stallBonus(s: RunState): number {
+  const past = secondsSinceReputation(s) - ERRAND_PACING.reputationAfter
+  if (past < 0) return 1
+  return 1 + Math.min(ERRAND_PACING.stallBonusSteps, Math.floor(past / ERRAND_PACING.stallBonusEvery))
 }
 
 /** True while reputation has stood still long enough for errands to turn up. */
@@ -306,7 +327,9 @@ function maybeOffer(s: RunState): void {
   if (s.clock < ERRAND_PACING.firstAt) return
   const b = book(s)
   if (s.clock < b.next) return
-  if (s.pendingChoices.length > 0 || (s.orderOffers ?? []).length > 0) return
+  // An order offer waiting in the Orders panel does not stop the clock, so
+  // errands still come; a dialog does.
+  if (s.pendingChoices.length > 0) return
   if (openErrands(s).length >= errandSlots(s)) return
   if (!errandStall(s) && s.clock - b.lastOffer < ERRAND_PACING.quietGap) return
   const errand = drawErrand(s)
@@ -448,21 +471,36 @@ export function errandBlocked(s: RunState, e: Errand): string | null {
     const have = Math.floor(s.stock[goal.resource] ?? 0)
     return have < TRADE_LOT ? `Needs ${TRADE_LOT} ${resourceName(goal.resource)}; you have ${have}.` : null
   }
+  if (goal.kind === 'staff') {
+    const b = s.buildings[goal.buildingId]
+    if (!b) return 'That building is gone.'
+    if (b.workers.length > 0) return `Someone works there: keep them on for ${goal.seconds} s in all.`
+    if (idleVillagers(s).length === 0) return 'Nobody is idle: free a villager first.'
+    return null
+  }
   return 'This errand is met by what the settlement does.'
 }
 
-/** True when the errand is met by pressing its button (a hand-over or a sale). */
+/**
+ * True when the errand has a button: a hand-over or a sale (met at once), or
+ * a staffing errand's "send a worker" (met once they have worked its time).
+ */
 export function errandHasAction(e: Errand): boolean {
-  return e.goal.kind === 'deliver' || e.goal.kind === 'sell'
+  return e.goal.kind === 'deliver' || e.goal.kind === 'sell' || e.goal.kind === 'staff'
 }
 
-/** Does an errand's hand-over or sale: the goods go (or sell), and the errand is met. */
+/**
+ * Does an errand's button: a hand-over or sale (the goods go or sell, and the
+ * errand is met), or sends an idle villager to the workplace a staffing
+ * errand names (it is met once they have held it long enough).
+ */
 export function runErrand(s: RunState, id: string): string | null {
   const e = openErrands(s).find((x) => x.id === id)
   if (!e) return 'That errand is no longer open.'
   const blocked = errandBlocked(s, e)
   if (blocked) return blocked
   const goal = e.goal
+  if (goal.kind === 'staff') return assignWorker(s, goal.buildingId)
   if (goal.kind === 'sell') {
     const error = sellResource(s, goal.resource)
     if (error) return error

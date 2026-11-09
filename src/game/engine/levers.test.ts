@@ -9,9 +9,14 @@ import {
   PETITION_BROKEN_IMPATIENCE,
   PETITION_KEPT_RELIEF,
   PETITION_RELIEF,
+  PETITION_PACE_SECONDS,
+  PETITION_VOW_MIN,
   PETITION_VOW_REPUTATION,
   PETITION_VOW_SECONDS,
   PETITION_WITHIN,
+  FINAL_CHARGE_RESOLVE_RATE,
+  FINAL_CHARGE_STALL,
+  FINAL_CHARGE_WITHIN,
   REROLL_BASE_COST,
   REROLL_COST_GROWTH,
   RETREAT_IMPATIENCE_SHARE,
@@ -34,10 +39,14 @@ import {
   architectOffers,
   architectPrice,
   buyArchitectPlans,
+  finalChargeActive,
   grandPetition,
   petitionBlocked,
   petitionOpen,
+  petitionVow,
   petitionVowLeft,
+  recentReputationPace,
+  stepFinalCharge,
   retreatOffered,
   retreatToCitadel,
   stepPetition,
@@ -45,6 +54,7 @@ import {
 import { secondsSinceReputation, stagnationImpatienceRate } from './society'
 import { tick } from './tick'
 import { migrateRun } from '../persistence'
+import { sendEnvoy } from './reputation'
 
 /**
  * The levers on a run going wrong: the Queen's Architect (plans for a named
@@ -203,7 +213,12 @@ describe('the Grand Petition', () => {
     expect(s.stock.amber).toBe(300 - PETITION_AMBER)
     expect(s.impatience + s.impatienceProgress).toBeCloseTo(15.5 - PETITION_RELIEF)
     expect(secondsSinceReputation(s)).toBe(0)
-    expect(s.petition).toMatchObject({ target: 12 + PETITION_VOW_REPUTATION, deadline: s.clock + PETITION_VOW_SECONDS })
+    // Reputation has stood still: the vow is the least, sized to that pace.
+    expect(s.petition).toMatchObject({
+      target: 12 + PETITION_VOW_MIN,
+      vow: PETITION_VOW_MIN,
+      deadline: s.clock + PETITION_VOW_SECONDS,
+    })
     expect(petitionVowLeft(s)).toBe(PETITION_VOW_SECONDS)
     setImpatience(s, 16)
     expect(petitionBlocked(s)).toBe('used')
@@ -260,7 +275,97 @@ describe('the Grand Petition', () => {
     setImpatience(s, s.maxImpatience - 2)
     expect(collectWarnings(s).find((w) => w.id === 'impatience')?.text).toMatch(/Grand Petition/)
     grandPetition(s)
-    expect(collectWarnings(s).find((w) => w.id === 'petition-vow')?.text).toMatch(/3 more reputation/)
+    expect(collectWarnings(s).find((w) => w.id === 'petition-vow')?.text).toMatch(
+      new RegExp(`${s.petition!.vow} more reputation`),
+    )
+  })
+
+  it('vows what the recent pace would earn in its time: at least one point, at most three, never past victory', () => {
+    const vowAt = (gained: number, rep = 12) => {
+      const s = newRun()
+      toYear(s, 4)
+      s.reputation = rep
+      s.reputationProgress = 0
+      // Six minutes ago reputation stood `gained` lower.
+      s.timeline.samples = [
+        [s.clock - PETITION_PACE_SECONDS - 12, 4, rep - gained, 10, 20, 15, 18, 100, 50],
+        [s.clock - PETITION_PACE_SECONDS, 4, rep - gained, 10, 20, 15, 18, 100, 50],
+        [s.clock - 12, 4, rep, 10, 20, 15, 18, 100, 50],
+      ]
+      return { pace: recentReputationPace(s), vow: petitionVow(s) }
+    }
+    expect(vowAt(0).vow).toBe(PETITION_VOW_MIN)
+    expect(vowAt(1.5).pace).toBeCloseTo(1.5 / PETITION_PACE_SECONDS)
+    expect(vowAt(1.5).vow).toBe(2)
+    expect(vowAt(6).vow).toBe(PETITION_VOW_REPUTATION)
+    // One point short, it vows that point.
+    expect(vowAt(6, 19).vow).toBe(1)
+  })
+})
+
+describe("the Queen's final charge", () => {
+  it('within three points of victory and stalled: contented villagers earn reputation twice as fast', () => {
+    const s = newRun()
+    toYear(s, 4)
+    for (const sp of s.speciesPool) s.resolve[sp] = 40
+    const earn = () => {
+      const before = s.reputation + s.reputationProgress
+      for (let i = 0; i < 8; i++) {
+        // Any milestone offer (the charter) would stop the clock: settle it.
+        while (s.pendingChoices.length > 0) takeChoice(s, s.pendingChoices[0].options[0])
+        for (const sp of s.speciesPool) s.resolve[sp] = 40
+        tick(s, 0.125)
+      }
+      return s.reputation + s.reputationProgress - before
+    }
+    // Four short: no charge, however long the stall.
+    s.reputation = s.maxReputation - FINAL_CHARGE_WITHIN - 1
+    s.reputationProgress = 0
+    s.reputationRise = { at: s.clock - 600, level: s.reputation }
+    stepFinalCharge(s)
+    expect(s.finalCharge).toBeUndefined()
+    // Three short, but reputation only just rose: not yet.
+    s.reputation = s.maxReputation - FINAL_CHARGE_WITHIN
+    s.reputationRise = { at: s.clock, level: s.reputation }
+    stepFinalCharge(s)
+    expect(s.finalCharge).toBeUndefined()
+    expect(finalChargeActive(s)).toBe(false)
+    const plain = earn()
+    // Stalled past the mark: the charge is given, logged, and resolve pays double.
+    s.reputationRise = { at: s.clock - FINAL_CHARGE_STALL, level: s.reputation }
+    stepFinalCharge(s)
+    expect(s.finalCharge).toEqual({ at: s.clock })
+    expect(s.log[0].text).toMatch(/final charge/)
+    const charged = earn()
+    expect(plain).toBeGreaterThan(0)
+    expect(charged / plain).toBeCloseTo(FINAL_CHARGE_RESOLVE_RATE, 1)
+    // Once the envoy rides it is over.
+    sendEnvoy(s)
+    expect(finalChargeActive(s)).toBe(false)
+  })
+
+  it('pays nothing for species below their threshold: a catch-up to earn, not a gift', () => {
+    const s = newRun()
+    toYear(s, 4)
+    s.reputation = s.maxReputation - 2
+    s.reputationProgress = 0
+    s.finalCharge = { at: s.clock }
+    const before = s.reputation + s.reputationProgress
+    for (let i = 0; i < 8; i++) {
+      while (s.pendingChoices.length > 0) takeChoice(s, s.pendingChoices[0].options[0])
+      for (const sp of s.speciesPool) s.resolve[sp] = 0
+      tick(s, 0.125)
+    }
+    expect(s.reputation + s.reputationProgress).toBe(before)
+  })
+
+  it('survives a save; a mangled one reads as none', () => {
+    const s = newRun()
+    s.finalCharge = { at: 600 }
+    expect(migrateRun(JSON.parse(JSON.stringify(s)))!.finalCharge).toEqual({ at: 600 })
+    const bad = JSON.parse(JSON.stringify(s))
+    bad.finalCharge = { at: 'soon' }
+    expect(migrateRun(bad)!.finalCharge).toBeUndefined()
   })
 })
 

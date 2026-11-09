@@ -9,8 +9,13 @@ import {
   PETITION_FROM_YEAR,
   PETITION_KEPT_RELIEF,
   PETITION_RELIEF,
+  PETITION_PACE_SECONDS,
+  PETITION_VOW_MIN,
   PETITION_VOW_REPUTATION,
   PETITION_VOW_SECONDS,
+  FINAL_CHARGE_STALL,
+  FINAL_CHARGE_WITHIN,
+  FINAL_CHARGE_RESOLVE_RATE,
   PETITION_WITHIN,
   RETREAT_IMPATIENCE_SHARE,
   RETREAT_REPUTATION_SHORT,
@@ -19,7 +24,8 @@ import { chainPieceFor, relevantBlueprints, serviceDemand } from './serviceChain
 import { spend } from './queries'
 import { SOOTHE_ENVOY_REFUSAL, sootheCost } from './actions'
 import { pushLog } from './runLog'
-import { addImpatience } from './society'
+import { addImpatience, secondsSinceReputation } from './society'
+import { COL } from './timeline'
 
 /**
  * The player's levers on a run that is going wrong, all paid for:
@@ -134,10 +140,39 @@ export function petitionOpen(s: RunState): boolean {
 }
 
 /**
+ * Reputation a second over the last `PETITION_PACE_SECONDS` (or the whole run,
+ * if it is younger), read from the run's timeline samples.
+ */
+export function recentReputationPace(s: RunState): number {
+  const samples = s.timeline?.samples ?? []
+  const now = s.reputation + s.reputationProgress
+  const from = s.clock - PETITION_PACE_SECONDS
+  let then: number[] | undefined
+  for (const sample of samples) {
+    if (sample[COL.clock] <= from) then = sample
+    else break
+  }
+  then ??= samples[0]
+  if (!then) return 0
+  const seconds = s.clock - then[COL.clock]
+  return seconds > 0 ? Math.max(0, now - then[COL.reputation]) / seconds : 0
+}
+
+/**
+ * The reputation a Grand Petition made now would vow: what the recent pace
+ * earns in the vow's time, rounded up, between `PETITION_VOW_MIN` and
+ * `PETITION_VOW_REPUTATION` — and never past victory.
+ */
+export function petitionVow(s: RunState): number {
+  const pace = Math.ceil(recentReputationPace(s) * PETITION_VOW_SECONDS - 1e-6)
+  const vow = Math.min(PETITION_VOW_REPUTATION, Math.max(PETITION_VOW_MIN, pace))
+  return Math.max(1, Math.min(vow, s.maxReputation - s.reputation))
+}
+
+/**
  * Makes the Grand Petition: pays its price; the Queen forgives
  * `PETITION_RELIEF` impatience and restarts her count of reputation standing
- * still, on a vow of `PETITION_VOW_REPUTATION` reputation within
- * `PETITION_VOW_SECONDS`.
+ * still, on a vow (`petitionVow`) of reputation within `PETITION_VOW_SECONDS`.
  */
 export function grandPetition(s: RunState): string | null {
   const blocked = petitionBlocked(s)
@@ -147,15 +182,17 @@ export function grandPetition(s: RunState): string | null {
   spend(s.stock, { amber: PETITION_AMBER })
   addImpatience(s, -PETITION_RELIEF)
   // A fresh hearing: the stagnation count starts again from now.
+  const vow = petitionVow(s)
   s.reputationRise = { at: s.clock, level: s.reputation }
   s.petition = {
     at: s.clock,
     deadline: s.clock + PETITION_VOW_SECONDS,
-    target: Math.min(s.maxReputation, s.reputation + PETITION_VOW_REPUTATION),
+    target: Math.min(s.maxReputation, s.reputation + vow),
+    vow,
   }
   pushLog(
     s,
-    `🕊️ The Queen grants your Grand Petition: −${PETITION_RELIEF} impatience, on your vow of ${PETITION_VOW_REPUTATION} reputation within ${PETITION_VOW_SECONDS / 60} minutes.`,
+    `🕊️ The Queen grants your Grand Petition: −${PETITION_RELIEF} impatience, on your vow of ${vow} reputation within ${PETITION_VOW_SECONDS / 60} minutes.`,
     'good',
   )
   return null
@@ -180,6 +217,31 @@ export function stepPetition(s: RunState): void {
     addImpatience(s, PETITION_BROKEN_IMPATIENCE)
     pushLog(s, `💢 Your vow to the Queen is broken. Her patience snaps: +${PETITION_BROKEN_IMPATIENCE} impatience.`, 'bad')
   }
+}
+
+// ---------------------------------------------------------------------------
+// The Queen's final charge
+// ---------------------------------------------------------------------------
+
+/** True while the final charge speeds the climb: given, and the envoy not yet sent. */
+export function finalChargeActive(s: Pick<RunState, 'finalCharge' | 'envoy'>): boolean {
+  return !!s.finalCharge && !s.envoy
+}
+
+/**
+ * Gives the final charge, once a run: within `FINAL_CHARGE_WITHIN` points of
+ * victory, with reputation stood still for `FINAL_CHARGE_STALL` seconds.
+ */
+export function stepFinalCharge(s: RunState): void {
+  if (s.finalCharge || s.envoy || s.phase !== 'playing') return
+  if (s.maxReputation - s.reputation > FINAL_CHARGE_WITHIN) return
+  if (secondsSinceReputation(s) < FINAL_CHARGE_STALL) return
+  s.finalCharge = { at: s.clock }
+  pushLog(
+    s,
+    `👑 The Queen's final charge: you are ${s.maxReputation - s.reputation} points from victory, and she is watching. Contented villagers now earn reputation ${FINAL_CHARGE_RESOLVE_RATE}× as fast until her envoy sets out — keep every species above its threshold.`,
+    'good',
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -253,7 +315,7 @@ export function queensCourt(s: RunState): CourtLever[] {
     soothe.note = `${cost} amber buys back a point of patience; dearer each time.`
   }
 
-  const terms = `${PETITION_AMBER} amber for −${PETITION_RELIEF} impatience, on a vow of ${PETITION_VOW_REPUTATION} reputation in ${PETITION_VOW_SECONDS / 60} minutes`
+  const terms = `${PETITION_AMBER} amber for −${PETITION_RELIEF} impatience, on a vow of ${petitionVow(s)} reputation in ${PETITION_VOW_SECONDS / 60} minutes (sized to your recent pace)`
   const petition: CourtLever = { id: 'petition', name: 'The Grand Petition', state: 'open', note: '' }
   const p = s.petition
   const blocked = petitionBlocked(s)
@@ -264,7 +326,7 @@ export function queensCourt(s: RunState): CourtLever[] {
         ? 'Made — the vow was kept.'
         : p.outcome === 'broken'
           ? 'Made — the vow was broken.'
-          : `Made — your vow: ${Math.max(0, s.reputation - (p.target - PETITION_VOW_REPUTATION))}/${PETITION_VOW_REPUTATION} reputation, ${Math.ceil(petitionVowLeft(s) / 60)} min left.`
+          : `Made — your vow: ${Math.max(0, s.reputation - (p.target - (p.vow ?? PETITION_VOW_REPUTATION)))}/${p.vow ?? PETITION_VOW_REPUTATION} reputation, ${Math.ceil(petitionVowLeft(s) / 60)} min left.`
   } else if (blocked === null) {
     petition.note = `Open once a run: ${terms}.`
   } else if (blocked === 'amber') {
