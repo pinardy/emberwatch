@@ -467,10 +467,20 @@ export const ORDER_REACH = {
  * this many seconds at its current rate, rounded to fives, and never less
  * than the minimum.
  */
-export const ORDER_COUNT_SECONDS = 300
+export const ORDER_COUNT_SECONDS = 390
 export const ORDER_COUNT_MIN = 15
 /** Impatience for asking the Queen for a different pair of orders (once a year). */
 export const ORDER_DECLINE_IMPATIENCE = 0.5
+/**
+ * An order for a species' refined need is drawn only once the finer good
+ * already reaches this share of the settlement (within reach, like resolve
+ * orders)…
+ */
+export const REFINED_ORDER_MIN_RATIO = 0.25
+/** …and counts its seconds while the finer good reaches at least this share. */
+export const REFINED_ORDER_HOLD_RATIO = 0.5
+/** …or once a workshop standing now makes the finer good and this much of it is in stock. */
+export const REFINED_ORDER_MIN_STOCK = 5
 
 /** Reputation at which the Queen grants her one-time charter. */
 export const CHARTER_REPUTATION = 10

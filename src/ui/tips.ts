@@ -15,6 +15,7 @@ import {
 } from '../game/engine/balance'
 import { pendingBlight } from '../game/engine/blights'
 import { openErrands } from '../game/engine/errands'
+import { isHeldOrder } from '../game/engine/orders'
 import { isFounding } from '../game/engine/founding'
 import { architectOffers, architectPrice, petitionOpen, retreatOffered } from '../game/engine/levers'
 import { idleVillagers, population, stormEndReach } from '../game/engine/queries'
@@ -259,6 +260,12 @@ export const TIPS: Tip[] = [
     text: 'While reputation stands still the settlement turns up small jobs — on the chip above the threats and in the Orders panel. Do one for a little reputation or amber; leave it and it lapses, no harm done.',
     when: (run) => openErrands(run).length > 0,
     doneWhen: (run) => (run.errandBook?.met ?? 0) > 0,
+  },
+  {
+    id: 'held-order',
+    title: 'An order to keep',
+    text: 'Some orders are kept rather than reached: a finer good served, camps at full crew, a Storm with nobody sleeping cold. The card counts the seconds it has held; keep it up until the bar fills.',
+    when: (run) => run.orders.some((o) => !o.complete && isHeldOrder(run, o)),
   },
   {
     id: 'stagnation',

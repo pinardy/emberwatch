@@ -228,10 +228,11 @@ const defs: CommissionDef[] = [
     art: 'charter/forge',
     patron: "The Masons' guild",
     twist:
-      'The land always has Rich Veins and the guild sends Copper Mine and Smelter plans, but the digging wakes the forest: hostility rises 10% faster.',
+      'The land always has Rich Veins and the guild sends Copper Mine and Smelter plans with bricks and planks toward them, but the digging wakes the forest: hostility rises 5% faster.',
     land: 'richVeins',
     startBlueprints: ['copperMine', 'smelter'],
-    effects: [{ kind: 'hostilityRate', percent: 10 }],
+    startStock: { brick: 12, plank: 6 },
+    effects: [{ kind: 'hostilityRate', percent: 5 }],
     terms: [{ kind: 'goal', goal: { kind: 'produced', resource: 'copperBar', amount: 40 } }],
     bonusPercent: 80,
     unlockedBy: 'masonsArchive',
@@ -348,7 +349,7 @@ export function describeTerm(term: CommissionTerm): string {
 }
 
 function goalTarget(goal: OrderGoal): number {
-  return 'amount' in goal ? goal.amount : goal.value
+  return 'amount' in goal ? goal.amount : 'value' in goal ? goal.value : 1
 }
 
 /** A count against a target: met at the target, else open (or failed once judged). */

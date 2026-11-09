@@ -1,6 +1,10 @@
 import { BUILDINGS } from '../content/buildings'
 import { categoryTotal, resourceName } from '../content/resources'
-import type { OrderGoal, RunState } from '../types'
+import { SPECIES } from '../content/species'
+import type { BuildingCategory, OrderGoal, RunState } from '../types'
+import { REFINED_ORDER_HOLD_RATIO } from './balance'
+import { gladesBeyond } from './crossings'
+import { DEPOSIT_INFO } from './mapgen'
 import { averageResolve, totalHousing } from './queries'
 import { tierOf } from './upgrades'
 
@@ -49,6 +53,89 @@ export function describeGoal(goal: OrderGoal): string {
       return goal.category === 'gathering'
         ? `Have ${goal.amount} camps staffed`
         : `Have ${goal.amount} ${goal.category} buildings staffed`
+    case 'refinedServed': {
+      const sp = SPECIES[goal.species]
+      return `Meet the ${sp?.name ?? goal.species}' refined need (${sp?.refined?.name ?? 'a finer good'}) for ${goal.seconds} s`
+    }
+    case 'gladesBeyond':
+      return `Clear ${countOf(goal.amount, 'glade')} ${goal.barrier === 'river' ? 'across the river' : 'beyond the ridge'}`
+    case 'depositYield':
+      return `Take ${goal.amount} goods from ${DEPOSIT_INFO[goal.deposit]?.name ?? goal.deposit}`
+    case 'warmStorm':
+      return 'See a whole Storm through with no one sleeping cold'
+    case 'trades':
+      return `Buy or sell ${countOf(goal.amount, 'lot')} at the caravan`
+    case 'dangerousCleared':
+      return `Clear ${countOf(goal.amount, 'dangerous glade')}`
+    case 'fullyStaffed':
+      return `Keep ${goal.buildings} ${categoryNoun(goal.category)}s at full crew for ${goal.seconds} s`
+  }
+}
+
+/** "a glade", "3 glades". */
+function countOf(n: number, noun: string): string {
+  return n === 1 ? `a${/^[aeiou]/.test(noun) ? 'n' : ''} ${noun}` : `${n} ${noun}s`
+}
+
+/** What one building of a category is called on an order card: "camp", "workshop". */
+export function categoryNoun(category: BuildingCategory): string {
+  switch (category) {
+    case 'gathering':
+      return 'camp'
+    case 'production':
+      return 'workshop'
+    case 'service':
+      return 'service hall'
+    default:
+      return `${category} building`
+  }
+}
+
+/**
+ * Goal kinds measured in seconds held (`Order.held`), and how many make the
+ * goal; `null` for the rest. A Storm's length is the season's own.
+ */
+export function heldSeconds(goal: OrderGoal, s: RunState): number | null {
+  switch (goal.kind) {
+    case 'refinedServed':
+    case 'fullyStaffed':
+      return goal.seconds
+    case 'warmStorm':
+      // A whole Storm, less a second for the step that turns the season.
+      return s.season.season === 'storm' ? Math.max(1, s.season.length - 1) : Infinity
+    default:
+      return null
+  }
+}
+
+/**
+ * One more line for an order card about how a goal is met, for the kinds
+ * whose words alone do not say (`null` for the rest).
+ */
+export function goalNote(goal: OrderGoal): string | null {
+  switch (goal.kind) {
+    case 'refinedServed': {
+      const refined = SPECIES[goal.species]?.refined
+      return refined
+        ? `${refined.hint} Counts while it reaches at least ${Math.round(REFINED_ORDER_HOLD_RATIO * 100)}% of your people.`
+        : null
+    }
+    case 'gladesBeyond':
+      return goal.barrier === 'river'
+        ? 'Only the fords lead across; glades on the hearth\'s bank do not count.'
+        : 'Only the passes lead down; glades on the hearth\'s side of the cliffs do not count.'
+    case 'depositYield':
+      return DEPOSIT_INFO[goal.deposit]?.note ?? null
+    case 'warmStorm':
+      return 'Homes beyond the hearth\'s shrinking reach need a brazier or insulation. Anyone sleeping cold starts it over.'
+    case 'trades':
+      return 'Every lot bought from or sold to a caravan counts.'
+    case 'dangerousCleared':
+      return 'Dangerous and forbidden glades both count; their events ask harder choices.'
+    case 'fullyStaffed':
+      return `Counts while ${goal.buildings} of them each have every worker slot filled; the seconds add up.`
+    default:
+      return null
   }
 }
 
@@ -90,6 +177,17 @@ export function evaluateGoal(goal: OrderGoal, s: RunState): number {
       ).length
       return clamp(n / goal.amount)
     }
+    // Counted from an order's draw (`goalCount`); as a level, the run's whole count.
+    case 'gladesBeyond':
+    case 'depositYield':
+    case 'trades':
+    case 'dangerousCleared':
+      return clamp((goalCount(goal, s) ?? 0) / goal.amount)
+    // Held goals measure seconds an order has held (`Order.held`); nothing as a level.
+    case 'refinedServed':
+    case 'warmStorm':
+    case 'fullyStaffed':
+      return 0
   }
 }
 
@@ -120,6 +218,18 @@ export function goalCount(goal: OrderGoal, s: RunState): number | null {
       return constructionCount(s, (defId) => defId === goal.buildingId)
     case 'buildingsOfCategory':
       return constructionCount(s, (defId) => BUILDINGS[defId]?.category === goal.category)
+    case 'gladesBeyond': {
+      const far = gladesBeyond(s, goal.barrier)
+      let n = 0
+      for (const id of far) if (s.glades[id]?.cleared) n++
+      return n
+    }
+    case 'depositYield':
+      return s.orderTallies?.depositYield?.[goal.deposit] ?? 0
+    case 'trades':
+      return s.orderTallies?.trades ?? 0
+    case 'dangerousCleared':
+      return Object.values(s.glades).filter((g) => g.cleared && (g.kind === 'dangerous' || g.kind === 'forbidden')).length
     default:
       return null
   }
