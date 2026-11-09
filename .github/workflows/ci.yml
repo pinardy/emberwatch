@@ -1,10 +1,9 @@
 name: CI
 
+# Automatic runs on pull requests and pushes to main are disabled.
+# To re-enable, restore the `pull_request` and `push: branches: [main]` triggers.
 on:
-  pull_request:
-  push:
-    branches: [main]
-  # Re-run by hand from the Actions tab.
+  # Run by hand from the Actions tab.
   workflow_dispatch:
 
 permissions:
