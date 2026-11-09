@@ -31,6 +31,7 @@ import { signed } from './threatText'
 import { SaveStatusChip } from './SaveStatusChip'
 import { EnvoyMeter, GloryNote } from './EnvoyStatus'
 import { envoyRiding } from '../game/engine/climax'
+import { useNarrowScreen } from './useNarrowScreen'
 
 interface Float {
   id: number
@@ -99,6 +100,7 @@ export function TopBar() {
   const statusRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
   const speedRef = useRef<HTMLDivElement>(null)
+  const narrow = useNarrowScreen()
   // Modifiers and resolve walk the whole settlement: once per sim step, shared.
   const frame = useFrameDerived()
   const derived = frame?.topBar ?? null
@@ -156,6 +158,10 @@ export function TopBar() {
   // running. The set speed returns with the buttons once the last pick is
   // made.
   const held = isFounding(run)
+  // On a phone the word would push the status toggle onto a row of its own:
+  // the held control keeps the paused button's size there, marked in gold,
+  // and says "Founding" in its name and in the group it opens.
+  const heldCompact = held && narrow
 
   const toggle = (which: Exclude<Popover, null>) =>
     setPopover((open) => (open === which ? null : which))
@@ -208,7 +214,7 @@ export function TopBar() {
             type="button"
             className={`speed-toggle ${speed === 0 || held ? 'is-paused' : ''} ${
               held ? 'is-held' : ''
-            } ${popover === 'speed' ? 'is-open' : ''}`}
+            }${heldCompact ? ' is-compact' : ''} ${popover === 'speed' ? 'is-open' : ''}`}
             onClick={() => toggle('speed')}
             aria-expanded={popover === 'speed'}
             aria-controls="speed-group"
@@ -217,7 +223,9 @@ export function TopBar() {
             }`}
             title={held ? 'The clock waits until the founding picks are made' : 'Game speed'}
           >
-            {held ? (
+            {heldCompact ? (
+              <Icon id="pause" emoji="⏸" />
+            ) : held ? (
               <>
                 <Icon id="pause" emoji="⏸" /> <span className="speed-held-word">Founding</span>
               </>

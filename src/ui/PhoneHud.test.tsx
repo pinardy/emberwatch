@@ -4,7 +4,7 @@ import { STORM_BLIGHT_LIST } from '../game/content/stormBlights'
 import { announceBlight } from '../game/engine/blights'
 import { useGameStore } from '../game/store'
 import type { ActiveThreat, Errand, RunState } from '../game/types'
-import { foundedRun, showRun } from '../test/foundedRun'
+import { foundedRun, makeFoundingPicks, newTestRun, showRun } from '../test/foundedRun'
 import { proclaimFirstDecree } from '../test/decrees'
 import { FIRST_STEPS_RETIRED_NOTICE, loadFirstStepsStatus, useFirstStepsStatus } from './FirstSteps'
 import { GameScreen } from './GameScreen'
@@ -13,6 +13,7 @@ import { SHEET_KEY, resetPhoneSheetForTests, snapSheet, usePhoneSheet } from './
 import { TIPS } from './tips'
 import { useSeenTips } from './TipsCoach'
 import { setNarrowScreenForTests } from './useNarrowScreen'
+import { TopBar } from './TopBar'
 
 /**
  * The HUD on a phone (the narrow layout, chosen here with
@@ -226,6 +227,136 @@ describe('coach tips on a phone', () => {
     expect(document.querySelector('.hud-context')!.contains(tip)).toBe(true)
     expect(tip.className).toBe('tip-coach')
     expect(document.querySelector('.sheet-tip')).toBeNull()
+    // The whole text, with no clamp and no "More".
+    expect(tip.querySelector('p')!.className).toBe('')
+    expect(within(tip).queryByRole('button', { name: /More/ })).toBeNull()
+  })
+})
+
+describe('a long coach tip in the short sheet', () => {
+  // jsdom lays nothing out: a clamped paragraph reports text past its two
+  // lines (60px of text in 32px), anything else reports none.
+  const saved = {
+    scroll: Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollHeight'),
+    client: Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight'),
+  }
+  let overflowing = true
+  beforeEach(() => {
+    overflowing = true
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get(this: HTMLElement) {
+        return this.classList.contains('is-clamped') && overflowing ? 60 : 32
+      },
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: () => 32,
+    })
+  })
+  afterEach(() => {
+    // jsdom defines both on Element: drop the stand-ins, or put back an own one.
+    const proto = HTMLElement.prototype as unknown as Record<string, unknown>
+    delete proto.scrollHeight
+    delete proto.clientHeight
+    if (saved.scroll) Object.defineProperty(HTMLElement.prototype, 'scrollHeight', saved.scroll)
+    if (saved.client) Object.defineProperty(HTMLElement.prototype, 'clientHeight', saved.client)
+  })
+
+  const sheetTip = () => {
+    const tip = screen.getByRole('status', { name: 'Tip' })
+    expect(document.querySelector('.sidebar .sheet-tip')!.contains(tip)).toBe(true)
+    return tip
+  }
+
+  it('holds it to two lines, and "More" opens the rest in place with "Got it" still there', () => {
+    showRun(foundedRun())
+    render(<GameScreen />)
+    expect(usePhoneSheet.getState().size).toBe('peek')
+    const tip = sheetTip()
+    const text = tip.querySelector('p')!
+    expect(text.className).toBe('is-clamped')
+    // The whole text is in the page all the same, for a screen reader.
+    expect(text.textContent).toMatch(/Reputation meter.*earns reputation\.$/)
+
+    const more = within(tip).getByRole('button', { name: 'More of this tip' })
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+    expect(more.getAttribute('aria-controls')).toBe(text.id)
+    expect(within(tip).getByRole('button', { name: 'Got it' })).toBeTruthy()
+
+    fireEvent.click(more)
+    expect(text.className).toBe('')
+    expect(more.getAttribute('aria-expanded')).toBe('true')
+    expect(more.textContent).toBe('Less of this tip')
+    expect(within(tip).getByRole('button', { name: 'Got it' })).toBeTruthy()
+
+    // "Less" folds it back to two lines.
+    fireEvent.click(more)
+    expect(text.className).toBe('is-clamped')
+    expect(more.getAttribute('aria-expanded')).toBe('false')
+
+    // "Got it" still puts it away for good.
+    fireEvent.click(within(tip).getByRole('button', { name: 'Got it' }))
+    expect(screen.queryByRole('status', { name: 'Tip' })).toBeNull()
+    expect(useSeenTips.getState().seen).toContain('welcome')
+  })
+
+  it('shows it whole in the tall sheet, and offers no "More" for a tip that fits', () => {
+    showRun(foundedRun())
+    render(<GameScreen />)
+    act(() => usePhoneSheet.getState().setSize('full'))
+    let tip = sheetTip()
+    expect(tip.querySelector('p')!.className).toBe('')
+    expect(within(tip).queryByRole('button', { name: /of this tip/ })).toBeNull()
+
+    // Back at the short height: clamped again, and a short text has no "More".
+    overflowing = false
+    act(() => usePhoneSheet.getState().setSize('peek'))
+    tip = sheetTip()
+    expect(tip.querySelector('p')!.className).toBe('is-clamped')
+    expect(within(tip).queryByRole('button', { name: /of this tip/ })).toBeNull()
+    expect(within(tip).getByRole('button', { name: 'Got it' })).toBeTruthy()
+  })
+})
+
+describe('the top bar during the founding on a phone', () => {
+  const toggle = () => screen.getByRole('button', { name: /^Game speed/ })
+
+  it('keeps the paused button’s size, marked held, and names the founding in its name and its group', () => {
+    const run = showRun(newTestRun())
+    render(<TopBar />)
+    const button = toggle()
+    expect(button.getAttribute('aria-label')).toBe('Game speed: held for the founding')
+    expect(button.className).toMatch(/\bis-held\b/)
+    expect(button.className).toMatch(/\bis-compact\b/)
+    // No word on the button itself: the bar keeps its two rows.
+    expect(button.textContent).not.toMatch(/Founding/)
+    expect(button.title).toMatch(/founding picks/)
+
+    // Its group says it in words, and offers no speed while none runs.
+    fireEvent.click(button)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    const group = screen.getByRole('group', { name: 'Game speed' })
+    expect(group.className).toMatch(/is-open/)
+    expect(within(group).getByRole('status').textContent).toMatch(/Founding — clock waits/)
+    expect(within(group).queryAllByRole('button')).toHaveLength(0)
+
+    // Once the picks are made, the set speed returns, as during play.
+    act(() => {
+      makeFoundingPicks(run)
+      showRun(run)
+    })
+    expect(toggle().getAttribute('aria-label')).toBe('Game speed: 1×')
+    expect(toggle().className).not.toMatch(/is-held|is-compact/)
+  })
+
+  it('keeps the word on desktop', () => {
+    setNarrowScreenForTests(false)
+    showRun(newTestRun())
+    render(<TopBar />)
+    expect(toggle().textContent).toMatch(/Founding/)
+    expect(toggle().className).toMatch(/\bis-held\b/)
+    expect(toggle().className).not.toMatch(/is-compact/)
   })
 })
 
