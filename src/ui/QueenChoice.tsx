@@ -10,7 +10,9 @@ import {
   isWritChoice,
   orderDeclineBlocked,
   orderGoal,
+  orderNote,
   orderReputation,
+  orderStatus,
 } from '../game/engine/orders'
 import { decreeGoal, decreeReputation, decreeStreakBonus } from '../game/engine/structure'
 import { describeTimedGoal } from '../game/engine/goals'
@@ -127,7 +129,8 @@ export function OrderOption({ run, order, onPick }: { run: RunState; order: Orde
       {tag && <em className="rarity-tag">{tag}</em>}
       <small>{describeOrder(order)}</small>
       {def.consume && <small>The goods are handed over when it is met.</small>}
-      <Progress value={order.progress} />
+      <OrderNote order={order} />
+      <Progress value={order.progress} status={orderStatus(run, order)} />
       <div className="option-effects">
         <span className="is-good">
           <Icon id="reputation" label="reputation" /> +{orderReputation(run, order)}
@@ -233,12 +236,19 @@ function DecreeOption({ run, decree, onPick }: { run: RunState; decree: RoyalDec
   )
 }
 
-function Progress({ value }: { value: number }) {
+function Progress({ value, status = null }: { value: number; status?: string | null }) {
   const pct = Math.floor(Math.max(0, Math.min(1, value)) * 100)
+  const label = status ? `${status} · ${pct}% done now` : `${pct}% done now`
   return (
-    <span className="queen-progress" role="img" aria-label={`${pct}% done`}>
+    <span className="queen-progress" role="img" aria-label={label}>
       <Bar value={pct / 100} />
-      <small>{pct}% done now</small>
+      <small>{label}</small>
     </span>
   )
+}
+
+/** How an order's goal is met, for the kinds whose words alone do not say. */
+export function OrderNote({ order }: { order: Order }) {
+  const note = orderNote(order)
+  return note ? <small className="order-note">{note}</small> : null
 }
