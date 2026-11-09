@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { useState } from 'react'
 import App from '../App'
 import { COMMISSIONS, commissionOffer, unlockedCommissions } from '../game/content/commissions'
 import { META_UPGRADES } from '../game/content/meta'
@@ -8,6 +9,7 @@ import { createRun } from '../game/engine/createRun'
 import { saveMeta } from '../game/persistence'
 import { useGameStore } from '../game/store'
 import type { MetaState, RunState } from '../game/types'
+import { CommissionPicker } from './Commissions'
 
 /** Citadel commissions in the UI: the pick, the Orders card, the verdict, the board. */
 
@@ -96,6 +98,91 @@ describe('choosing a commission on the setup screen', () => {
     useMeta(defaultMeta())
     await act(() => useGameStore.getState().startRun(1, undefined, 0, {}, undefined, 'tradeTown'))
     expect(currentRun().commission).toBeUndefined()
+  })
+})
+
+describe('the compact commission rows (phones)', () => {
+  // On phones setup.css draws each option as a one-line row with its terms
+  // behind the toggle beside it, like the species tiles; the DOM is the same
+  // at every width (wide screens hide the toggle and the detail area).
+  function Picker({ meta, initial = null }: { meta: MetaState; initial?: string | null }) {
+    const [value, setValue] = useState<string | null>(initial)
+    return <CommissionPicker meta={meta} value={value} onPick={setValue} />
+  }
+  const meta = owning('merchantCharter', 'openRoads', 'wardensWrit')
+
+  it('picks with a single tap on the row, the row named with its reward and whether it is chosen', () => {
+    render(<Picker meta={meta} />)
+    const group = screen.getByRole('radiogroup', { name: 'Commission' })
+    const offer = commissionOffer(meta)
+    expect(offer).toHaveLength(3)
+    const radios = within(group).getAllByRole('radio')
+    expect(radios).toHaveLength(4)
+
+    const none = within(group).getByRole('radio', { name: /^No commission.*✓ Chosen Base supplies$/ })
+    expect(none.getAttribute('aria-checked')).toBe('true')
+    const def = COMMISSIONS[offer[0]]
+    const row = within(group).getByRole('radio', { name: new RegExp(def.name) })
+    expect(row.getAttribute('aria-checked')).toBe('false')
+    expect(row.querySelector('.commission-chosen')).toBeNull()
+    expect(row.querySelector('.commission-reward')!.textContent).toBe(`+${def.bonusPercent}% supplies if met`)
+
+    fireEvent.click(row)
+    expect(row.getAttribute('aria-checked')).toBe('true')
+    expect(none.getAttribute('aria-checked')).toBe('false')
+    expect(within(group).getAllByRole('radio', { checked: true })).toEqual([row])
+    // The chosen state is in the row's name and its toggle's.
+    expect(within(group).getByRole('radio', { name: new RegExp(`${def.name}.*✓ Chosen \\+${def.bonusPercent}% supplies`) })).toBe(row)
+    expect(within(group).queryByRole('radio', { name: /No commission ✓ Chosen/ })).toBeNull()
+    expect(within(group).getByRole('button', { name: `Terms of ${def.name} (chosen)` })).toBeTruthy()
+    expect(within(group).getByRole('button', { name: 'Terms of No commission' })).toBeTruthy()
+
+    // Tapping it again keeps it chosen, as a radio does.
+    fireEvent.click(row)
+    expect(row.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('opens one option’s full terms at a time from its toggle, without picking it', () => {
+    render(<Picker meta={meta} />)
+    const group = screen.getByRole('radiogroup', { name: 'Commission' })
+    const [first, second] = commissionOffer(meta).map((id) => COMMISSIONS[id])
+    const toggleOf = (name: string) => within(group).getByRole('button', { name: new RegExp(`^Terms of ${name}`) })
+    const detailOf = (name: string) => document.getElementById(toggleOf(name).getAttribute('aria-controls')!)!
+
+    // All folded to start.
+    for (const toggle of within(group).getAllByRole('button', { name: /^Terms of/ })) {
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
+      expect(document.getElementById(toggle.getAttribute('aria-controls')!)!.hidden).toBe(true)
+    }
+
+    fireEvent.click(toggleOf(first.name))
+    expect(toggleOf(first.name).getAttribute('aria-expanded')).toBe('true')
+    const detail = detailOf(first.name)
+    expect(detail.hidden).toBe(false)
+    expect(detail.getAttribute('role')).toBe('group')
+    expect(detail.getAttribute('aria-label')).toBe(`Terms of ${first.name}`)
+    // Its full terms: patron, twist, the objective and the reward.
+    expect(detail.textContent).toContain(first.patron)
+    expect(detail.textContent).toContain(first.twist)
+    expect(detail.textContent).toContain('Hold the settlement')
+    expect(detail.textContent).toContain(`+${first.bonusPercent}% supplies if met`)
+    // Opening the terms picks nothing.
+    expect(within(group).getByRole('radio', { name: /No commission/ }).getAttribute('aria-checked')).toBe('true')
+
+    // Another option's terms close the first.
+    fireEvent.click(toggleOf(second.name))
+    expect(detailOf(second.name).hidden).toBe(false)
+    expect(detailOf(first.name).hidden).toBe(true)
+    expect(toggleOf(first.name).getAttribute('aria-expanded')).toBe('false')
+    expect(group.querySelectorAll('.commission-detail:not([hidden])')).toHaveLength(1)
+
+    // Its toggle again folds it; picking a row leaves the terms as they are.
+    fireEvent.click(toggleOf(second.name))
+    expect(group.querySelectorAll('.commission-detail:not([hidden])')).toHaveLength(0)
+    fireEvent.click(toggleOf('No commission'))
+    fireEvent.click(within(group).getByRole('radio', { name: new RegExp(second.name) }))
+    expect(detailOf('No commission').hidden).toBe(false)
+    expect(group.querySelectorAll('.commission-detail:not([hidden])')).toHaveLength(1)
   })
 })
 

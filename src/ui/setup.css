@@ -194,12 +194,24 @@
   }
 }
 
+/* Commissions: on wide screens each slot is just its card, as on the
+   Citadel's board (the toggle, the detail area and the "Chosen" tag are for
+   the phone rows below). */
+.commission-slot {
+  display: contents;
+}
+
+.commission-more,
+.commission-detail,
+.commission-card .commission-chosen {
+  display: none;
+}
+
 /* Phones: the rest of the form tightens too. A rung not yet earned shows its
    name and what opens it (its terms stay in its accessible name, and the
-   Citadel's ladder shows them in full); a commission drops its patron line. */
+   Citadel's ladder shows them in full). */
 @media (max-width: 600px) {
-  .setup-screen .edict-step.is-locked > small,
-  .setup-screen .commission-patron {
+  .setup-screen .edict-step.is-locked > small {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -207,6 +219,172 @@
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
+  }
+
+  /* Sections sit a little closer, and the species hint takes no room
+     until it has something to say. */
+  .setup-screen .setup-section {
+    margin: 14px 0;
+    padding-top: 12px;
+  }
+
+  .setup-screen .setup-hint:empty {
+    min-height: 0;
+    margin: 0;
+  }
+
+  /* The edict ladder: rungs that can be taken keep their cards, two to a
+     row, and so does the first rung still locked, which says what opens it.
+     The rungs past it are short chips, three to a row: name and lock (the
+     lock's words stay in each one's accessible name). */
+  .setup-screen .edict-ladder {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .setup-screen .edict-step {
+    grid-column: span 3;
+  }
+
+  .setup-screen .edict-step.is-locked + .edict-step.is-locked {
+    grid-column: span 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    min-width: 0;
+    padding: 6px 8px;
+  }
+
+  .setup-screen .edict-step.is-locked + .edict-step.is-locked > strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .setup-screen .edict-step.is-locked + .edict-step.is-locked > em {
+    flex: none;
+  }
+
+  .setup-screen .edict-step.is-locked + .edict-step.is-locked > em {
+    font-size: 0;
+  }
+
+  .setup-screen .edict-step.is-locked + .edict-step.is-locked > em > :is(.icon, .icon-emoji) {
+    font-size: 0.75rem;
+  }
+
+  /* Save slots: empty ones two to a row; one holding a run keeps a row of
+     its own for its summary. */
+  .setup-screen .slot-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .setup-screen .slot-option.is-taken {
+    grid-column: 1 / -1;
+  }
+
+  /* Each commission is a one-line row (icon, name, "Chosen" when it is, and
+     the reward) with its patron, twist and terms behind the toggle beside
+     it, one open at a time. A tap on the row still picks it. */
+  .setup-screen .commission-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .commission-slot {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 0 6px;
+  }
+
+  .commission-slot .commission-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name reward'
+      'state reward';
+    align-items: center;
+    align-content: center;
+    gap: 0 10px;
+    min-height: 48px;
+    padding: 6px 10px;
+  }
+
+  .commission-slot .commission-card > .commission-name {
+    grid-area: name;
+    min-width: 0;
+  }
+
+  .commission-slot .commission-card > small,
+  .commission-slot .commission-card > .rep-profile,
+  .commission-slot .commission-card > .commission-terms,
+  .commission-slot .commission-reward-tail {
+    display: none;
+  }
+
+  .commission-slot .commission-card > .commission-chosen {
+    grid-area: state;
+    display: block;
+    font-size: 0.75rem;
+  }
+
+  .commission-slot .commission-card > .commission-reward {
+    grid-area: reward;
+    white-space: nowrap;
+  }
+
+  .commission-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0;
+    color: var(--muted);
+    font-size: 1rem;
+  }
+
+  .commission-slot.is-open .commission-more {
+    color: var(--gold);
+    border-color: var(--gold);
+  }
+
+  .commission-more > span[aria-hidden] {
+    display: inline-block;
+  }
+
+  .commission-slot.is-open .commission-more > span[aria-hidden] {
+    transform: rotate(180deg);
+  }
+
+  .commission-detail:not([hidden]) {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 5px;
+    margin-top: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--line-soft);
+    border-left: 3px solid var(--gold);
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+    font-size: 0.75rem;
+  }
+
+  .commission-detail p {
+    margin: 0;
+  }
+
+  .commission-detail .commission-patron,
+  .commission-detail .rep-profile {
+    color: var(--muted);
+  }
+
+  .commission-detail .commission-detail-reward {
+    color: var(--gold);
   }
 
   .setup-screen .commission-terms {
