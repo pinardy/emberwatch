@@ -71,3 +71,39 @@ describe('stylesheets', () => {
     expect(braceProblem('.a { content: "}"; }')).toBeNull()
   })
 })
+
+/*
+ * The New settlement screen's footer once floated over the form (sticky, on a
+ * see-through gradient), hiding the seed field behind its buttons. It is now a
+ * solid bar below the scrolling body; jsdom has no layout, so the rules that
+ * make it so are checked here (the markup in SetupScreen.test.tsx).
+ */
+describe('the setup screen footer', () => {
+  const css = (name: string) => codeOnly(STYLESHEETS.find(([n]) => n === name)![1])
+  const rule = (sheet: string, selector: string) =>
+    new RegExp(`(?:^|\\})\\s*${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`).exec(css(sheet))?.[1] ?? ''
+
+  it('is a solid bar in a column card, under a body that scrolls clear of it', () => {
+    const card = rule('ui/setup.css', '.menu-card.setup-card')
+    expect(card).toMatch(/display:\s*flex/)
+    expect(card).toMatch(/flex-direction:\s*column/)
+    expect(card).toMatch(/overflow:\s*hidden/)
+    const body = rule('ui/setup.css', '.setup-body')
+    expect(body).toMatch(/overflow-y:\s*auto/)
+    expect(body).toMatch(/min-height:\s*0/)
+    expect(body).toMatch(/padding:\s*28px 28px 12px/)
+    const foot = rule('ui/setup.css', '.modal-foot.setup-foot')
+    expect(foot).toMatch(/flex:\s*none/)
+    expect(foot).toMatch(/margin:\s*0;/)
+    expect(foot).toMatch(/background:\s*var\(--panel\)/)
+  })
+
+  it('is never sticky or see-through anywhere', () => {
+    for (const [name] of STYLESHEETS) {
+      for (const [, body] of css(name).matchAll(/\.setup-foot[^{]*\{([^}]*)\}/g)) {
+        expect(body, name).not.toMatch(/position:\s*sticky/)
+        expect(body, name).not.toMatch(/rgba\(/)
+      }
+    }
+  })
+})
