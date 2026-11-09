@@ -645,6 +645,25 @@ export type OrderGoal =
    * stock goal for it can sit at nothing all run.
    */
   | { kind: 'producedCategory'; category: ResourceCategory; amount: number }
+  /*
+   * The kinds below are the Queen's orders on the run's own ground and
+   * systems (`content/orders.ts`); each says in `engine/orders.ts` when it
+   * may be drawn. Held kinds count seconds in `Order.held`.
+   */
+  /** A species' refined need fully met, for `seconds` in all. */
+  | { kind: 'refinedServed'; species: SpeciesId; seconds: number }
+  /** Glades cleared on the far side of the river (or below the ridge's cliffs) from the hearth. */
+  | { kind: 'gladesBeyond'; barrier: 'river' | 'cliff'; amount: number }
+  /** Goods taken from deposits of one kind (the ruins' salvage, the Cinderwood's deadfall or fireweed). */
+  | { kind: 'depositYield'; deposit: DepositId; amount: number }
+  /** A whole Storm seen through with no villager sleeping cold. */
+  | { kind: 'warmStorm' }
+  /** Lots bought from or sold to the caravans. */
+  | { kind: 'trades'; amount: number }
+  /** Dangerous or forbidden glades cleared. */
+  | { kind: 'dangerousCleared'; amount: number }
+  /** At least `buildings` workplaces of a category at full crew at once, for `seconds` in all. */
+  | { kind: 'fullyStaffed'; category: BuildingCategory; buildings: number; seconds: number }
 
 /**
  * What an errand asks, as drawn for this settlement (see `content/errands.ts`
@@ -716,6 +735,12 @@ export interface ErrandBook {
   amber: number
 }
 
+/** See `RunState.orderTallies`. */
+export interface OrderTallies {
+  trades?: number
+  depositYield?: Partial<Record<DepositId, number>>
+}
+
 export interface OrderDef {
   id: string
   name: string
@@ -725,6 +750,8 @@ export interface OrderDef {
   reward?: ResourceBag
   /** A shipment: the stock goal's goods are handed over when it is met. */
   consume?: boolean
+  /** Drawn only from this year on (absent: from the start). */
+  fromYear?: number
 }
 
 export interface Order {
@@ -745,6 +772,8 @@ export interface Order {
    * (`goalCount`). Absent = measured as a level (older saves, stock goals).
    */
   baseline?: number
+  /** Seconds a held goal has held so far (`refinedServed`, `fullyStaffed`, `warmStorm`). Absent = 0. */
+  held?: number
   /** The Year-1 founding writ: a small first order chosen at the start. */
   writ?: boolean
 }
@@ -1500,6 +1529,12 @@ export interface RunState {
   /** Order def ids already drawn, so we do not repeat them. */
   ordersSeen: string[]
   orderCounter: number
+  /**
+   * Run-long counts some orders measure from their draw: caravan lots bought
+   * and sold, and goods taken from each kind of deposit. Absent on older
+   * saves (migrated to empty).
+   */
+  orderTallies?: OrderTallies
 
   stats: {
     resourcesProduced: number

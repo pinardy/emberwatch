@@ -55,6 +55,34 @@ const defs: OrderDef[] = [
   { id: 'ship_tool_8', name: 'Citadel shipment: tools', goal: { kind: 'stock', resource: 'tool', amount: 8 }, reputationReward: 2, reward: { amber: 30 }, consume: true },
   { id: 'ship_part_10', name: 'Citadel shipment: parts', goal: { kind: 'stock', resource: 'part', amount: 10 }, reputationReward: 2, reward: { amber: 30 }, consume: true },
   { id: 'ship_copper_12', name: 'Citadel shipment: copper', goal: { kind: 'stock', resource: 'copperBar', amount: 12 }, reputationReward: 2, reward: { amber: 30 }, consume: true },
+
+  // Orders on the run's own ground and systems. `fromYear` spreads them
+  // over the run; each goal kind says in `engine/orders.ts` when it may be
+  // drawn besides: across the river or beyond the
+  // ridge only on that layout, salvage only on the ruins, deadfall and
+  // fireweed only in the Cinderwood, a species' finer good only once it
+  // wants it and the settlement can make it, the warm Storm only ahead of a
+  // Storm that would leave someone cold.
+  //
+  // Year 1 and on: the ground.
+  { id: 'cross_ford', name: 'Ford the river', goal: { kind: 'gladesBeyond', barrier: 'river', amount: 2 }, reputationReward: 1, reward: { amber: 30 } },
+  { id: 'cross_pass', name: 'Down through the pass', goal: { kind: 'gladesBeyond', barrier: 'cliff', amount: 2 }, reputationReward: 1, reward: { amber: 30 } },
+  { id: 'salvage_ruins_60', name: 'Salvage the old walls', goal: { kind: 'depositYield', deposit: 'ruins', amount: 60 }, reputationReward: 1, reward: { amber: 25 } },
+  { id: 'deadfall_80', name: 'Saw up the deadfall', goal: { kind: 'depositYield', deposit: 'deadfall', amount: 80 }, reputationReward: 1, reward: { amber: 20 } },
+  { id: 'fireweed_64', name: 'Gather fireweed', goal: { kind: 'depositYield', deposit: 'fireweed', amount: 64 }, reputationReward: 1, reward: { amber: 20 } },
+  { id: 'camps_full', name: 'Camps at full strength', goal: { kind: 'fullyStaffed', category: 'gathering', buildings: 5, seconds: 90 }, reputationReward: 1, reward: { amber: 20 } },
+  // Year 2 and on: the settlement's systems.
+  { id: 'dangerous_glade_1', name: 'Brave the dark glade', goal: { kind: 'dangerousCleared', amount: 1 }, reputationReward: 1, reward: { amber: 25 }, fromYear: 2 },
+  { id: 'workshops_full', name: 'Full shifts at the workshops', goal: { kind: 'fullyStaffed', category: 'production', buildings: 3, seconds: 120 }, reputationReward: 1, reward: { amber: 30 }, fromYear: 2 },
+  { id: 'halls_full', name: 'Halls open together', goal: { kind: 'fullyStaffed', category: 'service', buildings: 3, seconds: 120 }, reputationReward: 1, reward: { amber: 30 }, fromYear: 2 },
+  { id: 'warm_storm', name: 'No one sleeps cold', goal: { kind: 'warmStorm' }, reputationReward: 1, reward: { amber: 30 }, fromYear: 2 },
+  { id: 'trades_10', name: 'Open the trade road', goal: { kind: 'trades', amount: 10 }, reputationReward: 1, reward: { amber: 20 }, fromYear: 2 },
+  // Year 3 and on (or a large settlement): the finer goods.
+  { id: 'refined_human', name: 'Spiced ale for the humans', goal: { kind: 'refinedServed', species: 'human', seconds: 90 }, reputationReward: 2, reward: { amber: 35 } },
+  { id: 'refined_beaver', name: 'Folios for the beavers', goal: { kind: 'refinedServed', species: 'beaver', seconds: 90 }, reputationReward: 2, reward: { amber: 35 } },
+  { id: 'refined_lizard', name: 'Jerky for the lizards', goal: { kind: 'refinedServed', species: 'lizard', seconds: 90 }, reputationReward: 2, reward: { amber: 35 } },
+  { id: 'refined_harpy', name: 'Incense for the harpies', goal: { kind: 'refinedServed', species: 'harpy', seconds: 90 }, reputationReward: 2, reward: { amber: 35 } },
+  { id: 'refined_fox', name: 'Porridge for the foxes', goal: { kind: 'refinedServed', species: 'fox', seconds: 90 }, reputationReward: 2, reward: { amber: 35 } },
 ]
 
 /**

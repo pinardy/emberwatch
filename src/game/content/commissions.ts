@@ -348,7 +348,7 @@ export function describeTerm(term: CommissionTerm): string {
 }
 
 function goalTarget(goal: OrderGoal): number {
-  return 'amount' in goal ? goal.amount : goal.value
+  return 'amount' in goal ? goal.amount : 'value' in goal ? goal.value : 1
 }
 
 /** A count against a target: met at the target, else open (or failed once judged). */

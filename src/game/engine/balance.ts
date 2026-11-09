@@ -471,6 +471,14 @@ export const ORDER_COUNT_SECONDS = 300
 export const ORDER_COUNT_MIN = 15
 /** Impatience for asking the Queen for a different pair of orders (once a year). */
 export const ORDER_DECLINE_IMPATIENCE = 0.5
+/**
+ * An order for a species' refined need is drawn only once the finer good
+ * already reaches this share of them, or a workshop stands that makes it
+ * (within reach, like resolve orders).
+ */
+export const REFINED_ORDER_MIN_RATIO = 0.25
+/** …and counts its seconds while the finer good reaches at least this share. */
+export const REFINED_ORDER_HOLD_RATIO = 0.5
 
 /** Reputation at which the Queen grants her one-time charter. */
 export const CHARTER_REPUTATION = 10

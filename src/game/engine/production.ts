@@ -28,6 +28,7 @@ import { canAfford, grant, spend, storageUsed } from './queries'
 import { makeRng } from './rng'
 import { roadMultiplier } from './roads'
 import { touchBuildings } from './runCache'
+import { tallyDepositYield } from './tallies'
 import { buildMultiplier, workTraitMultiplier } from './traits'
 import {
   gatherRadiusOf,
@@ -335,6 +336,7 @@ export function stepProduction(
       }
 
       if (recipe.requiresDeposit) {
+        if (!isService) tallyDepositYield(s, recipe.requiresDeposit, outputTotal)
         if (consumeDeposit(s, b, recipe.requiresDeposit)) result.depletedDeposit = true
       }
     }
