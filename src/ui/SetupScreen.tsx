@@ -7,7 +7,7 @@ import {
   WORK_TAG_LABELS,
 } from '../game/content/species'
 import { parseSeed, randomSeed } from '../game/engine/rng'
-import { citadelLoadout } from '../game/engine/meta'
+import { citadelLoadout, edictLabel } from '../game/engine/meta'
 import { landFor, mapgenHooksFor, type LandChoice } from '../game/engine/runModifiers'
 import { commissionLand } from '../game/engine/citadel'
 import { drawTerrainPlan, isUnusualPlan, type TerrainPlan } from '../game/engine/terrainPlan'
@@ -82,8 +82,9 @@ export function SetupScreen() {
   // opens (and again on a reroll): the preview shows its land and ground, and
   // the run is created on exactly that seed, so the preview never lies.
   const [drawnSeed, setDrawnSeed] = useState(randomSeed)
-  // Queen's Edict: defaults to the hardest rung earned so far.
-  const [edict, setEdict] = useState(meta.edictUnlocked)
+  // Queen's Edict: none unless the player picks one. Defaulting to the
+  // hardest rung earned set veterans out under harsher terms unasked.
+  const [edict, setEdict] = useState(0)
   // A Citadel commission, or none (the standard settlement).
   const [commission, setCommission] = useState<string | null>(null)
   const available = useMemo(
@@ -297,7 +298,9 @@ export function SetupScreen() {
           </section>
 
           <section className="setup-section edict-section">
-            <h2>Queen's Edict</h2>
+            <h2>
+              Queen's Edict <span className="edict-current">· {edictLabel(edict)}</span>
+            </h2>
             <p className="muted">
               Harsher terms for richer supplies. Each edict stacks on the ones below it; win
               under the hardest you have earned to unlock the next.
@@ -355,10 +358,11 @@ export function SetupScreen() {
               {chosen.map((id) => (
                 <Icon key={id} of={SPECIES[id]} />
               ))}
+              {edict > 0 ? ` · ${edictLabel(edict)}` : ''}
               {slotTaken ? ` · replaces ${slotLabel}` : ''}
               <span className="sr-only">
                 {' '}
-                ({chosen.map((id) => SPECIES[id].name).join(', ')})
+                ({chosen.map((id) => SPECIES[id].name).join(', ')}; {edictLabel(edict)})
               </span>
             </button>
           )}

@@ -109,7 +109,7 @@ export const TIPS: Tip[] = [
   {
     id: 'welcome',
     title: 'Welcome, Viceroy',
-    text: 'Fill the 👑 Reputation meter to win before the Queen’s ⏳ Impatience fills and she recalls you. Resolve above each species’ threshold is what earns reputation.',
+    text: 'Fill the 👑 Reputation meter before the Queen’s ⏳ Impatience fills and she recalls you: that sends her envoy, and you win by holding until she arrives after the next Storm. High resolve earns reputation.',
     // The run opens on the founding; welcome the player once it closes.
     // While the First steps checklist is up, it carries this welcome instead.
     when: (run) => run.clock < 30 && run.pendingChoices.length === 0,
@@ -142,6 +142,8 @@ export const TIPS: Tip[] = [
     text: 'This settlement has an objective on top of winning, judged when the run ends. Its card at the top of the Orders panel ticks off each term as you go.',
     when: (run) => !!run.commission && !!COMMISSIONS[run.commission] && !isFounding(run),
   },
+  // The map's layouts and biomes (`terrainTips.ts`): early, and urgent.
+  ...TERRAIN_TIPS,
   {
     id: 'idle-builders',
     title: 'Idle hands build',
@@ -308,8 +310,6 @@ export const TIPS: Tip[] = [
     when: (run) => run.stats.gladesCleared >= 3 && !anySpared(run),
     doneWhen: anySpared,
   },
-  // The map's layouts and biomes (`terrainTips.ts`).
-  ...TERRAIN_TIPS,
 ]
 
 /** The tip with this id, if any. */
