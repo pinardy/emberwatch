@@ -187,7 +187,9 @@ describe('a new player following the checklist', () => {
         for (const sp of species) expect(state.despair[sp], `${label}: ${sp} despair`).toBe(0)
       }
     }
-  })
+    // 24 first years of play: about 2 s on an idle machine, but well past the
+    // default 5 s when the machine is loaded.
+  }, 30_000)
 })
 
 describe('first royal decree', () => {
