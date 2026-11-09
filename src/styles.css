@@ -1229,6 +1229,44 @@ code {
   color: #fff;
 }
 
+/* A flagged good: its short name beside the number ("Clay 0 !"), and a tap
+   opens the drawer on it, where it says why. Phones have no room for the
+   names (alerts can come three at a time): there the tap is the label. */
+.resource.resource-alert {
+  min-height: 26px;
+  margin: -2px -4px;
+  padding: 1px 5px;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+}
+
+.resource.resource-alert:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--line);
+}
+
+.resource.resource-alert[aria-expanded='true'] {
+  border-color: var(--gold);
+}
+
+.resource-name {
+  color: #f3dcc0;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.stock-drawer li.is-focus {
+  outline: 1px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.resource-more-short {
+  display: none;
+}
+
 .resource-more-anchor {
   position: relative;
   flex-shrink: 0;
@@ -1369,7 +1407,7 @@ code {
   }
 
   .resource-group {
-    padding: 3px 8px;
+    padding: 3px 6px;
     gap: 8px;
   }
 
@@ -1381,8 +1419,37 @@ code {
   .storage.is-bad:not(.food-summary) > strong::after,
   .food-summary .food-variety,
   .food-summary:not(.is-warn, .is-bad) .food-runway > span,
-  .resource-more-label {
+  .resource-more-long,
+  .resource-more-count,
+  .resource-name {
     display: none;
+  }
+
+  /* "Stock ▾": the drawer's name, short; the count is in its label. */
+  .resource-more-short {
+    display: inline;
+  }
+
+  /* No chevron: the word and the pill say it opens; it keeps the room for
+     the goods. */
+  .resource-more {
+    padding-inline: 9px;
+  }
+
+  .resource-more-chevron {
+    display: none;
+  }
+
+  .resource.resource-alert {
+    margin: 0;
+    padding: 0;
+    gap: 3px;
+    border-width: 0;
+  }
+
+  .resource.resource-alert[aria-expanded='true'] {
+    outline: 1px solid var(--gold);
+    outline-offset: 2px;
   }
 
   .resource-bar {
