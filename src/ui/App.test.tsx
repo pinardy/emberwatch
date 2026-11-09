@@ -387,8 +387,14 @@ describe('app shell', () => {
   it("previews the seed's map modifiers, then shows them in the run and at its end", () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /New settlement/i }))
-    // No seed yet: the land is a surprise.
-    expect(screen.getByText(/reveals them when you set out/i)).toBeTruthy()
+    // No seed typed: the random map's seed is drawn already, and its land shown.
+    const field = screen.getByLabelText(/Map seed/i) as HTMLInputElement
+    const drawn = /^random · (\d+)$/.exec(field.placeholder)
+    expect(drawn).not.toBeNull()
+    const random = screen.getByRole('list', { name: /Lay of the land/i })
+    const drawnLand = drawRunModifiers(Number(drawn![1]))
+    expect(within(random).getAllByRole('listitem')).toHaveLength(drawnLand.length)
+    for (const id of drawnLand) expect(within(random).getByText(RUN_MODIFIERS[id].name)).toBeTruthy()
     fireEvent.change(screen.getByLabelText(/Map seed/i), { target: { value: '4242' } })
     const expected = drawRunModifiers(4242).map((id) => RUN_MODIFIERS[id].name)
     const preview = screen.getByRole('list', { name: /Lay of the land/i })
