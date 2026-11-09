@@ -9,7 +9,8 @@ import { GameScreen } from './GameScreen'
 import type { RunState } from '../game/types'
 import { gladeEdgeGeometry, mapStats, useStaticGeometry } from './map3d/staticGeometry'
 import { districtOf, SPARED_STYLE, useHudValue, useMapOverlays } from './mapShared'
-import { roadKey } from './map3d/layerKeys'
+import { buildingViews, roadKey } from './map3d/layerKeys'
+import { labelTile } from './map3d/sprites'
 import { roadGeometry } from './map3d/Roads'
 import { ROAD_TOOL, placeRoad } from '../game/engine/roads'
 import { DISTRICT_STYLE, obstacleTitle, plateShape } from './map2dArt'
@@ -364,6 +365,98 @@ describe('2D map parity', () => {
     // Drawn before (beneath) every building plate.
     const firstBuilding = document.querySelector('g.building')!
     expect(wash!.compareDocumentPosition(firstBuilding) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+})
+
+describe('crew counts on the maps', () => {
+  /** A finished Woodcutters' Camp beside the hearth with one hand of its two. */
+  function shortCamp(run: RunState): string {
+    const spot = findPlacement(run, 'woodcuttersCamp')!
+    const hearth = Object.values(run.buildings)[0]
+    const worker = Object.values(run.villagers).find((v) => v.assignment === null)!
+    run.buildings.crewTest = {
+      id: 'crewTest',
+      defId: 'woodcuttersCamp',
+      pos: spot,
+      gladeId: hearth.gladeId,
+      built: true,
+      buildProgress: BUILDINGS.woodcuttersCamp.buildSeconds,
+      workers: [worker.id],
+      activeRecipeId: BUILDINGS.woodcuttersCamp.recipes[0]?.id ?? null,
+      recipeProgress: 0,
+      tier: 0,
+      paused: false,
+      depositsInRange: {},
+    }
+    worker.assignment = 'crewTest'
+    return 'crewTest'
+  }
+
+  const bump = () =>
+    act(() => {
+      const { version, hudVersion } = useGameStore.getState()
+      useGameStore.setState({ version: version + 1, hudVersion: hudVersion + 1 })
+    })
+
+  const count = (id: string) => document.querySelector(`[data-marks="${id}"] text.worker-count`)!
+
+  it('shows a short crew at full strength only while someone idle could fill it', () => {
+    startGame()
+    const run = currentRun()
+    const id = shortCamp(run)
+    bump()
+    expect(Object.values(run.villagers).some((v) => v.assignment === null)).toBe(true)
+    expect(count(id).textContent).toBe('1/2')
+    expect(count(id).getAttribute('class')).toMatch(/is-short/)
+    expect(count(id).getAttribute('class')).not.toMatch(/is-quiet/)
+
+    // Nobody idle: still drawn, but quiet.
+    act(() => {
+      for (const v of Object.values(run.villagers)) if (v.assignment === null) delete run.villagers[v.id]
+    })
+    bump()
+    expect(count(id).textContent).toBe('1/2')
+    expect(count(id).getAttribute('class')).toMatch(/is-quiet/)
+
+    // Selected or under the mouse, it speaks up again.
+    act(() => useGameStore.getState().selectBuilding(id))
+    expect(count(id).getAttribute('class')).not.toMatch(/is-quiet/)
+    act(() => useGameStore.getState().selectBuilding(null))
+    expect(count(id).getAttribute('class')).toMatch(/is-quiet/)
+    const plate = document.querySelector(`[data-building="${id}"]`)!
+    fireEvent.pointerOver(plate, { pointerType: 'mouse' })
+    expect(count(id).getAttribute('class')).not.toMatch(/is-quiet/)
+    fireEvent.pointerOut(plate, { pointerType: 'mouse' })
+    expect(count(id).getAttribute('class')).toMatch(/is-quiet/)
+  })
+
+  it('keeps a full crew quiet, whoever is idle, and leaves the status badges alone', () => {
+    startGame()
+    const run = currentRun()
+    const id = shortCamp(run)
+    const other = Object.values(run.villagers).find((v) => v.assignment === null)!
+    run.buildings[id].workers.push(other.id)
+    other.assignment = id
+    bump()
+    expect(Object.values(run.villagers).some((v) => v.assignment === null)).toBe(true)
+    expect(count(id).textContent).toBe('2/2')
+    expect(count(id).getAttribute('class')).toMatch(/is-quiet/)
+    // The status badges carry no quiet state of their own.
+    expect(document.querySelectorAll('g.status-badge.is-quiet, g.status-badge .is-quiet').length).toBe(0)
+  })
+
+  it('derives the call from the shared building views (both maps read it)', () => {
+    showFoundedRun()
+    const run = currentRun()
+    const id = shortCamp(run)
+    let version = useGameStore.getState().version
+    const view = () => buildingViews(run, ++version).find((v) => v.building.id === id)!
+    expect(view().crewCall).toBe(true)
+    for (const v of Object.values(run.villagers)) if (v.assignment === null) delete run.villagers[v.id]
+    expect(view().crewCall).toBe(false)
+    // The 3D map's crew label is the same tile painted faint: its own key,
+    // so no extra draw call, and readable apart from the full-strength one.
+    expect(labelTile('1/2', true).key).not.toBe(labelTile('1/2').key)
   })
 })
 

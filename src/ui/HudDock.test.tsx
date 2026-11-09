@@ -163,6 +163,78 @@ describe('resource bar', () => {
   })
 })
 
+describe('resource bar names', () => {
+  /** A Lumber Mill with a hand and no wood: wood is empty and holding it up. */
+  function millWithoutWood(): RunState {
+    const run = newRun()
+    const worker = Object.values(run.villagers).find((v) => v.assignment === null)!
+    const hearth = Object.values(run.buildings)[0]
+    run.buildings['test-mill'] = {
+      id: 'test-mill',
+      defId: 'lumberMill',
+      pos: { x: hearth.pos.x + 3, y: hearth.pos.y },
+      gladeId: hearth.gladeId,
+      built: true,
+      buildProgress: BUILDINGS.lumberMill.buildSeconds,
+      workers: [worker.id],
+      activeRecipeId: 'plank',
+      recipeProgress: 0,
+      paused: false,
+      depositsInRange: {},
+    }
+    worker.assignment = 'test-mill'
+    run.stock = { berry: 20, stone: 5, copperOre: 3 }
+    return run
+  }
+
+  it('names an alerted good beside its number, and says why on a tap', () => {
+    show(millWithoutWood())
+    render(<ResourceBar />)
+    const alert = screen.getByRole('button', { name: /^Wood: 0 · holding up Lumber Mill\. Show in all stock$/ })
+    expect(alert.className).toContain('is-flagged')
+    // The short name is on the bar itself, not only in a tooltip.
+    expect(alert.querySelector('.resource-name')?.textContent).toBe('Wood')
+    expect(alert.textContent).toMatch(/Wood\s*0\s*!/)
+    expect(alert.getAttribute('title')).toBe(`Wood: 0 · holding up ${BUILDINGS.lumberMill.name}`)
+    // A tap opens the drawer on that good, with its reason.
+    expect(alert.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(alert)
+    expect(alert.getAttribute('aria-expanded')).toBe('true')
+    const drawer = screen.getByRole('group', { name: 'All stock' })
+    const row = drawer.querySelector('[data-good="wood"]')!
+    expect(row.className).toContain('is-focus')
+    expect(within(row as HTMLElement).getByText(`Holding up ${BUILDINGS.lumberMill.name}`)).toBeTruthy()
+    // The toggle shows the drawer is open; a second tap on the alert closes it.
+    expect(screen.getByRole('button', { name: /^All stock:/ }).getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(alert)
+    expect(screen.queryByRole('group', { name: 'All stock' })).toBeNull()
+  })
+
+  it('gives every number a name and a tooltip, and unflagged goods no visible name', () => {
+    show(millWithoutWood())
+    render(<ResourceBar />)
+    const stone = screen.getByTitle(/^Stone: 5/)
+    expect(stone.tagName).toBe('DIV')
+    expect(stone.querySelector('.resource-name')).toBeNull()
+    expect(stone.querySelector('.sr-only')?.textContent).toBe('Stone ')
+    for (const item of document.querySelectorAll('.resource-scroll .resource')) {
+      expect(item.getAttribute('title')).toMatch(/^[A-Z][\w ]+: \d+/)
+    }
+    expect(screen.getByTitle(/^Stockpile/).textContent).toMatch(/Stockpile/)
+    expect(screen.getByTitle(/^Food in store/).textContent).toMatch(/Food/)
+  })
+
+  it('labels the drawer pill as the stock it opens, long and short', () => {
+    show(millWithoutWood())
+    render(<ResourceBar />)
+    const pill = screen.getByRole('button', { name: /^All stock: 3 goods, 1 need attention$/ })
+    expect(pill.getAttribute('title')).toBe('All stock: 3 goods, 1 need attention')
+    expect(pill.querySelector('.resource-more-long')?.textContent).toBe('All stock')
+    expect(pill.querySelector('.resource-more-short')?.textContent).toBe('Stock')
+    expect(pill.querySelector('.resource-more-count')?.textContent).toBe('3')
+  })
+})
+
 describe('overlay dock', () => {
   it('puts each overlay in its region and folds the side panel to its tabs', () => {
     const run = newRun()

@@ -1,0 +1,46 @@
+/* A panel's intro paragraph: open the first time, then folded to a small
+   "About this panel" disclosure (PanelIntro.tsx). */
+
+.panel-intro {
+  margin: 0 0 10px;
+}
+
+.panel-intro > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--radius-sm);
+}
+
+.panel-intro > summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel-intro > summary:hover {
+  color: var(--text);
+}
+
+.panel-intro-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.panel-intro[open] > summary .panel-intro-mark {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.panel-intro > .panel-hint {
+  margin: 4px 0 0;
+}

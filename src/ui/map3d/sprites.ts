@@ -128,10 +128,13 @@ export function drawIcon(
   ctx.globalAlpha = 1
 }
 
-export function labelTile(text: string): SpriteTile {
+export function labelTile(text: string, dim = false): SpriteTile {
   return {
-    key: `t:${text}`,
+    key: dim ? `t~:${text}` : `t:${text}`,
     draw: (ctx, size) => {
+      // A dimmed label (a crew count nobody idle could fill) is the same
+      // tile painted faint: another atlas tile, never another draw call.
+      if (dim) ctx.globalAlpha = 0.45
       ctx.font = `600 ${Math.floor(size * 0.34)}px system-ui, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'

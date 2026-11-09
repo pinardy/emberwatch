@@ -15,6 +15,38 @@
   opacity: 0.8;
 }
 
+/* Wanted, but it counts only once the base needs are all met: its own
+   quiet row under the needs, dimmed (the text keeps 4.5:1 on the card). */
+.refined-held {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: 6px;
+}
+
+.refined-held > small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.need.need-refined.is-held {
+  color: var(--muted);
+  border-color: var(--line);
+  background: transparent;
+}
+
+/* The emoji is not text: grey it so the chip reads as on hold. */
+.need.need-refined.is-held > span[aria-hidden] {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.need.need-refined.is-held .need-state,
+.need.need-refined.is-held em {
+  color: inherit;
+}
+
 .refined-line {
   display: grid;
   gap: 2px;

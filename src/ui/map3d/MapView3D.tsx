@@ -412,7 +412,7 @@ const BuildingLayer = memo(function BuildingLayer({
   return (
     <>
       <BuildingInstances run={run} />
-      {views.map(({ building, progress, workers, status, cold, tier, upgrade }) => {
+      {views.map(({ building, progress, workers, status, cold, tier, upgrade, crewCall }) => {
         // Buildings that pair with the blueprint in hand, in either direction.
         const partnerHint =
           !!ghostDef && building.built && !!BUILDINGS[building.defId] && pairsWith(ghostDef.id, building.defId)
@@ -429,6 +429,7 @@ const BuildingLayer = memo(function BuildingLayer({
             status={status}
             tier={tier}
             upgrade={upgrade}
+            crewCall={crewCall}
           />
         )
       })}

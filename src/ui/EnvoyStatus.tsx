@@ -116,6 +116,12 @@ export function GloryNote({ run }: { run: RunState }) {
   )
 }
 
+/** "+9 rep", "+2.4 rep": reputation to the tenth, a decimal only where fractional. */
+export function repPoints(value: number): string {
+  const tenth = Math.round(value * 10) / 10
+  return `+${Number.isInteger(tenth) ? tenth : tenth.toFixed(1)} rep`
+}
+
 /**
  * The end screen's account of the approach: held for the envoy (how long,
  * the Glory earned, by source) or how the settlement collapsed before she
@@ -145,11 +151,16 @@ export function EnvoyEnd({ run }: { run: RunState }) {
         <strong>Glory {formatReputation(Math.round(e.glory * 10) / 10)}</strong>
         <small> — reputation earned past the maximum while she rode</small>
       </p>
-      <ul className="end-rep-sources" aria-label="Reputation by source">
+      {/* Reputation, not counts: "completed orders +9 rep" sits above a stats
+          grid that counts orders, so it says which it is. */}
+      <h4 className="end-rep-heading" id="end-rep-heading">
+        <Icon id="reputation" /> Reputation by source
+      </h4>
+      <ul className="end-rep-sources" aria-labelledby="end-rep-heading">
         {REPUTATION_SOURCES.filter((src) => (by[src] ?? 0) >= 0.05).map((src) => (
           <li key={src}>
             <span>{REPUTATION_SOURCE_LABEL[src]}</span>
-            <span>{formatReputation(Math.round((by[src] ?? 0) * 10) / 10)}</span>
+            <span className="end-rep-value">{repPoints(by[src] ?? 0)}</span>
           </li>
         ))}
       </ul>
