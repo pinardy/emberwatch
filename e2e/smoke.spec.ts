@@ -317,6 +317,19 @@ test.describe('phone', () => {
       expect(w.bottom).toBeLessThanOrEqual(layout.tabs.top)
     }
 
+    // The map keeps most of the screen: the panel sheet opens short, and its
+    // handle makes it taller.
+    const height = (selector: string) =>
+      page.locator(selector).first().evaluate((el) => el.getBoundingClientRect().height)
+    expect(await height('.sidebar')).toBeLessThanOrEqual(844 * 0.22 + 2)
+    expect(await height('.map-column')).toBeGreaterThan(844 * 0.5)
+    await page.getByRole('button', { name: 'Expand the panel' }).click()
+    await expect.poll(() => height('.sidebar')).toBeGreaterThan(844 * 0.4)
+    // First steps is a chip over the map, not a card.
+    await expect(
+      page.getByRole('region', { name: 'First steps' }).getByRole('button', { name: /First steps/ }),
+    ).toHaveAttribute('aria-expanded', 'false')
+
     expect(problems).toEqual([])
   })
 })
