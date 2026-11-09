@@ -108,7 +108,7 @@ export const TIPS: Tip[] = [
   {
     id: 'welcome',
     title: 'Welcome, Viceroy',
-    text: 'Fill the 👑 Reputation meter to win before the Queen’s ⏳ Impatience fills and she recalls you. Resolve above each species’ threshold is what earns reputation.',
+    text: 'Fill the 👑 Reputation meter before the Queen’s ⏳ Impatience fills and she recalls you: that sends her envoy, and you win by holding until she arrives after the next Storm. High resolve earns reputation.',
     // The run opens on the founding; welcome the player once it closes.
     // While the First steps checklist is up, it carries this welcome instead.
     when: (run) => run.clock < 30 && run.pendingChoices.length === 0,

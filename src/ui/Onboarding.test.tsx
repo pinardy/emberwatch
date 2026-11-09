@@ -97,6 +97,9 @@ describe('first steps checklist', () => {
     const card = screen.getByRole('region', { name: /First steps/i })
     expect(within(card).getByText(/Reputation meter/)).toBeTruthy()
     expect(within(card).getByText(/Impatience/)).toBeTruthy()
+    // Full reputation sends the envoy; the win is holding until she arrives.
+    expect(card.textContent).toMatch(/sends her envoy, and you win by holding until she arrives after the next Storm/)
+    expect(card.textContent).not.toMatch(/meter to win/)
     expect(within(card).getByText('0/4')).toBeTruthy()
     // The checklist carries the welcome, so the generic tip stays away.
     expect(screen.queryByText(/Welcome, Viceroy$/)).toBeNull()
@@ -158,6 +161,8 @@ describe('first steps checklist', () => {
     const tip = screen.getByRole('status', { name: 'Tip' })
     expect(within(tip).getByText(/Reputation meter/)).toBeTruthy()
     expect(within(tip).getByText(/Impatience fills/)).toBeTruthy()
+    expect(tip.textContent).toMatch(/sends her envoy, and you win by holding until she arrives after the next Storm/)
+    expect(tip.textContent).not.toMatch(/meter to win/)
     expect(tip.textContent).not.toMatch(/crown meter|hourglass/)
 
     placeNow('shelter')
@@ -329,6 +334,8 @@ describe('how to play', () => {
       /Style achievements/,
       /river vale/,
       /Cinderwood/,
+      /does not win yet: it sends her envoy/,
+      /Hold until she arrives/,
     ]) {
       expect(text).toMatch(idea)
     }
