@@ -247,8 +247,12 @@ describe('Citadel land options on the setup screen', () => {
       name: /Map seed/i,
     }) as HTMLInputElement
     expect(seed.value).toBe('')
+    // The seed already drawn for the blank field (and previewed) is the one pinned.
+    const drawn = /^random · (\d+)$/.exec(seed.placeholder)?.[1]
+    expect(drawn).toMatch(/^\d+$/)
     fireEvent.click(screen.getByRole('button', { name: /Re-roll the land/i }))
     expect(seed.value).toMatch(/^\d+$/)
+    expect(seed.value).toBe(drawn)
   })
 })
 

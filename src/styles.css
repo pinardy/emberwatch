@@ -3946,14 +3946,7 @@ button.is-armed {
   opacity: 0.75;
 }
 
-.setup-foot {
-  position: sticky;
-  bottom: 0;
-  margin: 12px -28px -28px;
-  padding: 12px 28px 16px;
-  background: linear-gradient(180deg, rgba(18, 24, 29, 0.92), #12181d);
-  justify-content: flex-end;
-}
+/* The setup screen's footer: see src/ui/setup.css. */
 
 /* ---------------------------------------------------------------------------
  * Touch: every control a finger has to hit is at least 44px
@@ -3986,13 +3979,6 @@ button.is-armed {
   .speed-group button,
   .worker-slot button {
     min-width: 44px;
-  }
-}
-
-@media (max-width: 560px) {
-  .setup-foot {
-    margin: 12px -20px -20px;
-    padding: 12px 20px 14px;
   }
 }
 
