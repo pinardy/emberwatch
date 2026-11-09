@@ -47,6 +47,20 @@
   color: inherit;
 }
 
+/* How to meet a wanted refined need, and what it waits on, under the chips. */
+.refined-hint {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.refined-hint .refined-blocked {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .refined-line {
   display: grid;
   gap: 2px;
