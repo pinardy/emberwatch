@@ -130,6 +130,12 @@ export function VillagerPanel() {
                   <RefinedChip status={b.refinedStatus} bonus={b.refined} />
                 </div>
               )}
+              {b.refinedStatus && (
+                <RefinedHint
+                  status={b.refinedStatus}
+                  blocking={def.needs.filter((need) => !b.needDetail[need])}
+                />
+              )}
 
               <details className="breakdown">
                 <summary>Why {Math.round(b.target)}?</summary>
@@ -390,6 +396,34 @@ function RefinedChip({ status, bonus }: { status: RefinedStatus; bonus: number }
         </em>
       )}
     </span>
+  )
+}
+
+/** "A, B and C". */
+function listed(names: string[]): string {
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+/**
+ * Under the chips, while a wanted refined need is not met: how to make it
+ * (which building or upgrade gives the finer good) and, while it waits on the
+ * base needs, which of them is in the way.
+ */
+function RefinedHint({ status, blocking }: { status: RefinedStatus; blocking: string[] }) {
+  const state = refinedState(status)
+  if (state === 'dormant' || state === 'met') return null
+  const names = blocking.map((need) => NEED_LABELS[need]?.name ?? need)
+  return (
+    <p className="refined-hint">
+      {names.length > 0 && (
+        <strong className="refined-blocked">
+          Waits on {listed(names)}: meet {names.length > 1 ? 'them' : 'it'} first.{' '}
+        </strong>
+      )}
+      <span>
+        {status.def.name[0].toUpperCase() + status.def.name.slice(1)}: {status.def.hint}
+      </span>
+    </p>
   )
 }
 

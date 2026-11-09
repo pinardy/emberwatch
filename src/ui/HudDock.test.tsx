@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BUILDINGS } from '../game/content/buildings'
+import { findPlacement } from '../game/engine/actions'
 import { createRun } from '../game/engine/createRun'
 import { takeChoice } from '../game/engine/drafts'
 import { useGameStore } from '../game/store'
@@ -63,6 +64,25 @@ describe('stock trends', () => {
     expect(t.berry!.runway!).toBeGreaterThan(FALLING_FAST_SECONDS)
     expect(t.berry!.fallingFast).toBe(false)
   })
+
+  it("leaves the player's own spends and earnings out of the trend", () => {
+    // Wood 100 → 40 in 30 s, but 60 of it went on a build: no drift at all.
+    const t = trendsBetween(
+      { clock: 0, stock: { wood: 100, amber: 50, plank: 10 }, commands: { wood: -10 } },
+      { clock: 30, stock: { wood: 40, amber: 90, plank: 0 }, commands: { wood: -70, amber: 40 } },
+    )
+    expect(t.wood).toMatchObject({ direction: 'flat', perMinute: 0, runway: null, fallingFast: false })
+    // A sale's amber is not a rising trend either.
+    expect(t.amber).toMatchObject({ direction: 'flat', perMinute: 0 })
+    // Planks the economy burned are still a fall, flagged as before.
+    expect(t.plank).toMatchObject({ direction: 'down', perMinute: -20, runway: 0, fallingFast: true })
+    // A real shortfall under a spend still shows: wood fell 30 more than the build took.
+    const both = trendsBetween(
+      { clock: 0, stock: { wood: 100 } },
+      { clock: 30, stock: { wood: 10 }, commands: { wood: -60 } },
+    )
+    expect(both.wood).toMatchObject({ direction: 'down', perMinute: -60, runway: 10, fallingFast: true })
+  })
 })
 
 describe('resource bar', () => {
@@ -115,6 +135,43 @@ describe('resource bar', () => {
     expect(
       screen.getByRole('button', { name: /All stock: 2 goods, 1 need attention/ }),
     ).toBeTruthy()
+  })
+
+  it('does not flag a good as running dry just because the player spent it on a build', () => {
+    const run = newRun()
+    run.clock = 100
+    run.stock = { wood: 30 }
+    show(run)
+    render(<ResourceBar />)
+    const step = (t: number) =>
+      act(() => {
+        run.clock = t
+        useGameStore.setState({ version: useGameStore.getState().version + 1 })
+      })
+    for (let t = 103; t <= 112; t += 3) step(t)
+    // A Shelter, paid for through the store like a click on the map: 30 wood → 18.
+    const spot = findPlacement(run, 'shelter')!
+    act(() => {
+      useGameStore.getState().setBuildMode('shelter')
+      useGameStore.getState().place(spot)
+    })
+    expect(run.stock.wood).toBe(30 - BUILDINGS.shelter.cost.wood!)
+    step(115)
+    step(118)
+    const wood = screen.getByTitle(/^Wood: 18/)
+    expect(wood.className).not.toContain('is-falling')
+    expect(wood.className).not.toContain('is-flagged')
+    expect(wood.getAttribute('title')).not.toMatch(/runs out/)
+
+    // The same drop with nobody spending it is the economy's: flagged as running dry.
+    act(() => {
+      run.stock.wood = 6
+      useGameStore.setState({ version: useGameStore.getState().version + 1 })
+    })
+    step(121)
+    const falling = screen.getByTitle(/^Wood: 6/)
+    expect(falling.className).toContain('is-falling-fast')
+    expect(falling.className).toContain('is-flagged')
   })
 
   it('shows an empty good that holds a building up, and lists everything in the drawer', () => {

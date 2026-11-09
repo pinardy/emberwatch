@@ -16,6 +16,7 @@ import {
 import { BuildingList, mapSummaryText } from './MapAids'
 import { buildingViews } from './map3d/layerKeys'
 import { GameScreen } from './GameScreen'
+import { foundedRun } from '../test/foundedRun'
 
 /**
  * Playing without a pointer: placing a blueprint with the arrow keys and
@@ -103,6 +104,67 @@ describe('keyboard placement helpers', () => {
     const verdict = evaluateSpot(r, 'shelter', spot!)
     expect(verdict.ok).toBe(false)
     expect(verdict.hint).toMatch(/Not enough materials/)
+  })
+})
+
+describe('nearest valid spot off the half-pace grid', () => {
+  /**
+   * The playtest's case: seed 11, human/beaver/lizard, 40 s in, with a
+   * Shelter, a Warehouse, two Woodcutters' Camps and a Foragers' Camp up and a
+   * second glade cleared. The only ground left for a third camp in reach of the
+   * two tree stands is a sliver no half-pace grid point lands on, so the
+   * search used to say there was nowhere left while the engine placed it.
+   */
+  function crampedCamps(): RunState {
+    const r = foundedRun({ seed: 11, species: ['human', 'beaver', 'lizard'] })
+    r.glades.glade5.cleared = true
+    for (const id of ['wood', 'planks', 'stone']) r.stock[id as 'wood'] = 200
+    const placed: [string, number, number][] = [
+      ['shelter', -1.884, 0.67],
+      ['warehouse', -1.622, -1.17],
+      ['woodcuttersCamp', 1.766, 0.904],
+      ['woodcuttersCamp', 1.667, -0.597],
+      ['foragersCamp', 0.655, -2.732],
+    ]
+    for (const [defId, x, y] of placed) expect(placeBuilding(r, defId, { x, y })).toBeNull()
+    return r
+  }
+
+  it('finds the ground the engine would, nearest the view centre', () => {
+    const r = crampedCamps()
+    const from = { x: 0.2, y: 0.3 }
+    // The case still needs more than the grid: no half-pace point from the centre will take the camp.
+    const span = Math.max(r.world.width, r.world.height)
+    let onGrid = 0
+    for (let i = -2 * span; i <= 2 * span; i++)
+      for (let j = -2 * span; j <= 2 * span; j++)
+        if (canPlaceBuilding(r, 'woodcuttersCamp', { x: from.x + i / 2, y: from.y + j / 2 }) === null) onGrid++
+    expect(onGrid).toBe(0)
+    const engine = findPlacement(r, 'woodcuttersCamp')
+    expect(engine).not.toBeNull()
+
+    const spot = nearestValidSpot(r, 'woodcuttersCamp', from)
+    expect(spot).not.toBeNull()
+    expect(canPlaceBuilding(r, 'woodcuttersCamp', spot!)).toBeNull()
+    // No further from the centre than the engine's own pick.
+    expect(Math.hypot(spot!.x - from.x, spot!.y - from.y)).toBeLessThanOrEqual(
+      Math.hypot(engine!.x - from.x, engine!.y - from.y) + 1e-9,
+    )
+  })
+
+  it('"Place at the nearest valid spot" places it rather than saying nowhere is left', () => {
+    const r = crampedCamps()
+    useGameStore.setState({ run: r })
+    render(<GameScreen />)
+    const camps = () => Object.values(run().buildings).filter((b) => b.defId === 'woodcuttersCamp').length
+    expect(camps()).toBe(2)
+    clickBuildCard("Woodcutters' Camp")
+    // Aimed where the playtest's view was centred.
+    act(() => useKeyGhost.setState({ ghost: { pos: { x: 0.2, y: 0.3 }, ok: false, hint: null } }))
+    fireEvent.click(screen.getByRole('button', { name: /Place at the nearest valid spot/ }))
+    expect(camps()).toBe(3)
+    expect(liveRegion().textContent).toMatch(/Woodcutters' Camp placed/)
+    expect(useGameStore.getState().notice ?? '').not.toMatch(/nowhere left/)
   })
 })
 

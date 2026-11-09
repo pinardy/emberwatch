@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { commandStockTotals } from '../game/commandStock'
 import { BUILDINGS } from '../game/content/buildings'
 import { buildingStatus } from '../game/engine/forecast'
 import { computeModifiers } from '../game/engine/modifiers'
@@ -42,6 +43,13 @@ export interface StockTrends {
 interface Snapshot {
   clock: number
   stock: ResourceBag
+  /**
+   * The player's command totals at the time (`commandStock.ts`): what was
+   * spent or earned by hand between two snapshots is left out of the trend,
+   * so a build paid for, a sale or an order filled never reads as a good
+   * running dry. Absent counts as nothing.
+   */
+  commands?: ResourceBag
 }
 
 const EMPTY: StockTrends = { trends: {}, blocking: {} }
@@ -51,7 +59,11 @@ function threshold(amount: number): number {
   return Math.max(2, amount * 0.04)
 }
 
-/** Pure: the trend of every stock between the oldest and newest snapshot. */
+/**
+ * Pure: the trend of every stock between the oldest and newest snapshot — the
+ * economy's own drift, without the player's one-off spends and earnings in
+ * between. The runway is the stock on hand now at that drift.
+ */
 export function trendsBetween(
   oldest: Snapshot,
   newest: Snapshot,
@@ -65,7 +77,8 @@ export function trendsBetween(
   ]) as Set<ResourceId>
   for (const id of ids) {
     const now = newest.stock[id] ?? 0
-    const perMinute = ((now - (oldest.stock[id] ?? 0)) / span) * 60
+    const byHand = (newest.commands?.[id] ?? 0) - (oldest.commands?.[id] ?? 0)
+    const perMinute = ((now - (oldest.stock[id] ?? 0) - byHand) / span) * 60
     const cut = threshold(now)
     const direction: TrendDirection = perMinute >= cut ? 'up' : perMinute <= -cut ? 'down' : 'flat'
     const runway = perMinute < 0 ? (now / -perMinute) * 60 : null
@@ -117,7 +130,7 @@ export function useStockTrends(run: RunState | null): StockTrends {
   }
   const newest = state.history[state.history.length - 1]
   if (!newest || run.clock - newest.clock >= TREND_SAMPLE_SECONDS) {
-    state.history.push({ clock: run.clock, stock: { ...run.stock } })
+    state.history.push({ clock: run.clock, stock: { ...run.stock }, commands: commandStockTotals(run) })
     while (state.history.length > 2 && run.clock - state.history[0].clock > TREND_WINDOW_SECONDS) {
       state.history.shift()
     }

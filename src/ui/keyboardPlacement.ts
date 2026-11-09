@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { create } from 'zustand'
 import { BUILDINGS } from '../game/content/buildings'
-import { canPlaceBuilding } from '../game/engine/actions'
+import { canPlaceBuilding, findPlacement } from '../game/engine/actions'
+import { dist } from '../game/engine/geometry'
 import { describePlacement } from '../game/engine/placement'
 import { ROAD_TOOL } from '../game/engine/roads'
 import { useGameStore } from '../game/store'
@@ -118,8 +119,15 @@ export function spokenVerdict(ghost: KeyGhost): string {
 const SEARCH_SPACING = 0.5
 
 /**
- * The closest spot to `from` where the building could stand, searched on a
- * half-pace grid out to `maxRadius`; null when there is none.
+ * The closest spot to `from` where the building could stand; null only when
+ * the engine could not place it anywhere either.
+ *
+ * A half-pace grid out to `maxRadius` comes first, nearest ring first. Valid
+ * ground can be a sliver the grid steps over (a camp's few spots between its
+ * deposits, the buildings already there and the rough ground), so when the
+ * grid finds nothing the engine's own search answers: its rings around `from`
+ * and around the building's deposits (or the hearth), keeping whichever spot
+ * lies nearest `from`.
  */
 export function nearestValidSpot(
   run: RunState,
@@ -143,7 +151,12 @@ export function nearestValidSpot(
       if (isSite(probe, defId, pos)) return pos
     }
   }
-  return null
+  const within = (p: Vec2) => Math.max(Math.abs(p.x - from.x), Math.abs(p.y - from.y)) <= maxRadius
+  const candidates = [findPlacement(probe, defId, from), findPlacement(probe, defId)].filter(
+    (p): p is Vec2 => p !== null && within(p) && isSite(probe, defId, p),
+  )
+  if (candidates.length === 0) return null
+  return candidates.reduce((best, p) => (dist(p, from) < dist(best, from) ? p : best))
 }
 
 /**

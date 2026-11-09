@@ -26,6 +26,7 @@ import {
 } from './engine/actions'
 import { ROAD_MIN_LENGTH, type GameSpeed } from './engine/balance'
 import { appeaseThreat } from './engine/threats'
+import { withCommandStock } from './commandStock'
 import { dismissErrand, runErrand } from './engine/errands'
 import { redrawToward, rerollChoice, takeChoice } from './engine/drafts'
 import { resolveGladeEvent } from './engine/glades'
@@ -341,7 +342,8 @@ function runCommand(
 ): void {
   const run = get().run
   if (!run) return
-  const error = fn(run) ?? null
+  // What the command spent or earned is the player's doing, not a trend.
+  const error = withCommandStock(run, () => fn(run)) ?? null
   set({ ...bump(get), notice: error })
 }
 
