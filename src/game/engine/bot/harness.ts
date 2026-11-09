@@ -217,6 +217,6 @@ export function logRun(seed: number, r: BotReport): void {
       ` · cause ${r.cause} · impBy cal ${r.impatienceBy.calendar.toFixed(1)} stall ${r.impatienceBy.stalling.toFixed(1)} stag ${r.impatienceBy.stagnation.toFixed(1)} dl ${r.impatienceBy.deadline.toFixed(1)} lost ${r.impatienceBy.losses.toFixed(1)} ev ${r.impatienceBy.events.toFixed(1)} · over ${r.overThreshold.map((x) => x.toFixed(0)).join('/')} · blights ${r.blights.struck}/${r.blights.blunted} of ${r.blights.forecast} · wards ${r.wardMinutes.toFixed(1)} · stallImp ${r.stallImpatience.toFixed(1)}` +
       ` · plans ${r.plans} petition ${r.petition}${r.retreated ? ' RETREAT' : ''}` +
       ` · amber +${r.amber.earned.toFixed(0)} -${Object.entries(r.amber.spent).map(([k, v]) => `${k}:${v.toFixed(0)}`).join(',') || '0'} =${r.amber.end.toFixed(0)}${r.amber.caravans ? ` caravans ${r.amber.visits}` : ''}` +
-      `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · ground ${r.layout}/${r.biome} · open orders: ${r.openOrders}\n    reputation by minute: ${r.curve.join(' ')}`,
+      `\n    services: ${r.services}\n    drafted: ${r.drafted}\n    land: ${r.modifiers || 'none'} · ground ${r.layout}/${r.biome} · open orders: ${r.openOrders}\n    orders met: ${r.ordersMet.join(',') || 'none'}\n    reputation by minute: ${r.curve.join(' ')}`,
   )
 }

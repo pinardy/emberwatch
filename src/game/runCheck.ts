@@ -74,6 +74,7 @@ function validOrder(value: unknown, table: object, decree = false): boolean {
   if (!finite(value.progress) || typeof value.complete !== 'boolean') return false
   if (value.goal !== undefined && !(isRec(value.goal) && typeof value.goal.kind === 'string')) return false
   if (value.baseline !== undefined && !finite(value.baseline)) return false
+  if (value.held !== undefined && !finite(value.held)) return false
   if (decree && !(finite(value.timeLeft) && finite(value.timeLimit))) return false
   return true
 }

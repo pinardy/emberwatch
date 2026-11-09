@@ -301,6 +301,15 @@ describe('tip triggers', () => {
     expect(tipById('errand')!.doneWhen!(s)).toBe(true)
   })
 
+  it('an order to keep: while a held order (seconds, not a count) is live', () => {
+    const s = newRun()
+    s.orders = [{ id: 'o1', defId: 'stock_plank_30', progress: 0, complete: false }]
+    expect(fires(s, 'held-order')).toBe(false)
+    s.orders.push({ id: 'o2', defId: 'camps_full', progress: 0, complete: false })
+    expect(fires(s, 'held-order')).toBe(true)
+    expect(tipCopy(tipById('held-order')!.text, s)).toContain('counts the seconds')
+  })
+
   it("the Queen's court: from Year 2, when no dialog is open", () => {
     const s = newRun()
     expect(fires(s, 'queens-court')).toBe(false)

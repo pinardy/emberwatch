@@ -3,6 +3,7 @@ import { BIOME_LIST, LAYOUT_LIST } from '../content/layouts'
 import { playRun, type BotReport } from './bot/play'
 import { ALL_SEEDS, ENV, TRIOS, VERDICT_BY_MINUTES, isEarlyCollapse, mean, summarise, winShare } from './bot/harness'
 import { summariseTerrain } from './bot/terrainReport'
+import { summariseOrders } from './bot/orderReport'
 
 /**
  * The balance harness on every map layout and biome (`content/layouts.ts`).
@@ -42,6 +43,7 @@ describe('balance harness', () => {
       [
         ...groups.map((g) => summarise(g.label, g.reports)),
         summariseTerrain('terrain sweep', all),
+        summariseOrders('orders, terrain', all),
       ].join('\n'),
     )
 

@@ -255,6 +255,7 @@ export function createRun({
     unlockedBuildings: [...new Set([...STARTING_BLUEPRINTS, ...loadout.startBlueprints])],
     producedTotals: {},
     ordersSeen: [],
+    orderTallies: {},
     orderCounter: 0,
     edict: edictLevel,
     runModifiers: [],

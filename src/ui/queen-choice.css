@@ -79,3 +79,9 @@
   background: var(--gold);
   color: #1a1408;
 }
+
+/* How a newer kind of order is met: a line under its goal, on both cards. */
+.order-note {
+  display: block;
+  font-style: italic;
+}
