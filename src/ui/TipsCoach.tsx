@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import { useGameStore, useHudRun, useHudVersion } from '../game/store'
@@ -99,6 +99,7 @@ export function TipsCoach() {
   const panel = useGameStore((s) => s.panel)
   const setPanel = useGameStore((s) => s.setPanel)
   const sheetSlot = usePhoneSheet((s) => s.tipSlot)
+  const sheetSize = usePhoneSheet((s) => s.size)
 
   if (!run || blocked) return null
   if (showChecklist) return <FirstSteps run={run} />
@@ -108,7 +109,15 @@ export function TipsCoach() {
     if (panel !== null && sheetSlot) {
       return createPortal(
         <div className="tip-coach is-sheet" role="status" aria-label="Tip">
-          <TipBody tip={active} run={run} onDismiss={dismiss} />
+          {/* At the sheet's short height a long tip would fill it: two lines
+              and "More", which opens the rest in place. */}
+          <TipBody
+            key={active.id}
+            tip={active}
+            run={run}
+            onDismiss={dismiss}
+            clamp={sheetSize === 'peek'}
+          />
         </div>,
         sheetSlot,
       )
@@ -169,15 +178,65 @@ export function DialogTip({ id }: { id: string }) {
   )
 }
 
-function TipBody({ tip, run, onDismiss }: { tip: Tip; run: RunState; onDismiss: () => void }) {
+/**
+ * A tip's title, text and "Got it". With `clamp` (a phone's short sheet) the
+ * text is held to two lines, and a "More" control, shown only when the text
+ * runs past them, opens the rest in place. The whole text is in the page
+ * either way, so a screen reader reads all of it.
+ */
+function TipBody({
+  tip,
+  run,
+  onDismiss,
+  clamp = false,
+}: {
+  tip: Tip
+  run: RunState
+  onDismiss: () => void
+  clamp?: boolean
+}) {
+  const textId = useId()
+  const textRef = useRef<HTMLParagraphElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [overflows, setOverflows] = useState(false)
+  const clamped = clamp && !expanded
+  const text = tipCopy(tip.text, run)
+
+  // Whether two lines hide any of the text: measured with the clamp on, and
+  // again when the window's width changes.
+  useLayoutEffect(() => {
+    if (!clamp || expanded) return
+    const measure = () => {
+      const el = textRef.current
+      setOverflows(!!el && el.scrollHeight > el.clientHeight + 1)
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [clamp, expanded, text])
+
+  const showMore = clamp && (overflows || expanded)
   return (
     <>
-      <div className="tip-body">
+      <div className={`tip-body${clamp ? ' is-clampable' : ''}`}>
         <strong>
           <span aria-hidden>💡 </span>
           {tipCopy(tip.title, run)}
         </strong>
-        <p>{tipCopy(tip.text, run)}</p>
+        <p id={textId} ref={textRef} className={clamped ? 'is-clamped' : undefined}>
+          {text}
+        </p>
+        {showMore && (
+          <button
+            type="button"
+            className="tip-more"
+            aria-expanded={expanded}
+            aria-controls={textId}
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? 'Less' : 'More'} <span className="sr-only">of this tip</span>
+          </button>
+        )}
       </div>
       <button type="button" onClick={onDismiss} title="Dismiss tip (Esc)">
         Got it

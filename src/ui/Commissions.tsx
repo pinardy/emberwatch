@@ -13,6 +13,7 @@ import { ACHIEVEMENTS } from '../game/content/achievements'
 import { type RewardBreakdown } from '../game/engine/meta'
 import { metaUpgradeArt } from '../game/content/artFamilies'
 import type { MetaState, RunState } from '../game/types'
+import { useState, type ReactNode } from 'react'
 import { Icon } from './Icon'
 import { ReputationProfileLine } from './EnvoyStatus'
 
@@ -65,9 +66,85 @@ function TermList({ terms }: { terms: TermStatus[] }) {
   )
 }
 
+/** The picker's key for "no commission" (its detail toggle and region). */
+const NONE_KEY = 'none'
+
+/**
+ * One option of the setup screen's pick. On wide screens the slot vanishes
+ * (`display: contents`) and the card shows everything, as it always has. On
+ * phones (setup.css) the card is a one-line row (icon, name, the reward, and
+ * "Chosen" when it is) and its full terms open from the toggle beside it,
+ * like the species tiles. A tap on the row still picks it.
+ */
+function PickerSlot({
+  slotKey,
+  name,
+  picked,
+  open,
+  onPick,
+  onToggle,
+  card,
+  reward,
+  detail,
+}: {
+  slotKey: string
+  name: string
+  picked: boolean
+  open: boolean
+  onPick: () => void
+  onToggle: () => void
+  /** The card's title and body (the phone row hides all but the title). */
+  card: ReactNode
+  reward: ReactNode
+  /** The full terms, for the phone's detail region. */
+  detail: ReactNode
+}) {
+  const detailId = `commission-detail-${slotKey}`
+  return (
+    <div className={`commission-slot ${open ? 'is-open' : ''}`}>
+      <button
+        type="button"
+        role="radio"
+        aria-checked={picked}
+        className={`commission-card ${picked ? 'is-picked' : ''}`}
+        onClick={onPick}
+      >
+        {card}
+        {/* The spaces keep the parts apart in the row's name ("The Royal
+            Survey ✓ Chosen +65% supplies"); a grid draws no blank text. */}{' '}
+        {picked && <em className="commission-chosen">✓ Chosen</em>}{' '}
+        <em className="commission-reward">{reward}</em>
+      </button>
+      <button
+        type="button"
+        className="commission-more"
+        aria-expanded={open}
+        aria-controls={detailId}
+        onClick={onToggle}
+      >
+        <span aria-hidden>▾</span>
+        <span className="sr-only">
+          Terms of {name}
+          {picked ? ' (chosen)' : ''}
+        </span>
+      </button>
+      <div
+        id={detailId}
+        className="commission-detail"
+        role="group"
+        aria-label={`Terms of ${name}`}
+        hidden={!open}
+      >
+        {detail}
+      </div>
+    </div>
+  )
+}
+
 /**
  * The setup screen's pick: no commission, or one of the few on the Citadel's
- * board this time. Taking none founds the standard settlement.
+ * board this time. Taking none founds the standard settlement. On phones only
+ * one option's terms are open at a time.
  */
 export function CommissionPicker({
   meta,
@@ -79,41 +156,65 @@ export function CommissionPicker({
   onPick: (id: string | null) => void
 }) {
   const offer = commissionOffer(meta)
+  const [openKey, setOpenKey] = useState<string | null>(null)
+  const toggle = (key: string) => setOpenKey((open) => (open === key ? null : key))
   return (
     <div className="commission-grid" role="radiogroup" aria-label="Commission">
-      <button
-        type="button"
-        role="radio"
-        aria-checked={value === null}
-        className={`commission-card ${value === null ? 'is-picked' : ''}`}
-        onClick={() => onPick(null)}
-      >
-        <strong className="commission-name">
-          <Icon id="dove" emoji="🕊️" /> No commission
-        </strong>
-        <small>The standard settlement: no twist, no extra objective.</small>
-        <em>Base supplies</em>
-      </button>
+      <PickerSlot
+        slotKey={NONE_KEY}
+        name="No commission"
+        picked={value === null}
+        open={openKey === NONE_KEY}
+        onPick={() => onPick(null)}
+        onToggle={() => toggle(NONE_KEY)}
+        card={
+          <>
+            <strong className="commission-name">
+              <Icon id="dove" emoji="🕊️" /> No commission
+            </strong>
+            <small>The standard settlement: no twist, no extra objective.</small>
+          </>
+        }
+        reward="Base supplies"
+        detail={<p>The standard settlement: no twist, no extra objective.</p>}
+      />
       {offer.map((id) => {
         const def = COMMISSIONS[id]
         if (!def) return null
-        const picked = value === id
         return (
-          <button
+          <PickerSlot
             key={id}
-            type="button"
-            role="radio"
-            aria-checked={picked}
-            className={`commission-card ${picked ? 'is-picked' : ''}`}
-            onClick={() => onPick(id)}
-          >
-            <CommissionTitle def={def} />
-            <small className="commission-patron">{def.patron}</small>
-            <small>{def.twist}</small>
-            <ReputationProfileLine profile={def.reputation} />
-            <Objective def={def} />
-            <em>+{def.bonusPercent}% supplies if met</em>
-          </button>
+            slotKey={id}
+            name={def.name}
+            picked={value === id}
+            open={openKey === id}
+            onPick={() => onPick(id)}
+            onToggle={() => toggle(id)}
+            card={
+              <>
+                <CommissionTitle def={def} />
+                <small className="commission-patron">{def.patron}</small>
+                <small>{def.twist}</small>
+                <ReputationProfileLine profile={def.reputation} />
+                <Objective def={def} />
+              </>
+            }
+            reward={
+              <>
+                +{def.bonusPercent}% supplies{' '}
+                <span className="commission-reward-tail">if met</span>
+              </>
+            }
+            detail={
+              <>
+                <p className="commission-patron">{def.patron}</p>
+                <p>{def.twist}</p>
+                <ReputationProfileLine profile={def.reputation} />
+                <Objective def={def} />
+                <p className="commission-detail-reward">+{def.bonusPercent}% supplies if met</p>
+              </>
+            }
+          />
         )
       })}
     </div>
