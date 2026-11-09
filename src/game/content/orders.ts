@@ -58,7 +58,8 @@ const defs: OrderDef[] = [
 
   // Orders on the run's own ground and systems. They ask a settlement to
   // grow into its land, so the Queen turns to them once a service hall
-  // stands (`afterService`; until then she keeps to the plain orders above),
+  // stands (`afterService`; until then she keeps to the plain orders above,
+  // and the Cinderwood's charred deadfall, the burn's first work),
   // and `fromYear` spreads them over the run. Each goal kind says in
   // `engine/orders.ts` when it may be drawn besides: across the river or
   // beyond the ridge only on that layout, salvage only on the ruins,
@@ -70,7 +71,7 @@ const defs: OrderDef[] = [
   { id: 'cross_ford', name: 'Ford the river', goal: { kind: 'gladesBeyond', barrier: 'river', amount: 2 }, reputationReward: 1, reward: { amber: 30 }, afterService: true },
   { id: 'cross_pass', name: 'Down through the pass', goal: { kind: 'gladesBeyond', barrier: 'cliff', amount: 2 }, reputationReward: 1, reward: { amber: 30 }, afterService: true },
   { id: 'salvage_ruins_45', name: 'Salvage the old walls', goal: { kind: 'depositYield', deposit: 'ruins', amount: 45 }, reputationReward: 1, reward: { amber: 25 }, afterService: true },
-  { id: 'deadfall_60', name: 'Saw up the deadfall', goal: { kind: 'depositYield', deposit: 'deadfall', amount: 60 }, reputationReward: 1, reward: { amber: 20 }, afterService: true },
+  { id: 'deadfall_60', name: 'Saw up the deadfall', goal: { kind: 'depositYield', deposit: 'deadfall', amount: 60 }, reputationReward: 1, reward: { amber: 20 } },
   { id: 'fireweed_64', name: 'Gather fireweed', goal: { kind: 'depositYield', deposit: 'fireweed', amount: 64 }, reputationReward: 1, reward: { amber: 20 }, afterService: true },
   { id: 'dangerous_glade_1', name: 'Brave the dark glade', goal: { kind: 'dangerousCleared', amount: 1 }, reputationReward: 1, reward: { amber: 25 }, afterService: true },
   // Year 2 and on: the settlement's systems.
