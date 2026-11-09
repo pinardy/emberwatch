@@ -259,3 +259,31 @@ describe('the ground preview', () => {
     expect([currentRun().world.layout, currentRun().world.biome]).toEqual([plan.layout, plan.biome])
   })
 })
+
+describe("the Queen's Edict", () => {
+  it('starts on No edict, even with harsher rungs earned, and says so', () => {
+    giveMeta({ ...defaultMeta(), edictUnlocked: 3 })
+    render(<SetupScreen />)
+    const section = document.querySelector<HTMLElement>('.edict-section')!
+    const picked = within(section).getByRole('radio', { checked: true })
+    expect(picked.textContent).toMatch(/No edict/)
+    // The choice is named in the heading and on the Set out button.
+    expect(within(section).getByRole('heading').textContent).toMatch(/Queen's Edict · No edict/)
+    expect(screen.getByRole('button', { name: /Set out with/i }).textContent).not.toMatch(/Edict/)
+    setOut()
+    expect(currentRun().edict).toBe(0)
+  })
+
+  it('sets out under the edict picked, named where the player commits to it', () => {
+    giveMeta({ ...defaultMeta(), edictUnlocked: 3 })
+    render(<SetupScreen />)
+    const section = document.querySelector<HTMLElement>('.edict-section')!
+    fireEvent.click(within(section).getByRole('radio', { name: /Edict II.*Lean Provisions/ }))
+    expect(within(section).getByRole('radio', { checked: true }).textContent).toMatch(/Edict II.*Lean Provisions/)
+    expect(within(section).getByRole('heading').textContent).toMatch(/· Edict II$/)
+    const button = screen.getByRole('button', { name: /Set out with.*Edict II/i })
+    expect(button.textContent).toMatch(/· Edict II/)
+    setOut()
+    expect(currentRun().edict).toBe(2)
+  })
+})

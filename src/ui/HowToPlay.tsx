@@ -21,7 +21,8 @@ export function HowToPlay() {
         <Part title="The goal">
           <li>
             Fill <strong>👑 Reputation</strong> before the Queen’s <strong>⏳ Impatience</strong> fills
-            and she recalls you. By Year 5 her deadline has passed and impatience climbs fast.
+            and she recalls you. That does not win yet: it sends her envoy. By Year 5 her deadline
+            has passed and impatience climbs fast.
           </li>
           <li>
             Full reputation sends <strong>the Queen’s envoy</strong>: she arrives as the next Storm

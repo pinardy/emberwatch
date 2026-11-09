@@ -125,6 +125,48 @@ describe('People panel: refined needs', () => {
     expect(within(humanCard()).getByText('Luxury ✓ · refined: spiced ale ✗ (waits on the base needs)')).toBeTruthy()
   })
 
+  it('says under the chips how to make the finer good, and which base need it waits on', () => {
+    // Year 3, no temple: Religion stands in the way of the humans' spiced ale.
+    useGameStore.setState({ run: settlement(3) })
+    const { unmount } = render(<VillagerPanel />)
+    let hint = humanCard().querySelector('.refined-hint')!
+    expect(hint).not.toBeNull()
+    expect(hint.querySelector('.refined-blocked')?.textContent).toBe('Waits on Religion: meet it first. ')
+    expect(hint.textContent).toMatch(/Spiced ale: A Tavern with spiced ale in stock, brewed from ale and herbs at a Brewery raised to a Copper Still\./)
+    // Shown, not hidden in a tooltip or the folded breakdown.
+    expect(hint.closest('details')).toBeNull()
+    expect(hint.closest('[title]')).toBeNull()
+    unmount()
+
+    // The temple up: nothing blocks it, and the how-to stays until it is met.
+    const run = settlement(3, true)
+    useGameStore.setState({ run })
+    const second = render(<VillagerPanel />)
+    hint = humanCard().querySelector('.refined-hint')!
+    expect(hint.querySelector('.refined-blocked')).toBeNull()
+    expect(hint.textContent).toMatch(/^Spiced ale: A Tavern with spiced ale/)
+    second.unmount()
+
+    run.stock.spicedAle = 10
+    useGameStore.setState({ run: { ...run } })
+    render(<VillagerPanel />)
+    expect(humanCard().querySelector('.need-refined')!.className).toContain('is-met')
+    expect(humanCard().querySelector('.refined-hint')).toBeNull()
+  })
+
+  it('names every base need in the way, and says nothing before the need wakes', () => {
+    const run = settlement(3)
+    // No tavern either: Religion and Luxury both unmet, in the order the card lists them.
+    delete run.buildings.t_tavern
+    useGameStore.setState({ run })
+    const { unmount } = render(<VillagerPanel />)
+    expect(humanCard().querySelector('.refined-blocked')?.textContent).toBe('Waits on Religion and Luxury: meet them first. ')
+    unmount()
+    useGameStore.setState({ run: settlement(1) })
+    render(<VillagerPanel />)
+    expect(humanCard().querySelector('.refined-hint')).toBeNull()
+  })
+
   it('keeps the refined chip with the base needs, at full weight, once they are all met', () => {
     useGameStore.setState({ run: settlement(3, true) })
     render(<VillagerPanel />)

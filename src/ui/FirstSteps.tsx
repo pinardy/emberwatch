@@ -219,7 +219,7 @@ export function FirstSteps({ run }: { run: RunState }) {
       {!started && !compact && (
         <p className="first-steps-goal">
           <span className="first-steps-hello">Welcome, Viceroy. </span>
-          Fill the Reputation meter to win before the Queen’s Impatience runs out.
+          Fill the Reputation meter before the Queen’s Impatience runs out: that sends her envoy, and you win by holding until she arrives after the next Storm.
           <span className="first-steps-hello"> First, get through the Storm:</span>
         </p>
       )}
