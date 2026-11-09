@@ -138,7 +138,7 @@ function tickPlaying(s: RunState, dt: number): void {
     )
   }
 
-  stepDecree(s, dt)
+  stepDecree(s, dt, mods)
   stepOrders(s, dt)
   stepErrands(s, dt)
   checkMilestones(s)

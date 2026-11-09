@@ -6,7 +6,7 @@ import { COMMISSIONS } from '../game/content/commissions'
 import { STORM_BLIGHTS, STORM_BLIGHT_LIST } from '../game/content/stormBlights'
 import { gainReputation } from '../game/engine/reputation'
 import { isReachable, spareGlade } from '../game/engine/actions'
-import { IMPATIENCE_STAGNATION_GRACE, PETITION_WITHIN, YEAR_SECONDS } from '../game/engine/balance'
+import { FINAL_CHARGE_RESOLVE_RATE, IMPATIENCE_STAGNATION_GRACE, PETITION_WITHIN, YEAR_SECONDS } from '../game/engine/balance'
 import { architectPrice, buyArchitectPlans, grandPetition } from '../game/engine/levers'
 import { announceBlight } from '../game/engine/blights'
 import { createRun } from '../game/engine/createRun'
@@ -180,6 +180,8 @@ describe('tip triggers', () => {
     expect(fires(s, 'envoy')).toBe(true)
     expect(fires(s, 'envoy', true)).toBe(true)
     expect(tipCopy(tipById('envoy')!.text, s)).toMatch(/the next Storm ends/)
+    // About resolve: the unrest that loses a last stand, and where the fix is named.
+    expect(tipCopy(tipById('envoy')!.text, s)).toMatch(/resolve.*for 90 s, the run is lost.*🐎 warning names who would fall/)
     s.season.season = 'storm'
     expect(tipCopy(tipById('envoy')!.text, s)).toMatch(/this Storm ends/)
     s.envoy!.outcome = 'arrived'
@@ -279,6 +281,18 @@ describe('tip triggers', () => {
     expect(fires(s, 'order-offer')).toBe(true)
     s.orderOffers = []
     expect(tipById('order-offer')!.doneWhen!(s)).toBe(true)
+  })
+
+  it("the Queen's final charge: while it speeds the climb, not before it is given nor once the envoy rides", () => {
+    const s = newRun()
+    expect(fires(s, 'final-charge')).toBe(false)
+    s.finalCharge = { at: s.clock }
+    expect(fires(s, 'final-charge')).toBe(true)
+    expect(tipCopy(tipById('final-charge')!.text, s)).toContain(`Within 3 points and stalled`)
+    expect(tipCopy(tipById('final-charge')!.text, s)).toContain(`${FINAL_CHARGE_RESOLVE_RATE}× as fast`)
+    s.reputation = s.maxReputation - 1
+    gainReputation(s, 1, 'orders')
+    expect(fires(s, 'final-charge')).toBe(false)
   })
 
   it('an errand: while one is open, done once one is met', () => {

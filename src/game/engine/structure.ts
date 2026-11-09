@@ -109,11 +109,12 @@ function decreePayText(def: DecreeDef, reputation: number): string {
  * so the herald stays home: no decree is offered or runs (`quietCourt` in
  * `climax.ts` sets aside any open as she sets out).
  */
-export function stepDecree(s: RunState, dt: number): void {
+export function stepDecree(s: RunState, dt: number, mods?: Modifiers): void {
   if (envoyRiding(s)) return
   const decree = s.decree
   if (!decree) {
-    s.decreeTimer -= dt
+    // A commission can bring the herald round more often (Royal Works).
+    s.decreeTimer -= dt / (mods ?? computeModifiers(s)).decreeInterval
     if (s.decreeTimer <= 0) offerDecrees(s)
     return
   }

@@ -183,7 +183,7 @@ export const ERRAND_PACING = {
   /** …up to this many times over (×3 at most). */
   stallBonusSteps: 2,
   /** Errands pay reputation only while at least this many points short of victory. */
-  reputationShortOf: 2,
+  reputationShortOf: 3,
   /** Amber an errand pays in place of each whole point of reputation. */
-  amberPerPoint: 30,
+  amberPerPoint: 20,
 }

@@ -865,6 +865,8 @@ export type CornerstoneEffect =
   | { kind: 'decreeReputation'; amount: number }
   /** Time allowed to meet a royal decree (percent; positive = longer). */
   | { kind: 'decreeTime'; percent: number }
+  /** Wait between royal decrees (percent; negative = more often). */
+  | { kind: 'decreeInterval'; percent: number }
   /** Impatience when a decree lapses unmet (percent; negative = milder). */
   | { kind: 'decreeMissPenalty'; percent: number }
   /** Wood braziers burn in the Storm (percent; -100 = none). */

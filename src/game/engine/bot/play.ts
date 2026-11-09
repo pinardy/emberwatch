@@ -1405,11 +1405,14 @@ function pullLevers(s: RunState, ledger: AmberLedger): void {
  * here, a hand for an empty workplace or a half-cleared glade when more are
  * idle than the builders need, a home when one can be raised anyway. Errands
  * met by ordinary play (holding stock, leaving builders free) need nothing.
+ * One that pays a real share of a point (deep in a stall) is worth a builder
+ * held back for it, as a player reading the card would.
  */
 export function runErrands(s: RunState): void {
   for (const e of [...openErrands(s)]) {
     const goal = e.goal
     const idle = idleVillagers(s)
+    const reserve = (e.reward.reputation ?? 0) >= VALUABLE_ERRAND ? Math.min(1, builderReserve(s)) : builderReserve(s)
     switch (goal.kind) {
       case 'deliver': {
         // Food is judged by the larder as a whole: a few meals a head kept back.
@@ -1424,11 +1427,11 @@ export function runErrands(s: RunState): void {
         break
       case 'staff': {
         const b = s.buildings[goal.buildingId]
-        if (b && b.workers.length === 0 && idle.length > builderReserve(s)) assignWorker(s, b.id, idle[0].id)
+        if (b && b.workers.length === 0 && idle.length > reserve) runErrand(s, e.id)
         break
       }
       case 'clear':
-        if (s.glades[goal.gladeId]?.clearers === 0 && idle.length > builderReserve(s)) addClearer(s, goal.gladeId)
+        if (s.glades[goal.gladeId]?.clearers === 0 && idle.length > reserve) addClearer(s, goal.gladeId)
         break
       case 'count':
         if (idle.length > builderReserve(s) && openSites(s) === 0) buildHousing(s)
@@ -1438,6 +1441,9 @@ export function runErrands(s: RunState): void {
     }
   }
 }
+
+/** Reputation an errand must pay for the bot to hold a builder back for it. */
+const VALUABLE_ERRAND = 0.5
 
 /** The bot petitions only with victory this close… */
 const PETITION_MAX_SHORT = 8

@@ -153,7 +153,7 @@ const defs: CommissionDef[] = [
         goal: { kind: 'buildingId', buildingId: 'tradingPost', amount: 1 },
         label: 'Keep a Trading Post standing',
       },
-      { kind: 'caravans', amount: 6 },
+      { kind: 'caravans', amount: 5 },
     ],
     bonusPercent: 100,
     unlockedBy: 'merchantCharter',
@@ -210,14 +210,16 @@ const defs: CommissionDef[] = [
     icon: '📯',
     art: 'charter/horn',
     patron: 'The Charter Office',
-    twist: 'Decrees allow 15% less time and a miss stings 25% more, but each decree met pays +1 reputation.',
+    twist: 'The herald calls 25% more often and decrees allow 15% less time, a miss stings 25% more, but each decree met pays +1 reputation.',
     effects: [
+      { kind: 'decreeInterval', percent: -25 },
       { kind: 'decreeTime', percent: -15 },
       { kind: 'decreeMissPenalty', percent: 25 },
       { kind: 'decreeReputation', amount: 1 },
     ],
-    // 4, not 3: the Envoy's approach leaves time for one more decree.
-    terms: [{ kind: 'decrees', amount: 4 }],
+    // 3, on a herald who calls more often: no decree comes while the envoy
+    // rides, so they must all be met on the climb.
+    terms: [{ kind: 'decrees', amount: 3 }],
     bonusPercent: 70,
     unlockedBy: 'charterOffice',
   },

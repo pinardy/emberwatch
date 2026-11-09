@@ -697,15 +697,17 @@ export const PETITION_KEPT_RELIEF = 1
 
 /**
  * The Queen's final charge: once a settlement is within this many points of
- * victory and reputation has then stood still for `FINAL_CHARGE_STALL`
+ * victory, from `FINAL_CHARGE_FROM_YEAR`, and reputation has then stood still for `FINAL_CHARGE_STALL`
  * seconds, she turns her eye on it for the rest of the climb — contented
  * villagers earn reputation `FINAL_CHARGE_RESOLVE_RATE` times as fast. A
  * catch-up for a stalled finish that still has to be earned: species below
  * their threshold earn nothing, charged or not.
  */
 export const FINAL_CHARGE_WITHIN = 3
+/** …from this year: the charge is for a climb stalled as the deadline nears. */
+export const FINAL_CHARGE_FROM_YEAR = 4
 export const FINAL_CHARGE_STALL = 90
-export const FINAL_CHARGE_RESOLVE_RATE = 2
+export const FINAL_CHARGE_RESOLVE_RATE = 1.25
 
 /**
  * The Retreat to the Citadel is offered once the Queen's impatience has
@@ -745,7 +747,7 @@ export const ENVOY_BLIGHT_PREP_SCALE = 1.5
  * `ENVOY_DREAD_MIN`) until it passes — lifted early by gathering this many
  * herbs to burn as offerings.
  */
-export const ENVOY_DREAD_PER_HOSTILITY = 0.12
+export const ENVOY_DREAD_PER_HOSTILITY = 0.2
 export const ENVOY_DREAD_MIN = 2
 export const ENVOY_DREAD_OFFERING_HERBS = 40
 /**

@@ -569,7 +569,7 @@ function resolveRemedies(
         .filter(([, ratio]) => ratio < 1)
         .sort((x, y) => x[1] - y[1])
         .map(([need]) => NEED_LABELS[need]?.name ?? need)
-      return unmet.length > 0 ? `${SPECIES[sp].name} want ${andList(unmet.slice(0, 2))}` : null
+      return unmet.length > 0 ? `${SPECIES[sp].name} want ${unmet[0]}` : null
     })
     .filter((x): x is string => !!x)
   if (needs.length > 0) out.push(needs.join('; '))

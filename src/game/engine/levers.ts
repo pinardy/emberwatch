@@ -13,6 +13,7 @@ import {
   PETITION_VOW_MIN,
   PETITION_VOW_REPUTATION,
   PETITION_VOW_SECONDS,
+  FINAL_CHARGE_FROM_YEAR,
   FINAL_CHARGE_STALL,
   FINAL_CHARGE_WITHIN,
   FINAL_CHARGE_RESOLVE_RATE,
@@ -234,6 +235,7 @@ export function finalChargeActive(s: Pick<RunState, 'finalCharge' | 'envoy'>): b
  */
 export function stepFinalCharge(s: RunState): void {
   if (s.finalCharge || s.envoy || s.phase !== 'playing') return
+  if (s.season.year < FINAL_CHARGE_FROM_YEAR) return
   if (s.maxReputation - s.reputation > FINAL_CHARGE_WITHIN) return
   if (secondsSinceReputation(s) < FINAL_CHARGE_STALL) return
   s.finalCharge = { at: s.clock }

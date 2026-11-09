@@ -14,6 +14,7 @@ import {
   PETITION_VOW_REPUTATION,
   PETITION_VOW_SECONDS,
   PETITION_WITHIN,
+  FINAL_CHARGE_FROM_YEAR,
   FINAL_CHARGE_RESOLVE_RATE,
   FINAL_CHARGE_STALL,
   FINAL_CHARGE_WITHIN,
@@ -342,6 +343,19 @@ describe("the Queen's final charge", () => {
     // Once the envoy rides it is over.
     sendEnvoy(s)
     expect(finalChargeActive(s)).toBe(false)
+  })
+
+  it('waits for the deadline to near: not before Year 4', () => {
+    const s = newRun()
+    toYear(s, FINAL_CHARGE_FROM_YEAR - 1)
+    s.reputation = s.maxReputation - 1
+    s.reputationRise = { at: s.clock - 600, level: s.reputation }
+    stepFinalCharge(s)
+    expect(s.finalCharge).toBeUndefined()
+    toYear(s, FINAL_CHARGE_FROM_YEAR)
+    s.reputationRise = { at: s.clock - 600, level: s.reputation }
+    stepFinalCharge(s)
+    expect(s.finalCharge).toBeDefined()
   })
 
   it('pays nothing for species below their threshold: a catch-up to earn, not a gift', () => {

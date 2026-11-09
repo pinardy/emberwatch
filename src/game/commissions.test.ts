@@ -19,6 +19,7 @@ import { createRun } from './engine/createRun'
 import { computeModifiers } from './engine/modifiers'
 import { drawRunModifiers } from './engine/runModifiers'
 import { migrateRun } from './persistence'
+import { stepDecree } from './engine/structure'
 import type { MetaState, RunState, SpeciesId } from './types'
 
 const TRIO: SpeciesId[] = ['human', 'beaver', 'lizard']
@@ -247,19 +248,34 @@ describe('commissions: judging the objective', () => {
     expect(judgeCommission(ended(survey, 'won'))!.met).toBe(false)
   })
 
+  it('Royal Works brings the herald round a quarter more often (no decree comes while the envoy rides)', () => {
+    const works = run('royalWorks')
+    const plain = run()
+    expect(computeModifiers(works).decreeInterval).toBeCloseTo(0.75)
+    expect(computeModifiers(plain).decreeInterval).toBe(1)
+    for (const s of [works, plain]) {
+      s.decree = null
+      s.decreeTimer = 100
+      stepDecree(s, 3)
+    }
+    expect(100 - works.decreeTimer).toBeCloseTo(4)
+    expect(100 - plain.decreeTimer).toBeCloseTo(3)
+    expect(COMMISSIONS.royalWorks.terms).toEqual([{ kind: 'decrees', amount: 3 }])
+  })
+
   it('counts caravans, decrees and impatience from the run', () => {
     const trade = run('tradeTown')
     const [post, caravans] = COMMISSIONS.tradeTown.terms
+    trade.caravan.visits = 4
+    expect(termStatus(caravans, trade)).toMatchObject({ state: 'open', detail: '4/5' })
     trade.caravan.visits = 5
-    expect(termStatus(caravans, trade)).toMatchObject({ state: 'open', detail: '5/6' })
-    trade.caravan.visits = 6
     expect(termStatus(caravans, trade).state).toBe('met')
     expect(termStatus(post, ended(trade, 'won')).state).toBe('failed')
 
     const works = run('royalWorks')
-    works.feats = { ...works.feats!, decreesMet: 3 }
+    works.feats = { ...works.feats!, decreesMet: 2 }
     expect(termStatus(COMMISSIONS.royalWorks.terms[0], works).state).toBe('open')
-    works.feats = { ...works.feats!, decreesMet: 4 }
+    works.feats = { ...works.feats!, decreesMet: 3 }
     expect(termStatus(COMMISSIONS.royalWorks.terms[0], works).state).toBe('met')
 
     const fav = run('queensFavourite')
