@@ -214,8 +214,9 @@
     grid-template-rows: minmax(160px, 1fr) auto;
   }
 
+  /* Short enough that the map above keeps room to tap glades and deposits. */
   .founding {
-    max-height: 60vh;
+    max-height: 44vh;
     padding: 12px;
     gap: 10px;
     border-left: none;

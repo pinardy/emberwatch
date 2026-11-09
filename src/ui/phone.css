@@ -1,0 +1,288 @@
+/* ==========================================================================
+   Phones and small tablets (860px and narrower): the map keeps most of the
+   screen. The bottom stack's cards fold into one strip (HudStrip), coach
+   tips move into the panel sheet (or a slim bar while it is folded), First
+   steps is a chip, and the sheet opens short by default (phoneSheet.ts).
+   The components only render these forms on a narrow screen, so desktop
+   never sees them; the rules are scoped to the same width all the same.
+   ========================================================================== */
+
+@media (max-width: 860px) {
+  /* --- the panel sheet: folded / peek / tall ----------------------------- */
+
+  .game-main {
+    grid-template-rows: minmax(180px, 1fr) minmax(0, auto);
+  }
+
+  .sidebar {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    transition: max-height 180ms ease;
+  }
+
+  /* The same heights as SHEET_PEEK_VH and SHEET_FULL_VH in phoneSheet.ts. */
+  .sidebar.is-open.sheet-peek {
+    max-height: max(150px, 22vh);
+  }
+
+  .sidebar.is-open.sheet-full {
+    max-height: 60vh;
+  }
+
+  .sidebar.is-dragging {
+    transition: none;
+  }
+
+  .sidebar .panel-scroll {
+    grid-row: 3;
+  }
+
+  /* The tab row and the handle drag the sheet; the browser must not take
+     the gesture for a scroll. */
+  .sidebar .tabs,
+  .sidebar .sheet-handle {
+    touch-action: none;
+  }
+
+  /* A short grip line over the tab row says the sheet can be dragged. */
+  .sidebar .tabs {
+    position: relative;
+  }
+
+  .sidebar .tabs::before {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    width: 36px;
+    height: 3px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: var(--line);
+    pointer-events: none;
+  }
+
+  /* --- coach tips in the sheet ------------------------------------------ */
+
+  .sheet-tip {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-height: 0;
+    max-height: 34vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .sheet-tip:empty,
+  .sidebar.is-folded .sheet-tip {
+    display: none;
+  }
+
+  .sheet-tip > .tip-coach {
+    max-width: none;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 10px 0;
+    padding: 8px 10px;
+    box-shadow: none;
+  }
+
+  .sheet-tip > .tip-coach p {
+    font-size: 0.75rem;
+    line-height: 1.35;
+  }
+
+  /* While the sheet is folded: one slim line over the map's bottom edge. */
+  .hud-context > .tip-coach.is-bar {
+    align-items: center;
+    gap: 4px;
+    width: max-content;
+    max-width: 100%;
+    padding: 0 4px 0 10px;
+    border-radius: 22px;
+    overflow: hidden;
+  }
+
+  .tip-coach .tip-bar-open {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 4px;
+    border: none;
+    background: transparent;
+    color: var(--gold);
+    font-family: var(--font);
+    font-weight: 700;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* A finger-sized target on touch screens (the coarse-pointer rule). */
+  .tip-coach .tip-bar-dismiss {
+    padding: 2px 10px;
+    border-radius: 16px;
+    font-size: 0.75rem;
+  }
+
+  /* --- First steps as a chip -------------------------------------------- */
+
+  .hud-context > .tip-coach.first-steps.is-chip {
+    width: max-content;
+    max-width: 100%;
+    max-height: none;
+    padding: 0;
+    border-radius: 22px;
+    overflow: hidden;
+  }
+
+  .tip-coach .first-steps-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 44px;
+    padding: 2px 14px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+  }
+
+  .tip-coach .first-steps-chip strong {
+    color: var(--gold);
+    font-family: var(--font);
+  }
+
+  .tip-coach.first-steps.is-chip-open .first-steps-chip {
+    flex: 1 1 auto;
+    margin: -6px 0 -6px -10px;
+    padding-left: 10px;
+  }
+
+  .first-steps-chevron {
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  /* --- the bottom stack's strip ----------------------------------------- */
+
+  .bottom-stack > .hud-strip {
+    display: grid;
+    gap: 6px;
+    pointer-events: none;
+  }
+
+  .hud-strip-full {
+    display: grid;
+    gap: 6px;
+  }
+
+  .hud-strip-full > * {
+    pointer-events: auto;
+  }
+
+  /* Expanded, the cards keep the strip's order: threats, the decree and
+     conditions, then errands. */
+  .hud-strip-full > .threat-bar {
+    order: -1;
+  }
+
+  .hud-strip-full > .is-errand {
+    order: 1;
+  }
+
+  .hud-strip-full .conditions-bar > .is-blight {
+    order: -1;
+  }
+
+  .hud-strip-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    pointer-events: none;
+  }
+
+  .hud-strip-row > button {
+    pointer-events: auto;
+  }
+
+  .hud-strip.is-expanded .hud-strip-row {
+    justify-content: flex-end;
+  }
+
+  .hud-strip .hud-strip-item {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    min-height: 44px;
+    padding: 4px 10px;
+  }
+
+  .hud-strip-item.is-threat {
+    background: rgba(52, 22, 22, 0.96);
+    border-color: #8a4a44;
+  }
+
+  .hud-strip-item.is-urgent {
+    border-color: var(--bad);
+  }
+
+  .hud-strip-text {
+    display: grid;
+    flex: 1 1 auto;
+    min-width: 0;
+    line-height: 1.2;
+  }
+
+  .hud-strip-kind {
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .hud-strip-name {
+    color: var(--gold);
+    font-family: var(--font);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hud-strip-item.is-threat .hud-strip-name {
+    color: #f4cec9;
+  }
+
+  .hud-strip-item .condition-clock {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .hud-strip-more {
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: rgba(20, 27, 33, 0.96);
+    box-shadow: var(--shadow);
+    color: var(--text);
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  /* Opened, the full stack may take more of the map, and scrolls. */
+  .hud-stack > .bottom-stack:has(.hud-strip.is-expanded) {
+    max-height: 62cqh;
+  }
+}
+
+@media (max-width: 860px) and (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}

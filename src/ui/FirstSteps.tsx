@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { create } from 'zustand'
 import { BUILDINGS } from '../game/content/buildings'
 import {
@@ -11,25 +11,33 @@ import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import './first-steps.css'
 import { Icon } from './Icon'
+import { useNarrowScreen } from './useNarrowScreen'
 
 /**
  * The "First steps" checklist: a small card that walks a new player through
  * the moves that carry a settlement through its first Storm. Each step ticks
  * itself off from the run (see `engine/onboarding.ts`) and clicking one takes
  * the player to it. Once finished or dismissed it never returns — the choice
- * is remembered in localStorage, like the tips coach's seen tips.
+ * is remembered in localStorage, like the tips coach's seen tips. Once the
+ * first Storm has passed (Year 2 begins) it has done its job and retires by
+ * itself, even with a step left unticked.
+ *
+ * On a phone it is a small "First steps 3/4" chip that opens the list on tap,
+ * rather than a card over the map.
  *
  * It shares the tips coach's slot in the HUD stack: `TipsCoach` decides which
  * of the two shows, so they never stack on top of each other.
  */
 
 const STEPS_KEY = 'emberwatch.firstSteps.v1'
-type StepsStatus = 'open' | 'done' | 'dismissed'
+/** `retired`: put away when the first Storm passed with a step still open. */
+type StepsStatus = 'open' | 'done' | 'dismissed' | 'retired'
 
-function loadStatus(): StepsStatus {
+/** The checklist's stored status; older values (none, "done", "dismissed") read as before. */
+export function loadFirstStepsStatus(): StepsStatus {
   try {
     const value = localStorage.getItem(STEPS_KEY)
-    return value === 'done' || value === 'dismissed' ? value : 'open'
+    return value === 'done' || value === 'dismissed' || value === 'retired' ? value : 'open'
   } catch {
     return 'open'
   }
@@ -39,7 +47,7 @@ export const useFirstStepsStatus = create<{
   status: StepsStatus
   close: (status: Exclude<StepsStatus, 'open'>) => void
 }>((set) => ({
-  status: loadStatus(),
+  status: loadFirstStepsStatus(),
   close: (status) => {
     try {
       localStorage.setItem(STEPS_KEY, status)
@@ -50,29 +58,44 @@ export const useFirstStepsStatus = create<{
   },
 }))
 
+/** The checklist is about the first Storm: once it has passed, it retires. */
+export function firstStepsRetired(run: RunState): boolean {
+  return run.season.year >= 2
+}
+
+export const FIRST_STEPS_RETIRED_NOTICE =
+  '🧭 First steps put away — the first Storm is behind you. Keep food and wood ahead of the next.'
+
 /**
  * Whether the checklist still has something to say in this run. Call it from
  * a component that stays mounted (the tips coach): it also records the
- * checklist as done the moment the last required step ticks, and says so once.
+ * checklist as done the moment the last required step ticks, or as retired
+ * once the first Storm has passed, and says so once.
  */
 export function useFirstStepsOpen(run: RunState | null): boolean {
   const status = useFirstStepsStatus((s) => s.status)
   const close = useFirstStepsStatus((s) => s.close)
   const complete = !!run && firstStepsComplete(run)
-  const open = !!run && status === 'open' && !complete
+  const retired = !!run && firstStepsRetired(run)
+  const open = !!run && status === 'open' && !complete && !retired
   // Only celebrate a checklist the player actually watched fill up.
   const seenOpen = useRef(false)
   if (open) seenOpen.current = true
 
   useEffect(() => {
-    if (status !== 'open' || !complete) return
-    close('done')
-    if (seenOpen.current) {
-      useGameStore.setState({
-        notice: '✅ First steps done — now keep food and wood ahead of the Storm.',
-      })
+    if (status !== 'open') return
+    if (complete) {
+      close('done')
+      if (seenOpen.current) {
+        useGameStore.setState({
+          notice: '✅ First steps done — now keep food and wood ahead of the Storm.',
+        })
+      }
+    } else if (retired) {
+      close('retired')
+      useGameStore.setState({ notice: FIRST_STEPS_RETIRED_NOTICE })
     }
-  }, [status, complete, close])
+  }, [status, complete, retired, close])
 
   return open
 }
@@ -86,6 +109,21 @@ export function FirstSteps({ run }: { run: RunState }) {
   const focusCamera = useGameStore((s) => s.focusCamera)
   // While placing a building the map needs the room: keep to the next step.
   const compact = useGameStore((s) => s.buildMode !== null)
+  // Phones: a chip that opens the list on tap.
+  const narrow = useNarrowScreen()
+  const [chipOpen, setChipOpen] = useState(false)
+  // The chip's button moves into the card's header and back: keep focus on it.
+  const sectionRef = useRef<HTMLElement>(null)
+  const toggled = useRef(false)
+  const toggleChip = (open: boolean) => {
+    toggled.current = true
+    setChipOpen(open)
+  }
+  useEffect(() => {
+    if (!toggled.current) return
+    toggled.current = false
+    sectionRef.current?.querySelector<HTMLElement>('.first-steps-chip')?.focus()
+  }, [chipOpen])
 
   const steps = firstSteps(run)
   const required = steps.filter((step) => !step.optional)
@@ -111,21 +149,63 @@ export function FirstSteps({ run }: { run: RunState }) {
     if (glade) focusCamera(glade.center)
   }
 
+  const title = (
+    <>
+      <span aria-hidden>
+        <Icon id="compass" emoji="🧭" />{' '}
+      </span>
+      First steps{' '}
+      <span className="first-steps-count">
+        {doneCount}/{required.length}
+      </span>
+    </>
+  )
+
+  if (narrow && !chipOpen) {
+    return (
+      <section ref={sectionRef} className="tip-coach first-steps is-chip" aria-label="First steps">
+        <button
+          key="chip"
+          type="button"
+          className="first-steps-chip"
+          aria-expanded={false}
+          onClick={() => toggleChip(true)}
+          title="Show the first steps"
+        >
+          <strong>{title}</strong>
+          <span className="first-steps-chevron" aria-hidden>
+            ▴
+          </span>
+        </button>
+      </section>
+    )
+  }
+
   return (
     <section
-      className={`tip-coach first-steps ${compact ? 'is-compact' : ''}`}
+      ref={sectionRef}
+      className={`tip-coach first-steps ${compact ? 'is-compact' : ''}${narrow ? ' is-chip-open' : ''}`}
       aria-label="First steps"
     >
       <header className="first-steps-head">
-        <strong>
-          <span aria-hidden>
-            <Icon id="compass" emoji="🧭" />{' '}
-          </span>
-          First steps{' '}
-          <span className="first-steps-count">
-            {doneCount}/{required.length}
-          </span>
-        </strong>
+        {narrow ? (
+          <button
+            key="chip"
+            type="button"
+            className="first-steps-chip"
+            aria-expanded
+            aria-controls="first-steps-list"
+            onClick={() => toggleChip(false)}
+            title="Fold the first steps to a chip"
+          >
+            <strong>{title}</strong>
+            <span className="first-steps-chevron" aria-hidden>
+              ▾
+            </span>
+          </button>
+        ) : (
+          <strong>{title}</strong>
+        )}
         <button
           type="button"
           className="first-steps-close"
@@ -143,7 +223,7 @@ export function FirstSteps({ run }: { run: RunState }) {
           <span className="first-steps-hello"> First, get through the Storm:</span>
         </p>
       )}
-      <ol className="first-steps-list">
+      <ol className="first-steps-list" id={narrow ? 'first-steps-list' : undefined}>
         {(compact ? steps.filter((step) => step === next) : steps).map((step) => (
           <li
             key={step.id}

@@ -51,7 +51,7 @@ export function ConditionsBar() {
           <button
             type="button"
             key={condition.id}
-            className={`condition-card ${condition.timeLeft !== undefined && condition.timeLeft < 60 ? 'is-urgent' : ''}`}
+            className={`condition-card ${condition.breaksWithStorm ? 'is-blight ' : ''}${condition.timeLeft !== undefined && condition.timeLeft < 60 ? 'is-urgent' : ''}`}
             onClick={() => glade && focusCamera(glade.center)}
             title={glade ? `Left behind at ${glade.name}` : undefined}
           >
