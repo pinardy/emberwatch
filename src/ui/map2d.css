@@ -89,6 +89,12 @@ svg.map-2d .worker-count.is-short {
   fill: #ffc069;
 }
 
+/* Nobody idle to send (or a full crew): kept, but quiet, so a busy map is
+   not a field of "0/2"s. Full strength again on hover or selection. */
+svg.map-2d .worker-count.is-quiet {
+  opacity: 0.45;
+}
+
 svg.map-2d .tier-mark {
   font-size: 0.75rem;
   text-anchor: start;

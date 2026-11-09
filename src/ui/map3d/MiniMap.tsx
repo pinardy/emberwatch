@@ -1,15 +1,61 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import type { MapControls as MapControlsImpl } from 'three-stdlib'
 import { useGameStore } from '../../game/store'
-import type { RunState } from '../../game/types'
+import type { Barrier, RunState } from '../../game/types'
 import { gladeFill } from '../mapShared'
 import { miniMapKey, useRunKey } from './layerKeys'
 
 const WIDTH_PX = 168
 
+/** Minimap strokes for each barrier, in world units: a bank under a body. */
+const BARRIER_STROKE: Record<
+  Barrier['kind'],
+  { bank: string; body: string; bankW: number; bodyW: number; crossing: string }
+> = {
+  river: { bank: '#1f2c22', body: '#3d7fb4', bankW: 1.9, bodyW: 1.25, crossing: '#a88e5e' },
+  cliff: { bank: '#120f0d', body: '#8a8279', bankW: 1.5, bodyW: 0.6, crossing: '#7a6a4e' },
+}
+
 /**
- * Corner minimap: the whole world at a glance, with the camera's focus and
- * facing. Clicking jumps the camera there. Redraws only when a glade's look,
+ * A layout's river or cliffs, with their fords and passes, as the main maps
+ * draw them (`run.world.barriers`). They never change, so the path strings
+ * are built once per world and this group is memoised on it.
+ */
+const MiniBarriers = memo(function MiniBarriers({ barriers }: { barriers: Barrier[] }) {
+  const paths = useMemo(
+    () => barriers.map((b) => b.segments.map(([a, c]) => `M${a.x} ${a.y}L${c.x} ${c.y}`).join('')),
+    [barriers],
+  )
+  return (
+    <g className="minimap-barriers" pointerEvents="none">
+      {barriers.map((b, i) => {
+        const look = BARRIER_STROKE[b.kind]
+        return (
+          <g key={i} data-barrier={b.kind}>
+            <path d={paths[i]} stroke={look.bank} strokeWidth={look.bankW} strokeLinecap="round" fill="none" />
+            <path d={paths[i]} stroke={look.body} strokeWidth={look.bodyW} strokeLinecap="round" fill="none" />
+            {b.crossings.map((c, j) => (
+              <circle
+                key={j}
+                data-crossing={b.kind}
+                cx={c.x}
+                cy={c.y}
+                r={0.8}
+                fill={look.crossing}
+                stroke="#e3cf9f"
+                strokeWidth={0.3}
+              />
+            ))}
+          </g>
+        )
+      })}
+    </g>
+  )
+})
+
+/**
+ * Corner minimap: the whole world at a glance (with a layout's river or
+ * cliffs and their crossings), and the camera's focus and facing. Clicking jumps the camera there. Redraws only when a glade's look,
  * the building list or the threats change (polygon strings are built once
  * per run); the camera indicator polls the controls a few times a second.
  */
@@ -84,6 +130,7 @@ export const MiniMap = memo(function MiniMap({
           strokeWidth={0.15}
         />
       ))}
+      {(run.world.barriers?.length ?? 0) > 0 && <MiniBarriers barriers={run.world.barriers!} />}
       {Object.values(run.buildings).map((b) => (
         <circle
           key={b.id}
