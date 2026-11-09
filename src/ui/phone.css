@@ -91,6 +91,59 @@
     line-height: 1.35;
   }
 
+  /* At the sheet's short height: the title with "More" beside it, and the
+     text held to two lines until "More" opens the rest in place. */
+  .sheet-tip .tip-body.is-clampable {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title more'
+      'text text';
+    align-items: center;
+    column-gap: 8px;
+    min-width: 0;
+  }
+
+  .sheet-tip .tip-body.is-clampable > strong {
+    grid-area: title;
+    min-width: 0;
+    margin-bottom: 2px;
+  }
+
+  .sheet-tip .tip-body.is-clampable > p {
+    grid-area: text;
+  }
+
+  .sheet-tip .tip-body > p.is-clamped {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
+  /* A 44px target that takes no more than a line of the card's height. */
+  .tip-coach .tip-more {
+    grid-area: more;
+    min-height: 44px;
+    margin: -13px 0;
+    padding: 0 6px;
+    border: none;
+    background: transparent;
+    color: var(--gold);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  /* Its target overlaps the text's first line: no fill over the words. */
+  .tip-coach .tip-more:hover,
+  .tip-coach .tip-more:active {
+    background: transparent;
+    color: var(--text);
+  }
+
   /* While the sheet is folded: one slim line over the map's bottom edge. */
   .hud-context > .tip-coach.is-bar {
     align-items: center;
@@ -123,6 +176,14 @@
     padding: 2px 10px;
     border-radius: 16px;
     font-size: 0.75rem;
+  }
+
+  /* --- the founding's held clock in the top bar ------------------------- */
+
+  /* The paused button's size, so the bar keeps its two rows; gold says the
+     founding holds it, and its name and the group it opens say so in words. */
+  .speed-toggle.is-held.is-compact {
+    background: rgba(217, 180, 106, 0.12);
   }
 
   /* --- First steps as a chip -------------------------------------------- */
