@@ -44,6 +44,36 @@ export const useSeenTips = create<{ seen: string[]; markSeen: (id: string) => vo
   },
 }))
 
+/**
+ * How long a tip must have been on screen before Esc may put it away. A tip
+ * waits, hidden, while the player inspects something or holds a blueprint
+ * (styles.css); without this, the Esc that closes the inspector, pressed
+ * twice, dismissed the tip it uncovered before anyone could read it, and the
+ * tip never came back.
+ */
+export const TIP_ESC_GRACE_MS = 1000
+
+/** True while the player inspects something or holds a blueprint, which hides the corner tip. */
+function useTipCovered(): boolean {
+  return useGameStore(
+    (s) => !!s.buildMode || !!s.selectedBuilding || !!s.selectedDeposit || !!s.selectedGlade,
+  )
+}
+
+/** True once `key` has stayed set for `ms`; false again whenever it changes. */
+function useHeldFor(key: string | null, ms: number): boolean {
+  const [held, setHeld] = useState<string | null>(null)
+  useEffect(() => {
+    if (key === null) return
+    const timer = setTimeout(() => setHeld(key), ms)
+    return () => {
+      clearTimeout(timer)
+      setHeld(null)
+    }
+  }, [key, ms])
+  return key !== null && held === key
+}
+
 /** True while a blocking dialog (a draft, an event, the run's end) covers the game. */
 function dialogOpen(run: RunState): boolean {
   return run.phase !== 'playing' || run.pendingChoices.length > 0
@@ -94,7 +124,9 @@ export function TipsCoach() {
     if (active) markSeen(active.id)
     setActive(null)
   }
-  useEscapeLayer(active !== null && !blocked, dismiss, 'low')
+  const covered = useTipCovered()
+  const readable = useHeldFor(active && !blocked && !covered ? active.id : null, TIP_ESC_GRACE_MS)
+  useEscapeLayer(readable, dismiss, 'low')
   const narrow = useNarrowScreen()
   const panel = useGameStore((s) => s.panel)
   const setPanel = useGameStore((s) => s.setPanel)

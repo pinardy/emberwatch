@@ -141,6 +141,8 @@ export const TIPS: Tip[] = [
     text: 'This settlement has an objective on top of winning, judged when the run ends. Its card at the top of the Orders panel ticks off each term as you go.',
     when: (run) => !!run.commission && !!COMMISSIONS[run.commission] && !isFounding(run),
   },
+  // The map's layouts and biomes (`terrainTips.ts`): early, and urgent.
+  ...TERRAIN_TIPS,
   {
     id: 'idle-builders',
     title: 'Idle hands build',
@@ -301,8 +303,6 @@ export const TIPS: Tip[] = [
     when: (run) => run.stats.gladesCleared >= 3 && !anySpared(run),
     doneWhen: anySpared,
   },
-  // The map's layouts and biomes (`terrainTips.ts`).
-  ...TERRAIN_TIPS,
 ]
 
 /** The tip with this id, if any. */

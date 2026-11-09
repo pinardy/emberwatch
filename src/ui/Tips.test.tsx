@@ -18,8 +18,12 @@ import { offerDecrees } from '../game/engine/structure'
 import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { useFirstStepsStatus } from './FirstSteps'
-import { useSeenTips } from './TipsCoach'
+import { TIP_ESC_GRACE_MS, useSeenTips } from './TipsCoach'
 import { TIPS, currentDialogTip, nextCornerTip, tipById, tipCopy } from './tips'
+import { TERRAIN_TIP_DELAY } from './terrainTips'
+import { GameScreen } from './GameScreen'
+import { showRun } from '../test/foundedRun'
+import { tick } from '../game/engine/tick'
 
 /**
  * The tips coach's newer tips: each fires once, the first time its situation
@@ -424,20 +428,28 @@ describe('the ground: layout and biome tips', () => {
     for (const [id, layout] of [['river-vale', 'river'], ['long-ridge', 'ridge']] as const) {
       const founding = createRun({ seed: 4711, species: ['human', 'beaver', 'lizard'], modifiers: [], layout })
       expect(tipById(id)!.when(founding), `${id} during the founding`).toBe(false)
-      expect(fires(onGround(layout), id), id).toBe(true)
+      const ground = onGround(layout)
+      expect(fires(ground, id), `${id} at the clock's first second`).toBe(false)
+      ground.clock = TERRAIN_TIP_DELAY
+      expect(fires(ground, id), id).toBe(true)
       expect(fires(onGround('rings'), id), `${id} on the rings`).toBe(false)
     }
     expect(tipCopy(tipById('river-vale')!.text, onGround('river'))).toMatch(/ford/)
     expect(tipCopy(tipById('long-ridge')!.text, onGround('ridge'))).toMatch(/pass/)
   })
 
-  it('the ruins: once tumbled stonework stands on cleared ground', () => {
+  it('the ruins: once founded on the Fallen Holdfast, before any ruin is cleared', () => {
     const s = onGround('ruins')
     for (const g of Object.values(s.glades)) if (g.kind !== 'settlement') g.cleared = false
-    const ruin = Object.values(s.deposits).find((d) => d.kind === 'ruins')!
+    expect(Object.values(s.deposits).some((d) => d.kind === 'ruins' && s.glades[d.gladeId].cleared)).toBe(false)
+    s.clock = 0
     expect(fires(s, 'ruins-field')).toBe(false)
-    s.glades[ruin.gladeId].cleared = true
+    s.clock = TERRAIN_TIP_DELAY
     expect(fires(s, 'ruins-field')).toBe(true)
+    const founding = createRun({ seed: 4711, species: ['human', 'beaver', 'lizard'], modifiers: [], layout: 'ruins' })
+    founding.clock = TERRAIN_TIP_DELAY
+    expect(tipById('ruins-field')!.when(founding)).toBe(false)
+    expect(tipCopy(tipById('ruins-field')!.text, s)).toMatch(/Stonecutters/)
     expect(fires(onGround('rings'), 'ruins-field')).toBe(false)
   })
 
@@ -447,8 +459,100 @@ describe('the ground: layout and biome tips', () => {
     expect(fires(s, 'cinderwood')).toBe(false)
     const ash = Object.values(s.glades).find((g) => g.terrain === 'cinder')!
     ash.discovered = true
+    s.clock = TERRAIN_TIP_DELAY
     expect(fires(s, 'cinderwood')).toBe(true)
     expect(tipCopy(tipById('cinderwood')!.text, s)).toMatch(/warm/)
     expect(fires(onGround('rings', 'woodland'), 'cinderwood')).toBe(false)
   })
+
+  /** Seconds of play until the coach would first pick `id`, for a new player with First steps open; null if not in `limit`. */
+  function secondsUntil(s: RunState, id: string, limit = 60): number | null {
+    // A new player has seen only the founding's own tips.
+    const seen = ['founding', 'first-draft']
+    while (s.clock <= limit) {
+      if (nextCornerTip(s, seen, true)?.id === id) return s.clock
+      tick(s, 0.5)
+    }
+    return null
+  }
+
+  it('each layout and biome tip shows in the first minute, interrupting First steps', () => {
+    const cases: [string, RunState][] = [
+      ['river-vale', onGround('river')],
+      ['long-ridge', onGround('ridge')],
+      ['ruins-field', onGround('ruins')],
+      ['cinderwood', onGround('rings', 'cinderwood')],
+    ]
+    for (const [id, s] of cases) {
+      expect(tipById(id)!.urgent, id).toBe(true)
+      if (id === 'cinderwood') {
+        // Its ash in view from the start, as on a map where it borders the hearth.
+        Object.values(s.glades).find((g) => g.terrain === 'cinder')!.discovered = true
+      }
+      const at = secondsUntil(s, id)
+      expect(at, `${id} within a minute`).not.toBeNull()
+      expect(at!, id).toBeGreaterThanOrEqual(TERRAIN_TIP_DELAY)
+      expect(at!, id).toBeLessThanOrEqual(TERRAIN_TIP_DELAY + 1)
+    }
+  })
+
+  it('comes ahead of the ordinary tips once First steps is put away', () => {
+    const s = onGround('river')
+    s.clock = 120
+    // Idle hands and an untouched forest would both have their say by now.
+    expect(tipById('idle-builders')!.when(s) || tipById('first-glade')!.when(s)).toBe(true)
+    expect(nextCornerTip(s, ['founding', 'first-draft', 'welcome'], false)?.id).toBe('river-vale')
+  })
 })
+
+describe('the corner tip and Esc', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    useFirstStepsStatus.setState({ status: 'dismissed' })
+    useSeenTips.setState({ seen: seenAllBut('long-ridge') })
+  })
+  afterEach(cleanup)
+
+  const esc = () => fireEvent.keyDown(window, { key: 'Escape' })
+  const tipShown = () => screen.queryByRole('status', { name: 'Tip' })
+
+  it('the Esc that puts a blueprint away does not also dismiss the tip it uncovers', async () => {
+    const s = onGroundForCoach('ridge')
+    showRun(s, { store: { speed: 0, buildMode: 'shelter' } })
+    render(<GameScreen />)
+    // The tip came due while the blueprint was in hand: queued, hidden behind the build banner.
+    expect(tipShown()?.textContent).toMatch(/ridge/)
+    // Esc puts the blueprint away; a second press at once must not take the tip with it.
+    esc()
+    esc()
+    expect(useGameStore.getState().buildMode).toBeNull()
+    expect(tipShown()?.textContent).toMatch(/ridge/)
+    expect(useSeenTips.getState().seen).not.toContain('long-ridge')
+    // Once it has been on screen a moment, Esc dismisses it as before.
+    await act(() => new Promise((resolve) => setTimeout(resolve, TIP_ESC_GRACE_MS + 100)))
+    esc()
+    expect(tipShown()).toBeNull()
+    expect(useSeenTips.getState().seen).toContain('long-ridge')
+  })
+
+  it('nor does the Esc that closes the inspector', async () => {
+    const s = onGroundForCoach('ridge')
+    const hearth = Object.values(s.buildings)[0].id
+    showRun(s, { store: { speed: 0, selectedBuilding: hearth } })
+    render(<GameScreen />)
+    esc()
+    esc()
+    expect(useGameStore.getState().selectedBuilding).toBeNull()
+    expect(useSeenTips.getState().seen).not.toContain('long-ridge')
+    expect(tipShown()?.textContent).toMatch(/ridge/)
+  })
+})
+
+/** A founded run on this layout, its clock past the layout tip's delay. */
+function onGroundForCoach(layout: 'river' | 'ridge'): RunState {
+  const s = createRun({ seed: 4711, species: ['human', 'beaver', 'lizard'], modifiers: [], layout })
+  let guard = 0
+  while (s.pendingChoices.length > 0 && guard++ < 20) takeChoice(s, s.pendingChoices[0].options[0])
+  s.clock = TERRAIN_TIP_DELAY + 1
+  return s
+}
