@@ -1,0 +1,225 @@
+/* ==========================================================================
+   The New settlement screen: a scrolling body above a solid footer, the
+   compact species tiles on phones, and the ground line under the seed.
+   ========================================================================== */
+
+/* The card is a column: the sections scroll in .setup-body, and the footer
+   sits below that body rather than floating over it, so nothing in the form
+   can be hidden behind the buttons at any scroll position. */
+.menu-card.setup-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+}
+
+.setup-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 28px 28px 12px;
+}
+
+.setup-body > .setup-section:last-child {
+  margin-bottom: 8px;
+}
+
+.modal-foot.setup-foot {
+  flex: none;
+  margin: 0;
+  padding: 12px 28px 16px;
+  background: var(--panel);
+  justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+  .setup-body {
+    padding: 20px 20px 12px;
+  }
+
+  .modal-foot.setup-foot {
+    padding: 12px 20px 14px;
+  }
+}
+
+/* The ground the run will be founded on, for a typed seed or a random one. */
+.ground-line {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.ground-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.ground-part {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Species: on wide screens each slot is just its card (the toggle and the
+   detail area are for the phone tiles below). */
+.species-slot {
+  display: contents;
+}
+
+.species-more,
+.species-detail,
+.locked-short {
+  display: none;
+}
+
+/* Phones: five tall cards become one-line tiles — icon, name, state and the
+   two need icons — with the description, bonuses and lock reason behind each
+   tile's toggle. A tap on the tile still picks the species. */
+@media (max-width: 600px) {
+  .setup-screen .species-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .species-slot {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 0 6px;
+  }
+
+  .species-slot .species-pick {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'icon name needs'
+      'icon state needs';
+    align-items: center;
+    align-content: center;
+    gap: 0 10px;
+    min-height: 48px;
+    padding: 6px 10px;
+  }
+
+  .species-slot .species-icon {
+    grid-area: icon;
+    font-size: 1.5rem;
+  }
+
+  .species-slot .species-pick > strong {
+    grid-area: name;
+  }
+
+  .species-slot .picked-tag,
+  .species-slot .locked-short {
+    grid-area: state;
+  }
+
+  .species-slot .locked-short {
+    display: block;
+    font-style: normal;
+    font-size: 0.75rem;
+    color: var(--warn);
+  }
+
+  .species-slot .species-pick .need-row {
+    grid-area: needs;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .species-slot .species-pick .need {
+    padding: 3px 6px;
+    font-size: 0.9375rem;
+  }
+
+  /* The need names stay in the tile's accessible name, just not on screen. */
+  .species-slot .species-pick .need-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .species-slot .species-pick .species-blurb,
+  .species-slot .species-pick .chip-row,
+  .species-slot .species-pick .locked-tag {
+    display: none;
+  }
+
+  .species-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0;
+    color: var(--muted);
+    font-size: 1rem;
+  }
+
+  .species-slot.is-open .species-more {
+    color: var(--gold);
+    border-color: var(--species, var(--gold));
+  }
+
+  .species-more > span[aria-hidden] {
+    display: inline-block;
+  }
+
+  .species-slot.is-open .species-more > span[aria-hidden] {
+    transform: rotate(180deg);
+  }
+
+  .species-detail:not([hidden]) {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--line-soft);
+    border-left: 3px solid var(--species, var(--line));
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+  }
+
+  .species-detail p {
+    margin: 0;
+  }
+
+  .species-detail .locked-tag {
+    font-style: italic;
+  }
+}
+
+/* Phones: the rest of the form tightens too. A rung not yet earned shows its
+   name and what opens it (its terms stay in its accessible name, and the
+   Citadel's ladder shows them in full); a commission drops its patron line. */
+@media (max-width: 600px) {
+  .setup-screen .edict-step.is-locked > small,
+  .setup-screen .commission-patron {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .setup-screen .commission-terms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 12px;
+    padding-left: 0;
+    list-style: none;
+  }
+
+  .setup-screen .commission-terms li::before {
+    content: '• ';
+    content: '• ' / '';
+    color: var(--muted);
+  }
+}
