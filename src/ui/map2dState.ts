@@ -85,6 +85,17 @@ export interface Ghost {
 
 export const useGhost = create<{ ghost: Ghost | null }>(() => ({ ghost: null }))
 
+/**
+ * The building under the mouse on the 2D map (its own tiny store, like the
+ * ghost): its crew count shows at full strength while hovered.
+ */
+export const useHoveredBuilding = create<{ id: string | null }>(() => ({ id: null }))
+
+export function setHoveredBuilding(id: string | null): void {
+  if (useHoveredBuilding.getState().id === id) return
+  useHoveredBuilding.setState({ id })
+}
+
 export function setGhost(ghost: Ghost | null): void {
   if (useGhost.getState().ghost === ghost) return
   useGhost.setState({ ghost })
@@ -116,6 +127,8 @@ export interface BuildingView2D {
   upgrade: number
   /** Road work bonus percent when linked to a hub; -1 when roads do not apply. */
   road: number
+  /** Short-handed while villagers stand idle: the crew count at full strength. */
+  crewCall: boolean
 }
 
 export function buildingViews2D(run: RunState, version: number): { key: string; value: BuildingView2D[] } {
@@ -145,9 +158,10 @@ export function buildingViews2D(run: RunState, version: number): { key: string; 
       tier: v.tier,
       upgrade: v.upgrade,
       road,
+      crewCall: v.crewCall,
     }
     value.push(view)
-    key += `${b.id}:${v.progress}:${v.workers}/${view.slots}:${v.status}:${v.cold ? 1 : 0}:${v.tier}:${v.upgrade}:${road},`
+    key += `${b.id}:${v.progress}:${v.workers}/${view.slots}:${v.status}:${v.cold ? 1 : 0}:${v.tier}:${v.upgrade}:${road}:${v.crewCall ? 1 : 0},`
   }
   return { key, value }
 }

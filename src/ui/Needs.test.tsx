@@ -96,6 +96,42 @@ describe('People panel: refined needs', () => {
     expect(chip.textContent).toMatch(/waiting for every base need/)
     expect(within(humanCard()).getByText(/refined: spiced ale ◐ \(waits on the base needs\)/)).toBeTruthy()
     expect(within(humanCard()).queryByText(/Refined need:/)).toBeNull()
+    // Dimmed and set apart under the base needs, not one of them.
+    expect(chip.className).toContain('is-held')
+    expect(chip.closest('.need-row')).toBeNull()
+    expect(chip.closest('.refined-held')).not.toBeNull()
+  })
+
+  it('dims a refined need and folds it under the base needs while they are unmet', () => {
+    // Year 3, the tavern serves Luxury, but no temple: Religion is unmet, so
+    // spiced ale (not on hand either) could not pay yet.
+    useGameStore.setState({ run: settlement(3) })
+    render(<VillagerPanel />)
+    const chip = humanCard().querySelector('.need-refined')!
+    expect(chip.className).toContain('is-held')
+    expect(chip.className).toContain('is-unmet')
+    const held = chip.closest('.refined-held')!
+    expect(held).not.toBeNull()
+    expect(held.textContent).toMatch(/^Once base needs are met:/)
+    // Its own row, after the base needs.
+    const row = humanCard().querySelector('.need-row')!
+    expect(row.querySelector('.need-refined')).toBeNull()
+    expect(row.compareDocumentPosition(held) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Screen readers hear what it is and why it waits.
+    expect(chip.querySelector('.sr-only')?.textContent).toBe(
+      ' unmet, and it counts only once every base need is met',
+    )
+    expect(chip.getAttribute('title')).toMatch(/pays once every base need of this species is met/)
+    expect(within(humanCard()).getByText('Luxury ✓ · refined: spiced ale ✗ (waits on the base needs)')).toBeTruthy()
+  })
+
+  it('keeps the refined chip with the base needs, at full weight, once they are all met', () => {
+    useGameStore.setState({ run: settlement(3, true) })
+    render(<VillagerPanel />)
+    const chip = humanCard().querySelector('.need-refined')!
+    expect(chip.className).not.toContain('is-held')
+    expect(chip.closest('.need-row')).not.toBeNull()
+    expect(humanCard().querySelector('.refined-held')).toBeNull()
   })
 })
 

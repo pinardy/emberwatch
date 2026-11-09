@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RESOURCES } from '../game/content/resources'
 import { RUNWAY_WARNING_SECONDS, formatDuration } from '../game/engine/forecast'
 import {
@@ -63,6 +63,23 @@ function groupItems(stock: [ResourceId, number][], { trends, blocking }: StockTr
       // Amber first among the trade goods: it is the currency.
       .sort((a, b) => Number(b.id === 'amber') - Number(a.id === 'amber')),
   })).filter((g) => g.items.length > 0)
+}
+
+/**
+ * Short names for the bar, where a flagged good shows its name beside its
+ * number ("Clay 0 !"); anything not listed uses its full name.
+ */
+const SHORT_NAME: Partial<Record<ResourceId, string>> = {
+  copperOre: 'Ore',
+  copperBar: 'Copper',
+  plantFiber: 'Fibre',
+  pickles: 'Pickles',
+  trainingGear: 'Gear',
+  folio: 'Folios',
+}
+
+export function shortName(id: ResourceId): string {
+  return SHORT_NAME[id] ?? RESOURCES[id]?.name ?? id
 }
 
 function isFlagged(item: Item): boolean {
@@ -133,6 +150,13 @@ export function ResourceBar() {
   const frame = useFrameDerived()
   const derived = frame && { blocked: frame.storageBlocked.length, food: frame.food }
   const stockTrends = useStockTrends(run)
+  // The "All stock" drawer, and the good it was opened on (an alert's tap).
+  const [drawer, setDrawer] = useState<{ open: boolean; focus: ResourceId | null }>({
+    open: false,
+    focus: null,
+  })
+  const host = useRef<HTMLDivElement>(null)
+  useDismiss(drawer.open, host, () => setDrawer({ open: false, focus: null }))
   if (!run || !derived) return null
 
   const entries = sortBag(run.stock)
@@ -146,7 +170,7 @@ export function ResourceBar() {
   const runwayText = run.starving ? 'Empty' : formatDuration(food.runway)
 
   return (
-    <div className="resource-bar">
+    <div className="resource-bar" ref={host}>
       <div
         className={`storage ${full ? 'is-full is-bad' : capPct > 95 ? 'is-bad' : capPct > 80 ? 'is-warn' : ''}`}
         title={
@@ -220,33 +244,64 @@ export function ResourceBar() {
             aria-label={group.label}
             title={group.label}
           >
-            {group.items.map((item) => (
-              <div className={itemClass(item)} key={item.id} title={describeItem(item)}>
-                <span aria-hidden>
-                  <Icon of={RESOURCES[item.id]} />
-                </span>
-                {/* Read as "Wood 120", not a bare number. */}
-                <span className="sr-only">{RESOURCES[item.id]?.name ?? item.id} </span>
-                <strong>{Math.floor(item.amount)}</strong>
-                <TrendMark trend={item.trend} />
-                {isFlagged(item) && (
-                  <em
-                    className="resource-flag"
-                    role="img"
-                    aria-label={item.blocking?.length ? 'holding up a building' : 'running out'}
-                  >
+            {group.items.map((item) =>
+              isFlagged(item) ? (
+                // An alert names its good ("Clay 0 !") and opens the drawer on
+                // it with a tap, where it says why.
+                <button
+                  type="button"
+                  className={`${itemClass(item)} resource-alert`}
+                  key={item.id}
+                  title={describeItem(item)}
+                  aria-label={`${describeItem(item)}. Show in all stock`}
+                  aria-controls="stock-drawer"
+                  aria-expanded={drawer.open && drawer.focus === item.id}
+                  onClick={() =>
+                    setDrawer((d) =>
+                      d.open && d.focus === item.id
+                        ? { open: false, focus: null }
+                        : { open: true, focus: item.id },
+                    )
+                  }
+                >
+                  <span aria-hidden>
+                    <Icon of={RESOURCES[item.id]} />
+                  </span>
+                  <span className="resource-name" aria-hidden>
+                    {shortName(item.id)}
+                  </span>
+                  <strong aria-hidden>{Math.floor(item.amount)}</strong>
+                  <TrendMark trend={item.trend} />
+                  <em className="resource-flag" aria-hidden>
                     !
                   </em>
-                )}
-              </div>
-            ))}
+                </button>
+              ) : (
+                <div className={itemClass(item)} key={item.id} title={describeItem(item)}>
+                  <span aria-hidden>
+                    <Icon of={RESOURCES[item.id]} />
+                  </span>
+                  {/* Read as "Wood 120", not a bare number. */}
+                  <span className="sr-only">{RESOURCES[item.id]?.name ?? item.id} </span>
+                  <strong>{Math.floor(item.amount)}</strong>
+                  <TrendMark trend={item.trend} />
+                </div>
+              ),
+            )}
           </div>
         ))}
         {entries.length === 0 && <span className="muted">The stockpile is empty.</span>}
       </div>
 
       {entries.length > 0 && (
-        <StockDrawer groups={grouped} count={entries.length} flagged={flagged} />
+        <StockDrawer
+          groups={grouped}
+          count={entries.length}
+          flagged={flagged}
+          open={drawer.open}
+          focus={drawer.focus}
+          onToggle={() => setDrawer((d) => ({ open: !d.open, focus: null }))}
+        />
       )}
     </div>
   )
@@ -260,27 +315,40 @@ function StockDrawer({
   groups,
   count,
   flagged,
+  open,
+  focus,
+  onToggle,
 }: {
   groups: ReturnType<typeof groupItems>
   count: number
   flagged: number
+  open: boolean
+  /** The good an alert opened the drawer on: marked and scrolled to. */
+  focus: ResourceId | null
+  onToggle: () => void
 }) {
-  const [open, setOpen] = useState(false)
-  const host = useRef<HTMLDivElement>(null)
-  useDismiss(open, host, () => setOpen(false))
+  const list = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open || !focus) return
+    const row = list.current?.querySelector<HTMLElement>(`[data-good="${focus}"]`)
+    row?.scrollIntoView?.({ block: 'nearest' })
+  }, [open, focus])
+  const label = `All stock: ${count} goods${flagged > 0 ? `, ${flagged} need attention` : ''}`
 
   return (
-    <div className="resource-more-anchor" ref={host}>
+    <div className="resource-more-anchor">
       <button
         type="button"
         className={`resource-more ${open ? 'is-open' : ''} ${flagged > 0 ? 'is-flagged' : ''}`}
         aria-expanded={open}
         aria-controls="stock-drawer"
-        aria-label={`All stock: ${count} goods${flagged > 0 ? `, ${flagged} need attention` : ''}`}
-        onClick={() => setOpen((o) => !o)}
+        aria-label={label}
+        title={label}
+        onClick={onToggle}
       >
         <span className="resource-more-label" aria-hidden>
-          All
+          <span className="resource-more-long">All stock</span>
+          <span className="resource-more-short">Stock</span>
         </span>
         <span className="resource-more-count" aria-hidden>
           {count}
@@ -290,7 +358,7 @@ function StockDrawer({
         </span>
       </button>
       {open && (
-        <div id="stock-drawer" className="stock-drawer" role="group" aria-label="All stock">
+        <div id="stock-drawer" className="stock-drawer" role="group" aria-label="All stock" ref={list}>
           {groups.map((group) => (
             <section key={group.id} className="stock-drawer-group">
               <h2>{group.label}</h2>
@@ -298,7 +366,11 @@ function StockDrawer({
                 {group.items.map((item) => {
                   const t = item.trend
                   return (
-                    <li key={item.id} className={itemClass(item)}>
+                    <li
+                      key={item.id}
+                      className={`${itemClass(item)} ${focus === item.id ? 'is-focus' : ''}`}
+                      data-good={item.id}
+                    >
                       <span className="stock-drawer-icon">
                         <Icon of={RESOURCES[item.id]} />
                       </span>

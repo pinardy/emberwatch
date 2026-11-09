@@ -117,8 +117,19 @@ export function VillagerPanel() {
                     </span>
                   )
                 })}
-                {b.refinedStatus && <RefinedChip status={b.refinedStatus} bonus={b.refined} />}
+                {b.refinedStatus && !refinedHeld(b.refinedStatus) && (
+                  <RefinedChip status={b.refinedStatus} bonus={b.refined} />
+                )}
               </div>
+              {b.refinedStatus && refinedHeld(b.refinedStatus) && (
+                // Wanted, but it counts only once the base needs above are
+                // all met: set apart and dimmed so it does not read as the
+                // next thing to build.
+                <div className="refined-held">
+                  <small aria-hidden>Once base needs are met:</small>
+                  <RefinedChip status={b.refinedStatus} bonus={b.refined} />
+                </div>
+              )}
 
               <details className="breakdown">
                 <summary>Why {Math.round(b.target)}?</summary>
@@ -307,17 +318,25 @@ function openSlotsFor(run: RunState, v: Villager) {
 /** "from Year 3 or 20 villagers": when refined needs wake. */
 const REFINED_WHEN = `from Year ${REFINED_FROM_YEAR} or ${REFINED_FROM_POPULATION} villagers`
 
-type RefinedState = 'dormant' | 'waiting' | 'met' | 'partial' | 'unmet'
+type RefinedState = 'dormant' | 'held' | 'waiting' | 'met' | 'partial' | 'unmet'
 
 function refinedState(status: RefinedStatus): RefinedState {
   if (!status.unlocked) return 'dormant'
-  // On hand, but it pays only once every base need of the species is met.
-  if (status.ratio > 0 && !status.basicsMet) return 'waiting'
+  // Wanted, but it pays only once every base need of the species is met:
+  // on hand already ('waiting') or not ('held').
+  if (!status.basicsMet) return status.ratio > 0 ? 'waiting' : 'held'
   return status.met ? 'met' : status.ratio > 0 ? 'partial' : 'unmet'
+}
+
+/** Wanted, but on hold until the species' base needs are all met. */
+function refinedHeld(status: RefinedStatus): boolean {
+  const state = refinedState(status)
+  return state === 'held' || state === 'waiting'
 }
 
 const REFINED_MARK: Record<RefinedState, string> = {
   dormant: '·',
+  held: '✗',
   waiting: '◐',
   met: '✓',
   partial: '◐',
@@ -326,10 +345,21 @@ const REFINED_MARK: Record<RefinedState, string> = {
 
 const REFINED_SR: Record<RefinedState, string> = {
   dormant: `, not wanted yet (${REFINED_WHEN})`,
+  held: ' unmet, and it counts only once every base need is met',
   waiting: ', on hand but waiting for every base need to be met',
   met: ' met',
   partial: ' partly met',
   unmet: ' unmet',
+}
+
+/** The chip's state class: held and waiting chips are dimmed as well. */
+const REFINED_CLASS: Record<RefinedState, string> = {
+  dormant: 'is-dormant',
+  held: 'is-unmet is-held',
+  waiting: 'is-partial is-held',
+  met: 'is-met',
+  partial: 'is-partial',
+  unmet: 'is-unmet',
 }
 
 /**
@@ -341,12 +371,12 @@ function RefinedChip({ status, bonus }: { status: RefinedStatus; bonus: number }
   const worth =
     state === 'dormant'
       ? `Wanted ${REFINED_WHEN}.`
-      : state === 'waiting'
+      : state === 'waiting' || state === 'held'
         ? 'It pays once every base need of this species is met. Missing it costs nothing.'
         : `Covering ${status.capacity} of ${status.required} villagers: ${signed(bonus, (v) => v.toFixed(1))} resolve. Missing it costs nothing.`
   return (
     <span
-      className={`need need-refined is-${state === 'waiting' ? 'partial' : state}`}
+      className={`need need-refined ${REFINED_CLASS[state]}`}
       title={`Refined ${NEED_LABELS[status.def.need].name}: ${status.def.hint} ${worth}`}
     >
       <b className="need-state" aria-hidden>
@@ -376,8 +406,8 @@ function RefinedLine({ b }: { b: ResolveBreakdown }) {
         {base} {baseMark} · refined: {status.def.name}{' '}
         {state === 'dormant'
           ? '(not yet wanted)'
-          : state === 'waiting'
-            ? '◐ (waits on the base needs)'
+          : state === 'waiting' || state === 'held'
+            ? `${REFINED_MARK[state]} (waits on the base needs)`
             : REFINED_MARK[state]}
       </strong>
       <small>

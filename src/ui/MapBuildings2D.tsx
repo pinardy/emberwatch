@@ -5,7 +5,14 @@ import { useGameStore } from '../game/store'
 import { IconUse } from './Icon'
 import { COLD_BADGE, STATUS_BADGE, type MapBuildingStatus } from './mapShared'
 import { DISTRICT_STYLE, plateShape } from './map2dArt'
-import { S, useBuildingViews2D, useMapInteraction, type BuildingView2D } from './map2dState'
+import {
+  S,
+  setHoveredBuilding,
+  useBuildingViews2D,
+  useHoveredBuilding,
+  useMapInteraction,
+  type BuildingView2D,
+} from './map2dState'
 
 /** Smallest icon on the 2D map, in SVG units (the old emoji were 18px text). */
 export const MAP_ICON = 22
@@ -21,6 +28,7 @@ export const MAP_ICON = 22
 export const BuildingLayer2D = memo(function BuildingLayer2D() {
   const views = useBuildingViews2D()
   const selected = useGameStore((s) => s.selectedBuilding)
+  const hovered = useHoveredBuilding((s) => s.id)
   return (
     <>
       <g className="buildings-2d">
@@ -41,7 +49,7 @@ export const BuildingLayer2D = memo(function BuildingLayer2D() {
       </g>
       <g className="building-marks-2d" pointerEvents="none">
         {views.map((v) => (
-          <BuildingMarks2D key={v.id} {...v} />
+          <BuildingMarks2D key={v.id} {...v} hot={v.id === selected || v.id === hovered} />
         ))}
       </g>
     </>
@@ -72,6 +80,12 @@ const BuildingNode2D = memo(function BuildingNode2D({ id, defId, district, x, y,
       className={`building is-${district} ${selected ? 'is-selected' : ''} ${built ? '' : 'is-site'}`}
       transform={`translate(${x} ${y})`}
       data-building={id}
+      onPointerEnter={(e) => {
+        if (e.pointerType === 'mouse') setHoveredBuilding(id)
+      }}
+      onPointerLeave={() => {
+        if (useHoveredBuilding.getState().id === id) setHoveredBuilding(null)
+      }}
       onClick={(e) => {
         e.stopPropagation()
         if (interaction.consumeSuppressedClick()) return
@@ -101,15 +115,18 @@ const BuildingNode2D = memo(function BuildingNode2D({ id, defId, district, x, y,
 })
 
 /** What the building is doing: badges, crew, construction and upgrade bars. */
-const BuildingMarks2D = memo(function BuildingMarks2D(props: BuildingView2D) {
-  const { district, x, y, r, name, built, progress, workers, slots, status, cold, tier, upgrade, road } = props
+const BuildingMarks2D = memo(function BuildingMarks2D(props: BuildingView2D & { hot: boolean }) {
+  const { district, x, y, r, name, built, progress, workers, slots, status, cold, tier, upgrade, road, crewCall, hot } =
+    props
   const plate = plateShape(district, r)
   const top = -plate.top
   const bottom = plate.bottom
   const barWidth = Math.max(34, r * 1.7)
   const short = built && slots > 0 && workers < slots
+  // Full strength only where an idle villager could go, or on the building
+  // selected or under the mouse; every other crew count is dimmed, not hidden.
   return (
-    <g className={`building-marks is-${district}`} transform={`translate(${x} ${y})`}>
+    <g className={`building-marks is-${district}`} transform={`translate(${x} ${y})`} data-marks={props.id}>
       {!built && (
         <g className="build-progress">
           <rect x={-barWidth / 2} y={bottom + 4} width={barWidth} height={6} rx={3} className="build-bar-bg" />
@@ -124,7 +141,11 @@ const BuildingMarks2D = memo(function BuildingMarks2D(props: BuildingView2D) {
         </g>
       )}
       {built && slots > 0 && (
-        <text className={`worker-count ${short ? 'is-short' : ''}`} x={0} y={bottom + 14}>
+        <text
+          className={`worker-count ${short ? 'is-short' : ''} ${crewCall || hot ? '' : 'is-quiet'}`}
+          x={0}
+          y={bottom + 14}
+        >
           {workers}/{slots}
         </text>
       )}
