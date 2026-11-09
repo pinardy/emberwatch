@@ -2,6 +2,7 @@ import {
   ENVOY_COLD_HEARTH_SECONDS,
   ENVOY_UNREST_MARGIN,
   ENVOY_UNREST_SECONDS,
+  FINAL_CHARGE_RESOLVE_RATE,
 } from '../game/engine/balance'
 import {
   COLLAPSE_TEXT,
@@ -11,6 +12,7 @@ import {
   lastStandBlights,
 } from '../game/engine/climax'
 import { formatDuration } from '../game/engine/forecast'
+import { unrestDetail } from '../game/engine/timeline'
 import type { Modifiers } from '../game/engine/modifiers'
 import { population, stormReachFloor } from '../game/engine/queries'
 import {
@@ -91,8 +93,9 @@ export function EnvoyMeter({ run, mods }: { run: RunState; mods: Modifiers }) {
                 : ''}
             The envoy arrives in {time}
           </span>
+          {/* Narrow meters show the time in the head; the note carries the unrest clock. */}
           <span className="deadline-note-short" aria-hidden>
-            in {time}
+            {unrest ? `Unrest ${Math.floor(e.unrestSeconds)}/${ENVOY_UNREST_SECONDS}s` : `in ${time}`}
           </span>
         </small>
       </div>
@@ -112,6 +115,19 @@ export function GloryNote({ run }: { run: RunState }) {
   return (
     <small className="meter-note glory-note" title="Reputation earned past the maximum while the envoy rides">
       Glory +{formatReputation(Math.floor(run.envoy.glory * 10) / 10)}
+    </small>
+  )
+}
+
+/** Under the reputation meter during the Queen's final charge: contentment pays double. */
+export function FinalChargeNote() {
+  return (
+    <small
+      className="meter-note glory-note"
+      title={`The Queen's final charge: contented villagers earn reputation ${FINAL_CHARGE_RESOLVE_RATE}× as fast until her envoy sets out.`}
+      data-testid="final-charge-note"
+    >
+      Final charge ×{FINAL_CHARGE_RESOLVE_RATE}
     </small>
   )
 }
@@ -143,7 +159,7 @@ export function EnvoyEnd({ run }: { run: RunState }) {
           ? `The envoy set out in Year ${e.year} and the settlement held ${formatDuration(minutes)} through the forest's last stand until she arrived.`
           : run.phase === 'lost'
             ? `The envoy set out in Year ${e.year}, but ${
-                e.collapse ? COLLAPSE_TEXT[e.collapse] : 'the last villager left'
+                e.collapse ? `${COLLAPSE_TEXT[e.collapse]}${unrestDetail(e)}` : 'the last villager left'
               } before she arrived.`
             : `The envoy set out in Year ${e.year}.`}
       </p>

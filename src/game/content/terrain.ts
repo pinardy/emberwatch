@@ -64,7 +64,7 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     effects: [
       { kind: 'warmHomes' },
       { kind: 'workSpeed', tag: 'farming', percent: -40 },
-      { kind: 'seasonWork', season: 'storm', percent: -15 },
+      { kind: 'seasonWork', season: 'storm', percent: -10 },
     ],
   },
 }

@@ -39,6 +39,7 @@ import { makeRng, type Rng } from './rng'
 import { addImpatience } from './society'
 import { formatReputation, gainReputation, reputationFor } from './reputation'
 import { recordEvent } from './timeline'
+import { envoyRiding } from './climax'
 
 /**
  * Mid-run structure: the beats that give the middle of a run its shape.
@@ -102,11 +103,18 @@ function decreePayText(def: DecreeDef, reputation: number): string {
   return parts.join(', ') || 'The Queen is satisfied'
 }
 
-/** Counts down to the next decree, and runs the live one against its deadline. */
-export function stepDecree(s: RunState, dt: number): void {
+/**
+ * Counts down to the next decree, and runs the live one against its deadline.
+ * While the envoy rides the Queen is satisfied and her patience stands still,
+ * so the herald stays home: no decree is offered or runs (`quietCourt` in
+ * `climax.ts` sets aside any open as she sets out).
+ */
+export function stepDecree(s: RunState, dt: number, mods?: Modifiers): void {
+  if (envoyRiding(s)) return
   const decree = s.decree
   if (!decree) {
-    s.decreeTimer -= dt
+    // A commission can bring the herald round more often (Royal Works).
+    s.decreeTimer -= dt / (mods ?? computeModifiers(s)).decreeInterval
     if (s.decreeTimer <= 0) offerDecrees(s)
     return
   }

@@ -50,6 +50,8 @@ export interface Modifiers {
   decreeReputation: number
   /** Multiplier on a decree's time limit. */
   decreeTime: number
+  /** Multiplier on the wait between royal decrees. */
+  decreeInterval: number
   /** Multiplier on the impatience a missed decree costs. */
   decreeMissPenalty: number
   /** Multiplier on the wood braziers burn. */
@@ -96,6 +98,7 @@ export function emptyModifiers(): Modifiers {
     orderReputation: 0,
     decreeReputation: 0,
     decreeTime: 1,
+    decreeInterval: 1,
     decreeMissPenalty: 1,
     brazierFuel: 1,
     terrainBoost: 1,
@@ -185,6 +188,9 @@ function foldEffect(m: Modifiers, e: CornerstoneEffect): void {
       break
     case 'decreeTime':
       m.decreeTime = Math.max(0.25, m.decreeTime * (1 + e.percent / 100))
+      break
+    case 'decreeInterval':
+      m.decreeInterval = Math.max(0.25, m.decreeInterval * (1 + e.percent / 100))
       break
     case 'decreeMissPenalty':
       m.decreeMissPenalty = Math.max(0, m.decreeMissPenalty * (1 + e.percent / 100))

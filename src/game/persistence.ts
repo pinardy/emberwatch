@@ -9,7 +9,7 @@ import { createTimeline } from './engine/timeline'
 import { defaultCaravan } from './engine/trade'
 import { migrateWorld } from './engine/terrainPlan'
 import { isRec, runProblem } from './runCheck'
-import type { GrandPetition, MetaState, RunState } from './types'
+import type { EnvoyUnrest, GrandPetition, MetaState, RunState } from './types'
 
 /**
  * The original single run save. It is now the autosave slot's key (see
@@ -255,7 +255,15 @@ function migrateRunUnchecked(raw: unknown): RunState | null {
   if (p !== undefined && (typeof p !== 'object' || p === null || ![p.at, p.deadline, p.target].every((n) => typeof n === 'number'))) {
     delete run.petition
   }
+  if (run.petition && run.petition.vow !== undefined && !(Number.isFinite(run.petition.vow) && run.petition.vow > 0)) {
+    delete run.petition.vow
+  }
+  // Saves from before the final charge have none given; a mangled one reads as none.
+  if (run.finalCharge !== undefined && !(run.finalCharge && Number.isFinite(run.finalCharge.at))) delete run.finalCharge
   if (typeof run.retreated !== 'boolean') delete run.retreated
+  // Saves from before the camp plot keep nothing; a mangled one reads as none.
+  const plot = run.campPlot as unknown as Record<string, unknown> | undefined
+  if (plot !== undefined && !(plot && Number.isFinite(plot.x) && Number.isFinite(plot.y))) delete run.campPlot
   migrateClimax(run)
   // Saves from before layouts and biomes: rings in the old woodland.
   migrateWorld(run)
@@ -288,6 +296,21 @@ function migrateClimax(run: RunState): void {
       typeof e.finalStorm !== 'boolean')
   ) {
     delete run.envoy
+  }
+  // The cause of a collapse into unrest is for the end screen only; a mangled one is dropped.
+  const unrest = run.envoy?.unrest as Partial<EnvoyUnrest> | undefined
+  if (
+    run.envoy &&
+    unrest !== undefined &&
+    !(
+      unrest &&
+      Array.isArray(unrest.species) &&
+      unrest.species.every((sp) => typeof sp === 'string') &&
+      Array.isArray(unrest.blows) &&
+      unrest.blows.every((b) => b && typeof b.name === 'string' && Number.isFinite(b.amount))
+    )
+  ) {
+    delete run.envoy.unrest
   }
   if (run.phase === 'playing' && !run.envoy && run.reputation >= run.maxReputation) {
     run.phase = 'won'

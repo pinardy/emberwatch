@@ -1,6 +1,7 @@
 import { SPECIES } from '../content/species'
 import type {
   EnvoyCollapse,
+  EnvoyState,
   RunState,
   RunTimeline,
   SpeciesId,
@@ -198,6 +199,21 @@ const ENVOY_COLLAPSE_CLAUSE: Record<EnvoyCollapse, string> = {
   hearth: 'the hearth stood cold too long',
   unrest: 'most of the settlement fell into unrest',
 }
+/**
+ * " (Lizards and Harpies, under Leaking Roofs −8 and The Forest's Dread −3)":
+ * who fell into unrest and what pushed them, for a collapse into unrest.
+ * Empty when the save does not say.
+ */
+export function unrestDetail(envoy: Pick<EnvoyState, 'collapse' | 'unrest'> | undefined): string {
+  const u = envoy?.collapse === 'unrest' ? envoy.unrest : undefined
+  if (!u || (u.species.length === 0 && u.blows.length === 0)) return ''
+  const and = (parts: string[]) =>
+    parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+  const who = and(u.species.map(speciesPlural))
+  const why = and(u.blows.map((b) => `${b.name} −${Math.round(-b.amount)}`))
+  return ` (${[who, why && `under ${why}`].filter(Boolean).join(', ')})`
+}
+
 /** How far before a turning point to look for what caused it. */
 const CAUSE_WINDOW = 180
 
@@ -252,7 +268,7 @@ export function describeOutcome(run: RunState): string {
   const endYear = run.season.year
   if (!won && run.envoy) {
     const why = run.envoy.collapse
-      ? ENVOY_COLLAPSE_CLAUSE[run.envoy.collapse]
+      ? `${ENVOY_COLLAPSE_CLAUSE[run.envoy.collapse]}${unrestDetail(run.envoy)}`
       : 'the last villager left'
     const setOut = run.envoy.setOutAt
     const lost = (tl?.events ?? []).filter((e) => LOSS_KINDS.includes(e.k) && e.t >= setOut).length

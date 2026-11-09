@@ -865,6 +865,8 @@ export type CornerstoneEffect =
   | { kind: 'decreeReputation'; amount: number }
   /** Time allowed to meet a royal decree (percent; positive = longer). */
   | { kind: 'decreeTime'; percent: number }
+  /** Wait between royal decrees (percent; negative = more often). */
+  | { kind: 'decreeInterval'; percent: number }
   /** Impatience when a decree lapses unmet (percent; negative = milder). */
   | { kind: 'decreeMissPenalty'; percent: number }
   /** Wood braziers burn in the Storm (percent; -100 = none). */
@@ -1149,6 +1151,8 @@ export interface GrandPetition {
   deadline: number
   /** Reputation the vow is met at (the level when granted plus the vow). */
   target: number
+  /** The reputation vowed, sized to the recent pace (absent on older saves: 3). */
+  vow?: number
   /** Live until judged. */
   outcome?: 'kept' | 'broken'
 }
@@ -1215,6 +1219,14 @@ export interface EnvoyState {
   outcome?: 'arrived' | 'collapsed'
   /** Why the settlement collapsed, when it did. */
   collapse?: EnvoyCollapse
+  /** For a collapse into unrest: who was discontented, and what weighed on them. */
+  unrest?: EnvoyUnrest
+}
+
+/** The species in unrest as the settlement broke up, and the resolve blows on it. */
+export interface EnvoyUnrest {
+  species: SpeciesId[]
+  blows: { name: string; amount: number }[]
 }
 
 export interface PendingChoice {
@@ -1339,6 +1351,11 @@ export interface RunState {
   glades: Record<string, Glade>
   deposits: Record<string, WorldDeposit>
   obstacles: Obstacle[]
+  /**
+   * Ground in the hearth's glade kept for the first Woodcutters' Camp, by the
+   * trees (see `engine/campPlot.ts`). Absent on older saves: nothing is kept.
+   */
+  campPlot?: Vec2
   buildings: Record<string, BuildingInstance>
   /**
    * Buildings placed so far: the next one's id is `b<counter>`. Ids from older
@@ -1464,6 +1481,12 @@ export interface RunState {
   architectPlans?: number
   /** The run's Grand Petition, once made (once per run). */
   petition?: GrandPetition
+  /**
+   * The Queen's final charge, once given (clock second): contented villagers
+   * earn reputation faster for the rest of the climb (see `engine/levers.ts`).
+   * Absent until then, and on older saves.
+   */
+  finalCharge?: { at: number }
   /**
    * The run was ended by a Retreat to the Citadel rather than by the Queen's
    * patience running out (`phase` is still `'lost'`).

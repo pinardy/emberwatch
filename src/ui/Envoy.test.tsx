@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { SEASON_LENGTH } from '../game/engine/balance'
+import { FINAL_CHARGE_RESOLVE_RATE, SEASON_LENGTH } from '../game/engine/balance'
 import { createRun } from '../game/engine/createRun'
 import { takeChoice } from '../game/engine/drafts'
 import { gainReputation } from '../game/engine/reputation'
@@ -14,6 +14,7 @@ import { repPoints } from './EnvoyStatus'
 import { FoundingPanel } from './FoundingPanel'
 import { RunModifierList } from './RunModifierList'
 import { TopBar } from './TopBar'
+import { Warnings } from './Warnings'
 
 /**
  * The Envoy's approach in the HUD and on the end screen, and the land's
@@ -74,11 +75,57 @@ describe('the top bar while the envoy rides', () => {
     expect(within(meter).getByText(/Last stand · The envoy arrives in 1:30/)).toBeTruthy()
   })
 
+  it('on a narrow meter the note carries the unrest clock, not the time the head already shows', () => {
+    const run = riding()
+    run.season = { year: 3, season: 'storm', elapsed: 20, length: SEASON_LENGTH.storm }
+    run.envoy!.finalStorm = true
+    run.envoy!.unrestSeconds = 25
+    show(run)
+    render(<TopBar />)
+    const meter = screen.getByTestId('envoy-meter')
+    const short = meter.querySelector('.deadline-note-short')!
+    expect(short.textContent).toBe('Unrest 25/90s')
+    expect(meter.querySelector('.deadline-note-long')!.textContent).toMatch(/^Unrest 25\/90s · The envoy arrives in 1:30/)
+    // No unrest: the short note is the countdown, as before.
+    run.envoy!.unrestSeconds = 0
+    show(run)
+    expect(screen.getByTestId('envoy-meter').querySelector('.deadline-note-short')!.textContent).toBe('in 1:30')
+  })
+
+  it("marks the Queen's final charge under the reputation meter", () => {
+    const run = newRun()
+    run.reputation = run.maxReputation - 2
+    show(run)
+    render(<TopBar />)
+    expect(screen.queryByTestId('final-charge-note')).toBeNull()
+    run.finalCharge = { at: run.clock }
+    show(run)
+    const note = screen.getByTestId('final-charge-note')
+    expect(note.textContent).toBe(`Final charge ×${FINAL_CHARGE_RESOLVE_RATE}`)
+    expect(note.getAttribute('title')).toContain(`contented villagers earn reputation ${FINAL_CHARGE_RESOLVE_RATE}× as fast`)
+  })
+
   it('shows the impatience meter again for an ordinary run', () => {
     show(newRun())
     render(<TopBar />)
     expect(screen.getByRole('meter', { name: 'Impatience' })).toBeTruthy()
     expect(screen.queryByTestId('envoy-meter')).toBeNull()
+  })
+})
+
+describe('the warning strip while the envoy rides', () => {
+  it('names who the last stand would tip into unrest, and keeps the rules on screen for every device', () => {
+    const run = riding()
+    // A struggling settlement: everyone well under the threshold already.
+    for (const sp of run.speciesPool) run.resolve[sp] = 5
+    show(run)
+    render(<Warnings />)
+    const region = screen.getByRole('status')
+    const resolve = Array.from(region.querySelectorAll('.warning')).find((el) => /in the last stand/i.test(el.textContent ?? ''))
+    expect(resolve).toBeTruthy()
+    expect(resolve!.textContent).toMatch(/\(\d+ of \d+ villagers\) in unrest/)
+    expect(resolve!.textContent).toMatch(/want /)
+    expect(region.textContent).toMatch(/Hold until the envoy arrives in .*: keep \d+\+ villagers/)
   })
 })
 
@@ -131,6 +178,26 @@ describe('the end screen', () => {
     const fell = screen.getByRole('region', { name: "The envoy's approach" })
     expect(within(fell).getByRole('heading', { name: /The envoy found ruins/ })).toBeTruthy()
     expect(fell.textContent).toMatch(/the hearth stood cold too long before she arrived/)
+  })
+
+  it('names who fell into unrest and the blight and dread that did it', () => {
+    const run = riding()
+    run.envoy!.outcome = 'collapsed'
+    run.envoy!.collapse = 'unrest'
+    run.envoy!.unrest = {
+      species: ['beaver', 'lizard'],
+      blows: [
+        { name: 'Leaking Roofs', amount: -8 },
+        { name: "The Forest's Dread", amount: -3 },
+      ],
+    }
+    run.phase = 'lost'
+    show(run)
+    render(<EndModal />)
+    const fell = screen.getByRole('region', { name: "The envoy's approach" })
+    expect(fell.textContent).toMatch(
+      /most of the settlement fell into unrest \(Beavers and Lizards, under Leaking Roofs −8 and The Forest's Dread −3\) before she arrived/,
+    )
   })
 
   it('has no envoy section for a run that never filled its reputation', () => {

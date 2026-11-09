@@ -15,6 +15,7 @@ import {
   IMPATIENCE_OVERTIME_RAMP,
   IMPATIENCE_PER_HOSTILITY_OVER,
   IMPATIENCE_PER_VILLAGER_LOST,
+  FINAL_CHARGE_RESOLVE_RATE,
   IMPATIENCE_STAGNATION_GRACE,
   IMPATIENCE_STAGNATION_MAX,
   IMPATIENCE_STAGNATION_RAMP,
@@ -467,6 +468,8 @@ export function stepReputation(
     const served = REPUTATION_UNSERVED_SHARE + (1 - REPUTATION_UNSERVED_SHARE) * b.builtMet
     gain += share * over * served * REPUTATION_PER_RESOLVE_POINT * dt * mods.reputationRate
   }
+  // The Queen's final charge speeds the last of the climb (see `levers.ts`).
+  if (s.finalCharge && !s.envoy) gain *= FINAL_CHARGE_RESOLVE_RATE
   // The land's profile (Pilgrim Road pays more for contentment); once the
   // meter is full, it is Glory.
   gain = reputationFor(s, 'resolve', gain)

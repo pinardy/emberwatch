@@ -5,18 +5,22 @@ import type { RunState, Season } from '../types'
 import {
   ENVOY_BLIGHT_PREP_SCALE,
   ENVOY_COLD_HEARTH_SECONDS,
+  ENVOY_DREAD_OFFERING_HERBS,
   ENVOY_HOSTILITY_PER_EXTRA_BLIGHT,
   ENVOY_LATEST_ARRIVAL_SECONDS,
   ENVOY_MAX_BLIGHTS,
   ENVOY_STORM_HOSTILITY,
   ENVOY_THREAT_PACE,
+  ENVOY_UNREST_MARGIN,
   ENVOY_UNREST_SECONDS,
   HEARTH_STORM_REACH_FLOOR,
   HEARTH_WARMTH_RADIUS,
   HOSTILITY_PER_STORM,
   SEASON_LENGTH,
 } from './balance'
-import { blightPrepAmount } from './blights'
+import { announceBlight, blightPrepAmount } from './blights'
+import { SPECIES } from '../content/species'
+import { resolveBreakdowns } from './society'
 import {
   DREAD_NAME,
   dreadAt,
@@ -24,6 +28,7 @@ import {
   envoyPopulationFloor,
   envoyRiding,
   lastStandBlights,
+  lastStandOutlook,
   threatPace,
 } from './climax'
 import { sootheQueen } from './actions'
@@ -324,14 +329,221 @@ describe('the warning strip while the envoy rides', () => {
     setSeason(s, 2, 'storm', 10)
     for (let i = 0; i < 6; i++) addVillager(s)
     fill(s)
-    expect(collectWarnings(s).some((w) => w.id.startsWith('envoy-'))).toBe(false)
+    // Only the approach's rules, standing on every screen: nothing is closing in yet.
+    const calm = collectWarnings(s).filter((w) => w.id.startsWith('envoy-'))
+    expect(calm.map((w) => w.id)).toEqual(['envoy-hold'])
+    expect(calm[0].severity).toBe('caution')
+    expect(calm[0].text).toMatch(new RegExp(`keep ${envoyPopulationFloor(s.envoy!)}\\+ villagers.*the hearth lit \\(${ENVOY_COLD_HEARTH_SECONDS} s.*${ENVOY_UNREST_SECONDS} s straight`))
     s.coldHearth = true
     s.envoy!.coldSeconds = 10
     s.envoy!.unrestSeconds = 30
     while (population(s) > envoyPopulationFloor(s.envoy!)) loseVillager(s, Object.values(s.villagers)[0])
-    const warnings = collectWarnings(s).filter((w) => w.id.startsWith('envoy-'))
+    const warnings = collectWarnings(s).filter((w) => w.id.startsWith('envoy-') && w.id !== 'envoy-hold')
     expect(warnings.map((w) => w.id).sort()).toEqual(['envoy-hearth', 'envoy-population', 'envoy-unrest'])
     expect(warnings.find((w) => w.id === 'envoy-hearth')!.text).toMatch(/20s more/)
     expect(warnings.find((w) => w.id === 'envoy-unrest')!.text).toMatch(/1m 00s more/)
+  })
+})
+
+/**
+ * Puts every species' resolve target `margin` above the line where it counts
+ * as discontented in the last stand (a run-long effect per species), and
+ * resolve itself at its target.
+ */
+function targetsAbove(s: RunState, margin: number): void {
+  s.ongoing = s.ongoing.filter((o) => o.name !== 'test margin')
+  const mods = computeModifiers(s)
+  const effects = resolveBreakdowns(s, mods).map((b) => ({
+    kind: 'resolveFlat' as const,
+    species: b.species,
+    amount: b.threshold - ENVOY_UNREST_MARGIN + margin - b.target,
+  }))
+  s.ongoing.push({ id: 'test-margin', name: 'test margin', icon: '', description: '', effects })
+  for (const b of resolveBreakdowns(s, computeModifiers(s))) s.resolve[b.species] = b.target
+}
+
+/** The Gathering Clouds forecast standing for the envoy's Storm. */
+function gatheringClouds(s: RunState): void {
+  s.conditions = s.conditions.filter((c) => !c.breaksWithStorm)
+  announceBlight(s, STORM_BLIGHTS.leakingRoofs, ENVOY_BLIGHT_PREP_SCALE)
+  s.envoy!.lastStandForecast = true
+}
+
+const resolveWarning = (s: RunState) => collectWarnings(s).find((w) => w.id === 'envoy-resolve')
+
+describe("the last stand's resolve, from the moment she sets out", () => {
+  it('projects each species past the forecast blight, the dread and the surge — and the Storm bears it out', () => {
+    const s = newRun()
+    setSeason(s, 2, 'clearance', SEASON_LENGTH.clearance - 0.0625)
+    s.hostility = 20
+    fill(s)
+    gatheringClouds(s)
+    targetsAbove(s, 4)
+    const outlook = lastStandOutlook(s, computeModifiers(s))!
+    expect(outlook.inStand).toBe(false)
+    const after = 20 + HOSTILITY_PER_STORM + ENVOY_STORM_HOSTILITY
+    expect(outlook.blows.map((b) => [b.name, Math.round(b.amount)])).toEqual(
+      expect.arrayContaining([
+        ['Gathering Clouds', -8],
+        [DREAD_NAME, -dreadAt(after)],
+      ]),
+    )
+    // −8 and the dread take every species well under its line: unrest.
+    expect(outlook.unrest).toBe(true)
+    expect(outlook.discontented).toBe(population(s))
+    // Into the Storm: the blight strikes, the dread settles, and each species'
+    // target lands where the outlook said it would.
+    const projected = Object.fromEntries(outlook.species.map((x) => [x.species, x.projected]))
+    tick(s, 0.125)
+    expect(s.envoy!.finalStorm).toBe(true)
+    for (const b of resolveBreakdowns(s, computeModifiers(s))) {
+      expect(Math.abs(b.target - projected[b.species])).toBeLessThan(0.75)
+    }
+  })
+
+  it('a settlement with room to spare is not warned', () => {
+    const s = newRun()
+    setSeason(s, 2, 'clearance', 10)
+    s.hostility = 20
+    fill(s)
+    gatheringClouds(s)
+    targetsAbove(s, 20)
+    expect(lastStandOutlook(s, computeModifiers(s))!.unrest).toBe(false)
+    expect(resolveWarning(s)).toBeUndefined()
+  })
+
+  it('warns who would fall, how many of how many, and the way out — the blight’s goods, the dread’s herbs, the needs', () => {
+    const s = newRun()
+    setSeason(s, 2, 'clearance', 10)
+    s.hostility = 20
+    fill(s)
+    gatheringClouds(s)
+    targetsAbove(s, 4)
+    const w = resolveWarning(s)!
+    expect(w.severity).toBe('caution')
+    const pop = population(s)
+    const names = s.speciesPool.map((sp) => SPECIES[sp].name)
+    expect(w.text).toContain('In the last stand, Gathering Clouds −8')
+    expect(w.text).toMatch(new RegExp(`${DREAD_NAME} −\\d`))
+    expect(w.text).toContain(`(${pop} of ${pop} villagers) in unrest`)
+    for (const name of names) expect(w.text).toContain(name)
+    const planks = (s.conditions.find((c) => c.breaksWithStorm)!.resolveBy as { amount: number }).amount
+    expect(w.text).toContain(`Make ${planks} more Planks to turn Gathering Clouds aside (+8)`)
+    expect(w.text).toContain(`${ENVOY_DREAD_OFFERING_HERBS} herbs gathered in the Storm lift the dread`)
+    // A minute from the Storm it is a danger.
+    s.season.elapsed = s.season.length - 30
+    expect(resolveWarning(s)!.severity).toBe('danger')
+  })
+
+  it('before the blights are forecast, warns when one resolve blight would tip it', () => {
+    const s = newRun()
+    setSeason(s, 2, 'drizzle', 10)
+    s.hostility = 10
+    fill(s)
+    s.conditions = s.conditions.filter((c) => !c.breaksWithStorm)
+    // Enough to ride out the dread, not the dread and Gathering Clouds together.
+    targetsAbove(s, 7)
+    const outlook = lastStandOutlook(s, computeModifiers(s))!
+    expect(outlook.unforecast).toBe(1)
+    expect(outlook.unrest).toBe(false)
+    const w = resolveWarning(s)!
+    expect(w.severity).toBe('caution')
+    expect(w.text).toMatch(/names its last-stand blight at the Clearance/)
+    expect(w.text).toMatch(/Gathering Clouds −8\) would leave .* in unrest/)
+  })
+
+  it('in the last stand, unrest names who and what, and what lifts it; she may arrive first', () => {
+    const s = newRun()
+    setSeason(s, 2, 'clearance', SEASON_LENGTH.clearance - 0.0625)
+    s.hostility = 20
+    fill(s)
+    gatheringClouds(s)
+    targetsAbove(s, 4)
+    s.stock.plank = 3
+    tick(s, 0.125)
+    expect(s.envoy!.finalStorm).toBe(true)
+    for (const sp of s.speciesPool) s.resolve[sp] = 0
+    s.envoy!.unrestSeconds = 30
+    const w = collectWarnings(s).find((x) => x.id === 'envoy-unrest')!
+    expect(w.severity).toBe('danger')
+    expect(w.text).toMatch(/^🐎 Unrest: .* \(\d+ of \d+ villagers\) are discontented under Leaking Roofs −8 and The Forest's Dread −\d/)
+    expect(w.text).toContain('1m 00s more of this and the settlement breaks up')
+    expect(w.text).toContain('12 Planks in store lift Leaking Roofs (you have 3) (+8)')
+    // With the Storm nearly over, she arrives before the clock runs out.
+    s.season.elapsed = s.season.length - 20
+    const late = collectWarnings(s).find((x) => x.id === 'envoy-unrest')!
+    expect(late.severity).toBe('caution')
+    expect(late.text).toMatch(/but the envoy arrives in \S*20s, before it can break the settlement .*Hold on\./)
+  })
+
+  it('the end screen names the blight, the dread and who fell into unrest', () => {
+    const s = newRun()
+    setSeason(s, 2, 'clearance', SEASON_LENGTH.clearance - 0.0625)
+    s.hostility = 20
+    fill(s)
+    gatheringClouds(s)
+    targetsAbove(s, 4)
+    s.stock.plank = 0
+    tick(s, 0.125)
+    for (let t = 0; t < ENVOY_UNREST_SECONDS + 5 && s.phase === 'playing'; t += 0.5) {
+      while (s.pendingChoices.length > 0) takeChoice(s, s.pendingChoices[0].options[0])
+      for (const sp of s.speciesPool) s.resolve[sp] = 0
+      s.stock.wood = 200
+      s.stock.plank = 0
+      tick(s, 0.5)
+    }
+    expect(s.envoy!.collapse).toBe('unrest')
+    expect(s.envoy!.unrest!.species).toEqual(s.speciesPool)
+    expect(s.envoy!.unrest!.blows.map((b) => b.name)).toEqual(['Leaking Roofs', DREAD_NAME])
+    const text = describeOutcome(s)
+    expect(text).toMatch(/most of the settlement fell into unrest \(.+, under Leaking Roofs −8 and The Forest's Dread −\d\)/)
+    for (const sp of s.speciesPool) expect(text).toContain(SPECIES[sp].name)
+    // It survives a save; a mangled one is dropped, the collapse kept.
+    expect(migrateRun(JSON.parse(JSON.stringify(s)))!.envoy!.unrest).toEqual(s.envoy!.unrest)
+    const bad = JSON.parse(JSON.stringify(s)) as RunState
+    ;(bad.envoy as unknown as { unrest: unknown }).unrest = { species: 'all' }
+    const fixed = migrateRun(bad)!
+    expect(fixed.envoy!.unrest).toBeUndefined()
+    expect(fixed.envoy!.collapse).toBe('unrest')
+  })
+})
+
+describe('the court falls quiet while the envoy rides', () => {
+  it('a decree on offer or running, and order offers, are set aside without cost; no new decree comes', () => {
+    const s = newRun()
+    setSeason(s, 2, 'drizzle', 10)
+    s.decreeTimer = 0.01
+    tick(s, 0.125)
+    expect(s.pendingChoices.some((c) => c.kind === 'decree')).toBe(true)
+    s.orderOffers = [{ kind: 'order', options: ['x'], orders: [] }]
+    const impatience = s.impatience + s.impatienceProgress
+    fill(s)
+    tick(s, 0.125)
+    expect(s.pendingChoices).toEqual([])
+    expect(s.orderOffers).toEqual([])
+    expect(s.log.some((l) => /court falls quiet/.test(l.text))).toBe(true)
+    // A live decree is withdrawn, with no penalty.
+    const t = newRun()
+    setSeason(t, 2, 'drizzle', 10)
+    t.decreeTimer = 0.01
+    tick(t, 0.125)
+    takeChoice(t, t.pendingChoices[0].options[0])
+    expect(t.decree).not.toBeNull()
+    const strikes = t.decreeStrikes ?? 0
+    fill(t)
+    tick(t, 0.125)
+    expect(t.decree).toBeNull()
+    expect(t.decreeStrikes ?? 0).toBe(strikes)
+    expect(t.log.some((l) => /herald withdraws the decree/.test(l.text))).toBe(true)
+    // However long she rides, no herald comes.
+    for (let i = 0; i < 400 && t.phase === 'playing'; i++) {
+      t.stock.wood = 200
+      t.stock.berry = 200
+      for (const sp of t.speciesPool) t.resolve[sp] = 60
+      tick(t, 0.5)
+      expect(t.pendingChoices.some((c) => c.kind === 'decree')).toBe(false)
+      expect(t.decree).toBeNull()
+    }
+    expect(s.impatience + s.impatienceProgress).toBeCloseTo(impatience)
   })
 })
