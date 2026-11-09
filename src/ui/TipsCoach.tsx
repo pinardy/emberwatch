@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { create } from 'zustand'
 import { useGameStore, useHudRun, useHudVersion } from '../game/store'
 import type { RunState } from '../game/types'
 import { FirstSteps, useFirstStepsOpen } from './FirstSteps'
 import { currentDialogTip, nextCornerTip, tipById, tipCopy, type Tip } from './tips'
 import { useEscapeLayer } from './useGameLoop'
+import { useNarrowScreen } from './useNarrowScreen'
+import { usePhoneSheet } from './phoneSheet'
 
 /**
  * Contextual first-time tips. Each fires once, when its condition first holds,
@@ -53,6 +56,10 @@ function dialogOpen(run: RunState): boolean {
  *
  * It also owns the slot for the First steps checklist: while the checklist is
  * open only urgent tips interrupt it, and the welcome tip is folded into it.
+ *
+ * On a phone the card would cover much of the map, so the tip is shown at the
+ * top of the open panel sheet instead, or, while the sheet is folded, as a
+ * slim one-line bar over the map's bottom edge that opens the sheet.
  */
 export function TipsCoach() {
   const run = useHudRun()
@@ -88,10 +95,42 @@ export function TipsCoach() {
     setActive(null)
   }
   useEscapeLayer(active !== null && !blocked, dismiss, 'low')
+  const narrow = useNarrowScreen()
+  const panel = useGameStore((s) => s.panel)
+  const setPanel = useGameStore((s) => s.setPanel)
+  const sheetSlot = usePhoneSheet((s) => s.tipSlot)
 
   if (!run || blocked) return null
   if (showChecklist) return <FirstSteps run={run} />
   if (!active) return null
+
+  if (narrow) {
+    if (panel !== null && sheetSlot) {
+      return createPortal(
+        <div className="tip-coach is-sheet" role="status" aria-label="Tip">
+          <TipBody tip={active} run={run} onDismiss={dismiss} />
+        </div>,
+        sheetSlot,
+      )
+    }
+    return (
+      <div className="tip-coach is-bar" role="status" aria-label="Tip">
+        <button
+          type="button"
+          className="tip-bar-open"
+          onClick={() => setPanel('build')}
+          title="Read the tip in the panel"
+        >
+          <span aria-hidden>💡 </span>
+          <span className="tip-bar-title">{tipCopy(active.title, run)}</span>
+          <span className="sr-only"> — read the tip</span>
+        </button>
+        <button type="button" className="tip-bar-dismiss" onClick={dismiss} title="Dismiss tip (Esc)">
+          Got it
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="tip-coach" role="status" aria-label="Tip">

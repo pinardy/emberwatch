@@ -14,6 +14,7 @@ import { ConditionsBar } from './ConditionsBar'
 import { ErrandChip } from './Errands'
 import { EventToasts, useLogUnread } from './EventToasts'
 import { FoundingPanel } from './FoundingPanel'
+import { HudStrip } from './HudStrip'
 import { Inspector } from './Inspector'
 import { EndModal } from './lazyScreens'
 import { MapView } from './MapView'
@@ -30,7 +31,9 @@ import { PANEL_KEY_LABEL, useGameLoop, useHotkeys } from './useGameLoop'
 import { VillagerPanel } from './VillagerPanel'
 import { Warnings } from './Warnings'
 import { PerfReadout } from './PerfReadout'
+import { usePhoneSheetControls } from './phoneSheet'
 import './hud-feedback.css'
+import './phone.css'
 import { TAB_ART, threatArt } from '../game/content/artFamilies'
 
 const TABS: { id: Exclude<SidePanel, null>; label: string; icon: string }[] = [
@@ -63,6 +66,7 @@ export function GameScreen() {
   const unreadLog = useLogUnread(run, panel === 'log')
   const founding = run ? isFounding(run) : false
   const offers = run?.orderOffers?.length ?? 0
+  const sheet = usePhoneSheetControls()
 
   // When the founding's last pick is made the panel gives way to the side
   // rail; focus goes to its first tab rather than being lost with the panel.
@@ -131,9 +135,12 @@ export function GameScreen() {
               <Inspector />
             </div>
             <div className="bottom-stack">
-              <ErrandChip />
-              <ConditionsBar />
-              <ThreatBar />
+              {/* Phones fold these into one strip (HudStrip). */}
+              <HudStrip>
+                <ErrandChip />
+                <ConditionsBar />
+                <ThreatBar />
+              </HudStrip>
             </div>
             <EventToasts />
           </div>
@@ -144,7 +151,7 @@ export function GameScreen() {
         {founding ? (
           <FoundingPanel />
         ) : (
-          <aside className={`sidebar ${panel ? 'is-open' : 'is-folded'}`}>
+          <aside className={`sidebar ${panel ? 'is-open' : 'is-folded'}${sheet.className}`} {...sheet.dragHandlers}>
             <nav className="tabs" role="tablist" aria-label="Side panels" onKeyDown={onTabKey}>
               {TABS.map((tab) => (
                 <button
@@ -158,7 +165,7 @@ export function GameScreen() {
                   tabIndex={panel === tab.id || (panel === null && tab.id === 'build') ? 0 : -1}
                   title={`${tab.label} (${PANEL_KEY_LABEL[tab.id]})`}
                   className={panel === tab.id ? 'is-active' : ''}
-                  onClick={() => setPanel(panel === tab.id ? null : tab.id)}
+                  onClick={() => sheet.onTab(panel === tab.id ? null : tab.id)}
                 >
                   <span aria-hidden>
                     <Icon id={TAB_ART[tab.id]} emoji={tab.icon} />
@@ -181,19 +188,22 @@ export function GameScreen() {
                 </button>
               ))}
             </nav>
-            {/* Phones: the side panel is a bottom sheet, and this folds it down
-                to its tabs so the map gets the height. Desktop hides it. */}
+            {/* Phones: the side panel is a bottom sheet, and this opens it,
+                makes it taller and folds it down to its tabs (usePhoneSheetControls).
+                Desktop hides it. */}
             <button
               type="button"
               className="sheet-handle"
               aria-expanded={panel !== null}
               aria-controls="side-panel"
-              aria-label={panel ? 'Fold the panel away' : 'Open the panel'}
-              title={panel ? 'Fold the panel away' : 'Open the panel'}
-              onClick={() => setPanel(panel ? null : 'build')}
+              aria-label={sheet.handleLabel}
+              title={sheet.handleLabel}
+              onClick={sheet.onHandle}
             >
-              <span aria-hidden>{panel ? '▾' : '▴'}</span>
+              <span aria-hidden>{sheet.handleIcon}</span>
             </button>
+            {/* Phones: coach tips show here, at the top of the open sheet. */}
+            {sheet.narrow && <div className="sheet-tip" ref={sheet.tipSlotRef} />}
             <div
               key={panel ?? 'none'}
               className="panel-scroll"
