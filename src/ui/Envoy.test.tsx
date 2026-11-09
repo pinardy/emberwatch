@@ -10,6 +10,7 @@ import { useGameStore } from '../game/store'
 import type { RunState } from '../game/types'
 import { envoyArrivesNextTick } from '../test/envoy'
 import { EndModal } from './EndModal'
+import { repPoints } from './EnvoyStatus'
 import { FoundingPanel } from './FoundingPanel'
 import { RunModifierList } from './RunModifierList'
 import { TopBar } from './TopBar'
@@ -97,6 +98,26 @@ describe('the end screen', () => {
     expect(held.textContent).toMatch(/set out in Year 3/)
     expect(held.textContent).toMatch(/Glory 2\.5/)
     expect(within(held).getByText('reclaimed land')).toBeTruthy()
+  })
+
+  it('reads the breakdown as reputation by source, not as counts', () => {
+    const run = riding()
+    run.reputationBy = { orders: 9, decrees: 3, resolve: 2.44 }
+    envoyArrivesNextTick(run)
+    tick(run, 0.125)
+    expect(run.phase).toBe('won')
+    const by = { ...run.reputationBy }
+    show(run)
+    render(<EndModal />)
+    const held = screen.getByRole('region', { name: "The envoy's approach" })
+    expect(within(held).getByRole('heading', { name: 'Reputation by source' })).toBeTruthy()
+    const list = within(held).getByRole('list', { name: 'Reputation by source' })
+    const rows = within(list).getAllByRole('listitem').map((li) => li.textContent)
+    // The same numbers as the run's ledger: a whole point bare, a fraction to the tenth.
+    expect(rows).toContain(`completed orders${repPoints(by.orders!)}`)
+    expect(repPoints(9)).toBe('+9 rep')
+    expect(repPoints(2.44)).toBe('+2.4 rep')
+    for (const row of rows) expect(row).toMatch(/\+\d+(\.\d)? rep$/)
   })
 
   it('says how the settlement fell before she arrived', () => {

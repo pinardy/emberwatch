@@ -23,6 +23,7 @@ import { useGameStore, useHudRun } from '../game/store'
 import type { ResourceId, RunState } from '../game/types'
 import { DraftAppealChips } from './DraftAppealChips'
 import { Icon } from './Icon'
+import { PanelIntro } from './PanelIntro'
 
 /** "about 2 min" / "under a minute" for a caravan timer. */
 function minutesAway(seconds: number): string {
@@ -45,6 +46,10 @@ export function TradePanel() {
 
   return (
     <div className="panel-body" data-testid="trade-panel">
+      <PanelIntro id="trade">
+        Caravans sell goods for amber and buy your surplus. Amber also soothes the Queen
+        (Orders), redraws a draft, and rushes a site (select it).
+      </PanelIntro>
       <section className="build-group">
         <div className="row-between">
           <h3>Caravan</h3>
@@ -71,9 +76,6 @@ export function TradePanel() {
       {available && <Commission run={run} amber={amber} />}
       {available && <Agreement run={run} amber={amber} />}
       {available && run.caravan.here && <SellLots run={run} />}
-      <p className="muted trade-elsewhere">
-        Amber also soothes the Queen (Orders), redraws a draft, and rushes a site (select it).
-      </p>
     </div>
   )
 }

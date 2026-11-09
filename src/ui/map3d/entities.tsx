@@ -247,6 +247,7 @@ export const BuildingNode = memo(function BuildingNode({
   status,
   tier,
   upgrade,
+  crewCall,
 }: {
   building: BuildingInstance
   selected: boolean
@@ -265,6 +266,8 @@ export const BuildingNode = memo(function BuildingNode({
   tier: number
   /** Upgrade progress 0..1 while one is under way (quantised), else -1. */
   upgrade: number
+  /** Short-handed while villagers stand idle: the crew count at full strength. */
+  crewCall: boolean
 }) {
   const def = BUILDINGS[building.defId]
   const [hovered, setHovered] = useState(false)
@@ -312,7 +315,13 @@ export const BuildingNode = memo(function BuildingNode({
         <BatchSprite tile={labelTile(`${Math.round(progress * 10) * 10}%`)} x={x} y={0.85} z={z} size={0.6} />
       )}
       {slots > 0 && bucket === 'near' && (
-        <BatchSprite tile={labelTile(`${workers}/${slots}`)} x={x} y={1.15 * scale} z={z} size={0.65} />
+        <BatchSprite
+          tile={labelTile(`${workers}/${slots}`, !(crewCall || selected || hovered))}
+          x={x}
+          y={1.15 * scale}
+          z={z}
+          size={0.65}
+        />
       )}
       {tier > 0 && !far && <BatchSprite tile={labelTile('★'.repeat(tier))} x={x} y={iconY + 0.48} z={z} size={0.5} />}
       {upgrade >= 0 && !far && (

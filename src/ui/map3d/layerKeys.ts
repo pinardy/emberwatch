@@ -1,5 +1,6 @@
 import { BUILDINGS } from '../../game/content/buildings'
-import { warmthSources } from '../../game/engine/queries'
+import { villagerList, warmthSources } from '../../game/engine/queries'
+import { workerSlotsOf } from '../../game/engine/upgrades'
 import { frameDerived } from '../../game/frameDerived'
 import { useGameStore } from '../../game/store'
 import type { BuildingInstance, RunState } from '../../game/types'
@@ -89,6 +90,20 @@ export interface BuildingView {
   tier: number
   /** Upgrade under way: progress in 2% steps; -1 when none is. */
   upgrade: number
+  /**
+   * A finished workplace short of hands while villagers stand idle: its crew
+   * count shows at full strength. Every other crew count is dimmed (unless
+   * the building is selected or hovered), so a busy map is not a field of
+   * "0/2"s.
+   */
+  crewCall: boolean
+}
+
+/** Villagers with nothing to do: one pass, once per derived view. */
+function idleCount(run: RunState): number {
+  let n = 0
+  for (const v of villagerList(run)) if (v.assignment === null) n++
+  return n
 }
 
 /**
@@ -98,9 +113,11 @@ export interface BuildingView {
 export function buildingViews(run: RunState, version: number): BuildingView[] {
   const derived = frameDerived(run, version)
   const sources = warmthSources(run)
+  const idle = idleCount(run)
   return Object.values(run.buildings).map((building) => {
     const def = BUILDINGS[building.defId]
     const raw = building.built ? 1 : building.buildProgress / Math.max(1, def?.buildSeconds ?? 1)
+    const short = idle > 0 && building.built && building.workers.length < workerSlotsOf(building)
     return {
       building,
       progress: Math.min(1, Math.floor(raw * 50) / 50),
@@ -109,6 +126,7 @@ export function buildingViews(run: RunState, version: number): BuildingView[] {
       cold: isColdHousing(run, building, sources) || isUnlitWarmthSource(building),
       tier: building.tier ?? 0,
       upgrade: quantise(upgradeFraction(building)),
+      crewCall: short,
     }
   })
 }
@@ -123,7 +141,7 @@ export function buildingLayer(run: RunState, version: number): { key: string; va
   const value = buildingViews(run, version)
   let key = ''
   for (const v of value) {
-    key += `${v.building.id}:${v.progress}:${v.workers}:${v.status}:${v.cold ? 1 : 0}:${v.tier}:${v.upgrade},`
+    key += `${v.building.id}:${v.progress}:${v.workers}:${v.status}:${v.cold ? 1 : 0}:${v.tier}:${v.upgrade}:${v.crewCall ? 1 : 0},`
   }
   return { key, value }
 }
