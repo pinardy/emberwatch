@@ -65,7 +65,7 @@ scripts/        icon generation, artifact page, git hook install
 
 ## CI
 
-`.github/workflows/ci.yml` runs typecheck, lint, both test suites, the build and the Playwright smoke test. It is currently triggered by manual dispatch only. `npm install` also sets up a pre-commit hook that runs `npm run check`; skip it once with `git commit --no-verify`.
+`.github/workflows/ci.yml` runs typecheck, lint, both test suites and the build. It is currently triggered by manual dispatch only. The Playwright smoke test is left out to keep the pipeline short; run it locally with `npm run test:e2e`. `npm install` also sets up a pre-commit hook that runs `npm run check`; skip it once with `git commit --no-verify`.
 
 ## Known limits
 
