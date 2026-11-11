@@ -70,6 +70,10 @@ scripts/        icon generation, artifact page, git hook install
 
 `.github/workflows/ci.yml` runs typecheck, lint, `npm test` and the build. It is currently triggered by manual dispatch only. The balance harness and the Playwright smoke test are left out to keep the pipeline short; run them locally with `npm run test:balance` and `npm run test:e2e`. `npm install` also sets up a pre-commit hook that runs `npm run check`; skip it once with `git commit --no-verify`.
 
+## Deployment
+
+`.github/workflows/pages.yml` builds the app and publishes `dist/` to GitHub Pages on every push to `main` (or by manual dispatch). It needs Pages enabled once in the repository's Settings → Pages, with the source set to **GitHub Actions**.
+
 ## Known limits
 
 - No world-map campaign: meta progression is the upgrade tree, the difficulty ladder and commissions.
