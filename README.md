@@ -13,19 +13,22 @@ npm install
 npm run dev
 ```
 
-Then open the printed localhost URL. The game is also hosted as a private claude.ai Artifact: https://claude.ai/artifact/M78ydYF34bBJ7X2Ku1BctL
+Then open the printed localhost URL.
 
 ## How it plays
 
-- **Win** by filling the Queen's **reputation** meter (orders, decrees, glade events, contented villagers) and holding out until her envoy arrives. **Lose** if her **impatience** fills first or the settlement collapses. A run takes up to about 40 minutes.
-- **Seasons** cycle Drizzle → Clearance → Storm. The Storm stops farms, burns wood at the hearth, chills homes outside its warmth and, from Year 2, brings a forecast blight you can prepare for.
-- **Glades** are fogged pieces of forest. Clearing them yields land and resources; dangerous ones open events with risky choices, and every cleared glade raises the forest's **hostility**.
-- **Villagers** of each species have a **resolve** score fed by housing, food variety and services such as taverns. If it drops too low they leave. Idle villagers are your builders, so every worker you assign is a builder you gave up.
-- **Building** is free placement with no grid. Terrain, neighbours and roads change how well a building works, and most buildings can be upgraded.
-- **Drafts** decide what you can build: blueprints and cornerstone perks are picked from random offers, so each run needs a different plan. Caravans and the Queen's Architect sell what the drafts miss.
-- **Between runs**, supplies sent home buy Citadel upgrades. There are also commissions (optional run objectives), a seven-rung difficulty ladder, a daily expedition shared by all players, and 32 achievements.
+| | | |
+| :-: | --- | --- |
+| 👑 | **Goal** | Fill the Queen's **reputation** meter (orders, decrees, glade events, contented villagers) and hold out until her envoy arrives. |
+| ⏳ | **Pressure** | You lose if her **impatience** fills first or the settlement collapses. A run takes up to about 40 minutes. |
+| 🌧️ | **Seasons** | Drizzle → Clearance → Storm. The Storm stops farms, burns wood at the hearth, chills homes outside its warmth and, from Year 2, brings a forecast blight you can prepare for. |
+| 🌲 | **Glades** | Fogged pieces of forest. Clearing them yields land and resources; dangerous ones open events with risky choices, and every cleared glade raises the forest's **hostility**. |
+| 🧑‍🌾 | **Villagers** | Each species has a **resolve** score fed by housing, food variety and services such as taverns. If it drops too low they leave. Idle villagers are your builders, so every worker you assign is a builder you gave up. |
+| 🏠 | **Building** | Free placement with no grid. Terrain, neighbours and roads change how well a building works, and most buildings can be upgraded. |
+| 🃏 | **Drafts** | Blueprints and cornerstone perks are picked from random offers, so each run needs a different plan. Caravans and the Queen's Architect sell what the drafts miss. |
+| 🏰 | **Between runs** | Supplies sent home buy Citadel upgrades. There are also commissions (optional run objectives), a seven-rung difficulty ladder, a daily expedition shared by all players, and 32 achievements. |
 
-The map has a 3D view and a 2D view, the layout adapts to phones, and the whole game can be played from the keyboard. In-game coach tips explain each system the first time it matters.
+🗺️ The map has a 3D view and a 2D view, 📱 the layout adapts to phones, and ⌨️ the whole game can be played from the keyboard. 💡 In-game coach tips explain each system the first time it matters.
 
 ## Commands
 
