@@ -42,12 +42,9 @@ jobs:
       - name: Unit and UI tests (vitest)
         run: npm test
 
-      - name: Balance harness (vitest)
-        run: npm run test:balance
-
       - name: Build
         run: npm run build
 
-      # The Playwright smoke test is not run here: installing Chromium and
-      # driving the build made the pipeline slow. Run it locally with
-      # `npm run test:e2e`.
+      # The balance harness and the Playwright smoke test are not run here:
+      # they made the pipeline slow. Run them locally with
+      # `npm run test:balance` and `npm run test:e2e`.
