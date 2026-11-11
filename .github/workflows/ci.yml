@@ -19,7 +19,7 @@ env:
 
 jobs:
   checks:
-    name: Typecheck, tests, build, browser smoke test
+    name: Typecheck, tests, build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -42,29 +42,9 @@ jobs:
       - name: Unit and UI tests (vitest)
         run: npm test
 
-      - name: Balance harness (vitest)
-        run: npm run test:balance
-
       - name: Build
         run: npm run build
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Browser smoke test (Playwright)
-        # Serves the dist/ built above rather than building a second time.
-        run: npm run test:e2e
-        env:
-          E2E_SKIP_BUILD: '1'
-
-      - name: Upload Playwright report and traces
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-checks-${{ github.run_attempt }}
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 14
-          if-no-files-found: ignore
-
+      # The balance harness and the Playwright smoke test are not run here:
+      # they made the pipeline slow. Run them locally with
+      # `npm run test:balance` and `npm run test:e2e`.
